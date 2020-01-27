@@ -2,8 +2,6 @@
 # coding: utf-8
 
 # In[1]:
-
-
 from IPython.core.magic import register_cell_magic
 import ast
 class CheckDependency(ast.NodeTransformer):
@@ -52,16 +50,17 @@ class CheckDependency(ast.NodeTransformer):
         #print(node.target.__dict__)
         #print(node.value.__dict__)
         return node
-   
 
-class CheckName(ast.NodeTransformer):
     
+    
+class CheckName(ast.NodeTransformer):
     def visit_Name(self, node):
-        test.nameSet.add(node.id)
+        if node.id not in test.toUpdate.keys() and node.id in test.dag.dict.keys():
+            test.nameNodeList.append(test.dag.dict[node.id])
         return node
-  
 
-
+    
+    
 class VariableNode:
     def __init__(self, name, MUCN):
         self.name = str(name)
@@ -106,10 +105,14 @@ class DAG:
         for parent in node.parentSet:
             self.dict[parent].referenceSet.add(name)
             
-        
-
+    
 
 # In[2]:
+
+def warning(name, MUCN, mark):
+    print(name, "is defined in cell", MUCN, "but its reference was redefined in cell",
+                 mark, ". If you insist to run the cell, please rerun the cell with %%testRUN")
+
 
 
 @register_cell_magic
@@ -118,19 +121,15 @@ def test(line,cell):
     print("cell number", test.counter)
     
     test.toUpdate = {}
-    test.nameSet = set()
+    test.nameNodeList = []
     
     tree = ast.parse(cell)
     CheckDependency().visit(tree)
     CheckName().visit(tree)
-    for name in test.nameSet:
-        if name in test.toUpdate.keys() or name not in test.dag.dict.keys():
-            continue
-        
-        node = test.dag.dict[name]
+    test.nameNodeList.sort(key = lambda node: node.MUCN)
+    for node in test.nameNodeList:
         if node.MUCN < node.mark:
-            print(name, "is defined in cell", node.MUCN, "but its reference was redefined in cell",
-                 node.mark, ". If you insist to run the cell, please rerun the cell with %%testRUN")
+            test.warning(node.name, node.MUCN, node.mark)
             return
         
     get_ipython().run_cell(cell)
@@ -141,6 +140,7 @@ def test(line,cell):
     
 test.counter = 2
 test.dag = DAG()
+test.warning = warning
 
 @register_cell_magic
 def testRUN(line,cell):
@@ -153,52 +153,6 @@ def testRUN(line,cell):
     get_ipython().run_cell(cell)
     for name in test.toUpdate.keys():
         test.dag.updateNode(name, test.counter, test.toUpdate[name])
-    
 
 
-# In[3]:
 
-
-get_ipython().run_cell_magic('test', '', 'a = 1')
-
-
-# In[4]:
-
-
-get_ipython().run_cell_magic('test', '', 'b = 2')
-
-
-# In[5]:
-
-
-get_ipython().run_cell_magic('test', '', 'c = a+b')
-
-
-# In[6]:
-
-
-get_ipython().run_cell_magic('test', '', 'd = c+1')
-
-
-# In[7]:
-
-
-get_ipython().run_cell_magic('test', '', 'print(a,b,c,d)')
-
-
-# In[8]:
-
-
-get_ipython().run_cell_magic('test', '', 'a = 7')
-
-
-# In[9]:
-
-
-get_ipython().run_cell_magic('test', '', 'c = a+b')
-
-
-# In[10]:
-
-
-get_ipython().run_cell_magic('test', '', 'print(a,b,c,d)')

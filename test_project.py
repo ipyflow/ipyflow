@@ -75,7 +75,10 @@ def test_Foo_Bar_Example():
 def test_Variable_Scope():
 	global DETECTED
 	DETECTED = False
-	get_ipython().run_cell_magic('test', '', 'def func():\n    x = 6')
+	get_ipython().run_cell_magic('test', '', """
+def func():
+	x = 6
+""")
 	get_ipython().run_cell_magic('test', '', 'x = 7')
 	get_ipython().run_cell_magic('test', '', 'y = x')
 	get_ipython().run_cell_magic('test', '', 'z = func')

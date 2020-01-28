@@ -118,7 +118,7 @@ def warning(name, MUCN, mark):
 @register_cell_magic
 def test(line,cell):
     test.counter += 1
-    print("cell number", test.counter)
+    #print("cell number", test.counter)
     
     test.toUpdate = {}
     test.nameNodeList = []

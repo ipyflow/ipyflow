@@ -119,6 +119,19 @@ def test_Variable_Scope2():
 	get_ipython().run_cell_magic('test', '', 'print(y,z())')
 	assert not DETECTED, "Updating y should solve the problem"
 
+def test_default_args():
+	global DETECTED
+	get_ipython().run_cell_magic('test', '', """
+x = 7
+def foo(y=x):
+	return y + 5
+""")
+	get_ipython().run_cell_magic('test', '', 'a = foo()')
+	assert not DETECTED
+	get_ipython().run_cell_magic('test', '', 'x = 10')
+	assert not DETECTED
+	get_ipython().run_cell_magic('test', '', 'b = foo()')
+	assert DETECTED, "Should have detected stale dependency of fn foo() on x"
 
 
 #Run all above tests using ipytest

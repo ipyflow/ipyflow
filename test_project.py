@@ -1,5 +1,5 @@
 import ipytest
-import project
+from project_02172020 import *
 ipytest.config(rewrite_asserts=True, magics=True)
 
 """
@@ -13,13 +13,13 @@ from Ipython.
 
 
 #rewrite the warning from magic cell so that we know it prompts a warning. DETECTED should be set to false again after each time use
-original_warning = project.test.warning
+original_warning = test.warning
 DETECTED = False
 def better_warning(name,mucn,mark):
 	global DETECTED
 	DETECTED = True
 	original_warning(name,mucn,mark)
-project.test.warning = better_warning
+test.warning = better_warning
 
 
 def assert_detected(msg = ""):
@@ -30,15 +30,22 @@ def assert_detected(msg = ""):
 def assert_not_detected(msg = ""):
 	assert not DETECTED, str(msg)
 
+def new_test():
+	test.counter = 1
+	test.global_scope = Scope("global")
+	test.new_dependency = {}
+	test.function_call_dependency = {}
+	CheckDependency.current_scope = test.global_scope
+	CheckName.current_scope = test.global_scope
+
 
 #simple test about the basic assignment
 def test_Basic_Assignment_Break():
+	new_test()
 	get_ipython().run_cell_magic('test', '', 'a = 1')
 	get_ipython().run_cell_magic('test', '', 'b = 2')
 	get_ipython().run_cell_magic('test', '', 'c = a+b')
 	get_ipython().run_cell_magic('test', '', 'd = c+1')
-	assert "a" in project.test.dag.dict.keys() and "b" in project.test.dag.dict.keys(), "a and b not recorded"
-	
 	get_ipython().run_cell_magic('test', '', 'print(a,b,c,d)')
 	#redefine a here but not c and d
 	get_ipython().run_cell_magic('test', '', 'a = 7')
@@ -57,10 +64,8 @@ def test_Basic_Assignment_Break():
 
 #Foo, bar example from the project prompt
 def test_Foo_Bar_Example():
+	new_test()
 	get_ipython().run_cell_magic('test', '', 'def foo():\n    return 5\n\ndef bar():\n    return 7')
-	#our current problem is that we did not analysis foo and bar as function variables into our dictionary
-	assert "foo" in project.test.dag.dict.keys() and "bar" in project.test.dag.dict.keys(), "foo and bar not recorded"
-	
 	get_ipython().run_cell_magic('test', '', 'funcs_to_run = [foo,bar]')
 	get_ipython().run_cell_magic('test', '', 'accum = 0\nfor f in funcs_to_run:\n    accum += f()\nprint(accum)')
 	
@@ -77,6 +82,7 @@ def test_Foo_Bar_Example():
 
 #tests about variables that have same name but in different scope. There shouldn't be any extra dependency because of the name
 def test_Variable_Scope():
+	new_test()
 	get_ipython().run_cell_magic('test', '', """
 def func():
 	x = 6
@@ -100,6 +106,7 @@ def func():
 	assert_not_detected("Updating z should solve the problem")
 
 def test_Variable_Scope2():
+	new_test()
 	get_ipython().run_cell_magic('test', '', 'def func():\n    x = 6')
 	get_ipython().run_cell_magic('test', '', 'x = 7')
 	get_ipython().run_cell_magic('test', '', 'y = x')
@@ -120,19 +127,21 @@ def test_Variable_Scope2():
 	assert_not_detected("Updating y should solve the problem")
 
 def test_default_args():
+	new_test()
 	get_ipython().run_cell_magic('test', '', """
 x = 7
 def foo(y=x):
 	return y + 5
 """)
 	get_ipython().run_cell_magic('test', '', 'a = foo()')
-	assert_not_detected
+	assert_not_detected()
 	get_ipython().run_cell_magic('test', '', 'x = 10')
-	assert_not_detected
+	assert_not_detected()
 	get_ipython().run_cell_magic('test', '', 'b = foo()')
 	assert_detected("Should have detected stale dependency of fn foo() on x")
 	
 def test_Same_Pointer():
+	new_test()
 	#a and b are actually pointing to the same thing
 	get_ipython().run_cell_magic('test', '', 'a = [7]')
 	get_ipython().run_cell_magic('test', '', 'b = a')
@@ -143,7 +152,56 @@ def test_Same_Pointer():
 	assert_not_detected("The list b is pointing to is changed after a's list changed since they \
 		are actually the same thing. So there should not be any warning towards to c")
 
+def test_func_assign():
+	new_test()
+	get_ipython().run_cell_magic('test', '', """
+a = 1
+b = 1
+c = 2
+d = 3
+def func(x, y = a):
+    print(b)
+    e = c+d
+    f = x + y
+    return f
+""")
+	get_ipython().run_cell_magic('test', '', """
+z = func(c)""")
+	get_ipython().run_cell_magic('test', '', """
+a = 4""")
+	get_ipython().run_cell_magic('test', '', """
+print(z)""")
+	assert_detected("Should have detected stale dependency of fn func on a")
+	get_ipython().run_cell_magic('test', '', """
+def func(x, y = a):
+    print(b)
+    e = c+d
+    f = x + y
+    return f
+z = func(c)
+""")
+	get_ipython().run_cell_magic('test', '', """
+print(z)""")
+	assert_not_detected()
+	get_ipython().run_cell_magic('test', '', """
+c = 3""")
+	get_ipython().run_cell_magic('test', '', """
+print(z)""")
+	assert_detected("Should have detected stale dependency of z on c")
+	get_ipython().run_cell_magic('test', '', """
+z = func(c)""")
+	get_ipython().run_cell_magic('test', '', """
+print(z)""")
+	assert_not_detected()
+	get_ipython().run_cell_magic('test', '', """
+b = 4""")
+	get_ipython().run_cell_magic('test', '', """
+d = 1""")
+	assert_not_detected("Changing b and d should not affect z")
+
+
+
+
+
 #Run all above tests using ipytest
 ipytest.run_tests()
-#After the tests, set the warning back to the original warning
-project.test.warning = original_warning

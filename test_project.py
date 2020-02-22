@@ -160,10 +160,10 @@ b = 1
 c = 2
 d = 3
 def func(x, y = a):
-    print(b)
-    e = c+d
-    f = x + y
-    return f
+	print(b)
+	e = c+d
+	f = x + y
+	return f
 """)
 	get_ipython().run_cell_magic('test', '', """
 z = func(c)""")
@@ -174,10 +174,10 @@ print(z)""")
 	assert_detected("Should have detected stale dependency of fn func on a")
 	get_ipython().run_cell_magic('test', '', """
 def func(x, y = a):
-    print(b)
-    e = c+d
-    f = x + y
-    return f
+	print(b)
+	e = c+d
+	f = x + y
+	return f
 z = func(c)
 """)
 	get_ipython().run_cell_magic('test', '', """
@@ -199,7 +199,33 @@ b = 4""")
 d = 1""")
 	assert_not_detected("Changing b and d should not affect z")
 
-
+def test_func_assign_herlper_func():
+	new_test()
+	get_ipython().run_cell_magic('test', '', """
+x = 3
+a = 4
+def f():
+	def g():
+		print(a)
+		return x
+	return g()
+y = f()
+""")
+	get_ipython().run_cell_magic('test', '', """
+x = 4""")
+	get_ipython().run_cell_magic('test', '', """
+print(y)""")
+	assert_detected("Should have detected stale dependency of y on x")
+	get_ipython().run_cell_magic('test', '', """
+y = f()""")
+	get_ipython().run_cell_magic('test', '', """
+print(y)""")
+	assert_not_detected()
+	get_ipython().run_cell_magic('test', '', """
+a = 1""")
+	get_ipython().run_cell_magic('test', '', """
+print(y)""")
+	assert_not_detected("Changing a should not affect y")
 
 
 

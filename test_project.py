@@ -227,6 +227,24 @@ a = 1""")
 print(y)""")
 	assert_not_detected("Changing a should not affect y")
 
+def test_func_assign_herlper_func2():
+	new_test()
+	get_ipython().run_cell_magic('test', '', """
+x = 3
+a = 4
+def f():
+	def g():
+		print(a)
+		return x
+	return g
+y = f()()
+""")
+	get_ipython().run_cell_magic('test', '', """
+x = 4""")
+	get_ipython().run_cell_magic('test', '', """
+print(y)""")
+	assert_detected("Should have detected stale dependency of y on x")
+
 
 
 #Run all above tests using ipytest

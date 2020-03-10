@@ -1,5 +1,5 @@
 import ipytest
-from  project_02172020 import *
+from  project_02252020 import *
 ipytest.config(rewrite_asserts=True, magics=True)
 
 """
@@ -37,7 +37,7 @@ def new_test():
     test.function_call_dependency = {}
     CheckDependency.current_scope = test.global_scope
     CheckName.current_scope = test.global_scope
-
+    tracefunc.closedset = set()
 
 #simple test about the basic assignment
 def test_Basic_Assignment_Break():

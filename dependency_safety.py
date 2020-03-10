@@ -2,9 +2,11 @@ from IPython.core.magic import register_cell_magic
 import ast
 import sys
 
+
 def debug_print(name, node):
     print("\n Visiting ", name)
     print(node.__dict__)
+
 
 def tracefunc(frame, event, arg):
     if 'ipython-input' not in frame.f_code.co_filename:
@@ -12,7 +14,7 @@ def tracefunc(frame, event, arg):
     if event == "call":
         path = ()
         while frame.f_code.co_name != '<module>':
-            path = (frame.f_code.co_name,) + path 
+            path = (frame.f_code.co_name,) + path
             frame = frame.f_back
         if path not in tracefunc.closedset:
             scope = test.global_scope
@@ -23,7 +25,7 @@ def tracefunc(frame, event, arg):
 
 
 class CheckDependency(ast.NodeVisitor):
-    def get_right_side_dependency(self, value, extension = []):
+    def get_right_side_dependency(self, value, extension=[]):
         checklist = [value]
         dependency = set()
         while checklist:
@@ -49,17 +51,18 @@ class CheckDependency(ast.NodeVisitor):
         dependency.update(extension)
         return dependency
 
-
     def visit_Assign(self, node):
         if isinstance(node.targets[0], ast.Tuple):
             for i in range(len(node.targets[0].elts)):
-                 test.new_dependency[self.current_scope][node.targets[0].elts[i].id] = self.get_right_side_dependency(node.value.elts[i])
+                test.new_dependency[self.current_scope][node.targets[0].elts[i].id] = self.get_right_side_dependency(
+                    node.value.elts[i])
         else:
-             test.new_dependency[self.current_scope][node.targets[0].id] = self.get_right_side_dependency(node.value)
+            test.new_dependency[self.current_scope][node.targets[0].id] = self.get_right_side_dependency(node.value)
 
     def visit_AugAssign(self, node):
-        test.new_dependency[self.current_scope][node.target.id] = self.get_right_side_dependency(node.value, self.current_scope.get_node_dependency_list(node.target.id))
-
+        test.new_dependency[self.current_scope][node.target.id] = self.get_right_side_dependency(node.value,
+                                                                                                 self.current_scope.get_node_dependency_list(
+                                                                                                     node.target.id))
 
     def visit_FunctionDef(self, node):
         func_scope = Scope(node.name, self.current_scope)
@@ -70,8 +73,8 @@ class CheckDependency(ast.NodeVisitor):
         for name in arg_name_list:
             test.new_dependency[func_scope][name] = set()
         for i in range(len(node.args.defaults)):
-            pair = (node.args.defaults[-1-i].id, self.current_scope)
-            test.new_dependency[func_scope][node.args.args[-1-i].arg].add(pair)
+            pair = (node.args.defaults[-1 - i].id, self.current_scope)
+            test.new_dependency[func_scope][node.args.args[-1 - i].arg].add(pair)
             test.new_dependency[self.current_scope][node.name].add(pair)
 
         CheckDependency.current_scope = func_scope
@@ -84,7 +87,7 @@ class CheckDependency(ast.NodeVisitor):
                     if name in arg_name_list:
                         call_dependency.add(arg_name_list.index(name))
                     if scope != self.current_scope:
-                        call_dependency.add((name,scope))
+                        call_dependency.add((name, scope))
                     elif not scope.contains_name_current_scope(name) and name not in test.new_dependency[scope]:
                         call_dependency.add((name, scope))
                     else:
@@ -102,11 +105,11 @@ class CheckDependency(ast.NodeVisitor):
 
 
 class CheckName(ast.NodeVisitor):
-    def visit_Name(self,node):
+    def visit_Name(self, node):
         new_dep = test.new_dependency[self.current_scope]
-        if node.id in self.current_scope.variable_dict and node.id not in new_dep and self.current_scope.contains_name_all_scope(node.id):
+        if node.id in self.current_scope.variable_dict and node.id not in new_dep and self.current_scope.contains_name_all_scope(
+                node.id):
             test.checklist.append(self.current_scope.get_node_by_name_all_scope(node.id))
-
 
 
 class VariableNode:
@@ -119,6 +122,7 @@ class VariableNode:
         required_CN_node_pair     (4, bar)
         uid                        111222333444
     """
+
     def __init__(self, name, defined_CN, scope, uid):
         self.name = str(name)
         self.scope = scope
@@ -155,7 +159,7 @@ class VariableNode:
 
 
 class Scope:
-    def __init__(self, scope_name, parent_scope = None):
+    def __init__(self, scope_name, parent_scope=None):
         self.scope_name = scope_name
         self.parent_scope = parent_scope
         if parent_scope:
@@ -208,6 +212,7 @@ class Scope:
                 ret.append((node.name, node.scope))
             return ret
 
+
 @register_cell_magic
 def test(line, cell):
     test.counter += 1
@@ -219,7 +224,7 @@ def test(line, cell):
     ast_tree = ast.parse(cell)
     CheckDependency().visit(ast_tree)
     CheckName().visit(ast_tree)
-    test.checklist.sort(key = lambda node: node.defined_CN)
+    test.checklist.sort(key=lambda node: node.defined_CN)
     for node in test.checklist:
         if node.defined_CN < node.required_CN_node_pair[0]:
             test.warning(node.name, node.defined_CN, node.required_CN_node_pair)
@@ -244,8 +249,8 @@ def test(line, cell):
 
 
 def warning(name, defined_CN, pair):
-    print(name, "was defined in cell", defined_CN, "but its reference ", pair[1].name, "was redefined in cell", 
-        pair[0], ".")
+    print(name, "was defined in cell", defined_CN, "but its reference ", pair[1].name, "was redefined in cell",
+          pair[0], ".")
 
 
 test.counter = 1
@@ -258,8 +263,3 @@ CheckDependency.current_scope = test.global_scope
 CheckName.current_scope = test.global_scope
 
 tracefunc.closedset = set()
-
-
-
-
-

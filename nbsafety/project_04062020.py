@@ -109,7 +109,7 @@ class GetAllNames(ast.NodeVisitor):
 ############################  Run Stage  ########################################
 #################################################################################
 #The trace function we use to capture the frame dict of each scope. 
-def capture_frame_dict_at_run_time(frame, event, arg):
+def capture_frame_at_run_time(frame, event, arg):
     original_frame = frame
     if 'ipython-input' in frame.f_code.co_filename:
         if event == "call":
@@ -117,8 +117,8 @@ def capture_frame_dict_at_run_time(frame, event, arg):
             while frame.f_code.co_name != '<module>':
                 path = (frame.f_code.co_name,) + path 
                 frame = frame.f_back
-            if path not in capture_frame_dict_at_run_time.dictionary:
-                capture_frame_dict_at_run_time.dictionary[path] = original_frame.f_locals
+            if path not in capture_frame_at_run_time.dictionary:
+                capture_frame_at_run_time.dictionary[path] = original_frame
 
 
 
@@ -132,7 +132,7 @@ class UpdateDependency(ast.NodeVisitor):
         dependencies happened in this cell"""
     def updateDependency(self, module_node, scope):
         if scope.frame_dict is None:
-            scope.frame_dict = capture_frame_dict_at_run_time.dictionary[()]
+            scope.frame_dict = capture_frame_at_run_time.dictionary[()].f_locals
         self.current_scope = scope
         self.visit(module_node)
 
@@ -383,7 +383,7 @@ class UpdateDependency(ast.NodeVisitor):
         while s is not dependency_safety.global_scope:
             path = (s.scope_name,) + path
             s = s.parent_scope
-        func_scope.frame_dict = capture_frame_dict_at_run_time.dictionary[path]
+        func_scope.frame_dict = capture_frame_at_run_time.dictionary[path].f_locals
 
         #Get body part and argument part from the scope object
         func_body = func_scope.func_body
@@ -649,7 +649,7 @@ def dependency_safety(line, cell):
             return
 
     ############## Run ##############
-    sys.settrace(capture_frame_dict_at_run_time)
+    sys.settrace(capture_frame_at_run_time)
     get_ipython().run_cell(cell)
     sys.settrace(None)
 
@@ -670,7 +670,7 @@ def dependency_safety_init():
     
     dependency_safety.func_id_to_scope_object = {}
 
-    capture_frame_dict_at_run_time.dictionary = {}
+    capture_frame_at_run_time.dictionary = {}
 
 dependency_safety_init()
 

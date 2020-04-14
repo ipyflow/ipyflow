@@ -182,7 +182,7 @@ class UpdateDependency(ast.NodeVisitor):
                 if func_id not in dependency_safety.func_id_to_scope_object:
                     queue.extend(args)
                     #Should extend keywords too. Implement later together with the missing part in visit_Call about keywords
-                func_scope = dependency_safety.func_id_to_scope_object(func_id)
+                func_scope = dependency_safety.func_id_to_scope_object[func_id]
                 #In call_dependency, an item could be an integer indicate a position in argument or a node directly
                 for item in func_scope.call_dependency:
                     if isinstance(item, int):

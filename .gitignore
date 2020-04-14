@@ -1,7 +1,8 @@
-.DS_Store
+**/.DS_Store
 **/__pycache__
 **/.ipynb_checkpoints
-build
-dist
+build/
+dist/
 *.egg-info
 *.pyc
+MANIFEST

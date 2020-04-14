@@ -1,2 +1,3 @@
 ipykernel
+ipython
 jupyter

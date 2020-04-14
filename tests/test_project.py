@@ -1,5 +1,5 @@
 import ipytest
-from  project_02252020 import *
+from nbsafety.project_02252020 import *
 ipytest.config(rewrite_asserts=True, magics=True)
 
 """

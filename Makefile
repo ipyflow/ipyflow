@@ -1,7 +1,16 @@
-.PHONY: test kernel
+.PHONY: test deps devdeps dev
 
 test:
-	ipython3 test_project.py
+	ipython tests/test_project.py
 
-kernel:
-    python -m safe_kernel.install
+deps:
+	pip install -r requirements.txt
+
+devdeps:
+	pip install -e .
+	pip install -r requirements-dev.txt
+
+kernel: deps devdeps
+	python -m nbsafety.safe_kernel.install
+
+dev: kernel

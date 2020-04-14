@@ -23,8 +23,8 @@ def install_my_kernel_spec(user=True, prefix=None):
             json.dump(kernel_json, f, sort_keys=True)
         # TODO: Copy resources once they're specified
 
-        print('Installing IPython kernel spec')
-        KernelSpecManager().install_kernel_spec(td, 'bash', user=user, prefix=prefix)
+        print('Installing SafePython kernel spec')
+        KernelSpecManager().install_kernel_spec(td, 'safe-python', user=user, prefix=prefix)
 
 
 def _is_root():

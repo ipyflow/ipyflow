@@ -10,7 +10,7 @@ devdeps:
 	pip install -e .
 	pip install -r requirements-dev.txt
 
-kernel: deps devdeps
+kernel:
 	python -m nbsafety.safe_kernel.install
 
 dev: kernel

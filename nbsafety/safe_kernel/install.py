@@ -8,7 +8,7 @@ from IPython.utils.tempdir import TemporaryDirectory
 
 kernel_json = {
  "argv": [
-   sys.executable, "-m", "safe_kernel", "-f", "{connection_file}",
+   sys.executable, "-m", "nbsafety.safe_kernel", "-f", "{connection_file}",
  ],
  "display_name": "SafePython",
  "language": "python",

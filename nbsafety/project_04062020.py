@@ -191,23 +191,24 @@ class UpdateDependency(ast.NodeVisitor):
                 evaluates to false. This behavior ensures that we don't do anything to built-in functions except put all its
                 arguments to check queue. We then obtain everything from the call_dependency and just put them in."""
                 if isinstance(node.func, ast.Name):
-                    if node.func.id not in self.current_scope.frame_dict:
-                        func_id = id(None)
-                    else:
-                        func_id = id(self.current_scope.frame_dict[node.func.id])
+                    func_id = id(self.current_scope.get_object_by_name_all_scope(node.func.id))
                 elif isinstance(node.func, ast.Subscript):
                     func_id = id(self.get_subscript_object(node.func))
+
                 if func_id not in dependency_safety.func_id_to_scope_object:
                     queue.extend(args)
                     #Should extend keywords too. Implement later together with the missing part in visit_Call about keywords
-                func_scope = dependency_safety.func_id_to_scope_object[func_id]
-                #In call_dependency, an item could be an integer indicate a position in argument or a node directly
-                for item in func_scope.call_dependency:
-                    if isinstance(item, int):
-                        if item < len(node.args):
-                            queue.append(node.args[item])
-                    elif isinstance(item, VariableNode):
-                        return_dependency.add(item)
+                
+                else:
+                    func_scope = dependency_safety.func_id_to_scope_object[func_id]
+                    return_dependency.add(func_scope.parent_scope.get_node_by_name_all_scope(func_scope.scope_name))
+                    #In call_dependency, an item could be an integer indicate a position in argument or a node directly
+                    for item in func_scope.call_dependency:
+                        if isinstance(item, int):
+                            if item < len(node.args):
+                                queue.append(node.args[item])
+                        elif isinstance(item, VariableNode):
+                            return_dependency.add(item)
         return return_dependency
 
     """Helper function to get the object in a ast.Subscript node"""
@@ -608,6 +609,23 @@ class Scope:
             if name in scope.variable_dict:
                 return scope.variable_dict[name]
             scope = scope.parent_scope
+
+
+    #returns the object that is represented by the name passed in, return none if not existed. 
+    def get_object_by_name_current_scope(self, name):
+        if name in self.frame_dict:
+            return self.frame_dict[name]
+        return None
+
+    #returns the object that is represented by the name passed in. Look up all ancestor scopes, return none if not existed. 
+    def get_object_by_name_all_scope(self, name):
+        scope = self
+        while scope:
+            if name in scope.frame_dict:
+                return scope.frame_dict[name]
+            scope = scope.parent_scope
+        return None
+
 
     #returns a boolean value that indicates if the name represents a VariableNode in current scope
     def contains_name_current_scope(self, name):

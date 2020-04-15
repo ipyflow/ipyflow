@@ -186,7 +186,8 @@ class UpdateDependency(ast.NodeVisitor):
                 #In call_dependency, an item could be an integer indicate a position in argument or a node directly
                 for item in func_scope.call_dependency:
                     if isinstance(item, int):
-                        queue.append(node.args[item])
+                        if item < len(node.args):
+                            queue.append(node.args[item])
                     elif isinstance(item, VariableNode):
                         return_dependency.add(item)
         return return_dependency

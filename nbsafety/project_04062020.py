@@ -77,6 +77,24 @@ class PreCheck(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
         self.safe_set.add(node.name)
 
+    def visit_For(self, node):
+        #Case "for a,b in something: "
+        if isinstance(node.target, ast.Tuple):
+            for name_node in node.target.elts:
+                if isinstance(name_node, ast.Name):
+                    self.safe_set.add(name_node.id)
+                else:
+                    raise UNEXPECTED_STATES("Precheck", "visit_For", name_node, "Expect to be ast.Name")
+        #case "for a in something"
+        elif isinstance(node.target, ast.Name):
+            self.safe_set.add(node.target.id)
+        else:
+            raise UNEXPECTED_STATES("Update", "visit_For", node.target, "Expect to be ast.Tuple or ast.Name")
+
+        #Then we keep doing the visit for the body of the loop.
+        for line in node.body:
+            self.visit(line)
+
 
     
 

@@ -19,7 +19,7 @@ def better_warning(name,mucn,mark):
     global DETECTED
     DETECTED = True
     original_warning(name,mucn,mark)
-dependency_safety.warning = better_warning
+
 
 
 def assert_detected(msg = ""):
@@ -33,6 +33,7 @@ def assert_not_detected(msg = ""):
 #Make sure to seperate each test as a new test to prevent unexpected stale dependency
 def new_test():
     dependency_safety_init()
+    dependency_safety.warning = better_warning
 
 #The string name of that cell magic function
 magic_function = "dependency_safety"
@@ -63,18 +64,49 @@ def test_Basic_Assignment_Break():
 #Foo, bar example from the project prompt
 def test_Foo_Bar_Example():
     new_test()
-    get_ipython().run_cell_magic(magic_function, '', 'def foo():\n    return 5\n\ndef bar():\n    return 7')
-    get_ipython().run_cell_magic(magic_function, '', 'funcs_to_run = [foo,bar]')
-    get_ipython().run_cell_magic(magic_function, '', 'accum = 0\nfor f in funcs_to_run:\n    accum += f()\nprint(accum)')
+    get_ipython().run_cell_magic(magic_function, '', """
+def foo():
+    return 5
+
+def bar():
+    return 7
+""")
+    get_ipython().run_cell_magic(magic_function, '', """
+funcs_to_run = [foo,bar]
+""")
+    get_ipython().run_cell_magic(magic_function, '', """
+accum = 0
+for f in funcs_to_run:
+    accum += f()
+print(accum)
+""")
     
     #redefine foo here but not funcs_to_run
-    get_ipython().run_cell_magic(magic_function, '', 'def foo():\n    return 10\n\ndef bar():\n    return 7')
-    get_ipython().run_cell_magic(magic_function, '', 'accum = 0\nfor f in funcs_to_run:\n    accum += f()\nprint(accum)')
+    get_ipython().run_cell_magic(magic_function, '', """
+def foo():
+    return 10
+
+def bar():
+    return 7
+""")
+    get_ipython().run_cell_magic(magic_function, '', """
+accum = 0
+for f in funcs_to_run:
+    accum += f()
+print(accum)
+""")
     assert_detected("Did not detect that funcs_to_run's reference was changed")
 
 
-    get_ipython().run_cell_magic(magic_function, '', 'funcs_to_run = [foo,bar]')
-    get_ipython().run_cell_magic(magic_function, '', 'accum = 0\nfor f in funcs_to_run:\n    accum += f()\nprint(accum)')
+    get_ipython().run_cell_magic(magic_function, '', """
+funcs_to_run = [foo,bar]
+""")
+    get_ipython().run_cell_magic(magic_function, '', """
+accum = 0
+for f in funcs_to_run:
+    accum += f()
+print(accum)
+""")
     assert_not_detected("There should be no more dependency issue")
 
 

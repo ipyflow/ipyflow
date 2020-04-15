@@ -1,5 +1,5 @@
 import ipytest
-from project_04062020 import *
+from nbsafety.project_04062020 import *
 ipytest.config(rewrite_asserts=True, magics=True)
 
 """
@@ -178,9 +178,12 @@ def test_Same_Pointer():
     get_ipython().run_cell_magic(magic_function, '', 'c = b + [5]')
 
     get_ipython().run_cell_magic(magic_function, '', 'a[0] = 8')
+    get_ipython().run_cell_magic(magic_function, '', 'print(b)')
+    assert_not_detected("b is an alias of a, updating a should automatically update b as well")
     get_ipython().run_cell_magic(magic_function, '', 'print(c)')
-    assert_not_detected("The list b is pointing to is changed after a's list changed since they \
-        are actually the same thing. So there should not be any warning towards to c")
+    assert_detected("c does not point to the same thing as a or b, thus there is a stale dependency here ")
+
+
 
 def test_func_assign():
     new_test()

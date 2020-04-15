@@ -1,7 +1,7 @@
 .PHONY: test deps devdeps dev
 
 test:
-	ipython tests/test_project.py
+	./runtests.sh
 
 deps:
 	pip install -r requirements.txt

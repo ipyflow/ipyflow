@@ -43,6 +43,17 @@ def new_test():
 #The string name of that cell magic function
 magic_function = "dependency_safety"
 
+def run_cell(code):
+    get_ipython().run_cell_magic(magic_function, None, code)
+
+def test_subscript_dependency():
+    new_test()
+    run_cell('lst = [0, 1, 2]')
+    run_cell('x = 5')
+    run_cell('y = x + lst[0]')
+    run_cell('lst[0] = 10')
+    run_cell('logging.info(y)')
+    assert_detected("Did not detect that lst changed underneath y")
 
 #simple test about the basic assignment
 def test_Basic_Assignment_Break():

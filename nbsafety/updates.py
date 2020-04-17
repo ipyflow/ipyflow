@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 
+from .ast_utils import remove_subscript
 from .scope import Scope
 from .tracing import capture_frame_at_run_time
 from .unexpected import UNEXPECTED_STATES
@@ -11,8 +12,9 @@ class UpdateDependency(ast.NodeVisitor):
 
     def __init__(self, safety):
         self.safety = safety
+        self.current_scope = None
 
-    def updateDependency(self, module_node, scope):
+    def updateDependency(self, module_node: ast.Module, scope: Scope):
         """
         This function should be called when we are in the Update stage. This
         function will init the global_scope's frame_dict if it is never binded.
@@ -26,7 +28,7 @@ class UpdateDependency(ast.NodeVisitor):
         self.current_scope = scope
         self.visit(module_node)
 
-    def get_statement_dependency(self, value):
+    def get_statement_dependency(self, value: ast.AST):
         """
         Helper function that takes in a statement, returns a set that contains
         the dependency node set. Typically on the right side of assignments.
@@ -59,10 +61,14 @@ class UpdateDependency(ast.NodeVisitor):
                 # Should initialize call_dependency if it is called first time
                 self.visit_Call(node)
 
-                """Get the function id in different cases, if it is a built-in function, we pass in the None's id to look 
-                up in dependency_safety.func_id_to_scope_object. Since it can never contain id(None), this will automatically
-                evaluates to false. This behavior ensures that we don't do anything to built-in functions except put all its
-                arguments to check queue. We then obtain everything from the call_dependency and just put them in."""
+                # Get the function id in different cases, if it is a built-in
+                # function, we pass in the None's id to look up in
+                # dependency_safety.func_id_to_scope_object. Since it can never
+                # contain id(None), this will automatically evaluates to false.
+                # This behavior ensures that we don't do anything to built-in
+                # functions except put all its arguments to check queue. We
+                # then obtain everything from the call_dependency and just put
+                # them in.
                 if isinstance(node.func, ast.Name):
                     func_id = id(
                         self.current_scope.get_object_by_name_all_scope(node.func.id)
@@ -91,7 +97,7 @@ class UpdateDependency(ast.NodeVisitor):
                             return_dependency.add(item)
         return return_dependency
 
-    def get_subscript_object(self, node):
+    def get_subscript_object(self, node: ast.AST):
         """Helper function to get the object in a ast.Subscript node"""
         slice_list = []
         while isinstance(node, ast.Subscript):
@@ -124,18 +130,9 @@ class UpdateDependency(ast.NodeVisitor):
             "Update", "visit_Subscript", node, "Only support ast.Name for now"
         )
 
-    def remove_subscript(self, node):
-        """
-        Helper function to remove the subscript and return the name node in front of the subscript
-        For example: pass in ast.Subscript node "a[3][b][5]" will return ast.Name node "a".
-        """
-        while isinstance(node, ast.Subscript):
-            node = node.value
-        return node
-
     # Assignments. Similar to the one in precheck. We go through each target in targets.
     # Then if it is a tuple, we assign each value accordingly.
-    def visit_Assign(self, node):
+    def visit_Assign(self, node: ast.Assign):
         """
         Actually we cannot do the below greyed out part because there are different situations:
         a = 1      ----- LHS is ast.Name, RHS is ast.Num(or ast.Name or anything not ast.Tuple)
@@ -163,7 +160,7 @@ class UpdateDependency(ast.NodeVisitor):
                     target_node.id, self.get_statement_dependency(node.value)
                 )
             elif isinstance(target_node, ast.Subscript):
-                name_node = self.remove_subscript(target_node)
+                name_node = remove_subscript(target_node)
                 if not isinstance(name_node, ast.Name):
                     raise UNEXPECTED_STATES(
                         "Update", "visit_Assign", name_node, "Expect to be ast.Name"
@@ -183,9 +180,9 @@ class UpdateDependency(ast.NodeVisitor):
     # it is just a ast.Name node. We first get its orginal parent_node_set
     # because we want to keep that relation in a AugAssignment. Then we update
     # the node with the new dependencies.
-    def visit_AugAssign(self, node):
+    def visit_AugAssign(self, node: ast.AugAssign):
         if isinstance(node.target, ast.Subscript):
-            name_node = self.remove_subscript(node.target)
+            name_node = remove_subscript(node.target)
         else:
             name_node = node.target
         if isinstance(name_node, ast.Name):
@@ -208,7 +205,7 @@ class UpdateDependency(ast.NodeVisitor):
             )
 
     # For loops
-    def visit_For(self, node):
+    def visit_For(self, node: ast.For):
         # Obtain the dependency created by the iter (The "in" part of the for loop)
         iter_dependency = self.get_statement_dependency(node.iter)
         # If it is an unpack situation, we update each variable's dependency
@@ -233,7 +230,7 @@ class UpdateDependency(ast.NodeVisitor):
         for line in node.body:
             self.visit(line)
 
-    def visit_FunctionDef(self, node):
+    def visit_FunctionDef(self, node: ast.FunctionDef):
         """
         Function definitions.  An argument node contains: args, vararg,
         kwonlyargs, kw_defaults, kwarg, defaults, i.e.:
@@ -314,7 +311,7 @@ class UpdateDependency(ast.NodeVisitor):
         # Update Node
         self.current_scope.update_node(node.name, dependency)
 
-    def visit_Call(self, node):
+    def visit_Call(self, node: ast.Call):
         """
         This method is supposed to initialize the call_dependency of a function
         call. Note that we treat a function as two different nodes. A function

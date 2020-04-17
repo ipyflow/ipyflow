@@ -1,17 +1,9 @@
 # -*- coding: utf-8 -*-
 import ast
 
+from .ast_utils import remove_subscript
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
-
-
-# Helper function to remove the subscript and return the name node in front
-# of the subscript For example: pass in ast.Subscript node "a[3][b][5]"
-# will return ast.Name node "a".
-def _remove_subscript(node: ast.AST):
-    while isinstance(node, ast.Subscript):
-        node = node.value
-    return node
 
 
 class PreCheck(ast.NodeVisitor):
@@ -44,10 +36,10 @@ class PreCheck(ast.NodeVisitor):
         for target_node in node.targets:
             if isinstance(target_node, ast.Tuple):
                 for element_node in target_node.elts:
-                    element_node = _remove_subscript(element_node)
+                    element_node = remove_subscript(element_node)
                     if isinstance(element_node, ast.Name):
                         self.safe_set.add(element_node.id)
-            target_node = _remove_subscript(target_node)
+            target_node = remove_subscript(target_node)
             if isinstance(target_node, ast.Name):
                 self.safe_set.add(target_node.id)
             else:
@@ -60,7 +52,7 @@ class PreCheck(ast.NodeVisitor):
 
     # Similar to assignment, but multiple augassignment is not allowed
     def visit_AugAssign(self, node: ast.AugAssign):
-        target_node = _remove_subscript(node.target)
+        target_node = remove_subscript(node.target)
         if isinstance(target_node, ast.Name):
             self.safe_set.add(target_node.id)
         else:

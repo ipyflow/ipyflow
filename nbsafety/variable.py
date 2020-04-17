@@ -10,10 +10,10 @@ class VariableNode(object):
         # The Scope class it belongs to
         self.scope = scope
 
-        # Set of parent node that this node is depended on
+        # Set of parent nodes on which this node depends
         self.parent_node_set = set()
 
-        # Set of children node that are depended on this node
+        # Set of children nodes that depend on this node
         self.children_node_set = set()
 
         # The cell number when this node is defined
@@ -40,7 +40,12 @@ class VariableNode(object):
             self.alias_set = None
             #####################INCOMPLETE###########################
 
-    def update_CN_node_pair(self, pair):
+    def update_CN_node_pair(self, pair, seen=None):
+        if seen is None:
+            seen = set()
+        if self in seen:
+            return
+        seen.add(self)
         self.required_CN_node_pair = pair
         for n in self.children_node_set:
-            n.update_CN_node_pair(pair)
+            n.update_CN_node_pair(pair, seen)

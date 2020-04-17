@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import logging
 
 from .ast_utils import remove_subscript
 from .scope import Scope
@@ -79,7 +80,8 @@ class UpdateDependency(ast.NodeVisitor):
                 if func_id not in self.safety.func_id_to_scope_object:
                     # TODO (smacke): likely bug here
                     queue.extend(args)
-                    # Should extend keywords too. Implement later together with the missing part in visit_Call about keywords
+                    # Should extend keywords too.
+                    # Implement later together with the missing part in visit_Call about keywords
 
                 else:
                     func_scope = self.safety.func_id_to_scope_object[func_id]
@@ -95,6 +97,12 @@ class UpdateDependency(ast.NodeVisitor):
                                 queue.append(node.args[item])
                         elif isinstance(item, VariableNode):
                             return_dependency.add(item)
+            elif isinstance(node, ast.Subscript):
+                queue.append(remove_subscript(node))
+            elif isinstance(node, ast.Num):
+                continue
+            else:
+                logging.warning('unsupported node type for node %s', node)
         return return_dependency
 
     def get_subscript_object(self, node: ast.AST):

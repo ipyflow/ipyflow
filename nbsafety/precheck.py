@@ -33,13 +33,14 @@ class PreCheck(ast.NodeVisitor):
     # would be an ast.Tuple node in the case of "a,b = 3,4". Thus we need to
     # break the tuple in that case.
     def visit_Assign(self, node: ast.Assign):
+        ignore_node_types = (ast.Subscript,)
         for target_node in node.targets:
+            if isinstance(target_node, ignore_node_types):
+                continue
             if isinstance(target_node, ast.Tuple):
                 for element_node in target_node.elts:
-                    element_node = remove_subscript(element_node)
                     if isinstance(element_node, ast.Name):
                         self.safe_set.add(element_node.id)
-            target_node = remove_subscript(target_node)
             if isinstance(target_node, ast.Name):
                 self.safe_set.add(target_node.id)
             else:
@@ -52,7 +53,10 @@ class PreCheck(ast.NodeVisitor):
 
     # Similar to assignment, but multiple augassignment is not allowed
     def visit_AugAssign(self, node: ast.AugAssign):
-        target_node = remove_subscript(node.target)
+        target_node = node.target
+        ignore_node_types = (ast.Subscript,)
+        if isinstance(target_node, ignore_node_types):
+            return
         if isinstance(target_node, ast.Name):
             self.safe_set.add(target_node.id)
         else:

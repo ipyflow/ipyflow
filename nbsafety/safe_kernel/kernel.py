@@ -9,7 +9,7 @@ class SafeKernel(IPythonKernel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.shell.run_cell('from nbsafety.project_04062020 import dependency_safety')
+        self.shell.run_cell('from nbsafety.safety import dependency_safety')
 
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):

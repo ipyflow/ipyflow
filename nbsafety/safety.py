@@ -52,5 +52,3 @@ def dependency_safety_init():
     dependency_safety.warning = _safety_warning
     dependency_safety.func_id_to_scope_object = {}
     capture_frame_at_run_time.dictionary = {}
-
-dependency_safety_init()

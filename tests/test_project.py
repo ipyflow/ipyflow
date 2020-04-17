@@ -17,6 +17,7 @@ logging.basicConfig(level=logging.ERROR)
 
 # Rewrite the warning from magic cell so that we know it prompts a warning.
 # DETECTED should be set to false again after each time use.
+dependency_safety_init()
 original_warning = dependency_safety.warning
 DETECTED = False
 

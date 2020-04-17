@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from ipykernel.ipkernel import IPythonKernel
-from ..version import __version__
+import nbsafety.safety
+from nbsafety.version import __version__
 
 
 class SafeKernel(IPythonKernel):
@@ -9,9 +10,12 @@ class SafeKernel(IPythonKernel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.shell.run_cell('from nbsafety.safety import dependency_safety')
+        self.shell.run_cell('from {} import {}'.format(
+            nbsafety.safety.__name__, nbsafety.safety.dependency_safety.__name__)
+        )
+        self.shell.run_cell('{}()'.format(nbsafety.safety.dependency_safety_init.__name__))
 
     def do_execute(self, code, silent, store_history=True,
                    user_expressions=None, allow_stdin=False):
-        code = "%%dependency_safety\n" + code
+        code = "%%{}\n".format(nbsafety.dependency_safety.__name__) + code
         return super().do_execute(code, silent, store_history, user_expressions, allow_stdin)

@@ -321,11 +321,15 @@ class UpdateDependency(ast.NodeVisitor):
         function is to help to get the call_dependency first time it ever runs.
         It should detect and return if there is already a call_dependency set.
         """
-        if isinstance(node.func, ast.Name):
-            if node.func.id not in self.current_scope.frame_dict:
+        if isinstance(node.func, (ast.Name, ast.Attribute)):
+            if isinstance(node.func, ast.Name):
+                func_id = node.func.id
+            else:
+                func_id = '{}.{}'.format(node.func.value.id, node.func.attr)
+            if func_id not in self.current_scope.frame_dict:
                 func_id = id(None)
             else:
-                func_id = id(self.current_scope.frame_dict[node.func.id])
+                func_id = id(self.current_scope.frame_dict[func_id])
         elif isinstance(node.func, ast.Subscript):
             func_id = id(self.get_subscript_object(node.func))
         else:
@@ -333,7 +337,7 @@ class UpdateDependency(ast.NodeVisitor):
                 "Update",
                 "visit_Call",
                 node.func,
-                "Only support ast.Name and ast.Subscript for now",
+                "Only support ast.Name, ast.Attribute, and ast.Subscript for now",
             )
 
         # If this is not a user-defined function, we don't need to update the dependency within it

@@ -51,20 +51,20 @@ def test_Basic_Assignment_Break():
     get_ipython().run_cell_magic(magic_function, '', 'b = 2')
     get_ipython().run_cell_magic(magic_function, '', 'c = a+b')
     get_ipython().run_cell_magic(magic_function, '', 'd = c+1')
-    get_ipython().run_cell_magic(magic_function, '', 'print(a,b,c,d)')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(a,b,c,d)')
     #redefine a here but not c and d
     get_ipython().run_cell_magic(magic_function, '', 'a = 7')
-    get_ipython().run_cell_magic(magic_function, '', 'print(a,b,c,d)')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(a,b,c,d)')
     assert_detected("Did not detect that c's reference was changed")
 
 
     get_ipython().run_cell_magic(magic_function, '', 'c = a+b')
-    get_ipython().run_cell_magic(magic_function, '', 'print(a,b,c,d)')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(a,b,c,d)')
     assert_detected("Did not detect that d's reference was changed")
 
 
     get_ipython().run_cell_magic(magic_function, '', 'd = c+1')
-    get_ipython().run_cell_magic(magic_function, '', 'print(a,b,c,d)')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(a,b,c,d)')
     assert_not_detected("There should be no more dependency issue")
 
 
@@ -85,7 +85,7 @@ funcs_to_run = [foo,bar]
 accum = 0
 for f in funcs_to_run:
     accum += f()
-print(accum)
+logging.info(accum)
 """)
     
     #redefine foo here but not funcs_to_run
@@ -100,7 +100,7 @@ def bar():
 accum = 0
 for f in funcs_to_run:
     accum += f()
-print(accum)
+logging.info(accum)
 """)
     assert_detected("Did not detect that funcs_to_run's reference was changed")
 
@@ -111,7 +111,7 @@ funcs_to_run = [foo,bar]
 accum = 0
 for f in funcs_to_run:
     accum += f()
-print(accum)
+logging.info(accum)
 """)
     assert_not_detected("There should be no more dependency issue")
 
@@ -126,19 +126,19 @@ def func():
     get_ipython().run_cell_magic(magic_function, '', 'x = 7')
     get_ipython().run_cell_magic(magic_function, '', 'y = x')
     get_ipython().run_cell_magic(magic_function, '', 'z = func')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
 
     #change x inside of the function, but not x outside of the function
     get_ipython().run_cell_magic(magic_function, '', 'def func():\n    x = 10')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
     assert_detected("Did not detect the dependency change in the function")
 
     get_ipython().run_cell_magic(magic_function, '', 'y = x')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
     assert_detected("Updating y should not solve the dependency change inside of function func")
 
     get_ipython().run_cell_magic(magic_function, '', 'z = func')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
     assert_not_detected("Updating z should solve the problem")
 
 def test_Variable_Scope2():
@@ -147,19 +147,19 @@ def test_Variable_Scope2():
     get_ipython().run_cell_magic(magic_function, '', 'x = 7')
     get_ipython().run_cell_magic(magic_function, '', 'y = x')
     get_ipython().run_cell_magic(magic_function, '', 'z = func')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
 
     #change x outside of the function, but not inside of the function
     get_ipython().run_cell_magic(magic_function, '', 'x = 10')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
     assert_detected("Did not detect the dependency change outside of the function")
 
     get_ipython().run_cell_magic(magic_function, '', 'z = func')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
     assert_detected("Updating z should not solve the dependency change outside of function")
 
     get_ipython().run_cell_magic(magic_function, '', 'y = x')
-    get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(y,z())')
     assert_not_detected("Updating y should solve the problem")
 
 
@@ -186,9 +186,9 @@ def test_Same_Pointer():
     get_ipython().run_cell_magic(magic_function, '', 'c = b + [5]')
 
     get_ipython().run_cell_magic(magic_function, '', 'a[0] = 8')
-    get_ipython().run_cell_magic(magic_function, '', 'print(b)')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(b)')
     assert_not_detected("b is an alias of a, updating a should automatically update b as well")
-    get_ipython().run_cell_magic(magic_function, '', 'print(c)')
+    get_ipython().run_cell_magic(magic_function, '', 'logging.info(c)')
     assert_detected("c does not point to the same thing as a or b, thus there is a stale dependency here ")
 
 
@@ -200,7 +200,7 @@ b = 1
 c = 2
 d = 3
 def func(x, y = a):
-    print(b)
+    logging.info(b)
     e = c+d
     f = x + y
     return f
@@ -210,28 +210,28 @@ z = func(c)""")
     get_ipython().run_cell_magic(magic_function, '', """
 a = 4""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(z)""")
+logging.info(z)""")
     assert_detected("Should have detected stale dependency of fn func on a")
     get_ipython().run_cell_magic(magic_function, '', """
 def func(x, y = a):
-    print(b)
+    logging.info(b)
     e = c+d
     f = x + y
     return f
 z = func(c)
 """)
     get_ipython().run_cell_magic(magic_function, '', """
-print(z)""")
+logging.info(z)""")
     assert_not_detected()
     get_ipython().run_cell_magic(magic_function, '', """
 c = 3""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(z)""")
+logging.info(z)""")
     assert_detected("Should have detected stale dependency of z on c")
     get_ipython().run_cell_magic(magic_function, '', """
 z = func(c)""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(z)""")
+logging.info(z)""")
     assert_not_detected()
     get_ipython().run_cell_magic(magic_function, '', """
 b = 4""")
@@ -247,7 +247,7 @@ x = 3
 a = 4
 def f():
     def g():
-        print(a)
+        logging.info(a)
         return x
     return g()
 y = f()
@@ -255,17 +255,17 @@ y = f()
     get_ipython().run_cell_magic(magic_function, '', """
 x = 4""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(y)""")
+logging.info(y)""")
     assert_detected("Should have detected stale dependency of y on x")
     get_ipython().run_cell_magic(magic_function, '', """
 y = f()""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(y)""")
+logging.info(y)""")
     assert_not_detected()
     get_ipython().run_cell_magic(magic_function, '', """
 a = 1""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(y)""")
+logging.info(y)""")
     assert_not_detected("Changing a should not affect y")
 
 
@@ -276,7 +276,7 @@ x = 3
 a = 4
 def f():
     def g():
-        print(a)
+        logging.info(a)
         return x
     return g
 y = f()()
@@ -284,7 +284,7 @@ y = f()()
     get_ipython().run_cell_magic(magic_function, '', """
 x = 4""")
     get_ipython().run_cell_magic(magic_function, '', """
-print(y)""")
+logging.info(y)""")
     assert_detected("Should have detected stale dependency of y on x")
 
 

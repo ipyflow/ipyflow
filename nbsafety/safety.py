@@ -11,14 +11,14 @@ from .updates import UpdateDependency
 
 
 @register_cell_magic
-def dependency_safety(line, cell):
+def dependency_safety(line: str, cell: str):
     # We increase the counter by one each time this cell magic function is called
     dependency_safety.counter += 1
 
     # We get the ast.Module node by parsing the cell
     ast_tree = ast.parse(cell)
 
-    ############## PreCheck ##############
+    # State 1: Precheck.
     # Precheck process. First obtain the names that need to be checked. Then we check if their
     # defined_CN is greater than or equal to required, if not we give a warning and return.
     for name in PreCheck().precheck(ast_tree, dependency_safety.global_scope):
@@ -27,12 +27,12 @@ def dependency_safety(line, cell):
             dependency_safety.warning(name, node.defined_CN, node.required_CN_node_pair)
             return
 
-    ############## Run ##############
+    # Stage 2: Trace / run the cell.
     sys.settrace(capture_frame_at_run_time)
     get_ipython().run_cell(cell)
     sys.settrace(None)
 
-    ############## update ##############
+    # Stage 3: Update dependencies.
     UpdateDependency(dependency_safety).updateDependency(ast_tree, dependency_safety.global_scope)
     return
 

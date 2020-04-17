@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from ipykernel.ipkernel import IPythonKernel
 from ..version import __version__
 

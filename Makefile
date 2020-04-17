@@ -1,7 +1,11 @@
-.PHONY: test deps devdeps dev
+# -*- coding: utf-8 -*-
+.PHONY: check test tests deps devdeps dev
 
-test:
+check:
 	./runtests.sh
+
+test: check
+tests: check
 
 deps:
 	pip install -r requirements.txt

@@ -24,22 +24,25 @@ def better_warning(name,mucn,mark):
     original_warning(name,mucn,mark)
 
 
-
 def assert_detected(msg = ""):
     global DETECTED
     assert DETECTED, str(msg)
     DETECTED = False
 
+
 def assert_not_detected(msg = ""):
     assert not DETECTED, str(msg)
+
 
 #Make sure to seperate each test as a new test to prevent unexpected stale dependency
 def new_test():
     dependency_safety_init()
     dependency_safety.warning = better_warning
 
+
 #The string name of that cell magic function
 magic_function = "dependency_safety"
+
 
 #simple test about the basic assignment
 def test_Basic_Assignment_Break():
@@ -63,6 +66,7 @@ def test_Basic_Assignment_Break():
     get_ipython().run_cell_magic(magic_function, '', 'd = c+1')
     get_ipython().run_cell_magic(magic_function, '', 'print(a,b,c,d)')
     assert_not_detected("There should be no more dependency issue")
+
 
 #Foo, bar example from the project prompt
 def test_Foo_Bar_Example():
@@ -99,7 +103,6 @@ for f in funcs_to_run:
 print(accum)
 """)
     assert_detected("Did not detect that funcs_to_run's reference was changed")
-
 
     get_ipython().run_cell_magic(magic_function, '', """
 funcs_to_run = [foo,bar]
@@ -159,6 +162,7 @@ def test_Variable_Scope2():
     get_ipython().run_cell_magic(magic_function, '', 'print(y,z())')
     assert_not_detected("Updating y should solve the problem")
 
+
 def test_default_args():
     new_test()
     get_ipython().run_cell_magic(magic_function, '', """
@@ -172,7 +176,8 @@ def foo(y=x):
     assert_not_detected()
     get_ipython().run_cell_magic(magic_function, '', 'b = foo()')
     assert_detected("Should have detected stale dependency of fn foo() on x")
-    
+
+
 def test_Same_Pointer():
     new_test()
     #a and b are actually pointing to the same thing
@@ -185,7 +190,6 @@ def test_Same_Pointer():
     assert_not_detected("b is an alias of a, updating a should automatically update b as well")
     get_ipython().run_cell_magic(magic_function, '', 'print(c)')
     assert_detected("c does not point to the same thing as a or b, thus there is a stale dependency here ")
-
 
 
 def test_func_assign():
@@ -235,7 +239,8 @@ b = 4""")
 d = 1""")
     assert_not_detected("Changing b and d should not affect z")
 
-def test_func_assign_herlper_func():
+
+def test_func_assign_helper_func():
     new_test()
     get_ipython().run_cell_magic(magic_function, '', """
 x = 3
@@ -263,7 +268,8 @@ a = 1""")
 print(y)""")
     assert_not_detected("Changing a should not affect y")
 
-def test_func_assign_herlper_func2():
+
+def test_func_assign_helper_func2():
     new_test()
     get_ipython().run_cell_magic(magic_function, '', """
 x = 3
@@ -280,7 +286,6 @@ x = 4""")
     get_ipython().run_cell_magic(magic_function, '', """
 print(y)""")
     assert_detected("Should have detected stale dependency of y on x")
-
 
 
 #Run all above tests using ipytest

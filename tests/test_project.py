@@ -1,15 +1,18 @@
-import ipytest
-from nbsafety.safety import *
-ipytest.config(rewrite_asserts=True, magics=True)
-
 """
-Use "ipython test_project.py" command to run this test.
+Use "ipython test_project.py" command to run these tests.
 
-Although py.test should also work fine, but the main project has to be ran in ipython 
-enviroment, many functions will complain undefined otherwise. Importing things could 
+Although py.test should also work fine, but the main project has to be ran in ipython
+enviroment, many functions will complain undefined otherwise. Importing things could
 solve this problem, but I decided to implement this ipytest since it is also something
 from Ipython.
 """
+import ipytest
+
+from nbsafety.safety import *
+
+ipytest.config(rewrite_asserts=True, magics=True)
+# TODO (smacke): use a proper filter instead of using levels to filter out safety code logging
+logging.basicConfig(level=logging.ERROR)
 
 
 #rewrite the warning from magic cell so that we know it prompts a warning. DETECTED should be set to false again after each time use

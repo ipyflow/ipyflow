@@ -221,6 +221,7 @@ class UpdateDependency(ast.NodeVisitor):
                     func_id = id(self.get_subscript_object(node.func))
 
                 if func_id not in dependency_safety.func_id_to_scope_object:
+                    # TODO (smacke): likely bug here
                     queue.extend(args)
                     # Should extend keywords too. Implement later together with the missing part in visit_Call about keywords
 

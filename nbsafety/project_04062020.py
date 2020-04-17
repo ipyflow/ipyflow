@@ -165,31 +165,36 @@ def capture_frame_at_run_time(frame, event, arg):
 #############################   Update Stage   ##################################
 #################################################################################
 class UpdateDependency(ast.NodeVisitor):
-    """This function should be called when we are in the Update stage. This function will init the global_scope's frame_dict
-        if it is never binded. Then it will bind the instance attribute current_scope to the scope passed in (usually the 
-        global_scope). Then it will call super's visit function to visit everything in the module_node. Create or update node
-        dependencies happened in this cell"""
 
     def updateDependency(self, module_node, scope):
+        """
+        This function should be called when we are in the Update stage. This
+        function will init the global_scope's frame_dict if it is never binded.
+        Then it will bind the instance attribute current_scope to the scope
+        passed in (usually the global_scope). Then it will call super's visit
+        function to visit everything in the module_node. Create or update node
+        dependencies happened in this cell.
+        """
         if scope.frame_dict is None:
             scope.frame_dict = capture_frame_at_run_time.dictionary[()].f_locals
         self.current_scope = scope
         self.visit(module_node)
 
-    """Helper function that takes in a statement, returns a set that contains the dependency node set. 
-       Typically on the right side of assignments. 
-       For example: in a line "a = b + 3", the part "b + 3" will be the value argument. The return value will be a set
-       contains the variable node "b" that was looked up in all scopes. 
-    """
 
     def get_statement_dependency(self, value):
+        """
+        Helper function that takes in a statement, returns a set that contains
+        the dependency node set. Typically on the right side of assignments.
+        For example: in a line "a = b + 3", the part "b + 3" will be the value
+        argument. The return value will be a set contains the variable node "b"
+        that was looked up in all scopes.
+        """
         # The check queue starts with the value node passed in
         queue = [value]
         # The return dependency set starts with an empty set
         return_dependency = set()
 
-        # while queue is not empty
-        while queue:
+        while len(queue) > 0:
             node = queue.pop()
 
             # case "a", add the name to the return set. The base case

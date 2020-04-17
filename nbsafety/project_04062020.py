@@ -1,6 +1,8 @@
-from IPython.core.magic import register_cell_magic
 import ast
+import logging
 import sys
+
+from IPython.core.magic import register_cell_magic
 
 
 
@@ -702,20 +704,19 @@ def dependency_safety(line, cell):
 def dependency_safety_init():
     dependency_safety.counter = 1
     dependency_safety.global_scope = Scope("global")
-    dependency_safety.warning = lambda name, defined_CN, pair: print(name, "was defined in cell", 
-        defined_CN, "but its ancestor dependency node", pair[1].name, "was redefined in cell", pair[0], ".")
-    
+
+    def _safety_warning(name, defined_CN, pair):
+        logging.warning(
+            '{} was defined in cell {}, but its ancestor dependency node {} was redefined in cell {}.'.format(
+                name, defined_CN, pair[1].name, pair[0]
+            )
+        )
+    dependency_safety.warning = _safety_warning
+
     dependency_safety.func_id_to_scope_object = {}
 
     capture_frame_at_run_time.dictionary = {}
 
+
 dependency_safety_init()
-
-
-
-
-
-
-
-
 

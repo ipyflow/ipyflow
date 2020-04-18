@@ -31,7 +31,7 @@ class Scope(object):
         # The dependency set that will be used when function scope is called.
         # This will remain None until the scope is defined in
         # UpdateDependency.visit_FunctionDef method.  It contains either a
-        # string or a integer. String represents a outter scope variable name
+        # string or a integer. String represents an outer scope variable name
         # and integer represents a position of the argument.
         self.call_dependency = None
 

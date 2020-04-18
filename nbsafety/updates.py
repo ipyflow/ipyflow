@@ -11,9 +11,9 @@ from .variable import VariableNode
 
 class UpdateDependency(ast.NodeVisitor):
 
-    def __init__(self, safety):
+    def __init__(self, safety, current_scope=None):
         self.safety = safety
-        self.current_scope = None
+        self.current_scope = current_scope
 
     def updateDependency(self, module_node: ast.Module, scope: Scope):
         """
@@ -60,6 +60,8 @@ class UpdateDependency(ast.NodeVisitor):
             # case Function Calls
             elif isinstance(node, ast.Call):
                 # Should initialize call_dependency if it is called first time
+                while isinstance(node.func, ast.Call):
+                    node = node.func
                 self.visit_Call(node)
 
                 # Get the function id in different cases, if it is a built-in
@@ -76,10 +78,13 @@ class UpdateDependency(ast.NodeVisitor):
                     )
                 elif isinstance(node.func, ast.Subscript):
                     func_id = id(self.get_subscript_object(node.func))
+                else:
+                    raise UNEXPECTED_STATES(
+                        "Update", "get_statement_dependency", node.func, "Only ast.Name and ast.Subscript supported"
+                    )
 
                 if func_id not in self.safety.func_id_to_scope_object:
-                    # TODO (smacke): likely bug here
-                    queue.extend(args)
+                    queue.extend(node.args)
                     # Should extend keywords too.
                     # Implement later together with the missing part in visit_Call about keywords
 
@@ -193,6 +198,7 @@ class UpdateDependency(ast.NodeVisitor):
             name_node = remove_subscript(node.target)
         else:
             name_node = node.target
+
         if isinstance(name_node, ast.Name):
             # If the name is not user-defined, we just ignore
             if not self.current_scope.contains_name_current_scope(name_node.id):
@@ -238,6 +244,9 @@ class UpdateDependency(ast.NodeVisitor):
         for line in node.body:
             self.visit(line)
 
+    def _make_function_scope_from_name(self, name):
+        return Scope(self.safety, name, self.current_scope)
+
     def visit_FunctionDef(self, node: ast.FunctionDef):
         """
         Function definitions.  An argument node contains: args, vararg,
@@ -249,7 +258,7 @@ class UpdateDependency(ast.NodeVisitor):
         """
         # Create a new function scope of its name. Pass in the current scope as
         # its parent scope.
-        func_scope = Scope(self.safety, node.name, self.current_scope)
+        func_scope = self._make_function_scope_from_name(node.name)
 
         # Store the scope by its ID in dependency_safety's function attribute
         self.safety.func_id_to_scope_object[
@@ -354,7 +363,7 @@ class UpdateDependency(ast.NodeVisitor):
 
         func_scope = self.safety.func_id_to_scope_object[func_id]
 
-        # If the call_dependency is already binded, no need to run it again
+        # If the call_dependency is already bound, no need to run it again
         if func_scope.call_dependency is not None:
             return
         # else we initialize the call dependency to an empty set
@@ -367,6 +376,127 @@ class UpdateDependency(ast.NodeVisitor):
             path = (s.scope_name,) + path
             s = s.parent_scope
         func_scope.frame_dict = capture_frame_at_run_time.dictionary[path].f_locals
+
+        # Get body part and argument part from the scope object
+        func_body = func_scope.func_body
+        func_args = func_scope.func_args
+
+        # Save the pointers to original scope and dependencies so that we could
+        # do a recursive call to visit and update the relation within the new
+        # function scope.
+        original_scope = self.current_scope
+
+        # Change instance attribute "new_dependencies" and "current_scope" to be the new ones
+        self.current_scope = func_scope
+
+        # The simple arguments list.
+        arg_name_list = []
+        # Record all simple arguments(including defaults), create nodes for them
+        for arg_node in func_args.args:
+            if not isinstance(arg_node, ast.arg):
+                raise UNEXPECTED_STATES(
+                    "Update", "visit_Call", arg_node, "Expect to be ast.arg"
+                )
+            arg_name_list.append(arg_node.arg)
+            self.current_scope.update_node(arg_node.arg, set())
+        # Record Vararg
+        if func_args.vararg is not None:
+            arg_node = func_args.vararg
+            if not isinstance(arg_node, ast.arg):
+                raise UNEXPECTED_STATES(
+                    "Update", "visit_Call", arg_node, "Expect to be ast.arg"
+                )
+            self.current_scope.update_node(arg_node.arg, set())
+        # Record all kwonly arguments(including kw_defaults)
+        for arg_node in func_args.kwonlyargs:
+            if not isinstance(arg_node, ast.arg):
+                raise UNEXPECTED_STATES(
+                    "Update", "visit_Call", arg_node, "Expect to be ast.arg"
+                )
+            self.current_scope.update_node(arg_node.arg, set())
+        # Record kwarg
+        if func_args.kwarg is not None:
+            arg_node = func_args.kwarg
+            if not isinstance(arg_node, ast.arg):
+                raise UNEXPECTED_STATES(
+                    "Update", "visit_Call", arg_node, "Expect to be ast.arg"
+                )
+            self.current_scope.update_node(arg_node.arg, set())
+
+        # Run each line in the function body
+        # funcall_context = UpdateDependenciesFromCallContext(self.safety, self.current_scope)
+        for line in func_body:
+            if isinstance(line, ast.Return):
+                check_set = self.get_statement_dependency(line.value)
+                closed_set = set()
+                while check_set:
+                    node = check_set.pop()
+                    name, scope = node.name, node.scope
+                    closed_set.add(name)
+                    if scope is func_scope:
+                        # If it is one of the arguments, put the index in, so that we know which one
+                        # of the arguments we need to record. Reduce false positive for those non-used args
+                        if name in arg_name_list:
+                            func_scope.call_dependency.add(arg_name_list.index(name))
+                        elif name == func_args.vararg:
+                            func_scope.call_dependency.add(len(arg_name_list))
+                        ######There should be a way to get keyword arguments here########
+                        # for those still in the scope variables, we keep checking its parents
+                        else:
+                            check_set.update(
+                                [x for x in node.parent_node_set if x not in closed_set]
+                            )
+                    # If it is dependent on something outside of the current scope, then put it in
+                    elif func_scope.is_my_ancestor_scope(scope):
+                        func_scope.call_dependency.add(node)
+            elif isinstance(line, ast.FunctionDef):
+                self.visit(line)
+                # use the funcall_context visitor to traverse the whole function def
+                # can be used to get test_func_assign_helper_func2() to pass, but probably
+                # need to think of a different / cleaner approach (see note below).
+                # func_scope.call_dependency = func_scope.call_dependency | funcall_context.visit(line)
+            else:
+                self.visit(line)
+        # Restore the scope
+        self.current_scope = original_scope
+
+
+# TODO (smacke): this is for a proof of concept in order to get the
+# test_func_assign_helper_func2() test to pass, and is mostly
+# copy+pasted from visit_Call; will want to delete / rewrite.
+# The major challenge is that when inside of a two-level def,
+# we do not know at which scope the function was called, so we
+# do not know where to look for the captured frame.
+class UpdateDependenciesFromCallContext(UpdateDependency):
+    """Same as parent class, but traverses FunctionDefs"""
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        super().visit_FunctionDef(node)
+        func_id = id(self.current_scope.frame_dict[node.name])
+
+        # If this is not a user-defined function, we don't need to update the dependency within it
+        if func_id not in self.safety.func_id_to_scope_object:
+            return
+
+        func_scope = self.safety.func_id_to_scope_object[func_id]
+
+        # If the call_dependency is already bound, no need to run it again
+        if func_scope.call_dependency is not None:
+            return
+        # else we initialize the call dependency to an empty set
+        else:
+            func_scope.call_dependency = set()
+
+        # Link the frame_dict because this function has already ran now
+        path, s = (), func_scope
+        while s is not self.safety.global_scope:
+            path = (s.scope_name,) + path
+            s = s.parent_scope
+        try:
+            func_scope.frame_dict = capture_frame_at_run_time.dictionary[path].f_locals
+        except:
+            # TODO: this is a huge hack
+            func_scope.frame_dict = capture_frame_at_run_time.dictionary[(func_scope.scope_name,)].f_locals
 
         # Get body part and argument part from the scope object
         func_body = func_scope.func_body
@@ -443,3 +573,5 @@ class UpdateDependency(ast.NodeVisitor):
                 self.visit(line)
         # Restore the scope
         self.current_scope = original_scope
+        return func_scope.call_dependency
+

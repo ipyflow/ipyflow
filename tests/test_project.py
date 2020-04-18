@@ -6,9 +6,12 @@ enviroment, without which many functions will complain. Importing things could
 solve this problem, but I decided to implement this using ipytest since it is
 also something from IPython.
 """
+import logging
+
+from IPython import get_ipython
 import ipytest
 
-from nbsafety.safety import *
+from nbsafety.safety import dependency_safety, dependency_safety_init
 
 ipytest.config(rewrite_asserts=True, magics=True)
 # TODO (smacke): use a proper filter instead of using levels to filter out safety code logging
@@ -266,20 +269,14 @@ def f():
     return g()
 y = f()
 """)
-    run_cell("""
-x = 4""")
-    run_cell("""
-logging.info(y)""")
+    run_cell('x = 4')
+    run_cell('logging.info(y)')
     assert_detected("Should have detected stale dependency of y on x")
-    run_cell("""
-y = f()""")
-    run_cell("""
-logging.info(y)""")
+    run_cell('y = f()')
+    run_cell('logging.info(y)')
     assert_not_detected()
-    run_cell("""
-a = 1""")
-    run_cell("""
-logging.info(y)""")
+    run_cell('a = 1')
+    run_cell('logging.info(y)')
     assert_not_detected("Changing a should not affect y")
 
 
@@ -295,10 +292,8 @@ def f():
     return g
 y = f()()
 """)
-    run_cell("""
-x = 4""")
-    run_cell("""
-logging.info(y)""")
+    run_cell('x = 4')
+    run_cell('logging.info(y)')
     assert_detected("Should have detected stale dependency of y on x")
 
 

@@ -2,6 +2,7 @@ import ast
 import logging
 import sys
 
+from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
 
 from .precheck import PreCheck

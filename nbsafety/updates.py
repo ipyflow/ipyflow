@@ -1,17 +1,29 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import ast
 import logging
+from typing import TYPE_CHECKING
 
-from .ast_utils import remove_subscript
 from .scope import Scope
-from .tracing import capture_frame_at_run_time
 from .unexpected import UNEXPECTED_STATES
 from .variable import VariableNode
+
+if TYPE_CHECKING:
+    from .safety import DependencySafety
+
+
+# Helper function to remove the subscript and return the name node in front
+# of the subscript For example: pass in ast.Subscript node "a[3][b][5]"
+# will return ast.Name node "a".
+def remove_subscript(node: ast.AST):
+    while isinstance(node, ast.Subscript):
+        node = node.value
+    return node
 
 
 class UpdateDependency(ast.NodeVisitor):
 
-    def __init__(self, safety, current_scope=None):
+    def __init__(self, safety: DependencySafety, current_scope: Scope = None):
         self.safety = safety
         self.current_scope = current_scope
 
@@ -25,7 +37,7 @@ class UpdateDependency(ast.NodeVisitor):
         dependencies happened in this cell.
         """
         if scope.frame_dict is None:
-            scope.frame_dict = capture_frame_at_run_time.dictionary[()].f_locals
+            scope.frame_dict = self.safety.frame_dict_by_scope[()].f_locals
         self.current_scope = scope
         self.visit(module_node)
 
@@ -245,7 +257,7 @@ class UpdateDependency(ast.NodeVisitor):
             self.visit(line)
 
     def _make_function_scope_from_name(self, name):
-        return Scope(self.safety, name, self.current_scope)
+        return Scope(self.safety.counter, name, self.current_scope)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         """
@@ -375,7 +387,7 @@ class UpdateDependency(ast.NodeVisitor):
         while s is not self.safety.global_scope:
             path = (s.scope_name,) + path
             s = s.parent_scope
-        func_scope.frame_dict = capture_frame_at_run_time.dictionary[path].f_locals
+        func_scope.frame_dict = self.safety.frame_dict_by_scope[path].f_locals
 
         # Get body part and argument part from the scope object
         func_body = func_scope.func_body
@@ -493,10 +505,10 @@ class UpdateDependenciesFromCallContext(UpdateDependency):
             path = (s.scope_name,) + path
             s = s.parent_scope
         try:
-            func_scope.frame_dict = capture_frame_at_run_time.dictionary[path].f_locals
+            func_scope.frame_dict = self.safety.frame_dict_by_scope[path].f_locals
         except:
             # TODO: this is a huge hack
-            func_scope.frame_dict = capture_frame_at_run_time.dictionary[(func_scope.scope_name,)].f_locals
+            func_scope.frame_dict = self.safety.frame_dict_by_scope[(func_scope.scope_name,)].f_locals
 
         # Get body part and argument part from the scope object
         func_body = func_scope.func_body

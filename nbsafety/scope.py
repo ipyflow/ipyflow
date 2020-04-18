@@ -1,11 +1,16 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+from typing import List, TYPE_CHECKING
+
 from .variable import VariableNode
+if TYPE_CHECKING:
+    from .scope import Scope
 
 
 class Scope(object):
-    def __init__(self, safety, scope_name, parent_scope=None):
-        # instance of safety state
-        self.safety = safety
+    def __init__(self, counter: List[int], scope_name: str, parent_scope: Scope = None):
+        # shared counter state from DependencySafety object
+        self.counter = counter
 
         # The actual string name of the Scope
         self.scope_name = scope_name
@@ -63,7 +68,7 @@ class Scope(object):
         """
         node = VariableNode(
             name,
-            self.safety.counter,
+            self.counter[0],
             self,
             id(self.frame_dict[name]),
             self.is_aliasable(name),
@@ -90,8 +95,8 @@ class Scope(object):
             n.children_node_set.add(node)
             node.parent_node_set.add(n)
 
-        node.defined_CN = self.safety.counter
-        node.update_CN_node_pair((self.safety.counter, node))
+        node.defined_CN = self.counter[0]
+        node.update_CN_node_pair((self.counter[0], node))
 
     # returns the VariableNode that is represented by the name passed in.
     def get_node_by_name_current_scope(self, name):

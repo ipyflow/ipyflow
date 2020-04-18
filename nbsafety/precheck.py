@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
 
-from .ast_utils import remove_subscript
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
 

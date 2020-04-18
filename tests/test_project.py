@@ -11,44 +11,32 @@ import logging
 from IPython import get_ipython
 import ipytest
 
-from nbsafety.safety import dependency_safety, dependency_safety_init
+from nbsafety.safety import DependencySafety
 
 ipytest.config(rewrite_asserts=True, magics=True)
 # TODO (smacke): use a proper filter instead of using levels to filter out safety code logging
 logging.basicConfig(level=logging.ERROR)
 
 
-# Rewrite the warning from magic cell so that we know it prompts a warning.
-# DETECTED should be set to false again after each time use.
-dependency_safety_init()
-original_warning = dependency_safety.warning
-DETECTED = False
-
-
-def better_warning(name, mucn, mark):
-    global DETECTED
-    DETECTED = True
-    original_warning(name, mucn, mark)
+SAFETY_STATE = DependencySafety()
 
 
 def assert_detected(msg=''):
-    global DETECTED
-    assert DETECTED, str(msg)
-    DETECTED = False
+    assert SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
 
 
 def assert_not_detected(msg=''):
-    assert not DETECTED, str(msg)
+    assert not SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
 
 
 # Make sure to seperate each test as a new test to prevent unexpected stale dependency
 def new_test():
-    dependency_safety_init()
-    dependency_safety.warning = better_warning
+    global SAFETY_STATE
+    SAFETY_STATE = DependencySafety()
 
 
 def run_cell(code):
-    get_ipython().run_cell_magic(dependency_safety.__name__, None, code)
+    get_ipython().run_cell_magic(SAFETY_STATE.cell_magic_name, None, code)
 
 
 def test_subscript_dependency():

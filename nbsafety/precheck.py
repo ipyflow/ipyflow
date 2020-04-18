@@ -6,15 +6,15 @@ from .unexpected import UNEXPECTED_STATES
 
 
 class PreCheck(ast.NodeVisitor):
-    """
-    This function should be called when we want to precheck an ast.Module. For
-    each line/block of the cell We first run the check of new assignments, then
-    we obtain all the names. In these names, we put the ones that are user
-    defined and not in the safe_set into the return check_set for further
-    checks.
-    """
 
     def precheck(self, module_node: ast.Module, scope: Scope):
+        """
+        This function should be called when we want to precheck an ast.Module. For
+        each line/block of the cell We first run the check of new assignments, then
+        we obtain all the names. In these names, we put the ones that are user
+        defined and not in the safe_set into the return check_set for further
+        checks.
+        """
         check_set = set()
         self.safe_set = set()
         self.current_scope = scope

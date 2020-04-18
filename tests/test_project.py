@@ -1,8 +1,8 @@
 """
 Use "ipython test_project.py" command to run these tests.
 
-Although py.test should also work fine, the main project has to be ran in ipython
-enviroment, without which many functions will complain. Importing things could
+Although py.test should also work fine, the main project has to be run in an IPython
+environment, without which many functions will complain. Importing things could
 solve this problem, but I decided to implement this using ipytest since it is
 also something from IPython.
 """
@@ -49,7 +49,7 @@ def test_subscript_dependency():
     assert_detected("Did not detect that lst changed underneath y")
 
 
-#simple test about the basic assignment
+# simple test about the basic assignment
 def test_basic_assignment():
     new_test()
     run_cell('a = 1')
@@ -57,7 +57,7 @@ def test_basic_assignment():
     run_cell('c = a+b')
     run_cell('d = c+1')
     run_cell('logging.info(a,b,c,d)')
-    #redefine a here but not c and d
+    # redefine a here but not c and d
     run_cell('a = 7')
     run_cell('logging.info(a,b,c,d)')
     assert_detected("Did not detect that c's reference was changed")

@@ -23,7 +23,7 @@ class PreCheck(ast.NodeVisitor):
         self.current_scope = scope
         for node in module_node.body:
             self.visit(node)
-            for name in GetAllNames().get_name_set(node):
+            for name in GetAllNames()(node):
                 if name in self.current_scope.variable_dict and name not in self.safe_set:
                     check_set.add(name)
         return check_set
@@ -93,12 +93,13 @@ class PreCheck(ast.NodeVisitor):
             self.visit(line)
 
 
-# Call GetAllNames().get_name_set(ast_tree) to get a set of all names appeared in ast_tree.
+# Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.
 # Helper Class
 class GetAllNames(ast.NodeVisitor):
-    # This function should be called when getting the name set.
-    def get_name_set(self, node):
-        self.name_set = set()
+    def __init__(self):
+        self.name_set: Set[str] = set()
+
+    def __call__(self, node: ast.AST):
         self.visit(node)
         return self.name_set
 

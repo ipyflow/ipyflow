@@ -22,7 +22,7 @@ class VariableNode(object):
         self.children_node_set: Set[VariableNode] = set()
 
         # The cell number when this node is defined
-        self.defined_CN = defined_cell_num
+        self.defined_cell_num = defined_cell_num
 
         # The cell number this node is required to have to not be considered as stale dependency
         # The Pair should contain (The required cell number, The ancestor node that was updated)
@@ -45,7 +45,7 @@ class VariableNode(object):
             self.alias_set = None
             #####################INCOMPLETE###########################
 
-    def update_CN_node_pair(self, pair, seen=None):
+    def update_cellnum_node_pair(self, pair, seen=None):
         if seen is None:
             seen = set()
         if self in seen:
@@ -53,4 +53,4 @@ class VariableNode(object):
         seen.add(self)
         self.required_CN_node_pair = pair
         for n in self.children_node_set:
-            n.update_CN_node_pair(pair, seen)
+            n.update_cellnum_node_pair(pair, seen)

@@ -23,11 +23,11 @@ def remove_subscript(node: ast.AST):
 
 class UpdateDependency(ast.NodeVisitor):
 
-    def __init__(self, safety: DependencySafety, current_scope: Scope = None):
+    def __init__(self, safety: DependencySafety):
         self.safety = safety
-        self.current_scope = current_scope
+        self.current_scope = safety.global_scope
 
-    def updateDependency(self, module_node: ast.Module, scope: Scope):
+    def __call__(self, module_node: ast.Module):
         """
         This function should be called when we are in the Update stage. This
         function will init the global_scope's frame_dict if it is never binded.
@@ -36,9 +36,6 @@ class UpdateDependency(ast.NodeVisitor):
         function to visit everything in the module_node. Create or update node
         dependencies happened in this cell.
         """
-        if scope.frame_dict is None:
-            scope.frame_dict = self.safety.frame_dict_by_scope[()].f_locals
-        self.current_scope = scope
         self.visit(module_node)
 
     def get_statement_dependency(self, value: ast.AST) -> Set[VariableNode]:

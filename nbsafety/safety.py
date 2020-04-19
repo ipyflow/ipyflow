@@ -7,7 +7,7 @@ from typing import Dict, Tuple
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
 
-from .precheck import PreCheck
+from .precheck import precheck
 from .scope import Scope
 from .updates import UpdateDependency
 
@@ -52,10 +52,10 @@ class DependencySafety(object):
             # State 1: Precheck.
             # Precheck process. First obtain the names that need to be checked. Then we check if their
             # defined_cell_num is greater than or equal to required, if not we give a warning and return.
-            for name in PreCheck().precheck(ast_tree, self.global_scope):
+            for name in precheck(self.global_scope, ast_tree):
                 node = self.global_scope.get_node_by_name_current_scope(name)
-                if node.defined_CN < node.required_CN_node_pair[0]:
-                    _safety_warning(name, node.defined_CN, node.required_CN_node_pair)
+                if node.defined_cell_num < node.required_CN_node_pair[0]:
+                    _safety_warning(name, node.defined_cell_num, node.required_CN_node_pair)
                     self.stale_dependency_detected = True
                     return
 
@@ -65,7 +65,8 @@ class DependencySafety(object):
             sys.settrace(None)
 
             # Stage 3: Update dependencies.
-            UpdateDependency(self).updateDependency(ast_tree, self.global_scope)
+            self.global_scope.frame_dict = self.frame_dict_by_scope[()].f_locals
+            UpdateDependency(self)(ast_tree)
             return
         if cell_magic_name is not None:
             # TODO (smacke): probably not a great idea to rely on this

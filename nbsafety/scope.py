@@ -96,20 +96,21 @@ class Scope(object):
             n.children_node_set.add(node)
             node.parent_node_set.add(n)
 
-        node.defined_CN = self.counter[0]
-        node.update_CN_node_pair((self.counter[0], node))
+        node.defined_cell_num = self.counter[0]
+        node.update_cellnum_node_pair((self.counter[0], node))
 
     # returns the VariableNode that is represented by the name passed in.
-    def get_node_by_name_current_scope(self, name: str):
+    def get_node_by_name_current_scope(self, name: str) -> VariableNode:
         return self.variable_dict[name]
 
     # returns the VariableNode that is represented by the name passed in. Look up all ancestor scopes.
-    def get_node_by_name_all_scope(self, name):
+    def get_node_by_name_all_scope(self, name) -> VariableNode:
         scope = self
         while scope:
             if name in scope.variable_dict:
                 return scope.variable_dict[name]
             scope = scope.parent_scope
+        raise ValueError('unable to find node for %s' % name)
 
     # returns the object that is represented by the name passed in, return none if not existed.
     def get_object_by_name_current_scope(self, name):

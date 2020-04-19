@@ -5,12 +5,16 @@ from typing import Set
 
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
-from .variable import VariableNode
 
 
 class PreCheck(ast.NodeVisitor):
 
-    def precheck(self, module_node: ast.Module, scope: Scope):
+    def __init__(self, scope: Scope):
+        self.safe_set: Set[str] = set()
+        # TODO(smacke): ideally this would be an arg of __call__ and passed down the visit_* calls
+        self.current_scope = scope
+
+    def __call__(self, module_node: ast.Module):
         """
         This function should be called when we want to precheck an ast.Module. For
         each line/block of the cell We first run the check of new assignments, then
@@ -19,11 +23,9 @@ class PreCheck(ast.NodeVisitor):
         checks.
         """
         check_set = set()
-        self.safe_set: Set[str] = set()
-        self.current_scope = scope
         for node in module_node.body:
             self.visit(node)
-            for name in GetAllNames()(node):
+            for name in get_all_names(node):
                 if name in self.current_scope.variable_dict and name not in self.safe_set:
                     check_set.add(name)
         return check_set
@@ -93,6 +95,10 @@ class PreCheck(ast.NodeVisitor):
             self.visit(line)
 
 
+def precheck(scope: Scope, module_node: ast.Module):
+    return PreCheck(scope)(module_node)
+
+
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.
 # Helper Class
 class GetAllNames(ast.NodeVisitor):
@@ -119,3 +125,7 @@ class GetAllNames(ast.NodeVisitor):
                 node.args,
                 "Expect to be ast.arguments",
             )
+
+
+def get_all_names(node: ast.AST):
+    return GetAllNames()(node)

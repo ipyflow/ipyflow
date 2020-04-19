@@ -1,7 +1,8 @@
 import ast
 import logging
 import sys
-from typing import Any, Dict, Tuple
+from types import FrameType
+from typing import Dict, Tuple
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
@@ -11,10 +12,10 @@ from .scope import Scope
 from .updates import UpdateDependency
 
 
-def _safety_warning(name, defined_CN, pair):
+def _safety_warning(name, defined_cell_num, pair):
     logging.warning(
         "{} defined in cell {} may have a stale dependency on {} (last updated in cell {}).".format(
-            name, defined_CN, pair[1].name, pair[0]
+            name, defined_cell_num, pair[1].name, pair[0]
         )
     )
 
@@ -25,15 +26,15 @@ class DependencySafety(object):
         self.counter = [0]
         self.global_scope = Scope(self.counter, 'global')
         self.func_id_to_scope_object: Dict[int, Scope] = {}
-        self.frame_dict_by_scope: Dict[Tuple[str, ...], Any] = {}
+        self.frame_dict_by_scope: Dict[Tuple[str, ...], FrameType] = {}
         self.stale_dependency_detected = False
         self._cell_magic = self._make_cell_magic(cell_magic_name)
 
-    def _capture_frame_at_run_time(self, frame, event, _):
+    def _capture_frame_at_run_time(self, frame: FrameType, event: str, _):
         original_frame = frame
         if 'ipython-input' in frame.f_code.co_filename:
             if event == 'call':
-                path = ()
+                path: Tuple[str, ...] = ()
                 while frame.f_code.co_name != '<module>':
                     path = (frame.f_code.co_name,) + path
                     frame = frame.f_back
@@ -50,7 +51,7 @@ class DependencySafety(object):
 
             # State 1: Precheck.
             # Precheck process. First obtain the names that need to be checked. Then we check if their
-            # defined_CN is greater than or equal to required, if not we give a warning and return.
+            # defined_cell_num is greater than or equal to required, if not we give a warning and return.
             for name in PreCheck().precheck(ast_tree, self.global_scope):
                 node = self.global_scope.get_node_by_name_current_scope(name)
                 if node.defined_CN < node.required_CN_node_pair[0]:

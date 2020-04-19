@@ -262,7 +262,7 @@ class UpdateDependency(ast.NodeVisitor):
         for line in node.body:
             self.visit(line)
 
-    def _make_function_scope_from_name(self, name):
+    def _make_function_scope_from_name(self, name: str):
         return Scope(self.safety.counter, name, self.current_scope)
 
     def visit_FunctionDef(self, node: ast.FunctionDef):

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 
 class VariableNode(object):
-    def __init__(self, name: str, defined_CN: int, scope: Scope, uid: int, aliasable: bool):
+    def __init__(self, name: str, defined_cell_num: int, scope: Scope, uid: int, aliasable: bool):
         # The actual string name of the Node
         # Note that the VariableNode should be identified by its name, thus the name should never change
         self.name = str(name)
@@ -22,11 +22,11 @@ class VariableNode(object):
         self.children_node_set: Set[VariableNode] = set()
 
         # The cell number when this node is defined
-        self.defined_CN = defined_CN
+        self.defined_CN = defined_cell_num
 
         # The cell number this node is required to have to not be considered as stale dependency
         # The Pair should contain (The required cell number, The ancestor node that was updated)
-        self.required_CN_node_pair = (defined_CN, None)
+        self.required_CN_node_pair = (defined_cell_num, None)
 
         # The actual id of the object that this node represents.
         self.uid = uid

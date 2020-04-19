@@ -2,7 +2,7 @@
 from __future__ import annotations
 import ast
 import logging
-from typing import cast, Set, Tuple, TYPE_CHECKING
+from typing import cast, Set, TYPE_CHECKING
 
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
@@ -386,13 +386,8 @@ class UpdateDependency(ast.NodeVisitor):
         else:
             func_scope.call_dependency = set()
 
-        # Link the frame_dict because this function has already ran now
-        path: Tuple[str, ...] = ()
-        s = func_scope
-        while s is not self.safety.global_scope:
-            path = (s.scope_name,) + path
-            s = s.parent_scope
-        func_scope.frame_dict = self.safety.frame_dict_by_scope[path].f_locals
+        # Link the frame_dict because this function has already run now
+        func_scope.frame_dict = self.safety.frame_dict_by_scope[func_scope.full_path].f_locals
 
         # Get body part and argument part from the scope object
         func_body = func_scope.func_body
@@ -504,14 +499,9 @@ class UpdateDependenciesFromCallContext(UpdateDependency):
         else:
             func_scope.call_dependency = set()
 
-        # Link the frame_dict because this function has already ran now
-        path: Tuple[str, ...]
-        s = func_scope
-        while s is not self.safety.global_scope:
-            path = (s.scope_name,) + path
-            s = s.parent_scope
+        # Link the frame_dict because this function has already run now
         try:
-            func_scope.frame_dict = self.safety.frame_dict_by_scope[path].f_locals
+            func_scope.frame_dict = self.safety.frame_dict_by_scope[func_scope.full_path].f_locals
         except:
             # TODO: this is a huge hack
             func_scope.frame_dict = self.safety.frame_dict_by_scope[(func_scope.scope_name,)].f_locals

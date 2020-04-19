@@ -24,7 +24,7 @@ class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None):
         self.counter = [0]
-        self.global_scope = Scope(self.counter, 'global')
+        self.global_scope = Scope(self.counter)
         self.func_id_to_scope_object: Dict[int, Scope] = {}
         self.frame_dict_by_scope: Dict[Tuple[str, ...], FrameType] = {}
         self.stale_dependency_detected = False

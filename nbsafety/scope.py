@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
-from typing import Any, Dict, Iterable, List, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from .variable import VariableNode
 
 
 class Scope(object):
-    def __init__(self, counter: List[int], scope_name: str, parent_scope: Optional[Scope] = None):
+    GLOBAL_SCOPE = '<module>'
+
+    def __init__(self, counter: List[int], scope_name: str = GLOBAL_SCOPE, parent_scope: Optional[Scope] = None):
         # shared counter state from DependencySafety object
         self.counter = counter
 
@@ -98,6 +100,14 @@ class Scope(object):
 
         node.defined_cell_num = self.counter[0]
         node.update_cellnum_node_pair((self.counter[0], node))
+
+    @property
+    def full_path(self) -> Tuple[str, ...]:
+        path = (self.scope_name,)
+        if self.parent_scope.scope_name == self.GLOBAL_SCOPE:
+            return path
+        else:
+            return self.parent_scope.full_path + path
 
     # returns the VariableNode that is represented by the name passed in.
     def get_node_by_name_current_scope(self, name: str) -> VariableNode:

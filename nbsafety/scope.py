@@ -59,7 +59,7 @@ class Scope(object):
         self.func_args = None
 
     # Create a new VariableNode under the current scope and return the node
-    def create_node(self, name):
+    def create_node(self, name: str):
         """
         The new created node takes the name passed as its name, the current
         cell number as its defined cell number, this current scope as its
@@ -79,7 +79,7 @@ class Scope(object):
         return node
 
     # Give a set of parent nodes, update the current node accordingly.
-    def update_node(self, node_name, dependency_nodes):
+    def update_node(self, node_name: str, dependency_nodes):
         if self.contains_name_current_scope(node_name):
             node = self.get_node_by_name_current_scope(node_name)
         else:
@@ -99,7 +99,7 @@ class Scope(object):
         node.update_CN_node_pair((self.counter[0], node))
 
     # returns the VariableNode that is represented by the name passed in.
-    def get_node_by_name_current_scope(self, name):
+    def get_node_by_name_current_scope(self, name: str):
         return self.variable_dict[name]
 
     # returns the VariableNode that is represented by the name passed in. Look up all ancestor scopes.

@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .scope import Scope
 
 
 class VariableNode(object):
-    def __init__(self, name, defined_CN, scope, uid, aliasable):
+    def __init__(self, name: str, defined_CN: int, scope: Scope, uid: int, aliasable: bool):
         # The actual string name of the Node
         # Note that the VariableNode should be identified by its name, thus the name should never change
         self.name = str(name)

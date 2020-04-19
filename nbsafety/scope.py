@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Union
 
 from .variable import VariableNode
 
@@ -54,10 +54,10 @@ class Scope(object):
         # called, we can update the dependency within it.  This will remain
         # None until the scope is defined in the
         # UpdateDependency.visit_FunctionDef.
-        self.func_body: Optional[ast.AST] = None
+        self.func_body: Optional[Iterable[ast.stmt]] = None
 
         # This is the arguments of the funciton definition.
-        self.func_args: Optional[ast.AST] = None
+        self.func_args: Optional[ast.arguments] = None
 
     # Create a new VariableNode under the current scope and return the node
     def create_node(self, name: str):
@@ -128,11 +128,11 @@ class Scope(object):
         return None
 
     # returns a boolean value that indicates if the name represents a VariableNode in current scope
-    def contains_name_current_scope(self, name):
+    def contains_name_current_scope(self, name: str):
         return name in self.variable_dict
 
     # returns a boolean value if name exists in the scope or all ancestor scopes.
-    def contains_name_all_scope(self, name):
+    def contains_name_all_scope(self, name: str):
         scope = self
         while scope:
             if name in scope.variable_dict:
@@ -140,7 +140,7 @@ class Scope(object):
             scope = scope.parent_scope
         return False
 
-    def is_my_ancestor_scope(self, ancestor):
+    def is_my_ancestor_scope(self, ancestor: Scope):
         s = self.parent_scope
         while s:
             if s is ancestor:
@@ -149,7 +149,7 @@ class Scope(object):
         return False
 
     # helper function to check if the object behind the name in the scope is aliasable.
-    def is_aliasable(self, name):
+    def is_aliasable(self, name: str):
         ###### Currently Disabled ########
         return False
         ##################################

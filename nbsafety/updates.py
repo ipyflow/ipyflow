@@ -2,7 +2,7 @@
 from __future__ import annotations
 import ast
 import logging
-from typing import Set, Tuple, TYPE_CHECKING
+from typing import cast, Set, Tuple, TYPE_CHECKING
 
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
@@ -175,10 +175,14 @@ class UpdateDependency(ast.NodeVisitor):
         """
         for target_node in node.targets:
             if isinstance(target_node, ast.Tuple):
+                tuple_value = cast(ast.Tuple, node.value)
                 for i in range(len(target_node.elts)):
+                    if not isinstance(target_node.elts[i], ast.Name):
+                        raise TypeError('unexpected type for %s' % target_node.elts[i])
+                    target_i_name = cast(ast.Name, target_node.elts[i])
                     self.current_scope.update_node(
-                        target_node.elts[i].id,
-                        self.get_statement_dependency(node.value.elts[i]),
+                        target_i_name.id,
+                        self.get_statement_dependency(tuple_value.elts[i]),
                     )
             elif isinstance(target_node, ast.Name):
                 self.current_scope.update_node(
@@ -354,7 +358,8 @@ class UpdateDependency(ast.NodeVisitor):
             if isinstance(node.func, ast.Name):
                 func_name = node.func.id
             else:
-                func_name = '{}.{}'.format(node.func.value.id, node.func.attr)
+                attrval = cast(ast.Name, node.func.value)
+                func_name = '{}.{}'.format(attrval.id, node.func.attr)
             if func_name not in self.current_scope.frame_dict:
                 func_id = id(None)
             else:

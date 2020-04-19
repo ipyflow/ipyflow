@@ -175,6 +175,8 @@ class UpdateDependency(ast.NodeVisitor):
         """
         for target_node in node.targets:
             if isinstance(target_node, ast.Tuple):
+                if not isinstance(node.value, ast.Tuple):
+                    raise TypeError('unexpected type for %s' % node.value)
                 tuple_value = cast(ast.Tuple, node.value)
                 for i in range(len(target_node.elts)):
                     if not isinstance(target_node.elts[i], ast.Name):

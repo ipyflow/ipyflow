@@ -2,7 +2,7 @@
 from __future__ import annotations
 import ast
 import logging
-from typing import TYPE_CHECKING
+from typing import Set, Tuple, TYPE_CHECKING
 
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
@@ -41,7 +41,7 @@ class UpdateDependency(ast.NodeVisitor):
         self.current_scope = scope
         self.visit(module_node)
 
-    def get_statement_dependency(self, value: ast.AST):
+    def get_statement_dependency(self, value: ast.AST) -> Set[VariableNode]:
         """
         Helper function that takes in a statement, returns a set that contains
         the dependency node set. Typically on the right side of assignments.
@@ -352,13 +352,13 @@ class UpdateDependency(ast.NodeVisitor):
         """
         if isinstance(node.func, (ast.Name, ast.Attribute)):
             if isinstance(node.func, ast.Name):
-                func_id = node.func.id
+                func_name = node.func.id
             else:
-                func_id = '{}.{}'.format(node.func.value.id, node.func.attr)
-            if func_id not in self.current_scope.frame_dict:
+                func_name = '{}.{}'.format(node.func.value.id, node.func.attr)
+            if func_name not in self.current_scope.frame_dict:
                 func_id = id(None)
             else:
-                func_id = id(self.current_scope.frame_dict[func_id])
+                func_id = id(self.current_scope.frame_dict[func_name])
         elif isinstance(node.func, ast.Subscript):
             func_id = id(self.get_subscript_object(node.func))
         else:
@@ -383,7 +383,8 @@ class UpdateDependency(ast.NodeVisitor):
             func_scope.call_dependency = set()
 
         # Link the frame_dict because this function has already ran now
-        path, s = (), func_scope
+        path: Tuple[str, ...] = ()
+        s = func_scope
         while s is not self.safety.global_scope:
             path = (s.scope_name,) + path
             s = s.parent_scope
@@ -442,8 +443,8 @@ class UpdateDependency(ast.NodeVisitor):
                 check_set = self.get_statement_dependency(line.value)
                 closed_set = set()
                 while check_set:
-                    node = check_set.pop()
-                    name, scope = node.name, node.scope
+                    check_node = check_set.pop()
+                    name, scope = check_node.name, check_node.scope
                     closed_set.add(name)
                     if scope is func_scope:
                         # If it is one of the arguments, put the index in, so that we know which one
@@ -456,11 +457,11 @@ class UpdateDependency(ast.NodeVisitor):
                         # for those still in the scope variables, we keep checking its parents
                         else:
                             check_set.update(
-                                [x for x in node.parent_node_set if x not in closed_set]
+                                [x for x in check_node.parent_node_set if x not in closed_set]
                             )
                     # If it is dependent on something outside of the current scope, then put it in
                     elif func_scope.is_my_ancestor_scope(scope):
-                        func_scope.call_dependency.add(node)
+                        func_scope.call_dependency.add(check_node)
             elif isinstance(line, ast.FunctionDef):
                 self.visit(line)
                 # use the funcall_context visitor to traverse the whole function def
@@ -500,7 +501,8 @@ class UpdateDependenciesFromCallContext(UpdateDependency):
             func_scope.call_dependency = set()
 
         # Link the frame_dict because this function has already ran now
-        path, s = (), func_scope
+        path: Tuple[str, ...]
+        s = func_scope
         while s is not self.safety.global_scope:
             path = (s.scope_name,) + path
             s = s.parent_scope
@@ -561,9 +563,9 @@ class UpdateDependenciesFromCallContext(UpdateDependency):
             if isinstance(line, ast.Return):
                 check_set = self.get_statement_dependency(line.value)
                 closed_set = set()
-                while check_set:
-                    node = check_set.pop()
-                    name, scope = node.name, node.scope
+                while len(check_set) > 0:
+                    check_node = check_set.pop()
+                    name, scope = check_node.name, check_node.scope
                     closed_set.add(name)
                     if scope is func_scope:
                         # If it is one of the arguments, put the index in, so that we know which one
@@ -576,11 +578,11 @@ class UpdateDependenciesFromCallContext(UpdateDependency):
                         # for those still in the scope variables, we keep checking its parents
                         else:
                             check_set.update(
-                                [x for x in node.parent_node_set if x not in closed_set]
+                                [x for x in check_node.parent_node_set if x not in closed_set]
                             )
                     # If it is dependent on something outside of the current scope, then put it in
                     elif func_scope.is_my_ancestor_scope(scope):
-                        func_scope.call_dependency.add(node)
+                        func_scope.call_dependency.add(check_node)
             else:
                 self.visit(line)
         # Restore the scope

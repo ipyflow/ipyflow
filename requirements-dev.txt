@@ -1,3 +1,4 @@
+ipytest
+mypy
 py
 pytest
-ipytest

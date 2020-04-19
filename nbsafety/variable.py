@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Set, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .scope import Scope
@@ -16,10 +16,10 @@ class VariableNode(object):
         self.scope = scope
 
         # Set of parent nodes on which this node depends
-        self.parent_node_set = set()
+        self.parent_node_set: Set[VariableNode]  = set()
 
         # Set of children nodes that depend on this node
-        self.children_node_set = set()
+        self.children_node_set: Set[VariableNode] = set()
 
         # The cell number when this node is defined
         self.defined_CN = defined_CN

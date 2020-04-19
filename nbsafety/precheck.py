@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import ast
+from typing import Set
 
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
+from .variable import VariableNode
 
 
 class PreCheck(ast.NodeVisitor):
@@ -16,7 +19,7 @@ class PreCheck(ast.NodeVisitor):
         checks.
         """
         check_set = set()
-        self.safe_set = set()
+        self.safe_set: Set[str] = set()
         self.current_scope = scope
         for node in module_node.body:
             self.visit(node)

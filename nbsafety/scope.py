@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import List, TYPE_CHECKING
+import ast
+from typing import Any, Dict, List, Optional, Set, Union
 
 from .variable import VariableNode
-if TYPE_CHECKING:
-    from .scope import Scope
 
 
 class Scope(object):
-    def __init__(self, counter: List[int], scope_name: str, parent_scope: Scope = None):
+    def __init__(self, counter: List[int], scope_name: str, parent_scope: Optional[Scope] = None):
         # shared counter state from DependencySafety object
         self.counter = counter
 
@@ -19,31 +18,33 @@ class Scope(object):
         self.parent_scope = parent_scope
 
         # A "name->scope" dictionary that contains all its children scopes.
-        self.children_scope_dict = {}
+        self.children_scope_dict: Dict[str, Scope] = {}
 
         # If there is a parent scope, then updates its children scope dictionary to add self in.
         if parent_scope:
             parent_scope.children_scope_dict[scope_name] = self
 
         # A "name->node" dictionary that contains all VariableNode in this scope
-        self.variable_dict = {}
+        self.variable_dict: Dict[str, VariableNode] = {}
 
         # The actual f_locals dictionary in the frame that this represents.
         # This will not be initialized untill the actual frame runs.
         # updateDependency.visit_Call will update this.
-        self.frame_dict = None
+        self.frame_dict: Optional[Dict[str, Any]] = None
 
         # The dependency set that will be used when function scope is called.
         # This will remain None until the scope is defined in
         # UpdateDependency.visit_FunctionDef method.  It contains either a
         # string or a integer. String represents an outer scope variable name
         # and integer represents a position of the argument.
-        self.call_dependency = None
+        # TODO(smacke): not true? it looks like it can contain VariableNodes?
+        # self.call_dependency: Optional[Set[Union[str, int]]] = None
+        self.call_dependency: Optional[Set[Union[VariableNode, int]]] = None
 
         # This will remain None until the scope is defined in
         # UpdateDependency.visit_FunctionDef method.  This dictionary is to
         # record dependency of default arguments at the time the function is
-        # defined. Wwe don't have the frame_dict of this never ran function and
+        # defined. We don't have the frame_dict of this never ran function and
         # we have to wait until a Call to this function to update the
         # dependencies recorded in this set.
         self.to_update_dependency = None
@@ -53,10 +54,10 @@ class Scope(object):
         # called, we can update the dependency within it.  This will remain
         # None until the scope is defined in the
         # UpdateDependency.visit_FunctionDef.
-        self.func_body = None
+        self.func_body: Optional[ast.AST] = None
 
         # This is the arguments of the funciton definition.
-        self.func_args = None
+        self.func_args: Optional[ast.AST] = None
 
     # Create a new VariableNode under the current scope and return the node
     def create_node(self, name: str):

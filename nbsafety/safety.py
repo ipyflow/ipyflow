@@ -1,6 +1,7 @@
 import ast
 import logging
 import sys
+from typing import Any, Dict, Tuple
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
@@ -23,8 +24,8 @@ class DependencySafety(object):
     def __init__(self, cell_magic_name=None):
         self.counter = [0]
         self.global_scope = Scope(self.counter, 'global')
-        self.func_id_to_scope_object = {}
-        self.frame_dict_by_scope = {}
+        self.func_id_to_scope_object: Dict[int, Scope] = {}
+        self.frame_dict_by_scope: Dict[Tuple[str, ...], Any] = {}
         self.stale_dependency_detected = False
         self._cell_magic = self._make_cell_magic(cell_magic_name)
 

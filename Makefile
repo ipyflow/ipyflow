@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: check test tests deps devdeps dev
+.PHONY: check test tests deps devdeps typecheck
 
 check:
 	./runtests.sh
@@ -17,4 +17,5 @@ devdeps:
 kernel:
 	python -m nbsafety.safe_kernel.install
 
-dev: kernel
+typecheck:
+	mypy --no-strict-optional --ignore-missing-import nbsafety/safety.py

@@ -1,5 +1,5 @@
 """
-Use "ipython test_project.py" command to run these tests.
+Use "ipython test_dependencies.py" command to run these tests.
 
 Although py.test should also work fine, the main project has to be run in an IPython
 environment, without which many functions will complain. Importing things could

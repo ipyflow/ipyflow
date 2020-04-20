@@ -38,15 +38,15 @@ def should_skip_known_failing(reason='test for unimpled functionality'):
     }
 
 
-# Make sure to seperate each test as a new test to prevent unexpected stale dependency
-def new_test():
+# Reset dependency graph before each test to prevent unexpected stale dependency
+@pytest.fixture(autouse=True)
+def init_or_reset_dependency_graph():
     global SAFETY_STATE
     SAFETY_STATE = DependencySafety()
     run_cell('import logging')
 
 
 def test_subscript_dependency():
-    new_test()
     run_cell('lst = [0, 1, 2]')
     run_cell('x = 5')
     run_cell('y = x + lst[0]')
@@ -57,7 +57,6 @@ def test_subscript_dependency():
 
 # simple test about the basic assignment
 def test_basic_assignment():
-    new_test()
     run_cell('a = 1')
     run_cell('b = 2')
     run_cell('c = a+b')
@@ -79,7 +78,6 @@ def test_basic_assignment():
 
 # Foo, bar example from the project prompt
 def test_foo_bar_example():
-    new_test()
     run_cell("""
 def foo():
     return 5
@@ -128,7 +126,6 @@ logging.info(accum)
 # Tests about variables that have same name but in different scope.
 # There shouldn't be any extra dependency because of the name.
 def test_variable_scope():
-    new_test()
     run_cell("""
 def func():
     x = 6
@@ -153,7 +150,6 @@ def func():
 
 
 def test_variable_scope2():
-    new_test()
     run_cell('def func():\n    x = 6')
     run_cell('x = 7')
     run_cell('y = x')
@@ -175,7 +171,6 @@ def test_variable_scope2():
 
 
 def test_default_args():
-    new_test()
     run_cell("""
 x = 7
 def foo(y=x):
@@ -191,7 +186,6 @@ def foo(y=x):
 
 @pytest.mark.skipif(**should_skip_known_failing())
 def test_same_pointer():
-    new_test()
     # a and b are actually pointing to the same thing
     run_cell('a = [7]')
     run_cell('b = a')
@@ -205,7 +199,6 @@ def test_same_pointer():
 
 
 def test_func_assign():
-    new_test()
     run_cell("""
 a = 1
 b = 1
@@ -252,7 +245,6 @@ d = 1""")
 
 
 def test_func_assign_helper_func():
-    new_test()
     run_cell("""
 x = 3
 a = 4
@@ -276,7 +268,6 @@ y = f()
 
 @pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign_helper_func2():
-    new_test()
     run_cell("""
 x = 3
 a = 4

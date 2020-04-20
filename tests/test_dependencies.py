@@ -166,7 +166,7 @@ def func():
     assert_not_detected("Updating z should solve the problem")
 
 
-def test_variable_scope2():
+def test_variable_scope_2():
     run_cell('def func():\n    x = 6')
     run_cell('x = 7')
     run_cell('y = x')
@@ -284,7 +284,7 @@ y = f()
 
 
 @pytest.mark.skipif(**should_skip_known_failing())
-def test_func_assign_helper_func2():
+def test_func_assign_helper_func_2():
     run_cell("""
 x = 3
 a = 4

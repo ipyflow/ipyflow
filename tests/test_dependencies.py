@@ -19,8 +19,16 @@ logging.basicConfig(level=logging.ERROR)
 SAFETY_STATE = None
 
 
+def assert_bool(val, msg=''):
+    assert val, str(msg)
+
+
+def _detected():
+    return SAFETY_STATE.test_and_clear_detected_flag()
+
+
 def assert_detected(msg=''):
-    assert SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
+    assert_bool(_detected(), msg=msg)
 
 
 def assert_false_positive(msg=''):
@@ -32,7 +40,15 @@ def assert_false_positive(msg=''):
 
 
 def assert_not_detected(msg=''):
-    assert not SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
+    assert_bool(not _detected(), msg=msg)
+
+
+def assert_false_negative(msg=''):
+    """
+    Same as `assert_not_detected` but asserts a false negative.
+    Helps with searchability of false negatives in case we want to fix these later.
+    """
+    return assert_not_detected(msg=msg)
 
 
 def run_cell(code):

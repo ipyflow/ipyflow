@@ -23,6 +23,14 @@ def assert_detected(msg=''):
     assert SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
 
 
+def assert_false_positive(msg=''):
+    """
+    Same as `assert_detected` but asserts a false positive.
+    Helps with searchability of false positives in case we want to fix these later.
+    """
+    return assert_detected(msg=msg)
+
+
 def assert_not_detected(msg=''):
     assert not SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
 
@@ -52,7 +60,16 @@ def test_subscript_dependency():
     run_cell('y = x + lst[0]')
     run_cell('lst[0] = 10')
     run_cell('logging.info(y)')
-    assert_detected("Did not detect that lst changed underneath y")
+    assert_false_positive('y depends on stale lst[0]')
+
+
+def test_subscript_dependency_fp():
+    run_cell('lst = [0, 1, 2]')
+    run_cell('x = 5')
+    run_cell('y = x + lst[0]')
+    run_cell('lst[1] = 10')
+    run_cell('logging.info(y)')
+    assert_false_positive('false positive on unchanged lst[0] but OK since fine-grained detection hard')
 
 
 # simple test about the basic assignment
@@ -281,3 +298,65 @@ y = f()()
     run_cell('x = 4')
     run_cell('logging.info(y)')
     assert_detected("Should have detected stale dependency of y on x")
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_branching():
+    run_cell('y = 7')
+    run_cell('x = y + 3')
+    run_cell("""
+if True:
+    b = 5
+else:
+    y = 7
+""")
+    run_cell('logging.info(x)')
+    assert_not_detected('false positive on unchanged y')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_attributes():
+    run_cell("""
+class Foo(object):
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('x = Foo(5)')
+    run_cell('y = x.x + 5')
+    run_cell('x.x = 8')
+    run_cell('logging.info(y)')
+    assert_detected('y depends on stale attrval x.x')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_attributes_2():
+    run_cell("""
+class Foo(object):
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('x = Foo(5)')
+    run_cell('y = x.x + 5')
+    run_cell('x = 8')
+    run_cell('logging.info(y)')
+    assert_detected('y depends on stale x')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_numpy_subscripting_fp():
+    run_cell('import numpy as np')
+    run_cell('x = np.zeros(5)')
+    run_cell('y = x[3] + 5')
+    run_cell('x[3] = 2')
+    run_cell('logging.info(y)')
+    assert_detected('y depends on stale x[3]')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_numpy_subscripting_fp():
+    run_cell('import numpy as np')
+    run_cell('x = np.zeros(5)')
+    run_cell('y = x[3] + 5')
+    run_cell('x[0] = 2')
+    run_cell('logging.info(y)')
+    assert_false_positive('false positive on changed x[3] but OK since fine-grained detection hard')

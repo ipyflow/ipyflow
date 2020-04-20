@@ -7,18 +7,16 @@ solve this problem, but I decided to implement this using ipytest since it is
 also something from IPython.
 """
 import logging
+import os
 
 from IPython import get_ipython
-import ipytest
+import pytest
 
 from nbsafety.safety import DependencySafety
 
-ipytest.config(rewrite_asserts=True, magics=True)
-# TODO (smacke): use a proper filter instead of using levels to filter out safety code logging
+
 logging.basicConfig(level=logging.ERROR)
-
-
-SAFETY_STATE = DependencySafety()
+SAFETY_STATE = None
 
 
 def assert_detected(msg=''):
@@ -29,14 +27,22 @@ def assert_not_detected(msg=''):
     assert not SAFETY_STATE.test_and_clear_detected_flag(), str(msg)
 
 
+def run_cell(code):
+    get_ipython().run_cell_magic(SAFETY_STATE.cell_magic_name, None, code)
+
+
+def should_skip_known_failing(reason='test for unimpled functionality'):
+    return {
+        'condition': os.environ.get('SHOULD_SKIP_KNOWN_FAILING', True),
+        'reason': reason
+    }
+
+
 # Make sure to seperate each test as a new test to prevent unexpected stale dependency
 def new_test():
     global SAFETY_STATE
     SAFETY_STATE = DependencySafety()
-
-
-def run_cell(code):
-    get_ipython().run_cell_magic(SAFETY_STATE.cell_magic_name, None, code)
+    run_cell('import logging')
 
 
 def test_subscript_dependency():
@@ -183,6 +189,7 @@ def foo(y=x):
     assert_detected("Should have detected stale dependency of fn foo() on x")
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_same_pointer():
     new_test()
     # a and b are actually pointing to the same thing
@@ -205,7 +212,6 @@ b = 1
 c = 2
 d = 3
 def func(x, y = a):
-    logging.info(b)
     e = c+d
     f = x + y
     return f
@@ -268,6 +274,7 @@ y = f()
     assert_not_detected("Changing a should not affect y")
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign_helper_func2():
     new_test()
     run_cell("""
@@ -283,7 +290,3 @@ y = f()()
     run_cell('x = 4')
     run_cell('logging.info(y)')
     assert_detected("Should have detected stale dependency of y on x")
-
-
-# Run all above tests using ipytest
-ipytest.run_tests()

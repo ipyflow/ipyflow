@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
-.PHONY: check test tests deps devdeps typecheck
+.PHONY: check test tests deps devdeps typecheck checkall testall
 
 check:
 	./runtests.sh
 
+checkall:
+	SHOULD_SKIP_KNOWN_FAILING=0 ./runtests.sh
+
 test: check
 tests: check
+testall: checkall
 
 deps:
 	pip install -r requirements.txt

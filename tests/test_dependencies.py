@@ -109,8 +109,8 @@ def test_basic_assignment():
     assert_not_detected("There should be no more dependency issue")
 
 
-# Foo, bar example from the project prompt
-def test_foo_bar_example():
+# redefined function example from the project prompt
+def test_redefined_function_in_list():
     run_cell("""
 def foo():
     return 5
@@ -154,6 +154,118 @@ for f in funcs_to_run:
 logging.info(accum)
 """)
     assert_not_detected("There should be no more dependency issue")
+
+
+# like before but the function is called in a list comprehension
+def test_redefined_function_for_funcall_in_list_comp():
+    run_cell("""
+def foo():
+    return 5
+
+def bar():
+    return 7
+""")
+    run_cell('retvals = [foo(), bar()]')
+    run_cell("""
+accum = 0
+for ret in retvals:
+    accum += ret
+logging.info(accum)
+""")
+
+    # redefine foo here but not funcs_to_run
+    run_cell("""
+def foo():
+    return 10
+
+def bar():
+    return 7
+""")
+    run_cell('logging.info(accum)')
+    assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
+
+
+# like before but we run the list through a function before iterating
+def test_redefined_function_for_funcall_in_modified_list_comp():
+    run_cell("""
+def foo():
+    return 5
+
+def bar():
+    return 7
+""")
+    run_cell('retvals = tuple([foo(), bar()])')
+    run_cell("""
+accum = 0
+for ret in map(lambda x: x * 5, retvals):
+    accum += ret
+logging.info(accum)
+""")
+
+    # redefine foo here but not funcs_to_run
+    run_cell("""
+def foo():
+    return 10
+
+def bar():
+    return 7
+""")
+    run_cell('logging.info(accum)')
+    assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
+
+
+def test_redefined_function_over_list_comp():
+    run_cell("""
+def foo():
+    return 5
+
+def bar():
+    return 7
+
+def baz(lst):
+    return map(lambda x: 3*x, lst)
+""")
+    run_cell('retvals = baz([foo(), bar()])')
+    run_cell("""
+accum = 0
+for ret in map(lambda x: x * 5, retvals):
+    accum += ret
+""")
+    run_cell("""
+def baz(lst):
+    return map(lambda x: 7*x, lst)
+""")
+    run_cell('logging.info(accum)')
+    assert_detected('Did not detect stale dependency of `accum` on `baz`')
+
+
+# like before but the function is called in a tuple comprehension
+def test_redefined_function_for_funcall_in_tuple_comp():
+    run_cell("""
+def foo():
+    return 5
+
+def bar():
+    return 7
+""")
+    run_cell('retvals = (foo(), bar())')
+    run_cell("""
+accum = 0
+for ret in retvals:
+    accum += ret
+logging.info(accum)
+""")
+
+    # redefine foo here but not funcs_to_run
+    run_cell("""
+def foo():
+    return 10
+
+def bar():
+    return 7
+""")
+    run_cell('logging.info(accum)')
+    assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
 # Tests about variables that have same name but in different scope.
@@ -376,3 +488,109 @@ def test_numpy_subscripting_fp():
     run_cell('x[0] = 2')
     run_cell('logging.info(y)')
     assert_false_positive('false positive on changed x[3] but OK since fine-grained detection hard')
+
+
+def test_old_format_string():
+    run_cell('a = 5; b = 7')
+    run_cell('expr_str = "{} + {} = {}".format(a, b, a + b)')
+    run_cell('a = 9')
+    run_cell('logging.info(expr_str)')
+    assert_detected('`expr_str` depends on stale `a`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_old_format_string_kwargs():
+    run_cell('a = 5; b = 7')
+    run_cell('expr_str = "{a} + {b} = {total}".format(a=a, b=b, total=a + b)')
+    run_cell('a = 9')
+    run_cell('logging.info(expr_str)')
+    assert_detected('`expr_str` depends on stale `a`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_new_format_string():
+    run_cell('a = 5; b = 7')
+    run_cell('expr_str = f"{a} + {b} = {a+b}"')
+    run_cell('a = 9')
+    run_cell('logging.info(expr_str)')
+    assert_detected('`expr_str` depends on stale `a`')
+
+
+def test_scope_resolution():
+    run_cell("""
+def f(x):
+    def g(x):
+        return 2 * x
+    return g(x) + 8
+""")
+    run_cell('x = 7')
+    run_cell('y = f(x)')
+    run_cell('x = 8')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on stale `x`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_scope_resolution_2():
+    run_cell("""
+def g(x):
+    return 2 * x
+def f(x):
+    return g(x) + 8
+""")
+    run_cell('x = 7')
+    run_cell('y = f(x)')
+    run_cell('x = 8')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on stale `x`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_funcall_kwarg():
+    run_cell("""
+def f(y):
+    return 2 * y + 8
+""")
+    run_cell('x = 7')
+    run_cell('z = f(y=x)')
+    run_cell('x = 8')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on stale `x`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_funcall_kwarg_2():
+    run_cell("""
+def f(y):
+    return 2 * y + 8
+""")
+    run_cell('x = 7')
+    run_cell('y = f(y=x)')
+    run_cell('x = 8')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on stale `x`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_funcall_kwarg_3():
+    run_cell("""
+def f(x):
+    return 2 * x + 8
+""")
+    run_cell('x = 7')
+    run_cell('y = f(x=x)')
+    run_cell('x = 8')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on stale `x`')
+
+
+def test_funcall_kwarg_4():
+    run_cell("""
+def f(x):
+    return 2 * x + 8
+""")
+    run_cell('x = 7')
+    run_cell('x = f(x=x)')
+    run_cell('x = 8')
+    run_cell('logging.info(x)')
+    assert_not_detected('`x` is overriden so should not be stale')

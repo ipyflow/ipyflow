@@ -21,6 +21,26 @@ def remove_subscript(node: ast.AST):
     return node
 
 
+def _compute_function_name(func):
+    if not isinstance(func, (ast.Name, ast.Attribute)):
+        raise TypeError('can only compute func names for ast.Name or ast.Attribute now')
+    if isinstance(func, ast.Name):
+        return func.id
+    else:
+        if isinstance(func.value, ast.Name):
+            attrval = cast(ast.Name, func.value)
+            return '{}.{}'.format(attrval.id, func.attr)
+        elif isinstance(func.value, ast.Str):
+            return 'string.{}'.format(func.attr)
+        else:
+            raise UNEXPECTED_STATES(
+                "Update",
+                "_compute_function_name",
+                func.value,
+                "Only support ast.Name and ast.Str for function name computation for now",
+            )
+
+
 class UpdateDependency(ast.NodeVisitor):
 
     def __init__(self, safety: DependencySafety):
@@ -63,8 +83,8 @@ class UpdateDependency(ast.NodeVisitor):
             elif isinstance(node, ast.BinOp):
                 queue.append(node.left)
                 queue.append(node.right)
-            # case "[a,b,c]", extend all elements of it to the queue
-            elif isinstance(node, ast.List):
+            # case "[a,b,c]" or "(a, b, c)", extend all elements of it to the queue
+            elif isinstance(node, (ast.List, ast.Tuple)):
                 queue.extend(node.elts)
             # case Function Calls
             elif isinstance(node, ast.Call):
@@ -81,15 +101,16 @@ class UpdateDependency(ast.NodeVisitor):
                 # functions except put all its arguments to check queue. We
                 # then obtain everything from the call_dependency and just put
                 # them in.
-                if isinstance(node.func, ast.Name):
+                if isinstance(node.func, (ast.Name, ast.Attribute)):
                     func_id = id(
-                        self.current_scope.get_object_by_name_all_scope(node.func.id)
+                        self.current_scope.get_object_by_name_all_scope(_compute_function_name(node.func))
                     )
                 elif isinstance(node.func, ast.Subscript):
                     func_id = id(self.get_subscript_object(node.func))
                 else:
                     raise UNEXPECTED_STATES(
-                        "Update", "get_statement_dependency", node.func, "Only ast.Name and ast.Subscript supported"
+                        "Update", "get_statement_dependency", node.func,
+                        "Only ast.Name, ast.Attribute, and ast.Subscript supported"
                     )
 
                 if func_id not in self.safety.func_id_to_scope_object:
@@ -346,19 +367,15 @@ class UpdateDependency(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call):
         """
         This method is supposed to initialize the call_dependency of a function
-        call. Note that we treat a function as two different nodes. A function
-        node and a funciton_call node. Function node is the object of that
+        call. Note that we treat a function as two different nodes: a function
+        node and a function_call node. Function node is the object of that
         function.  Function_call node is more like a description of what
         dependency you will obtain by calling this function. Thus, this
         function is to help to get the call_dependency first time it ever runs.
         It should detect and return if there is already a call_dependency set.
         """
         if isinstance(node.func, (ast.Name, ast.Attribute)):
-            if isinstance(node.func, ast.Name):
-                func_name = node.func.id
-            else:
-                attrval = cast(ast.Name, node.func.value)
-                func_name = '{}.{}'.format(attrval.id, node.func.attr)
+            func_name = _compute_function_name(node.func)
             if func_name not in self.current_scope.frame_dict:
                 func_id = id(None)
             else:

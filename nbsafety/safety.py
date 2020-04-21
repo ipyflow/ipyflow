@@ -38,6 +38,9 @@ class DependencySafety(object):
                 while frame.f_code.co_name != '<module>':
                     path = (frame.f_code.co_name,) + path
                     frame = frame.f_back
+                # TODO(smacke): problem here
+                # Frame is stored by call path, but accessed by scope path.
+                # These are not necessarily the same!
                 if path not in self.frame_dict_by_scope:
                     self.frame_dict_by_scope[path] = original_frame
 

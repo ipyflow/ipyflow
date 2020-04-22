@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+from types import FrameType
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from .variable import VariableNode
@@ -32,7 +33,7 @@ class Scope(object):
         # The actual f_locals dictionary in the frame that this represents.
         # This will not be initialized untill the actual frame runs.
         # updateDependency.visit_Call will update this.
-        self.frame_dict: Optional[Dict[str, Any]] = None
+        self.frame_dict: Optional[Dict[str, FrameType]] = None
 
         # The dependency set that will be used when function scope is called.
         # This will remain None until the scope is defined in

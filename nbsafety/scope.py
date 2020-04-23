@@ -2,18 +2,16 @@
 from __future__ import annotations
 import ast
 from types import FrameType
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
+from .ipython_utils import cell_counter
 from .variable import VariableNode
 
 
 class Scope(object):
     GLOBAL_SCOPE = '<module>'
 
-    def __init__(self, counter: List[int], scope_name: str = GLOBAL_SCOPE, parent_scope: Optional[Scope] = None):
-        # shared counter state from DependencySafety object
-        self.counter = counter
-
+    def __init__(self, scope_name: str = GLOBAL_SCOPE, parent_scope: Optional[Scope] = None):
         # The actual string name of the Scope
         self.scope_name = scope_name
 
@@ -72,7 +70,7 @@ class Scope(object):
         """
         node = VariableNode(
             name,
-            self.counter[0],
+            cell_counter(),
             self,
             id(self.frame_dict[name]),
             self.is_aliasable(name),
@@ -99,8 +97,8 @@ class Scope(object):
             n.children_node_set.add(node)
             node.parent_node_set.add(n)
 
-        node.defined_cell_num = self.counter[0]
-        node.update_cellnum_node_pair((self.counter[0], node))
+        node.defined_cell_num = cell_counter()
+        node.update_cellnum_node_pair((cell_counter(), node))
 
     @property
     def full_path(self) -> Tuple[str, ...]:

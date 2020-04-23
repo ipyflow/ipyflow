@@ -66,8 +66,10 @@ def should_skip_known_failing(reason='test for unimpled functionality'):
 @pytest.fixture(autouse=True)
 def init_or_reset_dependency_graph():
     global SAFETY_STATE
-    SAFETY_STATE = DependencySafety()
+    SAFETY_STATE = DependencySafety(store_history=True)
     run_cell('import logging')
+    yield  # yield to execution of the actual test
+    get_ipython().reset()  # reset ipython state
 
 
 def test_subscript_dependency():

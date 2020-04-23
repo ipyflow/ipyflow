@@ -6,12 +6,11 @@ from typing import Dict, Tuple
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
+import networkx as nx
 
 from .precheck import precheck
 from .scope import Scope
 from .updates import UpdateDependency
-
-import networkx as nx
 
 
 def _safety_warning(name, defined_cell_num, pair):
@@ -24,15 +23,15 @@ def _safety_warning(name, defined_cell_num, pair):
 
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
-    def __init__(self, cell_magic_name=None, line_magic_name=None):
-        self.counter = [0]
-        self.global_scope = Scope(self.counter)
+    def __init__(self, cell_magic_name=None, line_magic_name=None, store_history=False):
+        self.global_scope = Scope()
         self.func_id_to_scope_object: Dict[int, Scope] = {}
         self.frame_dict_by_scope: Dict[Tuple[str, ...], FrameType] = {}
         self.stale_dependency_detected = False
         self._cell_magic = self._make_cell_magic(cell_magic_name)
-        #Maybe switch update this too when you are implementing the usage of cell_magic_name?
+        # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic(line_magic_name)
+        self._store_history = store_history
 
     def _capture_frame_at_run_time(self, frame: FrameType, event: str, _):
         original_frame = frame
@@ -50,9 +49,6 @@ class DependencySafety(object):
 
     def _make_cell_magic(self, cell_magic_name):
         def _dependency_safety(_, cell: str):
-            # We increase the counter by one each time this cell magic function is called
-            self.counter[0] += 1
-
             # We get the ast.Module node by parsing the cell
             ast_tree = ast.parse(cell)
 
@@ -68,7 +64,9 @@ class DependencySafety(object):
 
             # Stage 2: Trace / run the cell.
             sys.settrace(lambda *args: self.__class__._capture_frame_at_run_time(self, *args))
-            get_ipython().run_cell(cell)
+            # Test code doesn't run the full kernel and should therefore set store_history=True
+            # (e.g. in order to increment the cell numbers)
+            get_ipython().run_cell(cell, store_history=self._store_history)
             sys.settrace(None)
 
             # Stage 3: Update dependencies.
@@ -83,14 +81,21 @@ class DependencySafety(object):
     def _make_line_magic(self, line_magic_name):
         def _safety(line: str):
             if line == "show_graph":
-                G = nx.DiGraph() 
+                graph = nx.DiGraph()
                 for name in self.global_scope.variable_dict:
-                    G.add_node(name)
+                    graph.add_node(name)
                 for node in self.global_scope.variable_dict.values():
                     name = node.name
                     for child_node in node.children_node_set:
-                        G.add_edge(name, child_node.name)
-                nx.draw_networkx(G, node_color = "#cccccc", arrowstyle = '->', arrowsize = 30, node_size = 1000, pos = nx.drawing.layout.planar_layout(G))
+                        graph.add_edge(name, child_node.name)
+                nx.draw_networkx(
+                    graph,
+                    node_color="#cccccc",
+                    arrowstyle='->',
+                    arrowsize=30,
+                    node_size=1000,
+                    pos=nx.drawing.layout.planar_layout(graph)
+                )
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)
@@ -102,7 +107,6 @@ class DependencySafety(object):
     @property
     def line_magic_name(self):
         return self._line_magic.__name__
-
 
     def test_and_clear_detected_flag(self):
         ret = self.stale_dependency_detected

@@ -5,11 +5,13 @@ from types import FrameType
 from typing import Dict, Tuple
 
 from IPython import get_ipython
-from IPython.core.magic import register_cell_magic
+from IPython.core.magic import register_cell_magic, register_line_magic
 
 from .precheck import precheck
 from .scope import Scope
 from .updates import UpdateDependency
+
+import networkx as nx
 
 
 def _safety_warning(name, defined_cell_num, pair):
@@ -22,13 +24,15 @@ def _safety_warning(name, defined_cell_num, pair):
 
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
-    def __init__(self, cell_magic_name=None):
+    def __init__(self, cell_magic_name=None, line_magic_name=None):
         self.counter = [0]
         self.global_scope = Scope(self.counter)
         self.func_id_to_scope_object: Dict[int, Scope] = {}
         self.frame_dict_by_scope: Dict[Tuple[str, ...], FrameType] = {}
         self.stale_dependency_detected = False
         self._cell_magic = self._make_cell_magic(cell_magic_name)
+        #Maybe switch update this too when you are implementing the usage of cell_magic_name?
+        self._line_magic = self._make_line_magic(line_magic_name)
 
     def _capture_frame_at_run_time(self, frame: FrameType, event: str, _):
         original_frame = frame
@@ -76,9 +80,29 @@ class DependencySafety(object):
             _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
+    def _make_line_magic(self, line_magic_name):
+        def _safety(line: str):
+            if line == "show_graph":
+                G = nx.DiGraph() 
+                for name in self.global_scope.variable_dict:
+                    G.add_node(name)
+                for node in self.global_scope.variable_dict.values():
+                    name = node.name
+                    for child_node in node.children_node_set:
+                        G.add_edge(name, child_node.name)
+                nx.draw_networkx(G, node_color = "#cccccc", arrowstyle = '->', arrowsize = 30, node_size = 1000, pos = nx.drawing.layout.planar_layout(G))
+        if line_magic_name is not None:
+            _safety.__name__ = line_magic_name
+        return register_line_magic(_safety)
+
     @property
     def cell_magic_name(self):
         return self._cell_magic.__name__
+
+    @property
+    def line_magic_name(self):
+        return self._line_magic.__name__
+
 
     def test_and_clear_detected_flag(self):
         ret = self.stale_dependency_detected

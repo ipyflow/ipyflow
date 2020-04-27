@@ -2,7 +2,7 @@ import ast
 import logging
 import sys
 from types import FrameType
-from typing import Dict, Tuple
+from typing import Dict, Set, Tuple, TYPE_CHECKING
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
@@ -11,12 +11,13 @@ import networkx as nx
 from .precheck import precheck
 from .scope import Scope
 from .updates import UpdateDependency
+from .data_cell import DataCell
 
 
-def _safety_warning(name, defined_cell_num, pair):
+def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: Set[DataCell]):
     logging.warning(
         "{} defined in cell {} may have a stale dependency on {} (last updated in cell {}).".format(
-            name, defined_cell_num, pair[1].name, pair[0]
+            name, defined_cell_num, fresher_ancestors, required_cell_num
         )
     )
 
@@ -57,8 +58,8 @@ class DependencySafety(object):
             # defined_cell_num is greater than or equal to required, if not we give a warning and return.
             for name in precheck(self.global_scope, ast_tree):
                 node = self.global_scope.get_node_by_name_current_scope(name)
-                if node.defined_cell_num < node.required_cellnum_node_pair[0]:
-                    _safety_warning(name, node.defined_cell_num, node.required_cellnum_node_pair)
+                if node.defined_cell_num < node.required_cell_num:
+                    _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
                     self.stale_dependency_detected = True
                     return
 

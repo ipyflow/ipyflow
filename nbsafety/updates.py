@@ -6,7 +6,7 @@ from typing import cast, Set, TYPE_CHECKING
 
 from .scope import Scope
 from .unexpected import UNEXPECTED_STATES
-from .variable import VariableNode
+from .data_cell import DataCell
 
 if TYPE_CHECKING:
     from .safety import DependencySafety
@@ -58,7 +58,7 @@ class UpdateDependency(ast.NodeVisitor):
         """
         self.visit(module_node)
 
-    def get_statement_dependency(self, value: ast.AST) -> Set[VariableNode]:
+    def get_statement_dependency(self, value: ast.AST) -> Set[DataCell]:
         """
         Helper function that takes in a statement, returns a set that contains
         the dependency node set. Typically on the right side of assignments.
@@ -130,7 +130,7 @@ class UpdateDependency(ast.NodeVisitor):
                         if isinstance(item, int):
                             if item < len(node.args):
                                 queue.append(node.args[item])
-                        elif isinstance(item, VariableNode):
+                        elif isinstance(item, DataCell):
                             return_dependency.add(item)
             elif isinstance(node, ast.Subscript):
                 queue.append(remove_subscript(node))

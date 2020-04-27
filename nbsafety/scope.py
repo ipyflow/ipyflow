@@ -5,7 +5,7 @@ from types import FrameType
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
 from .ipython_utils import cell_counter
-from .variable import VariableNode
+from .data_cell import DataCell
 
 
 class Scope(object):
@@ -26,7 +26,7 @@ class Scope(object):
             parent_scope.children_scope_dict[scope_name] = self
 
         # A "name->node" dictionary that contains all VariableNode in this scope
-        self.variable_dict: Dict[str, VariableNode] = {}
+        self.variable_dict: Dict[str, DataCell] = {}
 
         # The actual f_locals dictionary in the frame that this represents.
         # This will not be initialized untill the actual frame runs.
@@ -40,7 +40,7 @@ class Scope(object):
         # and integer represents a position of the argument.
         # TODO(smacke): not true? it looks like it can contain VariableNodes?
         # self.call_dependency: Optional[Set[Union[str, int]]] = None
-        self.call_dependency: Optional[Set[Union[VariableNode, int]]] = None
+        self.call_dependency: Optional[Set[Union[DataCell, int]]] = None
 
         # This will remain None until the scope is defined in
         # UpdateDependency.visit_FunctionDef method.  This dictionary is to
@@ -68,13 +68,7 @@ class Scope(object):
         scope, the id of the object archieved from frame_dict as its id. Lastly
         check if it is aliasable.
         """
-        node = VariableNode(
-            name,
-            cell_counter(),
-            self,
-            id(self.frame_dict[name]),
-            self.is_aliasable(name),
-        )
+        node = DataCell(name, self)
 
         # update the variable_dict
         self.variable_dict[name] = node
@@ -109,11 +103,11 @@ class Scope(object):
             return self.parent_scope.full_path + path
 
     # returns the VariableNode that is represented by the name passed in.
-    def get_node_by_name_current_scope(self, name: str) -> VariableNode:
+    def get_node_by_name_current_scope(self, name: str) -> DataCell:
         return self.variable_dict[name]
 
     # returns the VariableNode that is represented by the name passed in. Look up all ancestor scopes.
-    def get_node_by_name_all_scope(self, name) -> VariableNode:
+    def get_node_by_name_all_scope(self, name) -> DataCell:
         scope = self
         while scope:
             if name in scope.variable_dict:
@@ -157,22 +151,3 @@ class Scope(object):
                 return True
             s = s.parent_scope
         return False
-
-    # helper function to check if the object behind the name in the scope is aliasable.
-    def is_aliasable(self, name: str):
-        ###### Currently Disabled ########
-        return False
-        ##################################
-        obj = self.frame_dict[name]
-
-        ##################### INCOMPLETE ###########################
-        # There should be some check about the object to see that if it is "aliasable"
-        if isinstance(obj, int) or isinstance(obj, str):
-            aliasable = False
-        elif isinstance(obj, list) or isinstance(obj, dict) or isinstance(obj, set):
-            aliasable = True
-        else:
-            aliasable = False
-        ##################### INCOMPLETE ###########################
-
-        return aliasable

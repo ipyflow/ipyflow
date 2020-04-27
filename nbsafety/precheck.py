@@ -32,10 +32,10 @@ class PreCheck(ast.NodeVisitor):
 
     # In case of assignment, we put the new assigned variable into a safe_set
     # to indicate that we know for sure it won't have stale dependency.  Note
-    # that node.targets might contain multiple ast.Name node in the case of "a
-    # = b = 3", so we go through each node in the targets.  Also that target
-    # would be an ast.Tuple node in the case of "a,b = 3,4". Thus we need to
-    # break the tuple in that case.
+    # that node.targets might contain multiple ast.Name node in the case of
+    # "a = b = 3", so we go through each node in the targets.  Also note that
+    # `target` would be an ast.Tuple node in the case of "a,b = 3,4". Thus
+    # we need to break the tuple in that case.
     def visit_Assign(self, node: ast.Assign):
         ignore_node_types = (ast.Subscript,)
         for target_node in node.targets:

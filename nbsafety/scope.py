@@ -87,15 +87,15 @@ class Scope(object):
         else:
             node = self.create_node(node_name)
 
-        removed_parents = node.parent_node_set - dependency_nodes
+        removed_parents = node.parents - dependency_nodes
         for n in removed_parents:
-            n.children_node_set.remove(node)
-            node.parent_node_set.remove(n)
+            n.children.remove(node)
+            node.parents.remove(n)
 
-        new_parents = dependency_nodes - node.parent_node_set
+        new_parents = dependency_nodes - node.parents
         for n in new_parents:
-            n.children_node_set.add(node)
-            node.parent_node_set.add(n)
+            n.children.add(node)
+            node.parents.add(n)
 
         node.defined_cell_num = cell_counter()
         node.update_cellnum_node_pair((cell_counter(), node))

@@ -57,8 +57,8 @@ class DependencySafety(object):
             # defined_cell_num is greater than or equal to required, if not we give a warning and return.
             for name in precheck(self.global_scope, ast_tree):
                 node = self.global_scope.get_node_by_name_current_scope(name)
-                if node.defined_cell_num < node.required_CN_node_pair[0]:
-                    _safety_warning(name, node.defined_cell_num, node.required_CN_node_pair)
+                if node.defined_cell_num < node.required_cellnum_node_pair[0]:
+                    _safety_warning(name, node.defined_cell_num, node.required_cellnum_node_pair)
                     self.stale_dependency_detected = True
                     return
 
@@ -86,7 +86,7 @@ class DependencySafety(object):
                     graph.add_node(name)
                 for node in self.global_scope.variable_dict.values():
                     name = node.name
-                    for child_node in node.children_node_set:
+                    for child_node in node.children:
                         graph.add_edge(name, child_node.name)
                 nx.draw_networkx(
                     graph,

@@ -55,7 +55,7 @@ def run_cell(code):
     get_ipython().run_cell_magic(SAFETY_STATE.cell_magic_name, None, code)
 
 
-def should_skip_known_failing(reason='test for unimpled functionality'):
+def should_skip_known_failing(reason='this test tests unimpled functionality'):
     return {
         'condition': os.environ.get('SHOULD_SKIP_KNOWN_FAILING', True),
         'reason': reason
@@ -79,6 +79,19 @@ def test_subscript_dependency():
     run_cell('lst[0] = 10')
     run_cell('logging.info(y)')
     assert_false_positive('y depends on stale lst[0]')
+
+
+def test_long_chain():
+    run_cell('a = 1')
+    run_cell('b = a + 1')
+    run_cell('c = b + 1')
+    run_cell('d = c + 1')
+    run_cell('e = d + 1')
+    run_cell('f = e + 1')
+    assert_not_detected('everything OK so far')
+    run_cell('a = 2')
+    run_cell('logging.info(f)')
+    assert_detected('f has stale dependency on old value of a')
 
 
 def test_subscript_dependency_fp():

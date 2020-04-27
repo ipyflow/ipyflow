@@ -16,17 +16,17 @@ class VariableNode(object):
         self.scope = scope
 
         # Set of parent nodes on which this node depends
-        self.parent_node_set: Set[VariableNode]  = set()
+        self.parents: Set[VariableNode] = set()
 
         # Set of children nodes that depend on this node
-        self.children_node_set: Set[VariableNode] = set()
+        self.children: Set[VariableNode] = set()
 
         # The cell number when this node is defined
         self.defined_cell_num = defined_cell_num
 
         # The cell number this node is required to have to not be considered as stale dependency
         # The Pair should contain (The required cell number, The ancestor node that was updated)
-        self.required_CN_node_pair = (defined_cell_num, None)
+        self.required_cellnum_node_pair = (defined_cell_num, None)
 
         # The actual id of the object that this node represents.
         self.uid = uid
@@ -51,6 +51,6 @@ class VariableNode(object):
         if self in seen:
             return
         seen.add(self)
-        self.required_CN_node_pair = pair
-        for n in self.children_node_set:
+        self.required_cellnum_node_pair = pair
+        for n in self.children:
             n.update_cellnum_node_pair(pair, seen)

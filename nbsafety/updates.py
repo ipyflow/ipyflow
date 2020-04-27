@@ -243,7 +243,7 @@ class UpdateDependency(ast.NodeVisitor):
             dependency_nodes.update(
                 self.current_scope.get_node_by_name_current_scope(
                     name_node.id
-                ).parent_node_set
+                ).parents
             )
             self.current_scope.update_node(name_node.id, dependency_nodes)
         else:
@@ -473,7 +473,7 @@ class UpdateDependency(ast.NodeVisitor):
                         # for those still in the scope variables, we keep checking its parents
                         else:
                             check_set.update(
-                                [x for x in check_node.parent_node_set if x not in closed_set]
+                                [x for x in check_node.parents if x not in closed_set]
                             )
                     # If it is dependent on something outside of the current scope, then put it in
                     elif func_scope.is_my_ancestor_scope(scope):
@@ -589,7 +589,7 @@ class UpdateDependenciesFromCallContext(UpdateDependency):
                         # for those still in the scope variables, we keep checking its parents
                         else:
                             check_set.update(
-                                [x for x in check_node.parent_node_set if x not in closed_set]
+                                [x for x in check_node.parents if x not in closed_set]
                             )
                     # If it is dependent on something outside of the current scope, then put it in
                     elif func_scope.is_my_ancestor_scope(scope):

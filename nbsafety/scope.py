@@ -25,7 +25,7 @@ class Scope(object):
         if parent_scope:
             parent_scope.children_scope_dict[scope_name] = self
 
-        # A "name->node" dictionary that contains all VariableNode in this scope
+        # A "name->node" dictionary that contains all DataCells in this scope
         self.variable_dict: Dict[str, DataCell] = {}
 
         # The actual f_locals dictionary in the frame that this represents.

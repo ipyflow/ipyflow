@@ -56,7 +56,7 @@ class DependencySafety(object):
             # State 1: Precheck.
             # Precheck process. First obtain the names that need to be checked. Then we check if their
             # defined_cell_num is greater than or equal to required, if not we give a warning and return.
-            for name in precheck(self.global_scope, ast_tree):
+            for name in precheck(ast_tree, self.global_scope.variable_dict.keys()):
                 node = self.global_scope.get_node_by_name_current_scope(name)
                 if node.defined_cell_num < node.required_cell_num:
                     _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)

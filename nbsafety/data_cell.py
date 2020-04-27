@@ -9,21 +9,19 @@ if TYPE_CHECKING:
 
 
 class DataCell(object):
-    def __init__(self, name: str, scope: Scope, defined_cell_num: Optional[int] = None):
-        # The actual string name of the Node
-        # Note that the DataCell should be identified by its name, thus the name should never change
+    def __init__(
+            self,
+            name: str,
+            scope: Scope,
+            parents: Optional[Set[DataCell]] = None,
+            defined_cell_num: Optional[int] = None
+    ):
         self.name = str(name)
-
-        # The Scope class it belongs to
         self.scope = scope
-
-        # Set of parent nodes on which this node depends
-        self.parents: Set[DataCell] = set()
-
-        # Set of children nodes that depend on this node
+        if parents is None:
+            parents = set()
+        self.parents = parents
         self.children: Set[DataCell] = set()
-
-        # The cell number when this node is defined
         if defined_cell_num is None:
             defined_cell_num = cell_counter()
         self.defined_cell_num = defined_cell_num
@@ -31,7 +29,7 @@ class DataCell(object):
         # The cell number this node is required to have to not be considered as stale dependency
         self.required_cell_num = defined_cell_num
 
-        # Set of ancestors defined more recently than this cell
+        # Set of ancestors defined more recently
         self.fresher_ancestors: Set[DataCell] = set()
 
     def __str__(self):

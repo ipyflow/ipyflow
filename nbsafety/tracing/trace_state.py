@@ -22,4 +22,4 @@ class TraceState(object):
         # this means that the previous line on the current frame is done executing
         line = self.cur_frame_last_line
         if line is not None and line.has_lval:
-            line.make_lhs_data_cell(safety)
+            line.make_lhs_data_cells()

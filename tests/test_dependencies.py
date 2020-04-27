@@ -136,7 +136,6 @@ def test_basic_assignment():
 
 
 # redefined function example from the project prompt
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_in_list():
     run_cell("""
 def foo():
@@ -301,7 +300,6 @@ def bar():
 
 # Tests about variables that have same name but in different scope.
 # There shouldn't be any extra dependency because of the name.
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_variable_scope():
     run_cell("""
 def func():
@@ -326,7 +324,6 @@ def func():
     assert_not_detected("Updating z should solve the problem")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_variable_scope_2():
     run_cell('def func():\n    x = 6')
     run_cell('x = 7')
@@ -384,7 +381,7 @@ a = 1
 b = 1
 c = 2
 d = 3
-def func(x, y = a):
+def func(x, y=a):
     e = c+d
     f = x + y
     return f
@@ -397,7 +394,7 @@ a = 4""")
 logging.info(z)""")
     assert_detected("Should have detected stale dependency of fn func on a")
     run_cell("""
-def func(x, y = a):
+def func(x, y=a):
     logging.info(b)
     e = c+d
     f = x + y
@@ -424,7 +421,6 @@ d = 1""")
     assert_not_detected("Changing b and d should not affect z")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign_helper_func():
     run_cell("""
 x = 3
@@ -447,7 +443,6 @@ y = f()
     assert_not_detected("Changing a should not affect y")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign_helper_func_2():
     run_cell("""
 x = 3
@@ -505,7 +500,6 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_numpy_subscripting_fp():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')

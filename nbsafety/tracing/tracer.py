@@ -44,7 +44,7 @@ def make_tracer(safety, state):
             to_parse += '\n    pass'
         node = ast.parse(to_parse).body[0]
         code_line = state.code_lines.get(
-            lineno, CodeLine(line, node, lineno, state.call_depth, frame)
+            lineno, CodeLine(safety, line, node, lineno, state.call_depth, frame)
         )
         state.code_lines[lineno] = code_line
 

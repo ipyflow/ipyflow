@@ -2,7 +2,7 @@
 from __future__ import annotations
 import ast
 
-from ..analysis.rvalues import get_all_rval_names
+from ..analysis.hyperedge import get_hyperedge_lvals_and_rvals
 
 
 def lookup_obj_by_name(name, frame, call_depth):
@@ -17,7 +17,8 @@ def lookup_obj_by_name(name, frame, call_depth):
 
 # TODO: maybe frame, scope, indentation, etc
 class CodeLine(object):
-    def __init__(self, text, ast_node, lineno, call_depth, frame):
+    def __init__(self, safety, text, ast_node, lineno, call_depth, frame):
+        self.safety = safety
         self.text = text
         self.ast_node = ast_node
         self.lineno = lineno
@@ -34,28 +35,25 @@ class CodeLine(object):
             return self.frame.f_locals[name], scope
         return self.frame.f_globals[name], 'global'
 
-    def compute_rval_dependencies(self, safety):
-        rval_names = get_all_rval_names(self.ast_node)
+    def compute_rval_dependencies(self, rval_names=None):
+        if rval_names is None:
+            _, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
         rval_data_cells = set()
         for name in rval_names:
             obj, _ = self.lookup_obj_by_name(name)
-            rval_data_cells.add(safety.data_cell_by_ref[id(obj)])
+            rval_data_cells.add(self.safety.data_cell_by_ref[id(obj)])
         return rval_data_cells | self.extra_dependencies
 
-    def make_lhs_data_cell(self, safety):
-        if not isinstance(self.ast_node, ast.Assign):
-            raise TypeError('Assign only supported for now')
-        # TODO: support multiple targets
-        target = self.ast_node.targets[0]
-        while isinstance(target, ast.Subscript):
-            target = target.value
-        if not isinstance(target, ast.Name):
-            raise TypeError('Expected ast.Name')
-        lhs_name = target.id
-        lhs_obj, scope = self.lookup_obj_by_name(lhs_name)
-        safety.make_data_cell_for_obj(lhs_name, lhs_obj, self.compute_rval_dependencies(safety), scope)
+    def make_lhs_data_cells(self):
+        lval_names, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
+        rval_deps = self.compute_rval_dependencies(rval_names=rval_names)
+        for name in lval_names:
+            obj, scope = self.lookup_obj_by_name(name)
+            self.safety.make_data_cell_for_obj(name, obj, rval_deps, scope)
 
     @property
     def has_lval(self):
-        # TODO: expand to AugAssign, method calls, etc.
-        return isinstance(self.ast_node, ast.Assign)
+        # TODO: expand to method calls, etc.
+        return isinstance(self.ast_node, (
+            ast.Assign, ast.AugAssign, ast.FunctionDef, ast.AsyncFunctionDef
+        ))

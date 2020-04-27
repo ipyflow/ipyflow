@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
-import inspect
+
+from IPython import get_ipython
 
 from .code_line import CodeLine
 
@@ -19,9 +20,17 @@ def make_tracer(safety, state):
         if 'ipython-input' not in frame.f_code.co_filename:
             return
 
-        if state.source is None:
-            state.source = inspect.getsource(frame).split('\n')
-        line = state.source[frame.f_lineno-1]
+        # if state.source is None:
+        # state.source = inspect.getsource(frame).split('\n')
+        # try:
+        #     line = state.source[frame.f_lineno-1]
+        # except:
+        #     print(inspect.getsource(frame))
+        #     print(frame.f_lineno)
+        #     raise
+        cell_num = int(frame.f_code.co_filename.split('-')[2])
+        state.source = get_ipython().all_ns_refs[0]['In'][cell_num].split('\n')
+        line = state.source[frame.f_lineno - 1]
 
         old_depth = state.call_depth
 

@@ -40,20 +40,25 @@ class CodeLine(object):
             _, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
         rval_data_cells = set()
         for name in rval_names:
-            obj, _ = self.lookup_obj_by_name(name)
+            try:
+                obj, _ = self.lookup_obj_by_name(name)
+            except KeyError:
+                continue
             rval_data_cells.add(self.safety.data_cell_by_ref[id(obj)])
         return rval_data_cells | self.extra_dependencies
 
     def make_lhs_data_cells(self):
         lval_names, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
-        rval_deps = self.compute_rval_dependencies(rval_names=rval_names)
+        rval_deps = self.compute_rval_dependencies(rval_names=rval_names-lval_names)
+        should_add = isinstance(self.ast_node, ast.AugAssign)
         for name in lval_names:
+            should_add_for_name = should_add or name in rval_names
             obj, scope = self.lookup_obj_by_name(name)
-            self.safety.make_data_cell_for_obj(name, obj, rval_deps, scope)
+            self.safety.make_data_cell_for_obj(name, obj, rval_deps, scope, add=should_add_for_name)
 
     @property
     def has_lval(self):
         # TODO: expand to method calls, etc.
         return isinstance(self.ast_node, (
-            ast.Assign, ast.AugAssign, ast.FunctionDef, ast.AsyncFunctionDef
+            ast.Assign, ast.AugAssign, ast.FunctionDef, ast.AsyncFunctionDef, ast.For
         ))

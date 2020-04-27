@@ -52,10 +52,10 @@ class DependencySafety(object):
                 if path not in self.frame_dict_by_scope:
                     self.frame_dict_by_scope[path] = original_frame
 
-    def make_data_cell_for_obj(self, name: str, obj: Any, deps: Set[DataCell], scope: str):
+    def make_data_cell_for_obj(self, name: str, obj: Any, deps: Set[DataCell], scope: str, add=False):
         if scope == 'global' and name in self.global_data_cell_by_name:
             dc = self.global_data_cell_by_name[name]
-            dc.update_deps(deps)
+            dc.update_deps(deps, add=add)
             # TODO: garbage collect old id
             self.data_cell_by_ref[id(obj)] = dc
             return

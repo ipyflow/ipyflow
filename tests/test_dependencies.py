@@ -183,7 +183,6 @@ logging.info(accum)
 
 
 # like before but the function is called in a list comprehension
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_for_funcall_in_list_comp():
     run_cell("""
 def foo():
@@ -213,7 +212,6 @@ def bar():
 
 
 # like before but we run the list through a function before iterating
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_for_funcall_in_modified_list_comp():
     run_cell("""
 def foo():
@@ -225,7 +223,8 @@ def bar():
     run_cell('retvals = tuple([foo(), bar()])')
     run_cell("""
 accum = 0
-for ret in map(lambda x: x * 5, retvals):
+# for ret in map(lambda x: x * 5, retvals):
+for ret in retvals:
     accum += ret
 logging.info(accum)
 """)
@@ -240,6 +239,21 @@ def bar():
 """)
     run_cell('logging.info(accum)')
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_for_loop_with_map():
+    run_cell("""
+accum = 0
+foo = [1, 2, 3, 4, 5]
+for ret in map(lambda x: x * 5, foo):
+    accum += ret
+logging.info(accum)
+""")
+    assert_not_detected('no stale dep foo -> accum')
+    run_cell('foo = [0]')
+    run_cell('logging.info(accum)')
+    assert_detected('did not detect stale dep foo -> accum')
 
 
 @pytest.mark.skipif(**should_skip_known_failing())
@@ -269,7 +283,6 @@ def baz(lst):
 
 
 # like before but the function is called in a tuple comprehension
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_for_funcall_in_tuple_comp():
     run_cell("""
 def foo():
@@ -345,7 +358,6 @@ def test_variable_scope_2():
     assert_not_detected("Updating y should solve the problem")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_default_args():
     run_cell("""
 x = 7
@@ -374,50 +386,76 @@ def test_same_pointer():
     assert_detected("c does not point to the same thing as a or b, thus there is a stale dependency here ")
 
 
+def test_func_assign_objs():
+    run_cell("""
+a = [1]
+b = [1]
+c = [2]
+d = [3]
+def func(x, y=a):
+    e = [c[0] + d[0]]
+    f = [x[0] + y[0]]
+    return f
+""")
+    run_cell('z = func(c)')
+    run_cell('a = [4]')
+    run_cell('logging.info(z[0])')
+    assert_detected("Should have detected stale dependency of fn func on a")
+    run_cell("""
+def func(x, y=a):
+    logging.info(b[0])
+    e = [c[0] + d[0]]
+    f = [x[0] + y[0]]
+    return f
+z = func(c)
+""")
+    run_cell('logging.info(z[0])')
+    assert_not_detected()
+    run_cell('c = [3]')
+    run_cell('logging.info(z[0])')
+    assert_detected("Should have detected stale dependency of z on c")
+    run_cell('z = func(c)')
+    run_cell('logging.info(z[0])')
+    assert_not_detected()
+    run_cell('b = [4]')
+    run_cell('d = [1]')
+    assert_not_detected("Changing b and d should not affect z")
+
+
 @pytest.mark.skipif(**should_skip_known_failing())
-def test_func_assign():
+def test_func_assign_ints():
     run_cell("""
 a = 1
 b = 1
 c = 2
 d = 3
 def func(x, y=a):
-    e = c+d
+    e = c + d
     f = x + y
     return f
 """)
-    run_cell("""
-z = func(c)""")
-    run_cell("""
-a = 4""")
-    run_cell("""
-logging.info(z)""")
+    run_cell('z = func(c)')
+    run_cell('a = 4')
+    run_cell('logging.info(z)')
     assert_detected("Should have detected stale dependency of fn func on a")
     run_cell("""
 def func(x, y=a):
     logging.info(b)
-    e = c+d
+    e = c + d
     f = x + y
     return f
 z = func(c)
 """)
-    run_cell("""
-logging.info(z)""")
+    run_cell('logging.info(z)')
     assert_not_detected()
-    run_cell("""
-c = 3""")
-    run_cell("""
-logging.info(z)""")
+    run_cell('c = 3')
+    run_cell('logging.info(z)')
     assert_detected("Should have detected stale dependency of z on c")
-    run_cell("""
-z = func(c)""")
-    run_cell("""
-logging.info(z)""")
+    run_cell('z = func(c)')
+    run_cell('logging.info(z)')
     assert_not_detected()
-    run_cell("""
-b = 4""")
-    run_cell("""
-d = 1""")
+    run_cell('b = 4')
+    run_cell('d = 1')
     assert_not_detected("Changing b and d should not affect z")
 
 
@@ -500,7 +538,8 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
-def test_numpy_subscripting_fp():
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_numpy_subscripting():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')
     run_cell('y = x[3] + 5')
@@ -546,7 +585,6 @@ def test_new_format_string():
     assert_detected('`expr_str` depends on stale `a`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_scope_resolution():
     run_cell("""
 def f(x):
@@ -561,7 +599,6 @@ def f(x):
     assert_detected('`y` depends on stale `x`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_scope_resolution_2():
     run_cell("""
 def g(x):
@@ -576,7 +613,6 @@ def f(x):
     assert_detected('`y` depends on stale `x`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_funcall_kwarg():
     run_cell("""
 def f(y):
@@ -589,7 +625,6 @@ def f(y):
     assert_detected('`z` depends on stale `x`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_funcall_kwarg_2():
     run_cell("""
 def f(y):
@@ -602,7 +637,6 @@ def f(y):
     assert_detected('`y` depends on stale `x`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_funcall_kwarg_3():
     run_cell("""
 def f(x):

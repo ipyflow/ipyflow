@@ -35,10 +35,15 @@ class DataCell(object):
     def __str__(self):
         return self.name
 
-    def update_deps(self, new_deps: Set[DataCell]):
-        for node in self.parents - new_deps:
-            node.children.remove(self)
-            self.parents.remove(node)
+    def update_deps(self, new_deps: Set[DataCell], add=False):
+        if self.name == 'c':
+            for child in self.children:
+                print(child.name)
+        if not add:
+            for node in self.parents - new_deps:
+                node.children.remove(self)
+                self.parents.remove(node)
+            self.parents = set()
 
         for node in new_deps - self.parents:
             node.children.add(self)

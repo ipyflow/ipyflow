@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from typing import KeysView, Set
 
-from .unexpected import UNEXPECTED_STATES
+from nbsafety.unexpected import UNEXPECTED_STATES
 
 
 class PreCheck(ast.NodeVisitor):

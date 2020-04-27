@@ -2,16 +2,18 @@ import ast
 import logging
 import sys
 from types import FrameType
-from typing import Dict, Set, Tuple, TYPE_CHECKING
+from typing import Any, Dict, Set, Tuple
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 import networkx as nx
 
-from .precheck import precheck
-from .scope import Scope
-from .updates import UpdateDependency
+from .analysis.precheck import precheck
+from .analysis.updates import UpdateDependency
 from .data_cell import DataCell
+from .scope import Scope
+from .tracing.tracer import make_tracer
+from .tracing.trace_state import TraceState
 
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: Set[DataCell]):
@@ -28,6 +30,8 @@ class DependencySafety(object):
         self.global_scope = Scope()
         self.func_id_to_scope_object: Dict[int, Scope] = {}
         self.frame_dict_by_scope: Dict[Tuple[str, ...], FrameType] = {}
+        self.data_cell_by_ref: Dict[int, DataCell] = {}
+        self.global_data_cell_by_name: Dict[str, DataCell] = {}
         self.stale_dependency_detected = False
         self._cell_magic = self._make_cell_magic(cell_magic_name)
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
@@ -48,8 +52,23 @@ class DependencySafety(object):
                 if path not in self.frame_dict_by_scope:
                     self.frame_dict_by_scope[path] = original_frame
 
+    def make_data_cell_for_obj(self, name: str, obj: Any, deps: Set[DataCell], scope: str):
+        if scope == 'global' and name in self.global_data_cell_by_name:
+            dc = self.global_data_cell_by_name[name]
+            dc.update_deps(deps)
+            # TODO: garbage collect old id
+            self.data_cell_by_ref[id(obj)] = dc
+            return
+        dc = DataCell(name, scope, deps)
+        # TODO: need more disambiguation than 'id'
+        self.data_cell_by_ref[id(obj)] = dc
+        if scope == 'global':
+            self.global_data_cell_by_name[name] = dc
+        for dep in deps:
+            dep.children.add(dc)
+
     def _make_cell_magic(self, cell_magic_name):
-        def _dependency_safety(_, cell: str):
+        def _dependency_safety_old(_, cell: str):
             # We get the ast.Module node by parsing the cell
             ast_tree = ast.parse(cell)
 
@@ -74,6 +93,31 @@ class DependencySafety(object):
             self.global_scope.frame_dict = self.frame_dict_by_scope[()].f_locals
             UpdateDependency(self)(ast_tree)
             return
+
+        def _dependency_safety(_, cell: str):
+            # We get the ast.Module node by parsing the cell
+            ast_tree = ast.parse(cell)
+
+            # State 1: Precheck.
+            # Precheck process. First obtain the names that need to be checked. Then we check if their
+            # defined_cell_num is greater than or equal to required, if not we give a warning and return.
+            for name in precheck(ast_tree, self.global_data_cell_by_name.keys()):
+                node = self.global_data_cell_by_name[name]
+                if node.defined_cell_num < node.required_cell_num:
+                    _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                    self.stale_dependency_detected = True
+                    return
+
+            # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
+            trace_state = TraceState()
+            sys.settrace(make_tracer(self, trace_state))
+            # Test code doesn't run the full kernel and should therefore set store_history=True
+            # (e.g. in order to increment the cell numbers)
+            get_ipython().run_cell(cell, store_history=self._store_history)
+            sys.settrace(None)
+            trace_state.post_line_hook_for_event('line', self)
+            return
+
         if cell_magic_name is not None:
             # TODO (smacke): probably not a great idea to rely on this
             _dependency_safety.__name__ = cell_magic_name

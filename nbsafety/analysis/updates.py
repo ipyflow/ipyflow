@@ -4,12 +4,12 @@ import ast
 import logging
 from typing import cast, Set, TYPE_CHECKING
 
-from .scope import Scope
-from .unexpected import UNEXPECTED_STATES
-from .data_cell import DataCell
+from nbsafety.scope import Scope
+from nbsafety.unexpected import UNEXPECTED_STATES
+from nbsafety.data_cell import DataCell
 
 if TYPE_CHECKING:
-    from .safety import DependencySafety
+    from nbsafety.safety import DependencySafety
 
 
 # Helper function to remove the subscript and return the name node in front

@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import Optional, Set, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
-    from .scope import Scope
+    from typing import Optional, Set, Tuple
 
 
 class DataCell(object):
     def __init__(
             self,
             name: str,
-            scope: Scope,
+            scope: str,
             parents: Optional[Set[DataCell]] = None,
             defined_cell_num: Optional[int] = None
     ):
@@ -34,6 +34,18 @@ class DataCell(object):
 
     def __str__(self):
         return self.name
+
+    def update_deps(self, new_deps: Set[DataCell]):
+        for node in self.parents - new_deps:
+            node.children.remove(self)
+            self.parents.remove(node)
+
+        for node in new_deps - self.parents:
+            node.children.add(self)
+            self.parents.add(node)
+
+        self.defined_cell_num = cell_counter()
+        self.update_cellnum_node_pair((cell_counter(), self))
 
     # TODO: don't require tuple for this
     def update_cellnum_node_pair(self, pair: Tuple[int, DataCell], seen=None):

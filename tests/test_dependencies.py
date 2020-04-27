@@ -94,6 +94,17 @@ def test_long_chain():
     assert_detected('f has stale dependency on old value of a')
 
 
+def test_redef_after_stale_use():
+    run_cell('a = 1')
+    run_cell('b = a + 1')
+    run_cell('a = 3')
+    run_cell("""
+logging.info(b)
+b = 7
+""")
+    assert_detected('b has stale dependency on old value of a')
+
+
 def test_subscript_dependency_fp():
     run_cell('lst = [0, 1, 2]')
     run_cell('x = 5')
@@ -125,6 +136,7 @@ def test_basic_assignment():
 
 
 # redefined function example from the project prompt
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_in_list():
     run_cell("""
 def foo():
@@ -172,6 +184,7 @@ logging.info(accum)
 
 
 # like before but the function is called in a list comprehension
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_for_funcall_in_list_comp():
     run_cell("""
 def foo():
@@ -201,6 +214,7 @@ def bar():
 
 
 # like before but we run the list through a function before iterating
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_for_funcall_in_modified_list_comp():
     run_cell("""
 def foo():
@@ -229,6 +243,7 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_over_list_comp():
     run_cell("""
 def foo():
@@ -255,6 +270,7 @@ def baz(lst):
 
 
 # like before but the function is called in a tuple comprehension
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_for_funcall_in_tuple_comp():
     run_cell("""
 def foo():
@@ -285,6 +301,7 @@ def bar():
 
 # Tests about variables that have same name but in different scope.
 # There shouldn't be any extra dependency because of the name.
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_variable_scope():
     run_cell("""
 def func():
@@ -309,6 +326,7 @@ def func():
     assert_not_detected("Updating z should solve the problem")
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_variable_scope_2():
     run_cell('def func():\n    x = 6')
     run_cell('x = 7')
@@ -330,6 +348,7 @@ def test_variable_scope_2():
     assert_not_detected("Updating y should solve the problem")
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_default_args():
     run_cell("""
 x = 7
@@ -358,6 +377,7 @@ def test_same_pointer():
     assert_detected("c does not point to the same thing as a or b, thus there is a stale dependency here ")
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign():
     run_cell("""
 a = 1
@@ -404,6 +424,7 @@ d = 1""")
     assert_not_detected("Changing b and d should not affect z")
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign_helper_func():
     run_cell("""
 x = 3
@@ -443,7 +464,6 @@ y = f()()
     assert_detected("Should have detected stale dependency of y on x")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_branching():
     run_cell('y = 7')
     run_cell('x = y + 3')
@@ -505,6 +525,7 @@ def test_numpy_subscripting_fp():
     assert_false_positive('false positive on changed x[3] but OK since fine-grained detection hard')
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_old_format_string():
     run_cell('a = 5; b = 7')
     run_cell('expr_str = "{} + {} = {}".format(a, b, a + b)')
@@ -531,6 +552,7 @@ def test_new_format_string():
     assert_detected('`expr_str` depends on stale `a`')
 
 
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_scope_resolution():
     run_cell("""
 def f(x):

@@ -14,7 +14,6 @@ class DataCell(object):
             name: str,
             scope: str,
             parents: Optional[Set[DataCell]] = None,
-            defined_cell_num: Optional[int] = None
     ):
         self.name = str(name)
         self.scope = scope
@@ -22,15 +21,16 @@ class DataCell(object):
             parents = set()
         self.parents = parents
         self.children: Set[DataCell] = set()
-        if defined_cell_num is None:
-            defined_cell_num = cell_counter()
-        self.defined_cell_num = defined_cell_num
+        self.defined_cell_num = cell_counter()
 
-        # The cell number this node is required to have to not be considered as stale dependency
-        self.required_cell_num = defined_cell_num
+        # The notebook cell number this is required to have to not be considered stale
+        self.required_cell_num = self.defined_cell_num
 
         # Set of ancestors defined more recently
         self.fresher_ancestors: Set[DataCell] = set()
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__} for variable {self.name}>'
 
     def __str__(self):
         return self.name
@@ -60,3 +60,9 @@ class DataCell(object):
         self.fresher_ancestors.add(pair[1])
         for n in self.children:
             n.update_cellnum_node_pair(pair, seen)
+
+
+class FunctionDataCell(DataCell):
+    def __init__(self, scope, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.scope = scope

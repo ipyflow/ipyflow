@@ -66,10 +66,18 @@ def should_skip_known_failing(reason='this test tests unimpled functionality'):
 @pytest.fixture(autouse=True)
 def init_or_reset_dependency_graph():
     global SAFETY_STATE
-    SAFETY_STATE = DependencySafety(store_history=True)
+    SAFETY_STATE = DependencySafety()
     run_cell('import logging')
     yield  # yield to execution of the actual test
     get_ipython().reset()  # reset ipython state
+
+
+def test_simplest():
+    run_cell('a = 1')
+    run_cell('b = a + 1')
+    run_cell('a = 3')
+    run_cell('logging.info(b)')
+    assert_detected('should have detected b has stale dep on old a')
 
 
 def test_subscript_dependency():

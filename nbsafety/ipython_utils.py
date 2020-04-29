@@ -5,4 +5,4 @@ from IPython import get_ipython
 
 
 def cell_counter() -> int:
-    return get_ipython().execution_count
+    return get_ipython().execution_count - 1

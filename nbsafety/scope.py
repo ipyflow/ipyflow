@@ -4,11 +4,38 @@ import ast
 from types import FrameType
 from typing import Dict, Iterable, Optional, Set, Tuple, Union
 
-from .ipython_utils import cell_counter
 from .data_cell import DataCell
 
 
 class Scope(object):
+    GLOBAL_SCOPE = '<module>'
+
+    def __init__(self, scope_name: str = GLOBAL_SCOPE, parent_scope: Optional[Scope] = None):
+        # The actual string name of the Scope
+        self.scope_name = scope_name
+
+        # The parent scope of this scope. Set to None if this is the global scope.
+        self.parent_scope = parent_scope
+
+    def make_child_scope(self, scope_name):
+        return self.__class__(scope_name, parent_scope=self)
+
+    def __hash__(self):
+        return self.full_path
+
+    def __str__(self):
+        return str(self.full_path)
+
+    @property
+    def full_path(self) -> Tuple[str, ...]:
+        path = (self.scope_name,)
+        if self.parent_scope is None:
+            return path
+        else:
+            return self.parent_scope.full_path + path
+
+
+class OldScope(object):
     GLOBAL_SCOPE = '<module>'
 
     def __init__(self, scope_name: str = GLOBAL_SCOPE, parent_scope: Optional[Scope] = None):

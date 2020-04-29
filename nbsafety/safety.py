@@ -10,7 +10,7 @@ import networkx as nx
 
 from .analysis.precheck import precheck
 from .analysis.updates import UpdateDependency
-from .data_cell import DataCell
+from .data_cell import DataCell, FunctionDataCell
 from .scope import Scope
 from .tracing.tracer import make_tracer
 from .tracing.trace_state import TraceState
@@ -18,25 +18,25 @@ from .tracing.trace_state import TraceState
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: Set[DataCell]):
     logging.warning(
-        "{} defined in cell {} may have a stale dependency on {} (last updated in cell {}).".format(
-            name, defined_cell_num, fresher_ancestors, required_cell_num
-        )
+        f'{name} defined in cell {defined_cell_num} may depend on '
+        f'old version(s) of [{", ".join(str(dep) for dep in fresher_ancestors)}] '
+        f'(lastest update in cell {required_cell_num}).'
     )
 
 
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
-    def __init__(self, cell_magic_name=None, line_magic_name=None, store_history=False):
+    def __init__(self, cell_magic_name=None, line_magic_name=None):
         self.global_scope = Scope()
         self.func_id_to_scope_object: Dict[int, Scope] = {}
         self.frame_dict_by_scope: Dict[Tuple[str, ...], FrameType] = {}
         self.data_cell_by_ref: Dict[int, DataCell] = {}
         self.global_data_cell_by_name: Dict[str, DataCell] = {}
         self.stale_dependency_detected = False
+        self.trace_state = TraceState(self.global_scope)
         self._cell_magic = self._make_cell_magic(cell_magic_name)
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic(line_magic_name)
-        self._store_history = store_history
 
     def _capture_frame_at_run_time(self, frame: FrameType, event: str, _):
         original_frame = frame
@@ -52,14 +52,25 @@ class DependencySafety(object):
                 if path not in self.frame_dict_by_scope:
                     self.frame_dict_by_scope[path] = original_frame
 
-    def make_data_cell_for_obj(self, name: str, obj: Any, deps: Set[DataCell], scope: str, add=False):
+    def make_data_cell_for_obj(
+            self,
+            name: str,
+            obj: Any,
+            deps: Set[DataCell],
+            scope: str,
+            add=False,
+            is_function_def=False
+    ):
         if scope == 'global' and name in self.global_data_cell_by_name:
             dc = self.global_data_cell_by_name[name]
             dc.update_deps(deps, add=add)
             # TODO: garbage collect old id
             self.data_cell_by_ref[id(obj)] = dc
             return
-        dc = DataCell(name, scope, deps)
+        if is_function_def:
+            dc = FunctionDataCell(self.trace_state.cur_frame_scope.make_child_scope(name), name, scope, deps)
+        else:
+            dc = DataCell(name, scope, deps)
         # TODO: need more disambiguation than 'id'
         self.data_cell_by_ref[id(obj)] = dc
         if scope == 'global':
@@ -84,9 +95,7 @@ class DependencySafety(object):
 
             # Stage 2: Trace / run the cell.
             sys.settrace(lambda *args: self.__class__._capture_frame_at_run_time(self, *args))
-            # Test code doesn't run the full kernel and should therefore set store_history=True
-            # (e.g. in order to increment the cell numbers)
-            get_ipython().run_cell(cell, store_history=self._store_history)
+            get_ipython().run_cell(cell, store_history=True)
             sys.settrace(None)
 
             # Stage 3: Update dependencies.
@@ -109,13 +118,14 @@ class DependencySafety(object):
                     return
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-            trace_state = TraceState()
-            sys.settrace(make_tracer(self, trace_state))
+            sys.settrace(make_tracer(self, self.trace_state))
             # Test code doesn't run the full kernel and should therefore set store_history=True
             # (e.g. in order to increment the cell numbers)
-            get_ipython().run_cell(cell, store_history=self._store_history)
+            get_ipython().run_cell(cell, store_history=True)
             sys.settrace(None)
-            trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
+            self.trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
+            # TODO: use context manager to handle this automatically
+            self.trace_state = TraceState(self.global_scope)  # reset the trace state
             return
 
         if cell_magic_name is not None:

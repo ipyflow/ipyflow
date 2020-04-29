@@ -115,7 +115,7 @@ class DependencySafety(object):
             # (e.g. in order to increment the cell numbers)
             get_ipython().run_cell(cell, store_history=self._store_history)
             sys.settrace(None)
-            trace_state.update_hook()
+            trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
             return
 
         if cell_magic_name is not None:

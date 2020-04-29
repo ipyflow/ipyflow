@@ -36,9 +36,6 @@ class DataCell(object):
         return self.name
 
     def update_deps(self, new_deps: Set[DataCell], add=False):
-        if self.name == 'c':
-            for child in self.children:
-                print(child.name)
         if not add:
             for node in self.parents - new_deps:
                 node.children.remove(self)
@@ -52,7 +49,7 @@ class DataCell(object):
         self.defined_cell_num = cell_counter()
         self.update_cellnum_node_pair((cell_counter(), self))
 
-    # TODO: don't require tuple for this
+    # TODO: don't use a tuple for this
     def update_cellnum_node_pair(self, pair: Tuple[int, DataCell], seen=None):
         if seen is None:
             seen = set()

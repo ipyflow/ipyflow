@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import Optional, Dict, Tuple, TYPE_CHECKING
+from typing import Optional, Dict, List, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -11,7 +11,7 @@ class TraceState(object):
     def __init__(self):
         self.call_depth = 0
         self.code_lines: Dict[int, CodeLine] = {}
-        self.stack = []
+        self.stack: List[CodeLine] = []
         self.source: Optional[str] = None
         self.cur_frame_last_line: Optional[CodeLine] = None
         self.last_event: Optional[str] = None
@@ -24,17 +24,16 @@ class TraceState(object):
 
     def update_hook(
             self,
-            event: str = 'line',
-            frame: Optional[FrameType] = None,
-            code_line: Optional[CodeLine] = None
+            event: str,
+            frame: FrameType,
+            code_line: CodeLine
     ):
-        if frame is None or self._prev_line_done_executing(event, frame):
+        if self._prev_line_done_executing(event, frame):
             line = self.cur_frame_last_line
-            if line is not None and line.has_lval:
-                line.make_lhs_data_cells()
+            if line is not None:
+                line.make_lhs_data_cells_if_has_lval()
 
-        if frame is not None:
-            self.prev_position = self.get_position(frame)
+        self.prev_position = self.get_position(frame)
 
         if code_line is None:
             return

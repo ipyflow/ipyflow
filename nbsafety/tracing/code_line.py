@@ -47,7 +47,9 @@ class CodeLine(object):
             rval_data_cells.add(self.safety.data_cell_by_ref[id(obj)])
         return rval_data_cells | self.extra_dependencies
 
-    def make_lhs_data_cells(self):
+    def make_lhs_data_cells_if_has_lval(self):
+        if not self.has_lval:
+            return
         lval_names, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
         rval_deps = self.compute_rval_dependencies(rval_names=rval_names-lval_names)
         should_add = isinstance(self.ast_node, ast.AugAssign)

@@ -3,7 +3,9 @@ from ipykernel.ipkernel import IPythonKernel
 import nbsafety.safety
 from ..safety import DependencySafety
 from ..version import __version__
-
+import warnings
+#Avoid networkx gives a FutureWarning
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 _SAFETY_STATE = '__SAFETY_STATE'
 _CELL_MAGIC_NAME = '__SAFETY_CELL_MAGIC'

@@ -17,7 +17,7 @@ class DataCell(object):
         self.name = str(name)
         if parents is None:
             parents = set()
-        self.parents = parents
+        self.parents: Set[DataCell] = parents
         self.children: Set[DataCell] = set()
         self.defined_cell_num = cell_counter()
 

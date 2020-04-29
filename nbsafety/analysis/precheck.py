@@ -3,8 +3,6 @@ from __future__ import annotations
 import ast
 from typing import KeysView, Set
 
-from nbsafety.unexpected import UNEXPECTED_STATES
-
 
 class PreCheck(ast.NodeVisitor):
 
@@ -45,12 +43,7 @@ class PreCheck(ast.NodeVisitor):
             if isinstance(target_node, ast.Name):
                 self.safe_set.add(target_node.id)
             else:
-                raise UNEXPECTED_STATES(
-                    "Precheck",
-                    "visit_Assign",
-                    target_node,
-                    "Expect to be ast.Tuple or ast.Name",
-                )
+                raise TypeError('unsupported type for node %s' % target_node)
 
     # Similar to assignment, but multiple augassignment is not allowed
     def visit_AugAssign(self, node: ast.AugAssign):
@@ -61,9 +54,7 @@ class PreCheck(ast.NodeVisitor):
         if isinstance(target_node, ast.Name):
             self.safe_set.add(target_node.id)
         else:
-            raise UNEXPECTED_STATES(
-                "Precheck", "visit_AugAssign", target_node, "Expect to be ast.Name"
-            )
+            raise TypeError('unsupported type for node %s' % target_node)
 
     # We also put the name of new functions in the safe_set
     def visit_FunctionDef(self, node: ast.FunctionDef):
@@ -76,16 +67,12 @@ class PreCheck(ast.NodeVisitor):
                 if isinstance(name_node, ast.Name):
                     self.safe_set.add(name_node.id)
                 else:
-                    raise UNEXPECTED_STATES(
-                        "Precheck", "visit_For", name_node, "Expect to be ast.Name"
-                    )
+                    raise TypeError('unsupported type for node %s' % name_node)
         # case "for a in something"
         elif isinstance(node.target, ast.Name):
             self.safe_set.add(node.target.id)
         else:
-            raise UNEXPECTED_STATES(
-                "Update", "visit_For", node.target, "Expect to be ast.Tuple or ast.Name"
-            )
+            raise TypeError('unsupported type for node %s' % node.target)
 
         # Then we keep doing the visit for the body of the loop.
         for line in node.body:
@@ -116,12 +103,7 @@ class GetAllNames(ast.NodeVisitor):
             for default_node in node.args.defaults:
                 self.visit(default_node)
         else:
-            raise UNEXPECTED_STATES(
-                "Precheck Helper",
-                "visit_FunctionDef",
-                node.args,
-                "Expect to be ast.arguments",
-            )
+            raise TypeError('unsupported type for node %s' % node.args)
 
 
 def get_all_names(node: ast.AST):

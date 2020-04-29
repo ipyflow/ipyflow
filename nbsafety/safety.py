@@ -1,18 +1,16 @@
 import ast
 import logging
 import sys
-from types import FrameType
-from typing import Any, Dict, Set, Tuple
+from typing import Dict, Set
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 import networkx as nx
 
-from .analysis.precheck import precheck
-from .data_cell import DataCell, FunctionDataCell
+from .analysis import precheck
+from .data_cell import DataCell
 from .scope import Scope
-from .tracing.tracer import make_tracer
-from .tracing.trace_state import TraceState
+from .tracing import make_tracer, TraceState
 
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: Set[DataCell]):

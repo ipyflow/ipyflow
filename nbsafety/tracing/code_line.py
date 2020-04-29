@@ -6,7 +6,6 @@ from ..analysis.hyperedge import get_hyperedge_lvals_and_rvals
 from ..data_cell import FunctionDataCell
 
 
-# TODO: maybe delete frame and add scope
 class CodeLine(object):
     def __init__(self, safety, text, ast_node, lineno, scope):
         self.safety = safety

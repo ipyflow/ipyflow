@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ..safety import DependencySafety
 
 
-def make_tracer(safety: DependencySafety, state: TraceState):
+def make_tracer(safety: DependencySafety):
     def tracer(frame: FrameType, event: str, _):
         # this is a bit of a hack to get the class out of the locals
         # - it relies on 'self' being used... normally a safe assumption!
@@ -26,6 +26,8 @@ def make_tracer(safety: DependencySafety, state: TraceState):
         # notebook filenames appear as 'ipython-input...'
         if 'ipython-input' not in frame.f_code.co_filename:
             return
+
+        state = safety.trace_state  # we'll be using this a lot
 
         cell_num, lineno = TraceState.get_position(frame)
         # TODO: cache the split-by-newline operation so that we're not doing it on every instruction

@@ -48,21 +48,24 @@ class DependencySafety(object):
                     self.stale_dependency_detected = True
                     return
 
+            # TODO: use context manager to handle these next lines automatically
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-            sys.settrace(make_tracer(self, self.trace_state))
+            sys.settrace(make_tracer(self))
             # Test code doesn't run the full kernel and should therefore set store_history=True
             # (e.g. in order to increment the cell numbers)
             get_ipython().run_cell(cell, store_history=True)
             sys.settrace(None)
-            self.trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
-            # TODO: use context manager to handle this automatically
-            self.trace_state = TraceState(self.global_scope)  # reset the trace state
+            self._reset_trace_state_hook()
             return
 
         if cell_magic_name is not None:
             # TODO (smacke): probably not a great idea to rely on this
             _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
+
+    def _reset_trace_state_hook(self):
+        self.trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
+        self.trace_state = TraceState(self.global_scope)
 
     def _make_line_magic(self, line_magic_name):
         def _safety(line: str):

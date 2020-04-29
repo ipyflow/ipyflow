@@ -50,9 +50,9 @@ def make_tracer(safety: DependencySafety, state: TraceState):
             to_parse += '\n    pass'
         node = ast.parse(to_parse).body[0]
         code_line = state.code_lines.get(
-            (cell_num, lineno), CodeLine(safety, line, node, lineno, state.call_depth, frame)
+            (cell_num, lineno), CodeLine(safety, line, node, lineno, state.cur_frame_scope)
         )
-        print(lineno, state.call_depth, event, line)
+        # print(lineno, state.call_depth, event, line)
         state.code_lines[(cell_num, lineno)] = code_line
         state.update_hook(event, frame, code_line)
         return tracer

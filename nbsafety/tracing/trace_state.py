@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-from typing import Optional, Dict, List, Tuple, TYPE_CHECKING
+import logging
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from typing import Optional, Dict, List, Tuple
     from types import FrameType
     from .code_line import CodeLine
     from ..scope import Scope
@@ -14,7 +16,7 @@ class TraceState(object):
         self.cur_frame_last_line: Optional[CodeLine] = None
         self.call_depth = 0
         self.code_lines: Dict[Tuple[int, int], CodeLine] = {}
-        self.stack: List[Tuple[CodeLine, Scope]] = []
+        self.stack: List[CodeLine] = []
         self.source: Optional[str] = None
         self.last_event: Optional[str] = None
         self.prev_position: Optional[Tuple[int, int]] = None
@@ -43,18 +45,20 @@ class TraceState(object):
         if event == 'line':
             self.cur_frame_last_line = code_line
         if event == 'call':
-            self.stack.append((self.cur_frame_last_line, self.cur_frame_scope))
+            self.stack.append(self.cur_frame_last_line)
             self.cur_frame_scope = code_line.get_post_call_scope(self.cur_frame_scope)
+            logging.debug('entering scope %s', self.cur_frame_scope)
             self.cur_frame_last_line = None
         if event == 'return':
-            ret_line, scope = self.stack.pop()
+            logging.debug('leaving scope %s', self.cur_frame_scope)
+            ret_line = self.stack.pop()
             assert ret_line is not None
-            assert scope is not None
             # print('{} @@returning to@@ {}'.format(code_line.text, ret_line.text))
             ret_line.extra_dependencies |= code_line.compute_rval_dependencies()
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
             self.cur_frame_last_line = ret_line
-            self.cur_frame_scope = scope
+            self.cur_frame_scope = ret_line.scope
+            logging.debug('entering scope %s', self.cur_frame_scope)
         self.last_event = event
 
     @staticmethod

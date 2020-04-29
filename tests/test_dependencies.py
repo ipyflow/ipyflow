@@ -263,7 +263,6 @@ logging.info(accum)
     assert_detected('did not detect stale dep foo -> accum')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_redefined_function_over_list_comp():
     run_cell("""
 def foo():
@@ -429,7 +428,6 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_func_assign_ints():
     run_cell("""
 a = 1
@@ -545,7 +543,6 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_numpy_subscripting():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')
@@ -555,7 +552,6 @@ def test_numpy_subscripting():
     assert_detected('y depends on stale x[3]')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_numpy_subscripting_fp():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')
@@ -565,7 +561,6 @@ def test_numpy_subscripting_fp():
     assert_false_positive('false positive on changed x[3] but OK since fine-grained detection hard')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_old_format_string():
     run_cell('a = 5; b = 7')
     run_cell('expr_str = "{} + {} = {}".format(a, b, a + b)')
@@ -574,7 +569,6 @@ def test_old_format_string():
     assert_detected('`expr_str` depends on stale `a`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_old_format_string_kwargs():
     run_cell('a = 5; b = 7')
     run_cell('expr_str = "{a} + {b} = {total}".format(a=a, b=b, total=a + b)')
@@ -583,7 +577,6 @@ def test_old_format_string_kwargs():
     assert_detected('`expr_str` depends on stale `a`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_new_format_string():
     run_cell('a = 5; b = 7')
     run_cell('expr_str = f"{a} + {b} = {a+b}"')

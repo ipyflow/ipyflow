@@ -12,11 +12,9 @@ class DataCell(object):
     def __init__(
             self,
             name: str,
-            scope: str,
             parents: Optional[Set[DataCell]] = None,
     ):
         self.name = str(name)
-        self.scope = scope
         if parents is None:
             parents = set()
         self.parents = parents
@@ -38,8 +36,7 @@ class DataCell(object):
     def update_deps(self, new_deps: Set[DataCell], add=False):
         if not add:
             for node in self.parents - new_deps:
-                node.children.remove(self)
-                self.parents.remove(node)
+                node.children.discard(self)
             self.parents = set()
 
         for node in new_deps - self.parents:

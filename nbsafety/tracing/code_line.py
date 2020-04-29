@@ -49,6 +49,7 @@ class CodeLine(object):
 
     def make_lhs_data_cells(self):
         lval_names, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
+        print(lval_names, rval_names)
         rval_deps = self.compute_rval_dependencies(rval_names=rval_names-lval_names)
         should_add = isinstance(self.ast_node, ast.AugAssign)
         for name in lval_names:

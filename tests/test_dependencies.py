@@ -241,7 +241,6 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_for_loop_with_map():
     run_cell("""
 accum = 0

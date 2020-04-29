@@ -1,14 +1,20 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+from typing import TYPE_CHECKING
 
 from IPython import get_ipython
 
 from .code_line import CodeLine
+from .trace_state import TraceState
+
+if TYPE_CHECKING:
+    from types import FrameType
+    from ..safety import DependencySafety
 
 
-def make_tracer(safety, state):
-    def tracer(frame, event, _):
+def make_tracer(safety: DependencySafety, state: TraceState):
+    def tracer(frame: FrameType, event: str, _):
         # this is a bit of a hack to get the class out of the locals
         # - it relies on 'self' being used... normally a safe assumption!
         try:
@@ -28,7 +34,7 @@ def make_tracer(safety, state):
         #     print(inspect.getsource(frame))
         #     print(frame.f_lineno)
         #     raise
-        cell_num = int(frame.f_code.co_filename.split('-')[2])
+        cell_num, _ = TraceState.get_position(frame)
         state.source = get_ipython().all_ns_refs[0]['In'][cell_num].split('\n')
         line = state.source[frame.f_lineno - 1]
 
@@ -56,21 +62,6 @@ def make_tracer(safety, state):
             lineno, CodeLine(safety, line, node, lineno, state.call_depth, frame)
         )
         state.code_lines[lineno] = code_line
-
-        state.post_line_hook_for_event(event, safety)
-
-        if event == 'line':
-            state.cur_frame_last_line = code_line
-        if event == 'call':
-            state.stack.append(state.cur_frame_last_line)
-            state.cur_frame_last_line = None
-        if event == 'return':
-            ret_line = state.stack.pop()
-            assert ret_line is not None
-            # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
-            state.cur_frame_last_line = ret_line
-            # print('{} @@returning to@@ {}'.format(code_line.text, ret_line.text))
-            ret_line.extra_dependencies |= code_line.compute_rval_dependencies()
-        state.last_event = event
+        state.update_hook(event, frame, code_line)
         return tracer
     return tracer

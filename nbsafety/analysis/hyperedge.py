@@ -7,11 +7,18 @@ class GetHyperEdgeNames(ast.NodeVisitor):
     def __init__(self):
         self.lval_name_set = set()
         self.rval_name_set = set()
-        self.to_add_set = self.rval_name_set
+        self.gather_rvals = True
 
     def __call__(self, node):
         self.visit(node)
         return self.lval_name_set, self.rval_name_set
+
+    @property
+    def to_add_set(self):
+        if self.gather_rvals:
+            return self.rval_name_set
+        else:
+            return self.lval_name_set
 
     def visit_Name(self, node):
         self.to_add_set.add(node.id)
@@ -21,34 +28,41 @@ class GetHyperEdgeNames(ast.NodeVisitor):
         self.visit(node.value)
 
     def visit_Assign(self, node):
-        self.to_add_set = self.lval_name_set
+        self.gather_rvals = False
         for target in node.targets:
             self.visit(target)
-        self.to_add_set = self.rval_name_set
+        self.gather_rvals = True
         self.visit(node.value)
 
     def visit_AugAssign(self, node):
-        self.to_add_set = self.lval_name_set
+        self.gather_rvals = False
         self.visit(node.target)
-        self.to_add_set = self.rval_name_set
+        self.gather_rvals = True
         self.visit(node.value)
 
     def visit_For(self, node):
         # skip body -- will have dummy since this visitor works line-by-line
-        self.to_add_set = self.lval_name_set
+        self.gather_rvals = False
         self.visit(node.target)
-        self.to_add_set = self.rval_name_set
+        self.gather_rvals = True
         self.visit(node.iter)
 
     def visit_FunctionDef(self, node):
         self.lval_name_set.add(node.name)
-        self.to_add_set = self.rval_name_set
+        self.gather_rvals = True
         self.visit(node.args)
+
+    def visit_Keyword(self, node):
+        self.visit(node.value)
+
+    def visit_Starred(self, node):
+        self.visit(node.value)
 
     def visit_AsyncFunctionDef(self, node):
         self.visit_FunctionDef(node)
 
     def visit_Lambda(self, node):
+        assert self.gather_rvals
         # remove node.arguments
         self.visit(node.body)
         self.visit(node.args)

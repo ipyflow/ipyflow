@@ -17,8 +17,8 @@ exec(read_file(os.path.join(pkg_name, 'version.py')))
 setup(
     name=pkg_name,
     version=__version__,  # noqa
-    author='Ray Gong',
-    author_email='ruiduoray@berkeley.edu',
+    author='Stephen Macke, Ray Gong',
+    author_email='stephen.macke@gmail.com',
     description='Language-agnostic synchronization of subtitles with video via speech detection.',
     long_description=read_file('README.md'),
     url='https://github.com/runtime-jupyter-safety/runtime-jupyter-safety',  # maybe rename to nbsafety

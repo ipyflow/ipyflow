@@ -3,8 +3,10 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
+from .mixins import SkipUnboundArgsMixin, VisitListsMixin
+
 if TYPE_CHECKING:
-    from typing import KeysView, List, Set, Union
+    from typing import KeysView, List, Set
 
 
 class PreCheck(ast.NodeVisitor):
@@ -88,7 +90,7 @@ def precheck(module_node: ast.Module, name_set: KeysView[str]):
 
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.
 # Helper Class
-class GetAllNames(ast.NodeVisitor):
+class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         self.name_set: Set[str] = set()
 
@@ -102,20 +104,6 @@ class GetAllNames(ast.NodeVisitor):
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self.visit(node.args)
-
-    # Only need to check for default arguments
-    def visit_arguments(self, node):
-        self.visit(node.defaults)
-        self.visit(node.kw_defaults)
-
-    def generic_visit(self, node):
-        if node is None:
-            return
-        elif isinstance(node, list):
-            for item in node:
-                self.visit(item)
-        else:
-            super().generic_visit(node)
 
 
 def get_all_names(node: ast.AST):

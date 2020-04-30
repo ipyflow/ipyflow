@@ -1,7 +1,10 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
-from typing import KeysView, Set
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import KeysView, List, Set, Union
 
 
 class PreCheck(ast.NodeVisitor):
@@ -32,7 +35,7 @@ class PreCheck(ast.NodeVisitor):
     # `target` would be an ast.Tuple node in the case of "a,b = 3,4". Thus
     # we need to break the tuple in that case.
     def visit_Assign(self, node: ast.Assign):
-        ignore_node_types = (ast.Subscript,)
+        ignore_node_types = (ast.Subscript, ast.Attribute)
         for target_node in node.targets:
             if isinstance(target_node, ignore_node_types):
                 continue
@@ -48,7 +51,7 @@ class PreCheck(ast.NodeVisitor):
     # Similar to assignment, but multiple augassignment is not allowed
     def visit_AugAssign(self, node: ast.AugAssign):
         target_node = node.target
-        ignore_node_types = (ast.Subscript,)
+        ignore_node_types = (ast.Subscript, ast.Attribute)
         if isinstance(target_node, ignore_node_types):
             return
         if isinstance(target_node, ast.Name):
@@ -97,13 +100,22 @@ class GetAllNames(ast.NodeVisitor):
         self.name_set.add(node.id)
 
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
-    # Only need to check for default arguments
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        if isinstance(node.args, ast.arguments):
-            for default_node in node.args.defaults:
-                self.visit(default_node)
+        self.visit(node.args)
+
+    # Only need to check for default arguments
+    def visit_arguments(self, node):
+        self.visit(node.defaults)
+        self.visit(node.kw_defaults)
+
+    def generic_visit(self, node):
+        if node is None:
+            return
+        elif isinstance(node, list):
+            for item in node:
+                self.visit(item)
         else:
-            raise TypeError('unsupported type for node %s' % node.args)
+            super().generic_visit(node)
 
 
 def get_all_names(node: ast.AST):

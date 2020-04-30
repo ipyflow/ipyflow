@@ -515,7 +515,19 @@ else:
     assert_not_detected('false positive on unchanged y')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+def test_branching_2():
+    run_cell('y = 7')
+    run_cell('x = y + 3')
+    run_cell("""
+if False:
+    b = 5
+else:
+    y = 7
+""")
+    run_cell('logging.info(x)')
+    assert_detected('x depends on stale y')
+
+
 def test_attributes():
     run_cell("""
 class Foo(object):
@@ -529,7 +541,6 @@ class Foo(object):
     assert_detected('y depends on stale attrval x.x')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_attributes_2():
     run_cell("""
 class Foo(object):
@@ -541,6 +552,21 @@ class Foo(object):
     run_cell('x = 8')
     run_cell('logging.info(y)')
     assert_detected('y depends on stale x')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_attributes_3():
+    run_cell("""
+class Foo(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+""")
+    run_cell('foo = Foo(5, 6)')
+    run_cell('y = foo.x + 5')
+    run_cell('foo.y = 8')
+    run_cell('logging.info(y)')
+    assert_not_detected('y does not depend on updated attrval foo.y')
 
 
 def test_numpy_subscripting():

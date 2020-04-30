@@ -75,12 +75,12 @@ class GetHyperEdgeNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitLists
         self.visit(node.body)
         self.visit(node.args)
         with self.push_attributes(rval_name_set=set()):
-        # throw away anything appearing in lambda body that isn't bound
             self.visit(node.args.args)
             self.visit(node.args.vararg)
             self.visit(node.args.kwonlyargs)
             self.visit(node.args.kwarg)
             discard_set = self.rval_name_set
+        # throw away anything appearing in lambda body that isn't bound
         self.rval_name_set -= discard_set
 
     def visit_arg(self, node):

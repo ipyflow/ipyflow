@@ -64,7 +64,10 @@ class DependencySafety(object):
         return register_cell_magic(_dependency_safety)
 
     def _reset_trace_state_hook(self):
-        self.trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
+        if self.trace_state.cur_frame_last_line is None:
+            logging.warning('last executed line not available after cell done executing; this should not happen')
+        else:
+            self.trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
         self.trace_state = TraceState(self.global_scope)
 
     def _make_line_magic(self, line_magic_name):

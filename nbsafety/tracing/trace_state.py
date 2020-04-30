@@ -22,7 +22,7 @@ class TraceState(object):
         self.prev_position: Optional[Tuple[int, int]] = None
 
     def _prev_line_done_executing(self, event: str, frame: FrameType):
-        if event not in ('line', 'return') or self.last_event == 'call':
+        if event not in ('line', 'return') or self.last_event in ('call', 'exception'):
             return False
         return self.get_position(frame) != self.prev_position
 
@@ -42,6 +42,7 @@ class TraceState(object):
         if code_line is None:
             return
 
+        # TODO: make an enum for all these events
         if event == 'line':
             self.cur_frame_last_line = code_line
         if event == 'call':
@@ -59,6 +60,11 @@ class TraceState(object):
             self.cur_frame_last_line = ret_line
             self.cur_frame_scope = ret_line.scope
             logging.debug('entering scope %s', self.cur_frame_scope)
+        if event == 'exception':
+            # TODO: save off the frame. when we hit the next trace event (the except clause), we'll count the
+            # number of times we need to pop the saved frame in order to determine how many times to pop
+            # our trace state's bespoke stack. See the `self.last_event == 'exception` comment in `tracer`.
+            pass
         self.last_event = event
 
     @staticmethod

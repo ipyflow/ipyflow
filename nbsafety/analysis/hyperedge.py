@@ -23,9 +23,12 @@ class GetHyperEdgeNames(ast.NodeVisitor):
     def visit_Name(self, node):
         self.to_add_set.add(node.id)
 
-    def visit_Subscript(self, node):
-        # TODO: add slice to rval set
+    def visit_Subscript(self, node: ast.Subscript):
         self.visit(node.value)
+        old_gather_rvals = self.gather_rvals
+        self.gather_rvals = True
+        self.visit(node.slice)
+        self.gather_rvals = old_gather_rvals
 
     def visit_Assign(self, node):
         self.gather_rvals = False

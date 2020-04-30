@@ -46,15 +46,26 @@ def make_tracer(safety: DependencySafety):
             if state.call_depth == 0:
                 return tracer
 
+        if state.last_event == 'exception':
+            # TODO: unwind the stack
+            pass
+
         to_parse = line = line.strip()
+        print(lineno, state.call_depth, event, line)
         logging.debug('%s %s %s %s', lineno, state.call_depth, event, line)
+        if line in ('try:', 'except:'):
+            return tracer
         if to_parse[-1] == ':':
             to_parse += '\n    pass'
-        node = ast.parse(to_parse).body[0]
+        try:
+            node = ast.parse(to_parse).body[0]
+        except SyntaxError:
+            logging.error('got syntax error when parsing %s', to_parse)
+            return tracer
         code_line = state.code_lines.get(
-            (cell_num, lineno), CodeLine(safety, line, node, lineno, state.cur_frame_scope)
+            (cell_num, lineno),
+            CodeLine(safety, line, node, lineno, state.cur_frame_scope)
         )
-        # print(lineno, state.call_depth, event, line)
         state.code_lines[(cell_num, lineno)] = code_line
         state.update_hook(event, frame, code_line)
         return tracer

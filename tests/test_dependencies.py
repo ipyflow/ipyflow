@@ -578,6 +578,25 @@ def test_numpy_subscripting():
     assert_detected('y depends on stale x[3]')
 
 
+def test_subscript_sensitivity():
+    run_cell('lst = list(range(5))')
+    run_cell('i = 0')
+    run_cell('lst[i] = 10')
+    run_cell('i = 1')
+    run_cell('logging.info(lst)')
+    assert_detected('lst depends on stale i')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_list_mutation():
+    run_cell('lst = list(range(5))')
+    run_cell('x = 42')
+    run_cell('lst.append(x)')
+    run_cell('x = 43')
+    run_cell('logging.info(lst)')
+    assert_detected('lst depends on stale x')
+
+
 def test_numpy_subscripting_fp():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')
@@ -685,3 +704,69 @@ def f(x):
     run_cell('x = 8')
     run_cell('logging.info(x)')
     assert_not_detected('`x` is overriden so should not be stale')
+
+
+def test_single_line_dictionary_literal():
+    run_cell('foo = 5')
+    run_cell('bar = 6')
+    run_cell('d = {foo: bar, "pi": 42,}')
+    run_cell('bar = 7')
+    run_cell('logging.info(d)')
+    assert_detected('`d` depends on stale `bar`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_single_line_dictionary_literal_fix_stale_deps():
+    run_cell('foo = 5')
+    run_cell('bar = 6')
+    run_cell('d = {foo: bar, "pi": 42,}')
+    run_cell('bar = 7')
+    run_cell('logging.info(d)')
+    assert_detected('`d` depends on stale `bar`')
+    run_cell('d[foo] = bar')
+    assert_not_detected('`d`s stale dep fixed')
+    run_cell('foo = 8')
+    assert_detected('`d` depends on stale `foo`')
+    run_cell('d[foo] = bar')
+    assert_not_detected('`d`s stale dep fixed')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_multiline_dictionary_literal():
+    run_cell('foo = 5')
+    run_cell('bar = 6')
+    run_cell("""
+d = {
+    foo: bar,
+    'pi': 42,
+}
+""")
+    run_cell('bar = 7')
+    run_cell('logging.info(d)')
+    assert_detected('`d` depends on stale `bar`')
+    run_cell('d[foo] = bar')
+    assert_not_detected('`d`s stale dep fixed')
+    run_cell('foo = 8')
+    assert_detected('`d` depends on stale `foo`')
+    run_cell('d[foo] = bar')
+    assert_not_detected('`d`s stale dep fixed')
+
+
+def test_exception():
+    run_cell('lst = list(range(5))')
+    run_cell('x = 6')
+    run_cell("""
+try:
+    lst[x] = 42
+except:
+    lst[0] = 42
+""")
+    run_cell('x = 7')
+    run_cell('logging.info(lst)')
+    assert_not_detected('lst should be independent of x due to exception')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_exception_stack_unwind():
+    # TODO: write this
+    pass

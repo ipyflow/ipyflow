@@ -1,20 +1,22 @@
-import ast
 import logging
 import sys
-from typing import Dict, Set
+from typing import TYPE_CHECKING
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 import networkx as nx
 
 from .analysis import precheck
-from .data_cell import DataCell
 from .ipython_utils import save_number_of_currently_executing_cell
 from .scope import Scope
 from .tracing import make_tracer, TraceState
 
+if TYPE_CHECKING:
+    from typing import Dict, Set, Optional
+    from .data_cell import DataCell
 
-def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: Set[DataCell]):
+
+def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
     logging.warning(
         f'{name} defined in cell {defined_cell_num} may depend on '
         f'old version(s) of [{", ".join(str(dep) for dep in fresher_ancestors)}] '
@@ -33,21 +35,26 @@ class DependencySafety(object):
         self._cell_magic = self._make_cell_magic(cell_magic_name)
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic(line_magic_name)
+        self._last_refused_code: Optional[str] = None
 
     def _make_cell_magic(self, cell_magic_name):
         def _dependency_safety(_, cell: str):
-            # We get the ast.Module node by parsing the cell
-            ast_tree = ast.parse(cell)
-
             # State 1: Precheck.
             # Precheck process. First obtain the names that need to be checked. Then we check if their
             # defined_cell_num is greater than or equal to required, if not we give a warning and return.
-            for name in precheck(ast_tree, self.global_scope.data_cell_by_name.keys()):
-                node = self.global_scope.data_cell_by_name[name]
-                if node.defined_cell_num < node.required_cell_num:
-                    _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
-                    self.stale_dependency_detected = True
-                    return
+            if self._last_refused_code is None or cell != self._last_refused_code:
+                for name in precheck(cell, self.global_scope.data_cell_by_name.keys()):
+                    node = self.global_scope.data_cell_by_name[name]
+                    if node.defined_cell_num < node.required_cell_num:
+                        _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                        self.stale_dependency_detected = True
+                        self._last_refused_code = cell
+                        return
+            else:
+                # TODO: break dependency chain here
+                pass
+
+            self._last_refused_code = None
 
             # TODO: use context manager to handle these next lines automatically
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.

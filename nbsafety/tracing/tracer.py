@@ -16,10 +16,10 @@ if TYPE_CHECKING:
 
 
 def make_tracer(safety: DependencySafety):
-    def tracer(frame: FrameType, event: str, _):
+    def tracer(frame: FrameType, evt: str, _):
         # this is a bit of a hack to get the class out of the locals
         # - it relies on 'self' being used... normally a safe assumption!
-        event = TraceEvent(event)
+        event = TraceEvent(evt)
         try:
             class_name = frame.f_locals['self'].__class__.__name__
         except (KeyError, AttributeError):

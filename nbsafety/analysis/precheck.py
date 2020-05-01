@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .mixins import SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import KeysView, List, Set
+    from typing import KeysView, List, Set, Union
 
 
 class PreCheck(ast.NodeVisitor):
@@ -84,8 +84,10 @@ class PreCheck(ast.NodeVisitor):
             self.visit(line)
 
 
-def precheck(module_node: ast.Module, name_set: KeysView[str]):
-    return PreCheck()(module_node, name_set)
+def precheck(code: Union[ast.Module, str], name_set: KeysView[str]):
+    if isinstance(code, str):
+        code = ast.parse(code)
+    return PreCheck()(code, name_set)
 
 
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.

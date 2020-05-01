@@ -4,22 +4,22 @@ import ast
 from contextlib import contextmanager
 
 
-class SkipUnboundArgsMixin(object):
+class SkipUnboundArgsMixin(ast.NodeVisitor):
     # Only need to check for default arguments
-    def visit_arguments(self: ast.NodeVisitor, node):
+    def visit_arguments(self, node):
         self.visit(node.defaults)
         self.visit(node.kw_defaults)
 
 
-class VisitListsMixin(object):
-    def generic_visit(self: ast.NodeVisitor, node):
+class VisitListsMixin(ast.NodeVisitor):
+    def generic_visit(self, node):
         if node is None:
             return
         elif isinstance(node, list):
             for item in node:
                 self.visit(item)
         else:
-            ast.NodeVisitor.generic_visit(self, node)
+            super().generic_visit(node)
 
 
 class SaveOffAttributesMixin(object):

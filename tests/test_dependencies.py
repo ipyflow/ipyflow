@@ -780,11 +780,9 @@ for i in [a, b, c]:
     assert_not_detected('`i` should not depend on `a` at end of for loop')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_same_cell_redefine():
     run_cell('a = 0')
-    run_cell("""
-b = a + 1
+    run_cell("""b = a + 1
 a = 42
 """)
     run_cell('logging.info(b)')

@@ -9,6 +9,7 @@ import networkx as nx
 
 from .analysis import precheck
 from .data_cell import DataCell
+from .ipython_utils import save_number_of_currently_executing_cell
 from .scope import Scope
 from .tracing import make_tracer, TraceState
 
@@ -51,11 +52,12 @@ class DependencySafety(object):
             # TODO: use context manager to handle these next lines automatically
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             sys.settrace(make_tracer(self))
-            # Test code doesn't run the full kernel and should therefore set store_history=True
-            # (e.g. in order to increment the cell numbers)
-            get_ipython().run_cell(cell, store_history=True)
-            sys.settrace(None)
-            self._reset_trace_state_hook()
+            with save_number_of_currently_executing_cell():
+                # Test code doesn't run the full kernel and should therefore set store_history=True
+                # (e.g. in order to increment the cell numbers)
+                get_ipython().run_cell(cell, store_history=True)
+                sys.settrace(None)
+                self._reset_trace_state_hook()
             return
 
         if cell_magic_name is not None:

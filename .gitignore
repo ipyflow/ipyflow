@@ -6,4 +6,6 @@ build/
 dist/
 *.egg-info
 *.pyc
+*.ipynb
+!notebooks/*.ipynb
 MANIFEST

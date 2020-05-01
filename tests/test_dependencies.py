@@ -767,6 +767,31 @@ except:
 
 
 @pytest.mark.skipif(**should_skip_known_failing())
+def test_for_loop_binding():
+    run_cell('a = 0')
+    run_cell('b = 1')
+    run_cell('c = 2')
+    run_cell("""
+for i in [a, b, c]:
+    pass
+""")
+    run_cell('a = 3')
+    run_cell('logging.info(i)')
+    assert_not_detected('`i` should not depend on `a` at end of for loop')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_same_cell_redefine():
+    run_cell('a = 0')
+    run_cell("""
+b = a + 1
+a = 42
+""")
+    run_cell('logging.info(b)')
+    assert_not_detected('`b` should not be considered as having stale dependency since `a` changed in same cell as `b`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
 def test_exception_stack_unwind():
     # TODO: write this
     pass

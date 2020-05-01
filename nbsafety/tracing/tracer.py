@@ -51,7 +51,7 @@ def make_tracer(safety: DependencySafety):
             pass
 
         to_parse = line = line.strip()
-        print(lineno, state.call_depth, event, line)
+        # print(lineno, state.call_depth, event, line)
         logging.debug('%s %s %s %s', lineno, state.call_depth, event, line)
         if line in ('try:', 'except:'):
             return tracer

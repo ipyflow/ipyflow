@@ -27,7 +27,7 @@ class SafeKernel(IPythonKernel):
     def do_execute(self, code, silent, store_history=False,
                    user_expressions=None, allow_stdin=False):
         if code.split()[0] == "%safety":
-            code = "%{} {}".format(_LINE_MAGIC_NAME, code.split()[1])
+            code = "%{} {}".format(_LINE_MAGIC_NAME, ' '.join(code.split()[1:]))
             return super().do_execute(code, silent, False, user_expressions, allow_stdin)
-        code = "%%{}\n{}".format(_CELL_MAGIC_NAME, code)
+        code = f"%%{_CELL_MAGIC_NAME}\n{code}"
         return super().do_execute(code, silent, False, user_expressions, allow_stdin)

@@ -35,13 +35,13 @@ class DataCell(object):
 
     def update_deps(self, new_deps: Set[DataCell], add=False):
         if not add:
-            for node in self.parents - new_deps:
-                node.children.discard(self)
+            for parent in self.parents - new_deps:
+                parent.children.discard(self)
             self.parents = set()
 
-        for node in new_deps - self.parents:
-            node.children.add(self)
-            self.parents.add(node)
+        for new_parent in new_deps - self.parents:
+            new_parent.children.add(self)
+            self.parents.add(new_parent)
 
         self.defined_cell_num = cell_counter()
         self.update_cellnum_node_pair((cell_counter(), self))
@@ -55,8 +55,8 @@ class DataCell(object):
         seen.add(self)
         self.required_cell_num = pair[0]
         self.fresher_ancestors.add(pair[1])
-        for n in self.children:
-            n.update_cellnum_node_pair(pair, seen)
+        for child in self.children:
+            child.update_cellnum_node_pair(pair, seen)
 
 
 class FunctionDataCell(DataCell):

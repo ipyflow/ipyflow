@@ -766,8 +766,22 @@ except:
     assert_not_detected('lst should be independent of x due to exception')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_for_loop_binding():
+    run_cell('a = 0')
+    run_cell('b = 1')
+    run_cell('c = 2')
+    run_cell('lst = [a, b, c]')
+    run_cell("""
+for i in lst:
+    pass
+""")
+    run_cell('a = 3')
+    run_cell('logging.info(i)')
+    assert_false_positive('`i` should not depend on `a` at end of for loop but this is hard')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_for_loop_literal_binding():
     run_cell('a = 0')
     run_cell('b = 1')
     run_cell('c = 2')

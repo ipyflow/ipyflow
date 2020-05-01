@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 
 from .code_line import CodeLine
+from .trace_events import TraceEvent
 from .trace_state import TraceState
 
 if TYPE_CHECKING:
@@ -18,6 +19,7 @@ def make_tracer(safety: DependencySafety):
     def tracer(frame: FrameType, event: str, _):
         # this is a bit of a hack to get the class out of the locals
         # - it relies on 'self' being used... normally a safe assumption!
+        event = TraceEvent(event)
         try:
             class_name = frame.f_locals['self'].__class__.__name__
         except (KeyError, AttributeError):
@@ -36,24 +38,24 @@ def make_tracer(safety: DependencySafety):
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
-        if event == 'call':
+        if event == TraceEvent.call:
             state.call_depth += 1
             if state.call_depth == 1:
                 return tracer
 
-        if event == 'return':
+        if event == TraceEvent.return_:
             state.call_depth -= 1
             if state.call_depth == 0:
                 return tracer
 
-        if state.last_event == 'exception':
+        if state.last_event == TraceEvent.exception:
             # TODO: unwind the stack
             pass
 
         to_parse = line = line.strip()
         # print(lineno, state.call_depth, event, line)
         logging.debug('%s %s %s %s', lineno, state.call_depth, event, line)
-        if line in ('try:', 'except:'):
+        if line in ('try:', 'except:') or line.startswith('%'):
             return tracer
         if to_parse[-1] == ':':
             to_parse += '\n    pass'

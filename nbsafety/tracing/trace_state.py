@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from .trace_events import TraceEvent
+
 if TYPE_CHECKING:
     from typing import Optional, Dict, List, Tuple
     from types import FrameType
@@ -18,17 +20,21 @@ class TraceState(object):
         self.code_lines: Dict[Tuple[int, int], CodeLine] = {}
         self.stack: List[CodeLine] = []
         self.source: Optional[str] = None
-        self.last_event: Optional[str] = None
+        self.last_event: Optional[TraceEvent] = None
         self.prev_position: Optional[Tuple[int, int]] = None
 
-    def _prev_line_done_executing(self, event: str, frame: FrameType):
-        if event not in ('line', 'return') or self.last_event in ('call', 'exception'):
+    def _prev_line_done_executing(self, event: TraceEvent, frame: FrameType):
+        if event not in (
+                TraceEvent.line, TraceEvent.return_
+        ) or self.last_event in (
+                TraceEvent.call, TraceEvent.exception
+        ):
             return False
         return self.get_position(frame) != self.prev_position
 
     def update_hook(
             self,
-            event: str,
+            event: TraceEvent,
             frame: FrameType,
             code_line: CodeLine
     ):
@@ -42,15 +48,14 @@ class TraceState(object):
         if code_line is None:
             return
 
-        # TODO: make an enum for all these events
-        if event == 'line':
+        if event == TraceEvent.line:
             self.cur_frame_last_line = code_line
-        if event == 'call':
+        if event == TraceEvent.call:
             self.stack.append(self.cur_frame_last_line)
             self.cur_frame_scope = code_line.get_post_call_scope(self.cur_frame_scope)
             logging.debug('entering scope %s', self.cur_frame_scope)
             self.cur_frame_last_line = None
-        if event == 'return':
+        if event == TraceEvent.return_:
             logging.debug('leaving scope %s', self.cur_frame_scope)
             ret_line = self.stack.pop()
             assert ret_line is not None
@@ -60,7 +65,7 @@ class TraceState(object):
             self.cur_frame_last_line = ret_line
             self.cur_frame_scope = ret_line.scope
             logging.debug('entering scope %s', self.cur_frame_scope)
-        if event == 'exception':
+        if event == TraceEvent.exception:
             # TODO: save off the frame. when we hit the next trace event (the except clause), we'll count the
             # number of times we need to pop the saved frame in order to determine how many times to pop
             # our trace state's bespoke stack. See the `self.last_event == 'exception` comment in `tracer`.

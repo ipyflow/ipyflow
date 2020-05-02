@@ -17,9 +17,10 @@ if TYPE_CHECKING:
 
 def make_tracer(safety: DependencySafety):
     def tracer(frame: FrameType, evt: str, _):
+        event = TraceEvent(evt)
+
         # this is a bit of a hack to get the class out of the locals
         # - it relies on 'self' being used... normally a safe assumption!
-        event = TraceEvent(evt)
         try:
             class_name = frame.f_locals['self'].__class__.__name__
         except (KeyError, AttributeError):
@@ -33,7 +34,7 @@ def make_tracer(safety: DependencySafety):
 
         cell_num, lineno = TraceState.get_position(frame)
         # TODO: cache the split-by-newline operation so that we're not doing it on every instruction
-        state.source = get_ipython().all_ns_refs[0]['In'][cell_num].split('\n')
+        state.source = get_ipython().user_ns['In'][cell_num].split('\n')
         line = state.source[lineno - 1]
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
@@ -63,7 +64,7 @@ def make_tracer(safety: DependencySafety):
             node = ast.parse(to_parse).body[0]
         except SyntaxError:
             logging.error('got syntax error when parsing %s', to_parse)
-            return tracer
+            node = None
         code_line = state.code_lines.get(
             (cell_num, lineno),
             CodeLine(safety, line, node, lineno, state.cur_frame_scope)

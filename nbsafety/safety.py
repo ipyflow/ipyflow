@@ -1,3 +1,4 @@
+import ast
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -36,14 +37,17 @@ class DependencySafety(object):
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic(line_magic_name)
         self._last_refused_code: Optional[str] = None
+        self._last_cell_ast: Optional[ast.Module] = None
+        self._track_dependencies = True
 
     def _make_cell_magic(self, cell_magic_name):
         def _dependency_safety(_, cell: str):
             # State 1: Precheck.
             # Precheck process. First obtain the names that need to be checked. Then we check if their
             # defined_cell_num is greater than or equal to required, if not we give a warning and return.
+            self._last_cell_ast = ast.parse(cell)
             if self._last_refused_code is None or cell != self._last_refused_code:
-                for name in precheck(cell, self.global_scope.data_cell_by_name.keys()):
+                for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
                     node = self.global_scope.data_cell_by_name[name]
                     if node.defined_cell_num < node.required_cell_num:
                         _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
@@ -75,7 +79,7 @@ class DependencySafety(object):
     def _reset_trace_state_hook(self):
         if self.trace_state.cur_frame_last_line is None:
             logging.warning('last executed line not available after cell done executing; this should not happen')
-        else:
+        elif self.dependency_tracking_enabled:
             self.trace_state.cur_frame_last_line.make_lhs_data_cells_if_has_lval()
         self.trace_state = TraceState(self.global_scope)
 
@@ -100,6 +104,10 @@ class DependencySafety(object):
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)
+
+    @property
+    def dependency_tracking_enabled(self):
+        return self._track_dependencies
 
     @property
     def cell_magic_name(self):

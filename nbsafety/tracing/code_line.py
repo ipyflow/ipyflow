@@ -1,19 +1,25 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+from typing import TYPE_CHECKING
 
-from ..analysis.hyperedge import get_hyperedge_lvals_and_rvals
+from ..analysis import get_hyperedge_lvals_and_rvals
 from ..data_cell import FunctionDataCell
+
+if TYPE_CHECKING:
+    from typing import Optional, Set
+    from ..data_cell import DataCell
+    from ..safety import DependencySafety
 
 
 class CodeLine(object):
-    def __init__(self, safety, text, ast_node, lineno, scope):
+    def __init__(self, safety: DependencySafety, text, ast_node: Optional[ast.AST], lineno, scope):
         self.safety = safety
         self.text = text
         self.ast_node = ast_node
         self.lineno = lineno
         self.scope = scope
-        self.extra_dependencies = set()
+        self.extra_dependencies: Set[DataCell] = set()
 
     def compute_rval_dependencies(self, rval_names=None):
         if rval_names is None:
@@ -42,6 +48,8 @@ class CodeLine(object):
 
     def make_lhs_data_cells_if_has_lval(self):
         if not self.has_lval:
+            return
+        if not self.safety.dependency_tracking_enabled:
             return
         lval_names, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
         rval_deps = self.compute_rval_dependencies(rval_names=rval_names-lval_names)

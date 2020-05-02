@@ -1,11 +1,5 @@
-"""
-Use "ipython test_dependencies.py" command to run these tests.
-
-Although py.test should also work fine, the main project has to be run in an IPython
-environment, without which many functions will complain. Importing things could
-solve this problem, but I decided to implement this using ipytest since it is
-also something from IPython.
-"""
+# -*- coding: utf-8 -*-
+from __future__ import annotations
 import logging
 import os
 

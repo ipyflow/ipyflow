@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import ast
 
 from nbsafety.analysis.hyperedge import get_hyperedge_lvals_and_rvals
 from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping

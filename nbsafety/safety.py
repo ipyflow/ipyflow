@@ -101,7 +101,7 @@ class DependencySafety(object):
                         graph.add_edge(name, child_node.name)
                 nx.draw_networkx(
                     graph,
-                    node_color="#cccccc",
+                    node_color=["#ff0000" if self.global_scope.data_cell_by_name[name].is_stale() else "#cccccc" for name in graph.nodes()],
                     arrowstyle='->',
                     arrowsize=30,
                     node_size=1000,

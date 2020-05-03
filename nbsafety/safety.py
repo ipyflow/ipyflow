@@ -112,7 +112,17 @@ class DependencySafety(object):
                     print("Usage: %safety show_dependency <variable_name>")
                 data_cell = self.global_scope.lookup_data_cell_by_name(line[1])
                 print("DataCell {} is dependent on {}".format(line[1], [str(n) for n in data_cell.parents]))
-
+            elif line[0] == "show_stale":
+                stale_set = set()
+                for data_cell in self.global_scope.data_cell_by_name.values():
+                    if data_cell.defined_cell_num < data_cell.required_cell_num:
+                        stale_set.add(data_cell)
+                if not stale_set:
+                    print("No DataCell has stale dependency for now!")
+                elif len(stale_set) == 1:
+                    print("The only DataCell with stale depedencies is:", str(stale_set.pop()))
+                else:
+                    print("DataCells with stale depedencies are:", [str(n) for n in stale_set])
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)

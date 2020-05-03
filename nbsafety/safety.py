@@ -3,12 +3,11 @@ import logging
 import sys
 from typing import TYPE_CHECKING
 
-from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 import networkx as nx
 
 from .analysis import precheck, compute_lineno_to_stmt_mapping
-from .ipython_utils import cell_counter, save_number_of_currently_executing_cell
+from .ipython_utils import cell_counter, run_cell, save_number_of_currently_executing_cell
 from .scope import Scope
 from .tracing import make_tracer, TraceState
 
@@ -69,7 +68,7 @@ class DependencySafety(object):
                 sys.settrace(make_tracer(self))
                 # Test code doesn't run the full kernel and should therefore set store_history=True
                 # (e.g. in order to increment the cell numbers)
-                get_ipython().run_cell(cell, store_history=True)
+                run_cell(cell)
                 sys.settrace(None)
                 self._reset_trace_state_hook()
                 return

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from .trace_events import TraceEvent
 
 if TYPE_CHECKING:
-    from typing import Optional, Dict, List, Tuple
+    from typing import Optional, Dict, List
     from types import FrameType
     from .code_stmt import CodeStatement
     from ..scope import Scope

@@ -59,6 +59,8 @@ class DataCell(object):
         for child in self.children:
             child.update_cellnum_node_pair(pair, seen)
 
+    def is_stale(self):
+        return self.defined_cell_num < self.required_cell_num
 
 class FunctionDataCell(DataCell):
     def __init__(self, scope, *args, **kwargs):

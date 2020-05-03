@@ -53,7 +53,7 @@ class DependencySafety(object):
                 if self._last_refused_code is None or cell != self._last_refused_code:
                     for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
                         node = self.global_scope.data_cell_by_name[name]
-                        if node.defined_cell_num < node.required_cell_num:
+                        if node.is_stale():
                             _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
                             self.stale_dependency_detected = True
                             self._last_refused_code = cell
@@ -115,7 +115,7 @@ class DependencySafety(object):
             elif line[0] == "show_stale":
                 stale_set = set()
                 for data_cell in self.global_scope.data_cell_by_name.values():
-                    if data_cell.defined_cell_num < data_cell.required_cell_num:
+                    if data_cell.is_stale():
                         stale_set.add(data_cell)
                 if not stale_set:
                     print("No DataCell has stale dependency for now!")

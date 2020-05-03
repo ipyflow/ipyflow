@@ -47,7 +47,9 @@ class DependencySafety(object):
                 # Stage 1: Precheck.
                 # Precheck process. First obtain the names that need to be checked. Then we check if their
                 # defined_cell_num is greater than or equal to required, if not we give a warning and return.
-                self._last_cell_ast = ast.parse(cell.strip())
+                self._last_cell_ast = ast.parse('\n'.join(
+                    [line for line in cell.strip().split('\n') if not line.startswith('%')])
+                )
                 self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
                 if self._last_refused_code is None or cell != self._last_refused_code:
                     for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):

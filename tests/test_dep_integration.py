@@ -807,6 +807,44 @@ def test_multiple_stmts_in_one_line_2():
     assert_detected('`x` depends on stale value of `a`')
 
 
+def test_line_magic():
+    run_cell("""
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+a = 0
+""")
+    run_cell("""
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+x = a + 1
+""")
+    run_cell("""
+%lsmagic
+%lsmagic
+a = 42
+""")
+    run_cell("""
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+%lsmagic
+logging.info(x)
+""")
+    assert_detected('`x` depends on stale value of `a`')
+
+
 @pytest.mark.skipif(**should_skip_known_failing())
 def test_exception_stack_unwind():
     # TODO: write this

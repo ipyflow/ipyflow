@@ -8,61 +8,55 @@ from .trace_events import TraceEvent
 if TYPE_CHECKING:
     from typing import Optional, Dict, List, Tuple
     from types import FrameType
-    from .code_line import CodeLine
+    from .code_cell_stmt import CodeCellStatement
     from ..scope import Scope
 
 
 class TraceState(object):
     def __init__(self, cur_frame_scope: Scope):
         self.cur_frame_scope = cur_frame_scope
-        self.cur_frame_last_line: Optional[CodeLine] = None
+        self.cur_frame_last_stmt: Optional[CodeCellStatement] = None
         self.call_depth = 0
-        self.code_lines: Dict[Tuple[int, int], CodeLine] = {}
-        self.stack: List[CodeLine] = []
+        self.code_statements: Dict[int, CodeCellStatement] = {}
+        self.stack: List[CodeCellStatement] = []
         self.source: Optional[str] = None
+        self.last_code_stmt: Optional[CodeCellStatement] = None
         self.last_event: Optional[TraceEvent] = None
-        self.prev_position: Optional[Tuple[int, int]] = None
 
-    def _prev_line_done_executing(self, event: TraceEvent, frame: FrameType):
+    def _prev_line_done_executing(self, event: TraceEvent, code_stmt: CodeCellStatement):
         if event not in (
                 TraceEvent.line, TraceEvent.return_
         ) or self.last_event in (
                 TraceEvent.call, TraceEvent.exception
         ):
             return False
-        return self.get_position(frame) != self.prev_position
+        return self.last_code_stmt is not code_stmt
 
     def update_hook(
             self,
             event: TraceEvent,
             frame: FrameType,
-            code_line: CodeLine
+            code_stmt: CodeCellStatement
     ):
-        if self._prev_line_done_executing(event, frame):
-            line = self.cur_frame_last_line
+        if self._prev_line_done_executing(event, code_stmt):
+            line = self.cur_frame_last_stmt
             if line is not None:
                 line.make_lhs_data_cells_if_has_lval()
 
-        self.prev_position = self.get_position(frame)
-
-        if code_line is None:
-            return
-
         if event == TraceEvent.line:
-            self.cur_frame_last_line = code_line
+            self.cur_frame_last_stmt = code_stmt
         if event == TraceEvent.call:
-            self.stack.append(self.cur_frame_last_line)
-            self.cur_frame_scope = code_line.get_post_call_scope(self.cur_frame_scope)
+            self.stack.append(self.cur_frame_last_stmt)
+            self.cur_frame_scope = code_stmt.get_post_call_scope(self.cur_frame_scope)
             logging.debug('entering scope %s', self.cur_frame_scope)
-            self.cur_frame_last_line = None
+            self.cur_frame_last_stmt = None
         if event == TraceEvent.return_:
             logging.debug('leaving scope %s', self.cur_frame_scope)
             ret_line = self.stack.pop()
             assert ret_line is not None
-            # print('{} @@returning to@@ {}'.format(code_line.text, ret_line.text))
-            ret_line.extra_dependencies |= code_line.compute_rval_dependencies()
+            ret_line.extra_dependencies |= code_stmt.compute_rval_dependencies()
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
-            self.cur_frame_last_line = ret_line
+            self.cur_frame_last_stmt = ret_line
             self.cur_frame_scope = ret_line.scope
             logging.debug('entering scope %s', self.cur_frame_scope)
         if event == TraceEvent.exception:

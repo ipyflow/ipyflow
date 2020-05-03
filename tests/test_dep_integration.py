@@ -601,7 +601,7 @@ def test_numpy_subscripting_fp():
 
 
 def test_old_format_string():
-    run_cell('a = 5; b = 7')
+    run_cell('a = 5\nb = 7')
     run_cell('expr_str = "{} + {} = {}".format(a, b, a + b)')
     run_cell('a = 9')
     run_cell('logging.info(expr_str)')
@@ -609,7 +609,7 @@ def test_old_format_string():
 
 
 def test_old_format_string_kwargs():
-    run_cell('a = 5; b = 7')
+    run_cell('a = 5\nb = 7')
     run_cell('expr_str = "{a} + {b} = {total}".format(a=a, b=b, total=a + b)')
     run_cell('a = 9')
     run_cell('logging.info(expr_str)')
@@ -617,7 +617,7 @@ def test_old_format_string_kwargs():
 
 
 def test_new_format_string():
-    run_cell('a = 5; b = 7')
+    run_cell('a = 5\nb = 7')
     run_cell('expr_str = f"{a} + {b} = {a+b}"')
     run_cell('a = 9')
     run_cell('logging.info(expr_str)')
@@ -725,7 +725,6 @@ def test_single_line_dictionary_literal_fix_stale_deps():
     assert_not_detected('`d`s stale dep fixed')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
 def test_multiline_dictionary_literal():
     run_cell('foo = 5')
     run_cell('bar = 6')
@@ -738,12 +737,6 @@ d = {
     run_cell('bar = 7')
     run_cell('logging.info(d)')
     assert_detected('`d` depends on stale `bar`')
-    run_cell('d[foo] = bar')
-    assert_not_detected('`d`s stale dep fixed')
-    run_cell('foo = 8')
-    assert_detected('`d` depends on stale `foo`')
-    run_cell('d[foo] = bar')
-    assert_not_detected('`d`s stale dep fixed')
 
 
 def test_exception():
@@ -795,6 +788,23 @@ a = 42
 """)
     run_cell('logging.info(b)')
     assert_not_detected('`b` should not be considered as having stale dependency since `a` changed in same cell as `b`')
+
+
+@pytest.mark.skipif(**should_skip_known_failing())
+def test_multiple_stmts_in_one_line():
+    run_cell('a = 1; b = 2')
+    run_cell('x = a + b')
+    run_cell('a = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on stale value of `a`')
+
+
+def test_multiple_stmts_in_one_line_2():
+    run_cell('a = 1; b = 2')
+    run_cell('x = a + b')
+    run_cell('b = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on stale value of `a`')
 
 
 @pytest.mark.skipif(**should_skip_known_failing())

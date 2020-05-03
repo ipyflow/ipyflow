@@ -5,8 +5,9 @@ import ast
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 
-class GetEdgeLvalRvalNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+class GetStatementLvalRvalNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
+        # TODO: current complete bipartite subgraph will add unncessary edges
         self.lval_name_set = set()
         self.rval_name_set = set()
         self.gather_rvals = True
@@ -97,5 +98,5 @@ class GetEdgeLvalRvalNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitLi
         self.to_add_set.add(node.arg)
 
 
-def get_edge_lvals_and_rvals(node: ast.AST):
-    return GetEdgeLvalRvalNames()(node)
+def get_statement_lvals_and_rval_names(node: ast.AST):
+    return GetStatementLvalRvalNames()(node)

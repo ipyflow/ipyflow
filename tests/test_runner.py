@@ -5,8 +5,8 @@ import sys
 
 if __name__ == '__main__':
     import test_dep_integration
-    import test_edges
     import test_lineno_stmt_map
+    import test_stmt_edges
     modulenames = set(sys.modules) & set(globals())
     test_modules = [sys.modules[name] for name in modulenames if name.startswith('test_')]
     for mod in test_modules:

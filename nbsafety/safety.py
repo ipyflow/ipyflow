@@ -108,10 +108,15 @@ class DependencySafety(object):
                     pos=nx.drawing.layout.planar_layout(graph)
                 )
             elif line[0] == "show_dependency":
-                if len(line) != 2:
-                    print("Usage: %safety show_dependency <variable_name>")
-                data_cell = self.global_scope.lookup_data_cell_by_name(line[1])
-                print("DataCell {} is dependent on {}".format(line[1], [str(n) for n in data_cell.parents]))
+                if len(line) == 1:
+                    print("Usage: %safety show_dependency <variable_name> <variable_name2> ...")
+                    return
+                for data_cell_name in line[1:]:
+                    data_cell = self.global_scope.lookup_data_cell_by_name(data_cell_name)
+                    if data_cell:
+                        print("DataCell {} is dependent on {}".format(data_cell_name, [str(n) for n in data_cell.parents] if data_cell.parents else "Nothing"))
+                    else:
+                        print("Cannot find DataCell", data_cell_name)
             elif line[0] == "show_stale":
                 stale_set = set()
                 for data_cell in self.global_scope.data_cell_by_name.values():

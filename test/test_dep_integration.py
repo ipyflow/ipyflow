@@ -8,6 +8,8 @@ import pytest
 
 from nbsafety.safety import DependencySafety
 
+from .utils import skipif_known_failing
+
 
 logging.basicConfig(level=logging.ERROR)
 SAFETY_STATE = None
@@ -47,13 +49,6 @@ def assert_false_negative(msg=''):
 
 def run_cell(code):
     get_ipython().run_cell_magic(SAFETY_STATE.cell_magic_name, None, code)
-
-
-def should_skip_known_failing(reason='this test tests unimpled functionality'):
-    return {
-        'condition': os.environ.get('SHOULD_SKIP_KNOWN_FAILING', True),
-        'reason': reason
-    }
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
@@ -372,7 +367,7 @@ def foo(y=x):
     assert_detected("Should have detected stale dependency of fn foo() on x")
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
 def test_same_pointer():
     # a and b are actually pointing to the same thing
     run_cell('a = [7]')
@@ -548,7 +543,7 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
 def test_attributes_3():
     run_cell("""
 class Foo(object):
@@ -581,7 +576,7 @@ def test_subscript_sensitivity():
     assert_detected('lst depends on stale i')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
 def test_list_mutation():
     run_cell('lst = list(range(5))')
     run_cell('x = 42')
@@ -709,7 +704,7 @@ def test_single_line_dictionary_literal():
     assert_detected('`d` depends on stale `bar`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
 def test_single_line_dictionary_literal_fix_stale_deps():
     run_cell('foo = 5')
     run_cell('bar = 6')
@@ -767,7 +762,7 @@ for i in lst:
     assert_false_positive('`i` should not depend on `a` at end of for loop but this is hard')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
 def test_for_loop_literal_binding():
     run_cell('a = 0')
     run_cell('b = 1')
@@ -790,7 +785,7 @@ a = 42
     assert_not_detected('`b` should not be considered as having stale dependency since `a` changed in same cell as `b`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
 def test_multiple_stmts_in_one_line():
     run_cell('a = 1; b = 2')
     run_cell('x = a + b')
@@ -845,7 +840,13 @@ logging.info(x)
     assert_detected('`x` depends on stale value of `a`')
 
 
-@pytest.mark.skipif(**should_skip_known_failing())
+@skipif_known_failing
+def test_cell_magic():
+    # TODO: write this
+    pass
+
+
+@skipif_known_failing
 def test_exception_stack_unwind():
     # TODO: write this
     pass

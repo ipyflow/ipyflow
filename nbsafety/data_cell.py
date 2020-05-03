@@ -33,7 +33,7 @@ class DataCell(object):
     def __str__(self):
         return self.name
 
-    def update_deps(self, new_deps: Set[DataCell], add=False):
+    def update_deps(self, new_deps: Set[DataCell], add=False, mark_children=True):
         if not add:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)
@@ -44,7 +44,8 @@ class DataCell(object):
             self.parents.add(new_parent)
 
         self.defined_cell_num = cell_counter()
-        self.update_cellnum_node_pair((cell_counter(), self))
+        if mark_children:
+            self.update_cellnum_node_pair((cell_counter(), self))
 
     # TODO: don't use a tuple for this
     def update_cellnum_node_pair(self, pair: Tuple[int, DataCell], seen=None):
@@ -60,6 +61,12 @@ class DataCell(object):
 
 
 class FunctionDataCell(DataCell):
+    def __init__(self, scope, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.scope = scope
+
+
+class ClassDataCell(DataCell):
     def __init__(self, scope, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope = scope

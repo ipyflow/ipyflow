@@ -5,6 +5,29 @@ from nbsafety.analysis.stmt_edges import get_statement_lvals_and_rval_names
 from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
 
 
+def test_classes():
+    code = """
+class Foo(object):
+    pass
+    
+class Bar(Foo):
+    pass
+    
+class Baz(Foo, Bar):
+    pass
+""".strip()
+    mapping = compute_lineno_to_stmt_mapping(code)
+    lvals, rvals = get_statement_lvals_and_rval_names(mapping[1])
+    assert lvals == {'Foo'}
+    assert rvals == {'object'}
+    lvals, rvals = get_statement_lvals_and_rval_names(mapping[4])
+    assert lvals == {'Bar'}
+    assert rvals == {'Foo'}
+    lvals, rvals = get_statement_lvals_and_rval_names(mapping[7])
+    assert lvals == {'Baz'}
+    assert rvals == {'Foo', 'Bar'}
+
+
 def test_for_loop():
     code = """
 for i in range(10):

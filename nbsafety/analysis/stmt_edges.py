@@ -61,6 +61,12 @@ class GetStatementLvalRvalNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, Vi
         with self.gather_rvals_context():
             self.visit(node.args)
 
+    def visit_ClassDef(self, node):
+        self.lval_name_set.add(node.name)
+        with self.gather_rvals_context():
+            self.visit(node.bases)
+            self.visit(node.decorator_list)
+
     def visit_Keyword(self, node):
         self.visit(node.value)
 

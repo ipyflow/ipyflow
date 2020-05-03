@@ -30,9 +30,14 @@ class CodeStatement(object):
                 rval_data_cells.add(maybe_rval_dc)
         return rval_data_cells | self.extra_dependencies
 
-    def get_post_call_scope(self, old_scope):
+    def get_post_call_scope(self, old_scope: Scope):
+        if isinstance(self.stmt_node, ast.ClassDef):
+            # classes need a new scope before the ClassDef has finished executing,
+            # so we make it immediately
+            return old_scope.make_child_scope(self.stmt_node.name)
+
         if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # TODO: the correct check is whether a lambda appears somewhere inside the ast node
+            # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
             # if not isinstance(self.ast_node, ast.Lambda):
             #     raise TypeError('unexpected type for ast node %s' % self.ast_node)
             return old_scope
@@ -51,16 +56,17 @@ class CodeStatement(object):
         if not self.safety.dependency_tracking_enabled:
             return
         lval_names, rval_names = get_statement_lvals_and_rval_names(self.stmt_node)
-        rval_deps = self.compute_rval_dependencies(rval_names=rval_names-lval_names)
+        rval_deps = self.compute_rval_dependencies(rval_names=rval_names - lval_names)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         should_add = isinstance(self.stmt_node, ast.AugAssign)
-        if is_function_def:
+        if is_function_def or is_class_def:
             assert len(lval_names) == 1
             assert not lval_names.issubset(rval_names)
         for name in lval_names:
             should_add_for_name = should_add or name in rval_names
             self.scope.upsert_data_cell_for_name(
-                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def
+                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, is_class_def=is_class_def
             )
 
     @property

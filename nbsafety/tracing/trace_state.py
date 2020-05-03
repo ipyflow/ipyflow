@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import ast
 import logging
 from typing import TYPE_CHECKING
 
@@ -23,14 +24,20 @@ class TraceState(object):
         self.last_code_stmt: Optional[CodeStatement] = None
         self.last_event: Optional[TraceEvent] = None
 
-    def _prev_line_done_executing(self, event: TraceEvent, code_stmt: CodeStatement):
+    def _prev_stmt_done_executing(self, event: TraceEvent, code_stmt: CodeStatement):
         if event not in (
                 TraceEvent.line, TraceEvent.return_
         ) or self.last_event in (
                 TraceEvent.call, TraceEvent.exception
         ):
             return False
-        return self.last_code_stmt is not code_stmt
+        finished = self.last_code_stmt is not code_stmt
+        if self.last_code_stmt is not None:
+            finished = finished and not (
+                # classdefs are not finished until we reach the end of the class body
+                isinstance(self.last_code_stmt.stmt_node, ast.ClassDef) and event != TraceEvent.return_
+            )
+        return finished
 
     def update_hook(
             self,
@@ -38,11 +45,12 @@ class TraceState(object):
             frame: FrameType,
             code_stmt: CodeStatement
     ):
-        if self._prev_line_done_executing(event, code_stmt):
-            line = self.cur_frame_last_stmt
-            if line is not None:
-                line.make_lhs_data_cells_if_has_lval()
+        if self._prev_stmt_done_executing(event, code_stmt):
+            stmt = self.cur_frame_last_stmt
+            if stmt is not None:
+                stmt.make_lhs_data_cells_if_has_lval()
 
+        self.last_code_stmt = code_stmt
         if event == TraceEvent.line:
             self.cur_frame_last_stmt = code_stmt
         if event == TraceEvent.call:
@@ -52,12 +60,12 @@ class TraceState(object):
             self.cur_frame_last_stmt = None
         if event == TraceEvent.return_:
             logging.debug('leaving scope %s', self.cur_frame_scope)
-            ret_line = self.stack.pop()
-            assert ret_line is not None
-            ret_line.extra_dependencies |= code_stmt.compute_rval_dependencies()
+            ret_stmt = self.stack.pop()
+            assert ret_stmt is not None
+            ret_stmt.extra_dependencies |= code_stmt.compute_rval_dependencies()
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
-            self.cur_frame_last_stmt = ret_line
-            self.cur_frame_scope = ret_line.scope
+            self.cur_frame_last_stmt = ret_stmt
+            self.cur_frame_scope = ret_stmt.scope
             logging.debug('entering scope %s', self.cur_frame_scope)
         if event == TraceEvent.exception:
             # TODO: save off the frame. when we hit the next trace event (the except clause), we'll count the

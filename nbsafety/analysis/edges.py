@@ -5,7 +5,7 @@ import ast
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 
-class GetHyperEdgeNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+class GetEdgeLvalRvalNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         self.lval_name_set = set()
         self.rval_name_set = set()
@@ -83,9 +83,19 @@ class GetHyperEdgeNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitLists
         # throw away anything appearing in lambda body that isn't bound
         self.rval_name_set -= discard_set
 
+    def visit_With(self, node):
+        # skip body
+        self.visit(node.items)
+
+    def visit_withitem(self, node):
+        with self.gather_lvals_context():
+            self.visit(node.optional_vars)
+        with self.gather_rvals_context():
+            self.visit(node.context_expr)
+
     def visit_arg(self, node):
-        self.rval_name_set.add(node.arg)
+        self.to_add_set.add(node.arg)
 
 
-def get_hyperedge_lvals_and_rvals(node: ast.AST):
-    return GetHyperEdgeNames()(node)
+def get_edge_lvals_and_rvals(node: ast.AST):
+    return GetEdgeLvalRvalNames()(node)

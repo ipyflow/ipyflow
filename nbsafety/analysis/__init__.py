@@ -1,3 +1,3 @@
 # -*- coding: utf-8 -*-
-from .hyperedge import *
+from .edges import *
 from .precheck import *

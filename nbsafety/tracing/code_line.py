@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
-from ..analysis import get_hyperedge_lvals_and_rvals
+from ..analysis import get_edge_lvals_and_rvals
 from ..data_cell import FunctionDataCell
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ class CodeLine(object):
 
     def compute_rval_dependencies(self, rval_names=None):
         if rval_names is None:
-            _, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
+            _, rval_names = get_edge_lvals_and_rvals(self.ast_node)
         rval_data_cells = set()
         for name in rval_names:
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
@@ -51,7 +51,7 @@ class CodeLine(object):
             return
         if not self.safety.dependency_tracking_enabled:
             return
-        lval_names, rval_names = get_hyperedge_lvals_and_rvals(self.ast_node)
+        lval_names, rval_names = get_edge_lvals_and_rvals(self.ast_node)
         rval_deps = self.compute_rval_dependencies(rval_names=rval_names-lval_names)
         is_function_def = isinstance(self.ast_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         should_add = isinstance(self.ast_node, ast.AugAssign)

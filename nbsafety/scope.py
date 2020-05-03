@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
-    from typing import Dict, Optional, Set, Tuple, Type, Union
+    from typing import Dict, Optional, Set, Tuple, Union
 
 
 class Scope(object):
@@ -16,7 +16,6 @@ class Scope(object):
         self.parent_scope = parent_scope  # None iff this is the global scope
         self.child_scopes: Dict[str, Scope] = {}
         self.data_cell_by_name: Dict[str, DataCell] = {}
-        self.clazz: Optional[Type] = None
 
     def __hash__(self):
         return self.full_path

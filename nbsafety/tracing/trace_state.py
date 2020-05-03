@@ -9,22 +9,22 @@ from .trace_events import TraceEvent
 if TYPE_CHECKING:
     from typing import Optional, Dict, List
     from types import FrameType
-    from .code_stmt import CodeStatement
+    from .trace_stmt import TraceStatement
     from ..scope import Scope
 
 
 class TraceState(object):
     def __init__(self, cur_frame_scope: Scope):
         self.cur_frame_scope = cur_frame_scope
-        self.cur_frame_last_stmt: Optional[CodeStatement] = None
+        self.cur_frame_last_stmt: Optional[TraceStatement] = None
         self.call_depth = 0
-        self.code_statements: Dict[int, CodeStatement] = {}
-        self.stack: List[CodeStatement] = []
+        self.code_statements: Dict[int, TraceStatement] = {}
+        self.stack: List[TraceStatement] = []
         self.source: Optional[str] = None
-        self.last_code_stmt: Optional[CodeStatement] = None
+        self.last_code_stmt: Optional[TraceStatement] = None
         self.last_event: Optional[TraceEvent] = None
 
-    def _prev_stmt_done_executing(self, event: TraceEvent, code_stmt: CodeStatement):
+    def _prev_stmt_done_executing(self, event: TraceEvent, code_stmt: TraceStatement):
         if event not in (
                 TraceEvent.line, TraceEvent.return_
         ) or self.last_event in (
@@ -43,7 +43,7 @@ class TraceState(object):
             self,
             event: TraceEvent,
             frame: FrameType,
-            code_stmt: CodeStatement
+            code_stmt: TraceStatement
     ):
         if self._prev_stmt_done_executing(event, code_stmt):
             stmt = self.cur_frame_last_stmt

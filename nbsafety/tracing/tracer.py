@@ -2,7 +2,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
-from .code_stmt import CodeStatement
+from .trace_stmt import TraceStatement
 from .trace_events import TraceEvent
 from .trace_state import TraceState
 
@@ -50,7 +50,7 @@ def make_tracer(safety: DependencySafety):
 
         code_stmt = state.code_statements.get(
             id(stmt_node),
-            CodeStatement(safety, stmt_node, state.cur_frame_scope)
+            TraceStatement(safety, stmt_node, state.cur_frame_scope)
         )
         state.code_statements[id(stmt_node)] = code_stmt
         state.update_hook(event, frame, code_stmt)

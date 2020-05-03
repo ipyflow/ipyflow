@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from ..scope import Scope
 
 
-class CodeStatement(object):
+class TraceStatement(object):
     def __init__(self, safety: DependencySafety, stmt_node: ast.stmt, scope: Scope):
         self.safety = safety
         self.stmt_node = stmt_node

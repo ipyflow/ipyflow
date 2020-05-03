@@ -88,7 +88,10 @@ class DependencySafety(object):
 
     def _make_line_magic(self, line_magic_name):
         def _safety(line: str):
-            if line == "show_graph":
+            line = line.split()
+            if not line:
+                return
+            if line[0] == "show_graph":
                 graph = nx.DiGraph()
                 for name in self.global_scope.data_cell_by_name:
                     graph.add_node(name)
@@ -104,6 +107,12 @@ class DependencySafety(object):
                     node_size=1000,
                     pos=nx.drawing.layout.planar_layout(graph)
                 )
+            elif line[0] == "show_dependency":
+                if len(line) != 2:
+                    print("Usage: %safety show_dependency <variable_name>")
+                data_cell = self.global_scope.lookup_data_cell_by_name(line[1])
+                print("DataCell {} is dependent on {}".format(line[1], [str(n) for n in data_cell.parents]))
+
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)

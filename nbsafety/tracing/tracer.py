@@ -48,11 +48,11 @@ def make_tracer(safety: DependencySafety):
         stmt_node = safety.statement_cache[cell_num][lineno]
         # print(lineno, event, stmt_node)
 
-        code_stmt = state.code_statements.get(
+        trace_stmt = state.code_statements.get(
             id(stmt_node),
-            TraceStatement(safety, stmt_node, state.cur_frame_scope)
+            TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
         )
-        state.code_statements[id(stmt_node)] = code_stmt
-        state.update_hook(event, frame, code_stmt)
+        state.code_statements[id(stmt_node)] = trace_stmt
+        state.update_hook(event, frame, trace_stmt)
         return tracer
     return tracer

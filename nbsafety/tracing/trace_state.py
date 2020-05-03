@@ -9,13 +9,14 @@ from .trace_events import TraceEvent
 if TYPE_CHECKING:
     from typing import Optional, Dict, List
     from types import FrameType
+    from ..safety import DependencySafety
     from .trace_stmt import TraceStatement
-    from ..scope import Scope
 
 
 class TraceState(object):
-    def __init__(self, cur_frame_scope: Scope):
-        self.cur_frame_scope = cur_frame_scope
+    def __init__(self, safety: DependencySafety):
+        self.safety = safety
+        self.cur_frame_scope = safety.global_scope
         self.cur_frame_last_stmt: Optional[TraceStatement] = None
         self.call_depth = 0
         self.code_statements: Dict[int, TraceStatement] = {}
@@ -43,26 +44,30 @@ class TraceState(object):
             self,
             event: TraceEvent,
             frame: FrameType,
-            code_stmt: TraceStatement
+            trace_stmt: TraceStatement
     ):
-        if self._prev_stmt_done_executing(event, code_stmt):
+        if self._prev_stmt_done_executing(event, trace_stmt):
             stmt = self.cur_frame_last_stmt
             if stmt is not None:
                 stmt.make_lhs_data_cells_if_has_lval()
+                if isinstance(stmt.stmt_node, ast.ClassDef):
+                    class_ref = stmt.frame.f_locals[stmt.stmt_node.name]
+                    self.safety.namespaces[id(class_ref)] = self.cur_frame_scope
 
-        self.last_code_stmt = code_stmt
+        self.last_code_stmt = trace_stmt
         if event == TraceEvent.line:
-            self.cur_frame_last_stmt = code_stmt
+            self.cur_frame_last_stmt = trace_stmt
         if event == TraceEvent.call:
             self.stack.append(self.cur_frame_last_stmt)
-            self.cur_frame_scope = code_stmt.get_post_call_scope(self.cur_frame_scope)
+            self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
             logging.debug('entering scope %s', self.cur_frame_scope)
             self.cur_frame_last_stmt = None
         if event == TraceEvent.return_:
             logging.debug('leaving scope %s', self.cur_frame_scope)
             ret_stmt = self.stack.pop()
             assert ret_stmt is not None
-            ret_stmt.extra_dependencies |= code_stmt.compute_rval_dependencies()
+            if not isinstance(ret_stmt.stmt_node, ast.ClassDef):
+                ret_stmt.extra_dependencies |= trace_stmt.compute_rval_dependencies()
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
             self.cur_frame_last_stmt = ret_stmt
             self.cur_frame_scope = ret_stmt.scope

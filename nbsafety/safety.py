@@ -28,11 +28,10 @@ class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, line_magic_name=None):
         self.global_scope = Scope()
-        self.func_id_to_scope_object: Dict[int, Scope] = {}
-        self.data_cell_by_ref: Dict[int, DataCell] = {}
+        self.namespaces: Dict[int, Scope] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.stale_dependency_detected = False
-        self.trace_state = TraceState(self.global_scope)
+        self.trace_state = TraceState(self)
         self._cell_magic = self._make_cell_magic(cell_magic_name)
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic(line_magic_name)
@@ -85,7 +84,7 @@ class DependencySafety(object):
             logging.warning('last executed statement not available after cell done executing; this should not happen')
         elif self.dependency_tracking_enabled:
             self.trace_state.cur_frame_last_stmt.make_lhs_data_cells_if_has_lval()
-        self.trace_state = TraceState(self.global_scope)
+        self.trace_state = TraceState(self)
 
     def _make_line_magic(self, line_magic_name):
         def _safety(line: str):

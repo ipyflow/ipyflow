@@ -7,6 +7,7 @@ from ..analysis import get_statement_lvals_and_rval_names
 from ..data_cell import FunctionDataCell
 
 if TYPE_CHECKING:
+    from types import FrameType
     from typing import Set
     from ..data_cell import DataCell
     from ..safety import DependencySafety
@@ -14,8 +15,9 @@ if TYPE_CHECKING:
 
 
 class TraceStatement(object):
-    def __init__(self, safety: DependencySafety, stmt_node: ast.stmt, scope: Scope):
+    def __init__(self, safety: DependencySafety, frame: FrameType, stmt_node: ast.stmt, scope: Scope):
         self.safety = safety
+        self.frame = frame
         self.stmt_node = stmt_node
         self.scope = scope
         self.extra_dependencies: Set[DataCell] = set()

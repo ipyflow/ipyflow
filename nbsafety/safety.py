@@ -81,7 +81,7 @@ class DependencySafety(object):
 
     def _reset_trace_state_hook(self):
         if self.trace_state.cur_frame_last_stmt is None:
-            logging.warning('last executed line not available after cell done executing; this should not happen')
+            logging.warning('last executed statement not available after cell done executing; this should not happen')
         elif self.dependency_tracking_enabled:
             self.trace_state.cur_frame_last_stmt.make_lhs_data_cells_if_has_lval()
         self.trace_state = TraceState(self.global_scope)

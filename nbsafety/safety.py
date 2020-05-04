@@ -181,6 +181,29 @@ class DependencySafety(object):
                     return
                 parent_data_cell.children.add(child_data_cell)
                 child_data_cell.parents.add(parent_data_cell)
+            elif line[0] == "turn_off_warnings_for":
+                if len(line) == 1:
+                    print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
+                    return
+                for data_cell_name in line[1:]:
+                    data_cell = self.global_scope.lookup_data_cell_by_name(data_cell_name)
+                    if data_cell:
+                        data_cell.no_warning = True
+                        print("Warnings are turned off for", data_cell_name)
+                    else:
+                        print("Cannot find DataCell", data_cell_name)
+            elif line[0] == "turn_on_warnings_for":
+                if len(line) == 1:
+                    print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
+                    return
+                for data_cell_name in line[1:]:
+                    data_cell = self.global_scope.lookup_data_cell_by_name(data_cell_name)
+                    if data_cell:
+                        data_cell.no_warning = False
+                        print("Warnings are turned on for", data_cell_name)
+                    else:
+                        print("Cannot find DataCell", data_cell_name)
+
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)

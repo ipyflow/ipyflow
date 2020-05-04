@@ -27,6 +27,9 @@ class DataCell(object):
         # Set of ancestors defined more recently
         self.fresher_ancestors: Set[DataCell] = set()
 
+        #Will never be stale if no_warning is True
+        self.no_warning = False
+
     def __repr__(self):
         return f'<{self.__class__.__name__} for variable {self.name}>'
 
@@ -60,6 +63,8 @@ class DataCell(object):
             child.update_cellnum_node_pair(pair, seen)
 
     def is_stale(self):
+        if self.no_warning:
+            return False
         return self.defined_cell_num < self.required_cell_num
 
 class FunctionDataCell(DataCell):

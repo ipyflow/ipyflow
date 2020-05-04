@@ -104,5 +104,5 @@ class GetStatementLvalRvalNames(SaveOffAttributesMixin, SkipUnboundArgsMixin, Vi
         self.to_add_set.add(node.arg)
 
 
-def get_statement_lvals_and_rval_names(node: ast.AST):
+def get_statement_lval_and_rval_names(node: ast.AST):
     return GetStatementLvalRvalNames()(node)

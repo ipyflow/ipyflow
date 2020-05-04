@@ -61,13 +61,13 @@ class TraceState(object):
             self.cur_frame_last_stmt = None
         if event == TraceEvent.return_:
             logging.debug('leaving scope %s', self.cur_frame_scope)
-            ret_stmt = self.stack.pop()
-            assert ret_stmt is not None
-            if not isinstance(ret_stmt.stmt_node, ast.ClassDef):
-                ret_stmt.extra_dependencies |= trace_stmt.compute_rval_dependencies()
+            return_to_stmt = self.stack.pop()
+            assert return_to_stmt is not None
+            if not isinstance(return_to_stmt.stmt_node, ast.ClassDef):
+                return_to_stmt.extra_dependencies |= trace_stmt.compute_rval_dependencies()
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
-            self.cur_frame_last_stmt = ret_stmt
-            self.cur_frame_scope = ret_stmt.scope
+            self.cur_frame_last_stmt = return_to_stmt
+            self.cur_frame_scope = return_to_stmt.scope
             logging.debug('entering scope %s', self.cur_frame_scope)
         if event == TraceEvent.exception:
             # TODO: save off the frame. when we hit the next trace event (the except clause), we'll count the

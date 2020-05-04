@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
-from ..analysis import get_statement_lvals_and_rval_names
+from ..analysis import get_statement_lval_and_rval_names
 from ..data_cell import FunctionDataCell
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ class TraceStatement(object):
 
     def compute_rval_dependencies(self, rval_names=None):
         if rval_names is None:
-            _, rval_names = get_statement_lvals_and_rval_names(self.stmt_node)
+            _, rval_names = get_statement_lval_and_rval_names(self.stmt_node)
         rval_data_cells = set()
         for name in rval_names:
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
@@ -57,7 +57,7 @@ class TraceStatement(object):
             return
         if not self.safety.dependency_tracking_enabled:
             return
-        lval_names, rval_names = get_statement_lvals_and_rval_names(self.stmt_node)
+        lval_names, rval_names = get_statement_lval_and_rval_names(self.stmt_node)
         rval_deps = self.compute_rval_dependencies(rval_names=rval_names - lval_names)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)

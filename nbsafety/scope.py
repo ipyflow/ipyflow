@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import copy
 from typing import TYPE_CHECKING
 
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
@@ -22,6 +23,9 @@ class Scope(object):
 
     def __str__(self):
         return str(self.full_path)
+
+    def clone(self):
+        return copy.deepcopy(self)
 
     def make_child_scope(self, scope_name):
         child_scope = self.__class__(scope_name, parent_scope=self)

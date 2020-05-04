@@ -6,18 +6,17 @@ from typing import TYPE_CHECKING
 from ..utils.mixins import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Tuple, Union
+    from typing import List, Optional, Union
 
 
 class GetAttributeSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, CallPoint]] = []
 
-    def __call__(self, node: ast.Attribute) -> Tuple[List[Union[str, CallPoint]], List[CallPoint]]:
+    def __call__(self, node: ast.Attribute) -> AttributeSymbolChain:
         self.visit(node)
         self.symbol_chain.reverse()
-        call_points = list(filter(lambda x: isinstance(x, CallPoint), self.symbol_chain))
-        return self.symbol_chain, call_points
+        return AttributeSymbolChain(self.symbol_chain)
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
@@ -39,8 +38,14 @@ class GetAttributeSymbols(ast.NodeVisitor):
         raise ValueError('we should never get here')
 
 
-def get_attribute_symbols(node: ast.Attribute) -> Tuple[List[Union[str, CallPoint]], List[CallPoint]]:
+def get_attribute_symbol_chain(node: ast.Attribute) -> AttributeSymbolChain:
     return GetAttributeSymbols()(node)
+
+
+class AttributeSymbolChain(object):
+    def __init__(self, symbols):
+        self.symbols = symbols
+        self.call_points = list(filter(lambda x: isinstance(x, CallPoint), self.symbols))
 
 
 class CallPoint(CommonEqualityMixin):

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 
+from nbsafety.analysis.attr_symbols import get_attribute_symbol_chain
 from nbsafety.analysis.stmt_edges import get_statement_lval_and_rval_symbols
 from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
 
@@ -58,10 +59,8 @@ with open(fname) as f:
 """.strip()
     mapping = compute_lineno_to_stmt_mapping(code)
     lvals, rvals = get_statement_lval_and_rval_symbols(mapping[2])
-    print(lvals)
-    print(rvals)
     assert lvals == {'f'}
     assert rvals == {'fname', 'open'}
     lvals, rvals = get_statement_lval_and_rval_symbols(mapping[3])
     assert lvals == {'contents'}
-    assert rvals == {'f'}
+    assert rvals.issubset({'f', 'read'})

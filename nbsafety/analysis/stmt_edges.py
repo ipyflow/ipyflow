@@ -1,15 +1,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+from typing import TYPE_CHECKING
 
+from .attr_symbols import get_attribute_symbol_chain
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+
+if TYPE_CHECKING:
+    from typing import List, Set
+    from .attr_symbols import AttributeSymbolChain
 
 
 class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: current complete bipartite subgraph will add unncessary edges
-        self.lval_symbol_set = set()
-        self.rval_symbol_set = set()
+        self.lval_symbol_set: Set[str] = set()
+        self.rval_symbol_set: Set[str] = set()
+        self.lval_attr_chains: List[AttributeSymbolChain] = []
+        self.rval_attr_chains: List[AttributeSymbolChain] = []
         self.gather_rvals = True
 
     def __call__(self, node):
@@ -23,11 +31,28 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         else:
             return self.lval_symbol_set
 
+    @property
+    def to_append_list(self):
+        if self.gather_rvals:
+            return self.rval_attr_chains
+        else:
+            return self.lval_attr_chains
+
     def gather_lvals_context(self):
         return self.push_attributes(gather_rvals=False)
 
     def gather_rvals_context(self):
         return self.push_attributes(gather_rvals=True)
+
+    def visit_Attribute(self, node):
+        # TODO: don't add the symbol chain if outer context is Call
+        self.to_append_list.append(get_attribute_symbol_chain(node))
+        self.generic_visit(node)
+
+    def visit_Call(self, node):
+        if isinstance(node.func, ast.Attribute):
+            self.to_append_list.append(get_attribute_symbol_chain(node))
+        self.generic_visit(node)
 
     def visit_Name(self, node):
         self.to_add_set.add(node.id)

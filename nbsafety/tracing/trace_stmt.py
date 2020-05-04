@@ -28,6 +28,8 @@ class TraceStatement(object):
             _, rval_names = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_data_cells = set()
         for name in rval_names:
+            if not isinstance(name, str):  # TODO: remove this once attributes working
+                continue
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
             if maybe_rval_dc is not None:
                 rval_data_cells.add(maybe_rval_dc)
@@ -67,6 +69,8 @@ class TraceStatement(object):
             assert len(lval_symbols) == 1
             assert not lval_symbols.issubset(rval_symbols)
         for name in lval_symbols:
+            if not isinstance(name, str):  # TODO: remove this once attributes working
+                continue
             should_add_for_name = should_add or name in rval_symbols
             self.scope.upsert_data_cell_for_name(
                 name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, is_class_def=is_class_def

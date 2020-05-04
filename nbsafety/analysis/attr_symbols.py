@@ -13,7 +13,7 @@ class GetAttributeSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, CallPoint]] = []
 
-    def __call__(self, node: ast.Attribute) -> AttributeSymbolChain:
+    def __call__(self, node: Union[ast.Attribute, ast.Call]) -> AttributeSymbolChain:
         self.visit(node)
         self.symbol_chain.reverse()
         return AttributeSymbolChain(self.symbol_chain)
@@ -34,21 +34,39 @@ class GetAttributeSymbols(ast.NodeVisitor):
     def visit_Name(self, node):
         self.symbol_chain.append(node.id)
 
+    def visit_Str(self, node):
+        return
+
     def generic_visit(self, node):
-        raise ValueError('we should never get here')
+        raise ValueError('we should never get here: %s' % node)
 
 
-def get_attribute_symbol_chain(node: ast.Attribute) -> AttributeSymbolChain:
+def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Call]) -> AttributeSymbolChain:
+    if isinstance(maybe_node, (ast.Attribute, ast.Call)):
+        node = maybe_node
+    else:
+        node = ast.parse(maybe_node).body[0].value
+    if not isinstance(node, (ast.Attribute, ast.Call)):
+        raise TypeError('invalid type for node %s' % node)
     return GetAttributeSymbols()(node)
 
 
-class AttributeSymbolChain(object):
+class AttributeSymbolChain(CommonEqualityMixin):
     def __init__(self, symbols):
-        self.symbols = symbols
-        self.call_points = list(filter(lambda x: isinstance(x, CallPoint), self.symbols))
+        self.symbols = tuple(symbols)
+        self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
+
+    def __hash__(self):
+        return hash(self.symbols)
+
+    def __repr__(self):
+        return repr(self.symbols)
 
 
 class CallPoint(CommonEqualityMixin):
     def __init__(self, symbol: str, retval: Optional[int] = None):
         self.symbol = symbol
         self.retval = retval
+
+    def __hash__(self):
+        return hash(self.symbol)

@@ -71,6 +71,13 @@ class TraceStatement(object):
                 name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, is_class_def=is_class_def
             )
 
+    def finished_execution_hook(self):
+        # need to handle namespace cloning upon object creation still
+        self.make_lhs_data_cells_if_has_lval()
+        if isinstance(self.stmt_node, ast.ClassDef):
+            class_ref = self.frame.f_locals[self.stmt_node.name]
+            self.safety.namespaces[id(class_ref)] = self.scope
+
     @property
     def has_lval(self):
         # TODO: expand to method calls, etc.

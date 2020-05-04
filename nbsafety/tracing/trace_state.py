@@ -40,7 +40,7 @@ class TraceState(object):
             )
         return finished
 
-    def update_hook(
+    def state_transition_hook(
             self,
             event: TraceEvent,
             frame: FrameType,
@@ -49,11 +49,7 @@ class TraceState(object):
         if self._prev_stmt_done_executing(event, trace_stmt) and self.cur_frame_last_stmt is not None:
             # TODO (smacke): maybe put this branch in TraceStatement.update_hook() or something
             # need to handle namespace cloning upon object creation still
-            stmt = self.cur_frame_last_stmt
-            stmt.make_lhs_data_cells_if_has_lval()
-            if isinstance(stmt.stmt_node, ast.ClassDef):
-                class_ref = stmt.frame.f_locals[stmt.stmt_node.name]
-                self.safety.namespaces[id(class_ref)] = self.cur_frame_scope
+            self.cur_frame_last_stmt.finished_execution_hook()
 
         self.last_code_stmt = trace_stmt
         if event == TraceEvent.line:

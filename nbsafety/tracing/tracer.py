@@ -53,6 +53,6 @@ def make_tracer(safety: DependencySafety):
             TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
         )
         state.code_statements[id(stmt_node)] = trace_stmt
-        state.update_hook(event, frame, trace_stmt)
+        state.state_transition_hook(event, frame, trace_stmt)
         return tracer
     return tracer

@@ -3,12 +3,12 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
-from ..analysis import get_statement_lval_and_rval_names
+from ..analysis import get_statement_lval_and_rval_symbols
 from ..data_cell import FunctionDataCell
 
 if TYPE_CHECKING:
     from types import FrameType
-    from typing import Set
+    from typing import Any, List, Set
     from ..data_cell import DataCell
     from ..safety import DependencySafety
     from ..scope import Scope
@@ -20,17 +20,18 @@ class TraceStatement(object):
         self.frame = frame
         self.stmt_node = stmt_node
         self.scope = scope
-        self.extra_dependencies: Set[DataCell] = set()
+        self.call_point_dependencies: List[Set[DataCell]] = []
+        self.call_point_retvals: List[Any] = []  # TODO: should this hold ids or weak refs (instead of actual objs)?
 
     def compute_rval_dependencies(self, rval_names=None):
         if rval_names is None:
-            _, rval_names = get_statement_lval_and_rval_names(self.stmt_node)
+            _, rval_names = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_data_cells = set()
         for name in rval_names:
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
             if maybe_rval_dc is not None:
                 rval_data_cells.add(maybe_rval_dc)
-        return rval_data_cells | self.extra_dependencies
+        return rval_data_cells.union(*self.call_point_dependencies)
 
     def get_post_call_scope(self, old_scope: Scope):
         if isinstance(self.stmt_node, ast.ClassDef):
@@ -57,16 +58,16 @@ class TraceStatement(object):
             return
         if not self.safety.dependency_tracking_enabled:
             return
-        lval_names, rval_names = get_statement_lval_and_rval_names(self.stmt_node)
-        rval_deps = self.compute_rval_dependencies(rval_names=rval_names - lval_names)
+        lval_symbols, rval_symbols = get_statement_lval_and_rval_symbols(self.stmt_node)
+        rval_deps = self.compute_rval_dependencies(rval_names=rval_symbols - lval_symbols)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         should_add = isinstance(self.stmt_node, ast.AugAssign)
         if is_function_def or is_class_def:
-            assert len(lval_names) == 1
-            assert not lval_names.issubset(rval_names)
-        for name in lval_names:
-            should_add_for_name = should_add or name in rval_names
+            assert len(lval_symbols) == 1
+            assert not lval_symbols.issubset(rval_symbols)
+        for name in lval_symbols:
+            should_add_for_name = should_add or name in rval_symbols
             self.scope.upsert_data_cell_for_name(
                 name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, is_class_def=is_class_def
             )

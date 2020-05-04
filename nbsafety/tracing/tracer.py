@@ -7,12 +7,13 @@ from .trace_events import TraceEvent
 from .trace_state import TraceState
 
 if TYPE_CHECKING:
+    from typing import Any
     from types import FrameType
     from ..safety import DependencySafety
 
 
 def make_tracer(safety: DependencySafety):
-    def tracer(frame: FrameType, evt: str, _):
+    def tracer(frame: FrameType, evt: str, arg: Any):
         event = TraceEvent(evt)
 
         # this is a bit of a hack to get the class out of the locals
@@ -53,6 +54,6 @@ def make_tracer(safety: DependencySafety):
             TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
         )
         state.code_statements[id(stmt_node)] = trace_stmt
-        state.state_transition_hook(event, frame, trace_stmt)
+        state.state_transition_hook(frame, event, arg, trace_stmt)
         return tracer
     return tracer

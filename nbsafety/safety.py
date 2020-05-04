@@ -111,7 +111,7 @@ class DependencySafety(object):
                         graph.add_edge(name, child_node.name)
                 nx.draw_networkx(
                     graph,
-                    node_color=["#ff0000" if self.global_scope.data_cell_by_name[name].is_stale() else "#cccccc" for name in graph.nodes()],
+                    node_color=["#ff0000" if self.global_scope.lookup_data_cell_by_name(name).is_stale() else "#cccccc" for name in graph.nodes()],
                     arrowstyle='->',
                     arrowsize=30,
                     node_size=1000,
@@ -139,14 +139,48 @@ class DependencySafety(object):
                 else:
                     print("DataCells with stale depedencies are:", [str(n) for n in stale_set])
             elif line[0] == "set_disable_level":
-                if len(line) == 1 or line[1] not in ['0','1','2','3']:
+                if len(line) != 2 or line[1] not in ['0','1','2','3']:
                     print("""Usage: %safety set_disable_level <integer>
                         level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
                         level 1: Warning,    Run code,    Record new dependencies, (Don't stop at the warning)
                         level 2: No Warning, Run code,    Record new dependencies, (Don't show warnings)
                         level 3: No warning, Run cocde,   No new dependencies,     (Original Kernel)""")
+                    return
                 self._disable_level = int(line[1])
-
+            elif line[0] == "remove_dependency":
+                if len(line) != 3:
+                    print("Usage: %safety remove_dependency <parent_name> <child_name>")
+                    return
+                parent_data_cell = self.global_scope.lookup_data_cell_by_name(line[1])
+                if not parent_data_cell:
+                    print("Cannot find DataCell", line[1])
+                    return
+                child_data_cell = self.global_scope.lookup_data_cell_by_name(line[2])
+                if not child_data_cell:
+                    print("Cannot find DataCell", line[2])
+                    return
+                if child_data_cell not in parent_data_cell.children or parent_data_cell not in child_data_cell.parents:
+                    print("Two DataCells do not have a dependency relation")
+                    return
+                parent_data_cell.children.remove(child_data_cell)
+                child_data_cell.parents.remove(parent_data_cell)
+            elif line[0] == "add_dependency":
+                if len(line) != 3:
+                    print("Usage: %safety add_dependency <parent_name> <child_name>")
+                    return
+                parent_data_cell = self.global_scope.lookup_data_cell_by_name(line[1])
+                if not parent_data_cell:
+                    print("Cannot find DataCell", line[1])
+                    return
+                child_data_cell = self.global_scope.lookup_data_cell_by_name(line[2])
+                if not child_data_cell:
+                    print("Cannot find DataCell", line[2])
+                    return
+                if child_data_cell in parent_data_cell.children and parent_data_cell in child_data_cell.parents:
+                    print("Two DataCells already have a dependency relation")
+                    return
+                parent_data_cell.children.add(child_data_cell)
+                child_data_cell.parents.add(parent_data_cell)
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)

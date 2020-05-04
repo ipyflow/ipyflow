@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING
 from collections import deque
 
 if TYPE_CHECKING:
-    from typing import Union
+    from typing import Deque, Optional, Tuple, Union
 
 
 def compute_lineno_to_stmt_mapping(node: Union[str, ast.AST]):
     if isinstance(node, str):
         node = ast.parse(node)
-    q = deque([(node, None)])
+    q: Deque[Tuple[ast.AST, Optional[ast.AST]]] = deque([(node, None)])
     line_to_stmt_map = {}
     while len(q) > 0:
         node, stmt_node = q.pop()

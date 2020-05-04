@@ -63,4 +63,4 @@ with open(fname) as f:
     assert rvals == {'fname', 'open'}
     lvals, rvals = get_statement_lval_and_rval_symbols(mapping[3])
     assert lvals == {'contents'}
-    assert rvals.issubset({'f', 'read'})
+    assert rvals == {'f', 'read'}

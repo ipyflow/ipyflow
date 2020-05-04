@@ -24,3 +24,12 @@ def test_calls_at_endpoints():
     symchain = get_attribute_symbol_chain(node)
     assert symchain.symbols == (Cp('a'), 'b', Cp('c'), 'd', 'e', Cp('f'))
     assert symchain.call_points == (Cp('a'), Cp('c'), Cp('f'))
+
+
+def test_hash():
+    symchain_set = set()
+    symchain_set.add(get_attribute_symbol_chain('f.read()'))
+    symchain_set.add(get_attribute_symbol_chain('f.read'))
+    symchain_set.add('f')
+    symchain_set.add(('f', 'read'))
+    assert len(symchain_set) == 4

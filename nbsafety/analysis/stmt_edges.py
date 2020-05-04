@@ -45,14 +45,19 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         return self.push_attributes(gather_rvals=True)
 
     def visit_Attribute(self, node):
-        # TODO: don't add the symbol chain if outer context is Call
         self.to_append_list.append(get_attribute_symbol_chain(node))
         self.generic_visit(node)
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
+            # don't add the symbol chain in visit_Attribute() if parent node is a Call
             self.to_append_list.append(get_attribute_symbol_chain(node))
-        self.generic_visit(node)
+            self.visit(node.args)
+            self.visit(node.keywords)
+            self.visit(node.func.value)
+            self.to_add_set.add(node.func.attr)
+        else:
+            self.generic_visit(node)
 
     def visit_Name(self, node):
         self.to_add_set.add(node.id)

@@ -38,10 +38,19 @@ class DependencySafety(object):
         self._last_refused_code: Optional[str] = None
         self._last_cell_ast: Optional[ast.Module] = None
         self._track_dependencies = True
+        """level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
+           level 1: Warning,    Run code,    Record new dependencies, (Don't stop at the warning)
+           level 2: No Warning, Run code,    Record new dependencies, (Don't show warnings)
+           level 3: No warning, Run cocde,   No new dependencies,     (Original Kernel)
+        """
+        self._disable_level = 0
 
     def _make_cell_magic(self, cell_magic_name):
         def _dependency_safety(_, cell: str):
             with save_number_of_currently_executing_cell():
+                if self._disable_level == 3:
+                    run_cell(cell)
+                    return
 
                 # Stage 1: Precheck.
                 # Precheck process. First obtain the names that need to be checked. Then we check if their
@@ -53,11 +62,12 @@ class DependencySafety(object):
                 if self._last_refused_code is None or cell != self._last_refused_code:
                     for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
                         node = self.global_scope.data_cell_by_name[name]
-                        if node.is_stale():
+                        if node.is_stale() and self._disable_level < 2:
                             _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
                             self.stale_dependency_detected = True
                             self._last_refused_code = cell
-                            return
+                            if self._disable_level == 0:
+                                return
                 else:
                     # TODO: break dependency chain here
                     pass
@@ -128,6 +138,15 @@ class DependencySafety(object):
                     print("The only DataCell with stale depedencies is:", str(stale_set.pop()))
                 else:
                     print("DataCells with stale depedencies are:", [str(n) for n in stale_set])
+            elif line[0] == "set_disable_level":
+                if len(line) == 1 or line[1] not in ['0','1','2','3']:
+                    print("""Usage: %safety set_disable_level <integer>
+                        level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
+                        level 1: Warning,    Run code,    Record new dependencies, (Don't stop at the warning)
+                        level 2: No Warning, Run code,    Record new dependencies, (Don't show warnings)
+                        level 3: No warning, Run cocde,   No new dependencies,     (Original Kernel)""")
+                self._disable_level = int(line[1])
+
         if line_magic_name is not None:
             _safety.__name__ = line_magic_name
         return register_line_magic(_safety)

@@ -95,16 +95,17 @@ class DependencySafety(object):
     def _make_line_magic(self, line_magic_name):
         def _safety(line: str):
             line = line.split()
-            if not line or line[0] not in ["show_graph", "show_dependency", "show_stale", "set_disable_level",
-                                            "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for"]:
-                print("""
-Options:
+            if not line or line[0] not in [
+                "show_graph", "show_dependency", "show_stale", "set_disable_level",
+                "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for"
+            ]:
+                print("""Options:
 
 show_graph: 
     -This will print out the dependency graph of global variables. Stale nodes are labeled red. Notice that user might need to call this twice to have it to work.
 
 show_dependency <variable_name> <variable_name2> ...: 
-    -This will print out the dependencies for given global vriables. Multiple variables should be seperated with spaces.
+    -This will print out the dependencies for given global variables. Multiple variables should be separated with spaces.
 
 show_stale: 
     -This will print out all the global variables that are stale. 
@@ -162,11 +163,11 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
                 if not stale_set:
                     print("No DataCell has stale dependency for now!")
                 elif len(stale_set) == 1:
-                    print("The only DataCell with stale depedencies is:", str(stale_set.pop()))
+                    print("The only DataCell with stale dependencies is:", str(stale_set.pop()))
                 else:
-                    print("DataCells with stale depedencies are:", [str(n) for n in stale_set])
+                    print("DataCells with stale dependencies are:", [str(n) for n in stale_set])
             elif line[0] == "set_disable_level":
-                if len(line) != 2 or line[1] not in ['0','1','2','3']:
+                if len(line) != 2 or line[1] not in ['0', '1', '2', '3']:
                     print("""Usage: %safety set_disable_level <integer>
 -level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
 -level 1: Warning,    Run code,    Record new dependencies, (Don't stop at the warning)

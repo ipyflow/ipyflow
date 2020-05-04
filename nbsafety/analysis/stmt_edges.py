@@ -106,30 +106,3 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
 
 def get_statement_lval_and_rval_symbols(node: ast.AST):
     return GetStatementLvalRvalSymbols()(node)
-
-
-class GetAttributeSymbols(ast.NodeVisitor):
-    def __init__(self):
-        self.symbol_chain = []
-
-    def __call__(self, node: ast.Attribute):
-        self.visit(node)
-        self.symbol_chain.reverse()
-        return self.symbol_chain
-
-    def visit_Call(self, node):
-        self.visit(node.func)
-
-    def visit_Attribute(self, node):
-        self.symbol_chain.append(node.attr)
-        self.visit(node.value)
-
-    def visit_Name(self, node):
-        self.symbol_chain.append(node.id)
-
-    def generic_visit(self, node):
-        raise ValueError('we should never get here')
-
-
-def get_attribute_symbols(node: ast.Attribute):
-    return GetAttributeSymbols()(node)

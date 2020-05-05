@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+import builtins
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -29,6 +30,17 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
         f'old version(s) of [{", ".join(str(dep) for dep in fresher_ancestors)}] '
         f'(lastest update in cell {required_cell_num}).'
     )
+
+
+class ReplacementNodeTransformer(ast.NodeTransformer):
+    def __init__(self, replacement):
+        self.replacement = replacement
+
+    def visit_Module(self, _):
+        # self.replacement.body = [
+        #     ast.Expr(ast.Call(ast.Name('print', ctx=ast.Load()), [ast.Str('foo')], []))
+        # ] + self.replacement.body
+        return self.replacement
 
 
 class DependencySafety(object):
@@ -62,7 +74,7 @@ class DependencySafety(object):
                 # Precheck process. First obtain the names that need to be checked. Then we check if their
                 # defined_cell_num is greater than or equal to required, if not we give a warning and return.
                 self._last_cell_ast = ast.parse('\n'.join(
-                    [line for line in cell.strip().split('\n') if not line.startswith('%')])
+                    [line for line in cell.strip().split('\n') if not line.startswith('%') and not line.endswith('?')])
                 )
                 self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
                 if self._last_refused_code is None or cell != self._last_refused_code:
@@ -83,11 +95,16 @@ class DependencySafety(object):
                 # TODO: use context manager to handle these next lines automatically
                 # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
                 sys.settrace(make_tracer(self))
-                # Test code doesn't run the full kernel and should therefore set store_history=True
-                # (e.g. in order to increment the cell numbers)
+                # with ast_transformer_context(ReplacementNodeTransformer(self._last_cell_ast)):
                 run_cell(cell)
                 sys.settrace(None)
-                self._reset_trace_state_hook()
+                if self.trace_state.prev_trace_stmt_in_cur_frame is None:
+                    # something went wrong silently (e.g. due to line magic); fall back to just execting the code
+                    # TODO: reenable warning?
+                    # logging.warning('last executed statement not available after cell done executing; this should not happen')
+                    run_cell(cell)
+                else:
+                    self._reset_trace_state_hook()
                 return
 
         if cell_magic_name is not None:
@@ -96,9 +113,7 @@ class DependencySafety(object):
         return register_cell_magic(_dependency_safety)
 
     def _reset_trace_state_hook(self):
-        if self.trace_state.prev_trace_stmt_in_cur_frame is None:
-            logging.warning('last executed statement not available after cell done executing; this should not happen')
-        elif self.dependency_tracking_enabled:
+        if self.dependency_tracking_enabled:
             self.trace_state.prev_trace_stmt_in_cur_frame.make_lhs_data_cells_if_has_lval()
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state

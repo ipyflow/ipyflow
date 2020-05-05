@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import copy
 from typing import TYPE_CHECKING
 
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
@@ -15,7 +14,6 @@ class Scope(object):
     def __init__(self, scope_name: str = GLOBAL_SCOPE_NAME, parent_scope: Optional[Scope] = None):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
-        self.child_scopes: Dict[str, Scope] = {}
         self.data_cell_by_name: Dict[str, DataCell] = {}
 
     def __hash__(self):
@@ -25,12 +23,13 @@ class Scope(object):
         return str(self.full_path)
 
     def clone(self):
-        return copy.deepcopy(self)
+        # we don't want copies of the data cells but aliases instead
+        cloned = Scope()
+        cloned.__dict__ = dict(self.__dict__)
+        return cloned
 
     def make_child_scope(self, scope_name):
-        child_scope = self.__class__(scope_name, parent_scope=self)
-        self.child_scopes[scope_name] = child_scope
-        return child_scope
+        return self.__class__(scope_name, parent_scope=self)
 
     def lookup_data_cell_by_name(self, name):
         ret = self.data_cell_by_name.get(name, None)
@@ -53,8 +52,8 @@ class Scope(object):
         dc = FunctionDataCell(self.make_child_scope(name), name)
         return self._upsert_and_mark_children_if_different_data_cell_type(dc, name, deps)
 
-    def _upsert_class_data_cell_for_name(self, name: str, deps: Set[DataCell]):
-        dc = ClassDataCell(self.child_scopes[name])
+    def _upsert_class_data_cell_for_name(self, name: str, deps: Set[DataCell], class_scope: Scope):
+        dc = ClassDataCell(class_scope, name)
         return self._upsert_and_mark_children_if_different_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
@@ -63,15 +62,15 @@ class Scope(object):
             deps: Set[DataCell],
             add=False,
             is_function_def=False,
-            is_class_def=False,
+            class_scope: Optional[Scope] = None,
     ):
-        assert not (is_class_def and is_function_def)
+        assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert not add
             return self._upsert_function_data_cell_for_name(name, deps)
-        if is_class_def:
+        if class_scope is not None:
             assert not add
-            return self._upsert_class_data_cell_for_name(name, deps)
+            return self._upsert_class_data_cell_for_name(name, deps, class_scope)
         if self.is_global and name in self.data_cell_by_name:
             # TODO: handle case where new dc is of different type
             dc = self.data_cell_by_name[name]

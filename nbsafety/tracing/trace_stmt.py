@@ -72,8 +72,11 @@ class TraceStatement(object):
             if not isinstance(name, str):  # TODO: remove this once attributes working
                 continue
             should_add_for_name = should_add or name in rval_symbols
+            class_scope = None
+            if is_class_def:
+                class_scope = self.scope
             self.scope.upsert_data_cell_for_name(
-                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, is_class_def=is_class_def
+                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, class_scope=class_scope
             )
 
     def finished_execution_hook(self):

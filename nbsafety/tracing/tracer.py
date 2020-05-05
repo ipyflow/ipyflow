@@ -47,7 +47,8 @@ def make_tracer(safety: DependencySafety):
 
         cell_num, lineno = TraceState.get_position(frame)
         stmt_node = safety.statement_cache[cell_num][lineno]
-        # print(lineno, event, stmt_node)
+        # source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
+        # print(lineno, event, stmt_node, source[lineno-1])
 
         trace_stmt = state.code_statements.get(
             id(stmt_node),

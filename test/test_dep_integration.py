@@ -1,30 +1,27 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import logging
-import os
 
-from IPython import get_ipython
-import pytest
-
-from nbsafety.safety import DependencySafety
-
-from .utils import skipif_known_failing
+from .utils import make_safety_fixture, skipif_known_failing
 
 
 logging.basicConfig(level=logging.ERROR)
-SAFETY_STATE = None
+
+
+# Reset dependency graph before each test
+_safety_fixture, _safety_state, run_cell = make_safety_fixture()
+
+
+def stale_detected():
+    return _safety_state[0].test_and_clear_detected_flag()
 
 
 def assert_bool(val, msg=''):
     assert val, str(msg)
 
 
-def _detected():
-    return SAFETY_STATE.test_and_clear_detected_flag()
-
-
 def assert_detected(msg=''):
-    assert_bool(_detected(), msg=msg)
+    assert_bool(stale_detected(), msg=msg)
 
 
 def assert_false_positive(msg=''):
@@ -36,7 +33,7 @@ def assert_false_positive(msg=''):
 
 
 def assert_not_detected(msg=''):
-    assert_bool(not _detected(), msg=msg)
+    assert_bool(not stale_detected(), msg=msg)
 
 
 def assert_false_negative(msg=''):
@@ -46,19 +43,6 @@ def assert_false_negative(msg=''):
     """
     return assert_not_detected(msg=msg)
 
-
-def run_cell(code):
-    get_ipython().run_cell_magic(SAFETY_STATE.cell_magic_name, None, code)
-
-
-# Reset dependency graph before each test to prevent unexpected stale dependency
-@pytest.fixture(autouse=True)
-def init_or_reset_dependency_graph():
-    global SAFETY_STATE
-    SAFETY_STATE = DependencySafety()
-    run_cell('import logging')
-    yield  # yield to execution of the actual test
-    get_ipython().reset()  # reset ipython state
 
 
 def test_simplest():

@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING
 from IPython.core.magic import register_cell_magic, register_line_magic
 
 from .analysis import precheck, compute_lineno_to_stmt_mapping
-from .ipython_utils import cell_counter, run_cell, save_number_of_currently_executing_cell
+from .ipython_utils import (
+    ast_transformer_context,
+    cell_counter,
+    run_cell,
+    save_number_of_currently_executing_cell,
+)
 from . import line_magics
 from .scope import Scope
 from .tracing import make_tracer, TraceState
@@ -28,12 +33,15 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
 
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
-    def __init__(self, cell_magic_name=None, line_magic_name=None):
+    def __init__(self, cell_magic_name=None, line_magic_name=None, **kwargs):
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.stale_dependency_detected = False
         self.trace_state = TraceState(self)
+        self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
+        if self._save_prev_trace_state_for_tests:
+            self.prev_trace_state: Optional[TraceState] = None
         self._cell_magic = self._make_cell_magic(cell_magic_name)
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic(line_magic_name)
@@ -92,6 +100,8 @@ class DependencySafety(object):
             logging.warning('last executed statement not available after cell done executing; this should not happen')
         elif self.dependency_tracking_enabled:
             self.trace_state.prev_trace_stmt_in_cur_frame.make_lhs_data_cells_if_has_lval()
+        if self._save_prev_trace_state_for_tests:
+            self.prev_trace_state = self.trace_state
         self.trace_state = TraceState(self)
 
     def _make_line_magic(self, line_magic_name):

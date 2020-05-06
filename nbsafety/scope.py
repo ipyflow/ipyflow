@@ -35,13 +35,23 @@ class Scope(object):
         cloned.data_cell_by_name = dict(self.data_cell_by_name)
         return cloned
 
+    @property
+    def non_namespace_parent_scope(self):
+        # a scope nested inside of a namespace scope does not have access
+        # to unqualified members of the namespace scope
+        if self.is_global:
+            return None
+        if self.parent_scope.is_namespace_scope:
+            return self.parent_scope.non_namespace_parent_scope
+        return self.parent_scope
+
     def make_child_scope(self, scope_name, is_namespace_scope=False):
         return self.__class__(scope_name, parent_scope=self, is_namespace_scope=is_namespace_scope)
 
     def lookup_data_cell_by_name(self, name):
         ret = self.data_cell_by_name.get(name, None)
-        if ret is None and not self.is_global:
-            ret = self.parent_scope.lookup_data_cell_by_name(name)
+        if ret is None and self.non_namespace_parent_scope is not None:
+            ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
         return ret
 
     def _upsert_and_mark_children_if_different_data_cell_type(

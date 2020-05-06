@@ -17,7 +17,6 @@ class AttributeTracingManager(object):
         self.namespaces = namespaces
         self.original_active_scope = active_scope
         self.active_scope = active_scope
-        self.prev_active_scope = None
         self.attr_tracer_start_name = '_ATTR_TRACER_START'
         setattr(builtins, self.attr_tracer_start_name, self.attribute_tracer)
         self.ast_transformer = AttributeTracingNodeTransformer(self.attr_tracer_start_name)
@@ -30,16 +29,14 @@ class AttributeTracingManager(object):
         delattr(builtins, self.attr_tracer_start_name)
 
     def push_stack(self, new_scope: Scope):
-        self.stack.append((self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names,
-                           self.active_scope, self.prev_active_scope))
+        self.stack.append((self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names, self.active_scope))
         self.stored_scope_qualified_names = set()
         self.aug_stored_scope_qualified_names = set()
         self.active_scope = new_scope
 
     def pop_stack(self):
         (
-            self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names,
-            self.active_scope, self.prev_active_scope
+            self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names, self.active_scope
         ) = self.stack.pop()
 
     @staticmethod
@@ -59,7 +56,6 @@ class AttributeTracingManager(object):
                 self.namespaces[obj_id] = scope
             # else:
             #     print('no scope for class', obj.__class__)
-        self.prev_active_scope = self.active_scope
         # print('new active scope', scope)
         self.active_scope = scope
         if scope is None:

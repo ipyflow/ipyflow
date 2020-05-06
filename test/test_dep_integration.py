@@ -557,6 +557,41 @@ class Foo(object):
     assert_detected('`foo.x` depends on stale `bar.y`')
 
 
+@skipif_known_failing
+def test_attr_manager_active_scope_resets():
+    run_cell("""
+x = 5
+y = 7
+class Foo(object):
+    def f(self):
+        y = 10
+        return x
+def f():
+    return y
+""")
+    run_cell('foo = Foo()')
+    run_cell('z = foo.f() + f()')
+    run_cell('y = 42')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on stale `y`')
+
+
+def test_namespace_scope_resolution():
+    run_cell("""
+y = 42
+class Foo(object):
+    y = 10
+    @property
+    def foo(self):
+        return y
+""")
+    run_cell('foo = Foo()')
+    run_cell('x = foo.foo')
+    run_cell('Foo.y = 99')
+    run_cell('logging.info(x)')
+    assert_not_detected('`x` should not have dependency on `Foo.y`')
+
+
 def test_long_chain_attribute():
     run_cell("""
 class Foo(object):

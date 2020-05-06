@@ -104,32 +104,49 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
     def __init__(self, start_tracer: str, end_tracer: str):
         self.start_tracer = start_tracer
         self.end_tracer = end_tracer
+        self.inside_attr_load_chain = False
 
-    def visit_Attribute(self, node: ast.Attribute, override_active_scope=False):
-        func = ast.Name(self.start_tracer, ctx=ast.Load())
-        override_active_scope = ast.Constant(override_active_scope)
-        ast.copy_location(override_active_scope, node)
-        replacement_value = ast.Call(
-            func=func,
-            args=[
-                self.visit(node.value), ast.Str(node.attr),
-                ast.Str(node.ctx.__class__.__name__), override_active_scope
-            ],
-            keywords=[]
-        )
+    @contextmanager
+    def attribute_load_context(self, override=True):
+        old = self.inside_attr_load_chain
+        self.inside_attr_load_chain = override or old
+        yield
+        self.inside_attr_load_chain = old
+
+    def visit_Attribute(self, node: ast.Attribute):
+        override_active_scope = isinstance(node.ctx, ast.Load)
+        override_active_scope_arg = ast.Constant(override_active_scope)
+        ast.copy_location(override_active_scope_arg, node)
+        with self.attribute_load_context(override_active_scope):
+            replacement_value = ast.Call(
+                func=ast.Name(self.start_tracer, ctx=ast.Load()),
+                args=[
+                    self.visit(node.value), ast.Str(node.attr),
+                    ast.Str(node.ctx.__class__.__name__), override_active_scope_arg
+                ],
+                keywords=[]
+            )
         ast.copy_location(replacement_value, node.value)
         node.value = replacement_value
-        return node
+        new_node = node
+        if not self.inside_attr_load_chain and override_active_scope:
+            new_node = ast.Call(
+                func=ast.Name(self.end_tracer, ctx=ast.Load()),
+                args=[node],
+                keywords=[]
+            )
+        return new_node
 
     def visit_Call(self, node: ast.Call):
-        # TODO: this strategy doesn't work for things like @property where there is an implicit function call
-        # that's not apparent by examining the text
         if not isinstance(node.func, ast.Attribute):
             return node
-        node.func = self.visit_Attribute(node.func, override_active_scope=True)
-        func = ast.Name(self.end_tracer, ctx=ast.Load())
+        assert isinstance(node.func.ctx, ast.Load)
+        with self.attribute_load_context():
+            node.func = self.visit_Attribute(node.func)
+        if self.inside_attr_load_chain:
+            return node
         replacement_node = ast.Call(
-            func=func,
+            func=ast.Name(self.end_tracer, ctx=ast.Load()),
             args=[node],
             keywords=[]
         )

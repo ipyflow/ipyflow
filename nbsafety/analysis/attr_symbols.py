@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
-from typing import TYPE_CHECKING
+from typing import cast, Union, TYPE_CHECKING
 
 from ..utils.mixins import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Union
+    from typing import List, Optional, Tuple
 
 
 class GetAttributeSymbols(ast.NodeVisitor):
@@ -45,15 +45,15 @@ def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Call]) 
     if isinstance(maybe_node, (ast.Attribute, ast.Call)):
         node = maybe_node
     else:
-        node = ast.parse(maybe_node).body[0].value
+        node = cast(Union[ast.Attribute, ast.Call], cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
     if not isinstance(node, (ast.Attribute, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
     return GetAttributeSymbols()(node)
 
 
 class AttributeSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols):
-        self.symbols = tuple(symbols)
+    def __init__(self, symbols: List[str, CallPoint]):
+        self.symbols: Tuple[Union[str, CallPoint], ...] = tuple(symbols)
         self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
 
     def __hash__(self):

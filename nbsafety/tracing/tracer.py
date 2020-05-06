@@ -16,15 +16,8 @@ if TYPE_CHECKING:
 
 def make_tracer(safety: DependencySafety):
     def tracer(frame: FrameType, evt: str, arg: Any):
-        # # this is a bit of a hack to get the class out of the locals
-        # # - it relies on 'self' being used... normally a safe assumption!
-        # try:
-        #     class_name = frame.f_locals['self'].__class__.__name__
-        # except (KeyError, AttributeError):
-        #     class_name = "No Class"
-
-        # notebook filenames appear as 'ipython-input...'
-        if 'ipython-input' not in frame.f_code.co_filename:
+        # notebook cells have filenames that appear as 'ipython-input...'
+        if not frame.f_code.co_filename.startswith('<ipython-input'):
             return
 
         event = TraceEvent(evt)

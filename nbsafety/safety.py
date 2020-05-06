@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
-import builtins
 import logging
 import sys
 from typing import TYPE_CHECKING
 
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import precheck, compute_lineno_to_stmt_mapping
+from .analysis import AttributeSymbolChain, precheck, compute_lineno_to_stmt_mapping
 from .ipython_utils import (
     ast_transformer_context,
     cell_counter,
@@ -69,13 +68,24 @@ class DependencySafety(object):
                 self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
                 if self._last_refused_code is None or cell != self._last_refused_code:
                     for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
-                        node = self.global_scope.data_cell_by_name[name]
-                        if node.is_stale() and self._disable_level < 2:
-                            _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
-                            self.stale_dependency_detected = True
-                            self._last_refused_code = cell
-                            if self._disable_level == 0:
-                                return
+                        if isinstance(name, str):
+                            nodes = [self.global_scope.data_cell_by_name.get(name, None)]
+                        elif isinstance(name, AttributeSymbolChain):
+                            nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
+                        else:
+                            logging.warning('invalid type for name %s', name)
+                            continue
+                        for node in nodes:
+                            if node is None:
+                                continue
+                            if node.name == 'y':
+                                print('just hit y! and is it stale?', node.is_stale())
+                            if node.is_stale() and self._disable_level < 2:
+                                _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                                self.stale_dependency_detected = True
+                                self._last_refused_code = cell
+                                if self._disable_level == 0:
+                                    return
                 else:
                     # TODO: break dependency chain here
                     pass

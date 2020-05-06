@@ -3,21 +3,23 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
+from .attr_symbols import get_attribute_symbol_chain
 from .mixins import SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
+    from .attr_symbols import AttributeSymbolChain
     from typing import KeysView, List, Set, Union
 
 
 class PreCheck(ast.NodeVisitor):
 
     def __init__(self):
-        self.safe_set: Set[str] = set()
+        self.safe_set: Set[Union[str, AttributeSymbolChain]] = set()
 
     def __call__(self, module_node: ast.Module, name_set: KeysView[str]):
         """
         This function should be called when we want to precheck an ast.Module. For
-        each line/block of the cell We first run the check of new assignments, then
+        each line/block of the cell we first run the check of new assignments, then
         we obtain all the names. In these names, we put the ones that are user
         defined and not in the safe_set into the return check_set for further
         checks.
@@ -26,7 +28,7 @@ class PreCheck(ast.NodeVisitor):
         for node in module_node.body:
             self.visit(node)
             for name in get_all_names(node):
-                if name in name_set and name not in self.safe_set:
+                if name not in self.safe_set:
                     check_set.add(name)
         return check_set
 
@@ -41,12 +43,14 @@ class PreCheck(ast.NodeVisitor):
         for target_node in node.targets:
             if isinstance(target_node, ignore_node_types):
                 continue
-            if isinstance(target_node, ast.Tuple):
+            elif isinstance(target_node, ast.Tuple):
                 for element_node in target_node.elts:
                     if isinstance(element_node, ast.Name):
                         self.safe_set.add(element_node.id)
-            if isinstance(target_node, ast.Name):
+            elif isinstance(target_node, ast.Name):
                 self.safe_set.add(target_node.id)
+            elif isinstance(target_node, ast.Attribute):
+                self.safe_set.add(get_attribute_symbol_chain(target_node))
             else:
                 raise TypeError('unsupported type for node %s' % target_node)
 
@@ -56,8 +60,10 @@ class PreCheck(ast.NodeVisitor):
         ignore_node_types = (ast.Subscript, ast.Attribute)
         if isinstance(target_node, ignore_node_types):
             return
-        if isinstance(target_node, ast.Name):
+        elif isinstance(target_node, ast.Name):
             self.safe_set.add(target_node.id)
+        elif isinstance(target_node, ast.Attribute):
+            self.safe_set.add(get_attribute_symbol_chain(target_node))
         else:
             raise TypeError('unsupported type for node %s' % target_node)
 
@@ -94,7 +100,7 @@ def precheck(code: Union[ast.Module, str], name_set: KeysView[str]):
 # Helper Class
 class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
-        self.name_set: Set[str] = set()
+        self.name_set: Set[Union[str, AttributeSymbolChain]] = set()
 
     def __call__(self, node: ast.AST):
         self.visit(node)
@@ -106,6 +112,9 @@ class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self.visit(node.args)
+
+    def visit_Attribute(self, node: ast.Attribute):
+        self.name_set.add(get_attribute_symbol_chain(node))
 
 
 def get_all_names(node: ast.AST):

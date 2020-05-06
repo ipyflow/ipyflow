@@ -2,6 +2,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from IPython import get_ipython
+
+from .analysis import AttributeSymbolChain, CallPoint
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
@@ -53,6 +56,24 @@ class Scope(object):
         if ret is None and self.non_namespace_parent_scope is not None:
             ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
         return ret
+
+    def gen_data_cells_for_attr_symbol_chain(self, chain: AttributeSymbolChain, namespaces: Dict[int, Scope]):
+        cur_scope = self
+        name_to_obj = get_ipython().ns_table['user_global']
+        for name in chain.symbols:
+            if isinstance(name, CallPoint):
+                break
+            dc = cur_scope.data_cell_by_name.get(name, None)
+            if dc is None:
+                break
+            yield dc
+            obj = name_to_obj.get(name, None)
+            if obj is None:
+                break
+            cur_scope = namespaces.get(id(obj), None)
+            if cur_scope is None:
+                break
+            name_to_obj = obj.__dict__
 
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: Union[ClassDataCell, FunctionDataCell], name: str, deps: Set[DataCell]

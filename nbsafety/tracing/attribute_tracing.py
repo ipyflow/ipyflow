@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from ..data_cell import DataCell
 
 if TYPE_CHECKING:
-    from typing import Dict, Set, Tuple
+    from typing import Dict, List, Set, Tuple, Union
     from ..scope import Scope
 
 
@@ -26,7 +26,7 @@ class AttributeTracingManager(object):
         self.loaded_data_cells: Set[DataCell] = set()
         self.stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
         self.aug_stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
-        self.stack = []
+        self.stack: List[Tuple[Set[Tuple[Scope, str]], Set[Tuple[Scope, str]], Scope, Scope]] = []
 
     def __del__(self):
         if hasattr(builtins, self.start_tracer_name):
@@ -128,7 +128,7 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
             )
         ast.copy_location(replacement_value, node.value)
         node.value = replacement_value
-        new_node = node
+        new_node: Union[ast.Attribute, ast.Call] = node
         if not self.inside_attr_load_chain and override_active_scope:
             new_node = ast.Call(
                 func=ast.Name(self.end_tracer, ctx=ast.Load()),

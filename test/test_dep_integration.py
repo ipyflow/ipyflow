@@ -541,7 +541,6 @@ class Foo(object):
     assert_not_detected('y does not depend on updated attrval foo.y')
 
 
-@skipif_known_failing
 def test_stale_use_of_attribute():
     run_cell("""
 class Foo(object):

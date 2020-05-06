@@ -557,9 +557,9 @@ class Foo(object):
     assert_detected('`foo.x` depends on stale `bar.y`')
 
 
-@skipif_known_failing
 def test_attr_manager_active_scope_resets():
     run_cell("""
+y = 10
 class Foo(object):
     def f(self):
         y = 10
@@ -572,7 +572,7 @@ def f():
     # it will think the `y` referred to by f() is the one in Foo.f's scope.
     run_cell('x = foo.f() + f()')
     run_cell('y = 42')
-    run_cell('logging.info(z)')
+    run_cell('logging.info(x)')
     assert_detected('`x` depends on stale `y`')
 
 

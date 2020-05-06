@@ -2,6 +2,7 @@
 from __future__ import annotations
 import ast
 import builtins
+from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
@@ -17,21 +18,21 @@ class AttributeTracingManager(object):
         self.namespaces = namespaces
         self.original_active_scope = active_scope
         self.active_scope = active_scope
-        self.attr_tracer_name = '_ATTR_TRACER'
-        self.expr_tracer_name = '_EXPR_TRACER'
-        setattr(builtins, self.attr_tracer_name, self.attribute_tracer)
-        setattr(builtins, self.expr_tracer_name, self.expr_tracer)
-        self.ast_transformer = AttributeTracingNodeTransformer(self.attr_tracer_name, self.expr_tracer_name)
+        self.start_tracer_name = '_ATTR_TRACER_START'
+        self.end_tracer_name = '_ATTR_TRACER_END'
+        setattr(builtins, self.start_tracer_name, self.attribute_tracer)
+        setattr(builtins, self.end_tracer_name, self.expr_tracer)
+        self.ast_transformer = AttributeTracingNodeTransformer(self.start_tracer_name, self.end_tracer_name)
         self.loaded_data_cells: Set[DataCell] = set()
         self.stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
         self.aug_stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
         self.stack = []
 
     def __del__(self):
-        if hasattr(builtins, self.attr_tracer_name):
-            delattr(builtins, self.attr_tracer_name)
-        if hasattr(builtins, self.expr_tracer_name):
-            delattr(builtins, self.expr_tracer_name)
+        if hasattr(builtins, self.start_tracer_name):
+            delattr(builtins, self.start_tracer_name)
+        if hasattr(builtins, self.end_tracer_name):
+            delattr(builtins, self.end_tracer_name)
 
     def push_stack(self, new_scope: Scope):
         self.stack.append((
@@ -42,6 +43,7 @@ class AttributeTracingManager(object):
         ))
         self.stored_scope_qualified_names = set()
         self.aug_stored_scope_qualified_names = set()
+        self.original_active_scope = new_scope
         self.active_scope = new_scope
 
     def pop_stack(self):
@@ -57,7 +59,7 @@ class AttributeTracingManager(object):
         logging.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def attribute_tracer(self, obj, attr, ctx):
+    def attribute_tracer(self, obj, attr, ctx, override_active_scope):
         obj_id = id(obj)
         scope = self.namespaces.get(obj_id, None)
         # print('%s attr %s of obj %s' % (ctx, attr, obj))
@@ -70,7 +72,8 @@ class AttributeTracingManager(object):
             # else:
             #     print('no scope for class', obj.__class__)
         # print('new active scope', scope)
-        self.active_scope = scope
+        if override_active_scope:
+            self.active_scope = scope
         if scope is None:
             return obj
         if ctx == 'Load':
@@ -86,6 +89,7 @@ class AttributeTracingManager(object):
         return obj
 
     def expr_tracer(self, obj):
+        # print('reset active scope to', self.original_active_scope)
         self.active_scope = self.original_active_scope
         return obj
 
@@ -93,6 +97,7 @@ class AttributeTracingManager(object):
         self.loaded_data_cells = set()
         self.stored_scope_qualified_names = set()
         self.aug_stored_scope_qualified_names = set()
+        self.active_scope = self.original_active_scope
 
 
 class AttributeTracingNodeTransformer(ast.NodeTransformer):
@@ -100,20 +105,30 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
         self.start_tracer = start_tracer
         self.end_tracer = end_tracer
 
-    def visit_Attribute(self, node: ast.Attribute):
+    def visit_Attribute(self, node: ast.Attribute, override_active_scope=False):
+        func = ast.Name(self.start_tracer, ctx=ast.Load())
+        override_active_scope = ast.Constant(override_active_scope)
+        ast.copy_location(override_active_scope, node)
         replacement_value = ast.Call(
-            func=ast.Name(self.start_tracer, ctx=ast.Load()),
-            args=[self.visit(node.value), ast.Str(node.attr), ast.Str(node.ctx.__class__.__name__)],
+            func=func,
+            args=[
+                self.visit(node.value), ast.Str(node.attr),
+                ast.Str(node.ctx.__class__.__name__), override_active_scope
+            ],
             keywords=[]
         )
         ast.copy_location(replacement_value, node.value)
         node.value = replacement_value
         return node
 
-    def visit_expr(self, node: ast.expr):
+    def visit_Call(self, node: ast.Call):
+        if not isinstance(node.func, ast.Attribute):
+            return node
+        node.func = self.visit_Attribute(node.func, override_active_scope=True)
+        func = ast.Name(self.end_tracer, ctx=ast.Load())
         replacement_node = ast.Call(
-            func=ast.Name(self.end_tracer, ctx=ast.Load()),
-            args=[self.generic_visit(node)],
+            func=func,
+            args=[node],
             keywords=[]
         )
         ast.copy_location(replacement_node, node)

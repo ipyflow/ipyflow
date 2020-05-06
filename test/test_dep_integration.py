@@ -576,6 +576,24 @@ def f():
     assert_detected('`x` depends on stale `y`')
 
 
+def test_attr_manager_active_scope_with_property():
+    run_cell("""
+y = 10
+class Foo(object):
+    @property
+    def f(self):
+        y = 11
+        return y
+""")
+    run_cell('foo = Foo()')
+    # if the active scope doesn't reset after done with foo.f(),
+    # it will think the `y` referred to by f() is the one in Foo.f's scope.
+    run_cell('x = foo.f')
+    run_cell('y = 42')
+    run_cell('logging.info(x)')
+    assert_not_detected('`x` independent of outer `y`')
+
+
 def test_namespace_scope_resolution():
     run_cell("""
 y = 42

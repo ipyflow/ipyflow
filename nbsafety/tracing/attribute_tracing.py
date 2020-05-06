@@ -122,6 +122,8 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
         return node
 
     def visit_Call(self, node: ast.Call):
+        # TODO: this strategy doesn't work for things like @property where there is an implicit function call
+        # that's not apparent by examining the text
         if not isinstance(node.func, ast.Attribute):
             return node
         node.func = self.visit_Attribute(node.func, override_active_scope=True)

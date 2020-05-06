@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from ..analysis import get_statement_lval_and_rval_symbols
@@ -24,6 +25,13 @@ class TraceStatement(object):
         self.call_point_dependencies: List[Set[DataCell]] = []
         self.call_point_retvals: List[Any] = []  # TODO: should this hold ids or weak refs (instead of actual objs)?
         self.marked_finished = False
+
+    @contextmanager
+    def replace_active_scope(self, new_active_scope):
+        old_scope = self.scope
+        self.scope = new_active_scope
+        yield
+        self.scope = old_scope
 
     def compute_rval_dependencies(self, rval_symbols=None):
         if rval_symbols is None:

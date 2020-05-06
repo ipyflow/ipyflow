@@ -560,20 +560,20 @@ class Foo(object):
 @skipif_known_failing
 def test_attr_manager_active_scope_resets():
     run_cell("""
-x = 5
-y = 7
 class Foo(object):
     def f(self):
         y = 10
-        return x
+        return y
 def f():
     return y
 """)
     run_cell('foo = Foo()')
-    run_cell('z = foo.f() + f()')
+    # if the active scope doesn't reset after done with foo.f(),
+    # it will think the `y` referred to by f() is the one in Foo.f's scope.
+    run_cell('x = foo.f() + f()')
     run_cell('y = 42')
     run_cell('logging.info(z)')
-    assert_detected('`z` depends on stale `y`')
+    assert_detected('`x` depends on stale `y`')
 
 
 def test_namespace_scope_resolution():

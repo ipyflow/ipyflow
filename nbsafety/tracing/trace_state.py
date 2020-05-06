@@ -72,12 +72,10 @@ class TraceState(object):
         if event == TraceEvent.call:
             self.stack.append(self.prev_trace_stmt_in_cur_frame)
             # print('scope', trace_stmt.scope)
-            old_trace_stmt_scope = trace_stmt.scope
-            trace_stmt.scope = self.safety.attr_trace_manager.active_scope
-            # print('active scope', trace_stmt.scope)
-            self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
-            # print('post call scope', self.cur_frame_scope)
-            trace_stmt.scope = old_trace_stmt_scope
+            with trace_stmt.replace_active_scope(self.safety.attr_trace_manager.active_scope):
+                # print('active scope', trace_stmt.scope)
+                self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
+                # print('post call scope', self.cur_frame_scope)
             logging.debug('entering scope %s', self.cur_frame_scope)
             self.prev_trace_stmt_in_cur_frame = None
             self.safety.attr_trace_manager.push_stack(self.cur_frame_scope)

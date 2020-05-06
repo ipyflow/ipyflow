@@ -44,7 +44,6 @@ def assert_false_negative(msg=''):
     return assert_not_detected(msg=msg)
 
 
-
 def test_simplest():
     run_cell('a = 1')
     run_cell('b = a + 1')
@@ -527,7 +526,6 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
-@skipif_known_failing
 def test_attributes_3():
     run_cell("""
 class Foo(object):
@@ -536,8 +534,9 @@ class Foo(object):
         self.y = y
 """)
     run_cell('foo = Foo(5, 6)')
-    run_cell('y = foo.x + 5')
-    run_cell('foo.y = 8')
+    run_cell('bar = Foo(7, 8)')
+    run_cell('y = bar.x + 5')
+    run_cell('foo.x = 8')
     run_cell('logging.info(y)')
     assert_not_detected('y does not depend on updated attrval foo.y')
 

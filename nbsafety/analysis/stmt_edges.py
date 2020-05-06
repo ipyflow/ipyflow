@@ -3,7 +3,7 @@ from __future__ import annotations
 import ast
 from typing import TYPE_CHECKING
 
-from .attr_symbols import get_attribute_symbol_chain
+# from .attr_symbols import get_attribute_symbol_chain
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
@@ -45,19 +45,10 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         return self.push_attributes(gather_rvals=True)
 
     def visit_Attribute(self, node):
-        self.to_append_list.append(get_attribute_symbol_chain(node))
-        self.generic_visit(node)
-
-    def visit_Call(self, node):
-        if isinstance(node.func, ast.Attribute):
-            # don't add the symbol chain in visit_Attribute() if parent node is a Call
-            self.to_append_list.append(get_attribute_symbol_chain(node))
-            self.visit(node.args)
-            self.visit(node.keywords)
-            self.visit(node.func.value)
-            self.to_add_set.add(node.func.attr)
-        else:
-            self.generic_visit(node)
+        # skip node.attr -- this is handled by the attribute tracer
+        # also only add rvals -- lvals will also be handled by tracer
+        with self.gather_rvals_context():
+            self.visit(node.value)
 
     def visit_Name(self, node):
         self.to_add_set.add(node.id)

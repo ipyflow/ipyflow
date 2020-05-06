@@ -8,7 +8,7 @@ from ..data_cell import FunctionDataCell
 
 if TYPE_CHECKING:
     from types import FrameType
-    from typing import Any, List, Set
+    from typing import Any, List, Optional, Set
     from ..data_cell import DataCell
     from ..safety import DependencySafety
     from ..scope import Scope
@@ -20,26 +20,25 @@ class TraceStatement(object):
         self.frame = frame
         self.stmt_node = stmt_node
         self.scope = scope
+        self.class_scope: Optional[Scope] = None
         self.call_point_dependencies: List[Set[DataCell]] = []
         self.call_point_retvals: List[Any] = []  # TODO: should this hold ids or weak refs (instead of actual objs)?
 
-    def compute_rval_dependencies(self, rval_names=None):
-        if rval_names is None:
-            _, rval_names = get_statement_lval_and_rval_symbols(self.stmt_node)
+    def compute_rval_dependencies(self, rval_symbols=None):
+        if rval_symbols is None:
+            _, rval_symbols = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_data_cells = set()
-        for name in rval_names:
-            if not isinstance(name, str):  # TODO: remove this once attributes working
-                continue
+        for name in rval_symbols:
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
             if maybe_rval_dc is not None:
                 rval_data_cells.add(maybe_rval_dc)
-        return rval_data_cells.union(*self.call_point_dependencies)
+        return rval_data_cells.union(*self.call_point_dependencies) | self.safety.attr_trace_manager.loaded_data_cells
 
     def get_post_call_scope(self, old_scope: Scope):
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return old_scope.make_child_scope(self.stmt_node.name)
+            return old_scope.make_child_scope(self.stmt_node.name, is_namespace_scope=True)
 
         if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
@@ -57,11 +56,13 @@ class TraceStatement(object):
 
     def make_lhs_data_cells_if_has_lval(self):
         if not self.has_lval:
+            assert len(self.safety.attr_trace_manager.stored_scope_qualified_names) == 0
+            assert len(self.safety.attr_trace_manager.aug_stored_scope_qualified_names) == 0
             return
         if not self.safety.dependency_tracking_enabled:
             return
         lval_symbols, rval_symbols = get_statement_lval_and_rval_symbols(self.stmt_node)
-        rval_deps = self.compute_rval_dependencies(rval_names=rval_symbols - lval_symbols)
+        rval_deps = self.compute_rval_dependencies(rval_symbols=rval_symbols - lval_symbols)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         should_add = isinstance(self.stmt_node, ast.AugAssign)
@@ -69,26 +70,30 @@ class TraceStatement(object):
             assert len(lval_symbols) == 1
             assert not lval_symbols.issubset(rval_symbols)
         for name in lval_symbols:
-            if not isinstance(name, str):  # TODO: remove this once attributes working
-                continue
             should_add_for_name = should_add or name in rval_symbols
-            class_scope = None
             if is_class_def:
-                class_scope = self.scope
+                assert self.class_scope is not None
+                class_ref = self.frame.f_locals[self.stmt_node.name]
+                self.safety.namespaces[id(class_ref)] = self.class_scope
             self.scope.upsert_data_cell_for_name(
-                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, class_scope=class_scope
+                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
             )
+        if len(self.safety.attr_trace_manager.stored_scope_qualified_names) > 0:
+            assert isinstance(self.stmt_node, ast.Assign)
+        if len(self.safety.attr_trace_manager.aug_stored_scope_qualified_names) > 0:
+            assert isinstance(self.stmt_node, ast.AugAssign)
+        for scope, name in self.safety.attr_trace_manager.stored_scope_qualified_names:
+            scope.upsert_data_cell_for_name(name, rval_deps, add=False, is_function_def=False, class_scope=None)
+        for scope, name in self.safety.attr_trace_manager.aug_stored_scope_qualified_names:
+            scope.upsert_data_cell_for_name(name, rval_deps, add=True, is_function_def=False, class_scope=None)
 
     def finished_execution_hook(self):
-        # need to handle namespace cloning upon object creation still
         self.make_lhs_data_cells_if_has_lval()
-        if isinstance(self.stmt_node, ast.ClassDef):
-            class_ref = self.frame.f_locals[self.stmt_node.name]
-            self.safety.namespaces[id(class_ref)] = self.scope
+        self.safety.attr_trace_manager.reset()
 
     @property
     def has_lval(self):
         # TODO: expand to method calls, etc.
         return isinstance(self.stmt_node, (
-            ast.Assign, ast.AugAssign, ast.FunctionDef, ast.AsyncFunctionDef, ast.For
+            ast.Assign, ast.AugAssign, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.For
         ))

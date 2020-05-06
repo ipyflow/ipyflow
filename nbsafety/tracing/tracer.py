@@ -50,11 +50,11 @@ def make_tracer(safety: DependencySafety):
         # source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
         # print(lineno, event, stmt_node, source[lineno-1])
 
-        trace_stmt = state.code_statements.get(
+        trace_stmt = state.traced_statements.get(
             id(stmt_node),
             TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
         )
-        state.code_statements[id(stmt_node)] = trace_stmt
+        state.traced_statements[id(stmt_node)] = trace_stmt
         state.state_transition_hook(frame, event, arg, trace_stmt)
         return tracer
     return tracer

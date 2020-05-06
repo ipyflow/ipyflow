@@ -11,25 +11,32 @@ if TYPE_CHECKING:
 class Scope(object):
     GLOBAL_SCOPE_NAME = '<module>'
 
-    def __init__(self, scope_name: str = GLOBAL_SCOPE_NAME, parent_scope: Optional[Scope] = None):
+    def __init__(
+            self, scope_name: str = GLOBAL_SCOPE_NAME,
+            parent_scope: Optional[Scope] = None,
+            is_namespace_scope=False
+    ):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
+        self.is_namespace_scope = is_namespace_scope
         self.data_cell_by_name: Dict[str, DataCell] = {}
 
     def __hash__(self):
-        return self.full_path
+        return hash(self.full_path)
 
     def __str__(self):
         return str(self.full_path)
 
     def clone(self):
-        # we don't want copies of the data cells but aliases instead
         cloned = Scope()
         cloned.__dict__ = dict(self.__dict__)
+        # we don't want copies of the data cells but aliases instead,
+        # but we still want separate dictionaries for newly created DataCells
+        cloned.data_cell_by_name = dict(self.data_cell_by_name)
         return cloned
 
-    def make_child_scope(self, scope_name):
-        return self.__class__(scope_name, parent_scope=self)
+    def make_child_scope(self, scope_name, is_namespace_scope=False):
+        return self.__class__(scope_name, parent_scope=self, is_namespace_scope=is_namespace_scope)
 
     def lookup_data_cell_by_name(self, name):
         ret = self.data_cell_by_name.get(name, None)
@@ -40,7 +47,7 @@ class Scope(object):
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: Union[ClassDataCell, FunctionDataCell], name: str, deps: Set[DataCell]
     ):
-        if self.is_global and name in self.data_cell_by_name:
+        if self.is_globally_accessible and name in self.data_cell_by_name:
             old = self.data_cell_by_name[name]
             # don't mark children as having stale dep unless old dep was of same type
             old.update_deps(set(), add=False, mark_children=isinstance(old, type(dc)))
@@ -71,7 +78,7 @@ class Scope(object):
         if class_scope is not None:
             assert not add
             return self._upsert_class_data_cell_for_name(name, deps, class_scope)
-        if self.is_global and name in self.data_cell_by_name:
+        if self.is_globally_accessible and name in self.data_cell_by_name:
             # TODO: handle case where new dc is of different type
             dc = self.data_cell_by_name[name]
             dc.update_deps(deps, add=add)
@@ -86,6 +93,10 @@ class Scope(object):
     @property
     def is_global(self):
         return self.parent_scope is None
+
+    @property
+    def is_globally_accessible(self):
+        return self.is_global or (self.is_namespace_scope and self.parent_scope.is_globally_accessible)
 
     @property
     def global_scope(self):

@@ -17,7 +17,7 @@ from .ipython_utils import (
 )
 from . import line_magics
 from .scope import Scope
-from .tracing import make_tracer, TraceState
+from .tracing import AttributeTracingManager, make_tracer, TraceState
 
 if TYPE_CHECKING:
     from typing import Dict, Set, Optional
@@ -32,17 +32,6 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
     )
 
 
-class ReplacementNodeTransformer(ast.NodeTransformer):
-    def __init__(self, replacement):
-        self.replacement = replacement
-
-    def visit_Module(self, _):
-        # self.replacement.body = [
-        #     ast.Expr(ast.Call(ast.Name('print', ctx=ast.Load()), [ast.Str('foo')], []))
-        # ] + self.replacement.body
-        return self.replacement
-
-
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, line_magic_name=None, **kwargs):
@@ -51,6 +40,7 @@ class DependencySafety(object):
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.stale_dependency_detected = False
         self.trace_state = TraceState(self)
+        self.attr_trace_manager = AttributeTracingManager(self.namespaces)
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
@@ -95,13 +85,13 @@ class DependencySafety(object):
                 # TODO: use context manager to handle these next lines automatically
                 # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
                 sys.settrace(make_tracer(self))
-                # with ast_transformer_context(ReplacementNodeTransformer(self._last_cell_ast)):
-                run_cell(cell)
+                with ast_transformer_context(self.attr_trace_manager.ast_transformer):
+                    run_cell(cell)
                 sys.settrace(None)
                 if self.trace_state.prev_trace_stmt_in_cur_frame is None:
-                    # something went wrong silently (e.g. due to line magic); fall back to just execting the code
-                    # TODO: reenable warning?
-                    # logging.warning('last executed statement not available after cell done executing; this should not happen')
+                    # something went wrong silently (e.g. due to line magic); fall back to just executing the code
+                    logging.warning('Last executed statement not available after attempting traced execution; '
+                                    'falling back to uninstrumented execution.')
                     run_cell(cell)
                 else:
                     self._reset_trace_state_hook()
@@ -115,6 +105,7 @@ class DependencySafety(object):
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled:
             self.trace_state.prev_trace_stmt_in_cur_frame.make_lhs_data_cells_if_has_lval()
+        self.attr_trace_manager.reset()
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state
         self.trace_state = TraceState(self)

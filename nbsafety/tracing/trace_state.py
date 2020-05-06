@@ -19,24 +19,24 @@ class TraceState(object):
         self.cur_frame_scope = safety.global_scope
         self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
         self.call_depth = 0
-        self.code_statements: Dict[int, TraceStatement] = {}
+        self.traced_statements: Dict[int, TraceStatement] = {}
         self.stack: List[TraceStatement] = []
         self.source: Optional[str] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.last_event: Optional[TraceEvent] = None
 
-    def _prev_stmt_done_executing(self, event: TraceEvent, code_stmt: TraceStatement):
+    def _prev_stmt_done_executing(self, event: TraceEvent, trace_stmt: TraceStatement):
         if event not in (
                 TraceEvent.line, TraceEvent.return_
         ) or self.last_event in (
                 TraceEvent.call, TraceEvent.exception
         ):
             return False
-        finished = self.prev_trace_stmt is not code_stmt
+        finished = self.prev_trace_stmt is not trace_stmt
         if self.prev_trace_stmt is not None:
             finished = finished and not (
                 # classdefs are not finished until we reach the end of the class body
-                    isinstance(self.prev_trace_stmt.stmt_node, ast.ClassDef) and event != TraceEvent.return_
+                isinstance(self.prev_trace_stmt.stmt_node, ast.ClassDef) and self.last_event != TraceEvent.return_
             )
         return finished
 
@@ -60,16 +60,20 @@ class TraceState(object):
             self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
             logging.debug('entering scope %s', self.cur_frame_scope)
             self.prev_trace_stmt_in_cur_frame = None
+            self.safety.attr_trace_manager.push_stack()
         if event == TraceEvent.return_:
             logging.debug('leaving scope %s', self.cur_frame_scope)
             return_to_stmt = self.stack.pop()
             assert return_to_stmt is not None
-            if not isinstance(return_to_stmt.stmt_node, ast.ClassDef):
+            if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
+                return_to_stmt.class_scope = self.cur_frame_scope
+            else:
                 return_to_stmt.call_point_dependencies.append(trace_stmt.compute_rval_dependencies())
                 return_to_stmt.call_point_retvals.append(arg)
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt
             self.cur_frame_scope = return_to_stmt.scope
+            self.safety.attr_trace_manager.pop_stack()
             logging.debug('entering scope %s', self.cur_frame_scope)
         if event == TraceEvent.exception:
             # TODO: save off the frame. when we hit the next trace event (the except clause), we'll count the

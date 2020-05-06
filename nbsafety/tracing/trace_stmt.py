@@ -23,6 +23,7 @@ class TraceStatement(object):
         self.class_scope: Optional[Scope] = None
         self.call_point_dependencies: List[Set[DataCell]] = []
         self.call_point_retvals: List[Any] = []  # TODO: should this hold ids or weak refs (instead of actual objs)?
+        self.marked_finished = False
 
     def compute_rval_dependencies(self, rval_symbols=None):
         if rval_symbols is None:
@@ -38,7 +39,7 @@ class TraceStatement(object):
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return old_scope.make_child_scope(self.stmt_node.name, is_namespace_scope=True)
+            return self.scope.make_child_scope(self.stmt_node.name, is_namespace_scope=True)
 
         if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
@@ -51,7 +52,7 @@ class TraceStatement(object):
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
         if not isinstance(func_cell, FunctionDataCell):
-            raise TypeError('got non-function data cell for name %s' % func_name)
+            raise TypeError('got non-function data cell %s for name %s' % (func_cell, func_name))
         return func_cell.scope
 
     def make_lhs_data_cells_if_has_lval(self):
@@ -75,6 +76,8 @@ class TraceStatement(object):
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
                 self.safety.namespaces[id(class_ref)] = self.class_scope
+            # if is_function_def:
+            #     print('create function', name, 'in scope', self.scope)
             self.scope.upsert_data_cell_for_name(
                 name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
             )
@@ -88,8 +91,11 @@ class TraceStatement(object):
             scope.upsert_data_cell_for_name(name, rval_deps, add=True, is_function_def=False, class_scope=None)
 
     def finished_execution_hook(self):
+        if self.marked_finished:
+            return
+        # print('finishing stmt', self.stmt_node)
+        self.marked_finished = True
         self.make_lhs_data_cells_if_has_lval()
-        self.safety.attr_trace_manager.reset()
 
     @property
     def has_lval(self):

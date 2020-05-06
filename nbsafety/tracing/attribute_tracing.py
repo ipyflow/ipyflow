@@ -13,26 +13,34 @@ if TYPE_CHECKING:
 
 
 class AttributeTracingManager(object):
-    def __init__(self, namespaces: Dict[int, Scope]):
+    def __init__(self, namespaces: Dict[int, Scope], active_scope: Scope):
         self.namespaces = namespaces
-        self.attr_tracer_name = '_ATTR_TRACER'
-        setattr(builtins, self.attr_tracer_name, self.attribute_tracer)
-        self.ast_transformer = AttributeTracingNodeTransformer(self.attr_tracer_name)
+        self.original_active_scope = active_scope
+        self.active_scope = active_scope
+        self.prev_active_scope = None
+        self.attr_tracer_start_name = '_ATTR_TRACER_START'
+        setattr(builtins, self.attr_tracer_start_name, self.attribute_tracer)
+        self.ast_transformer = AttributeTracingNodeTransformer(self.attr_tracer_start_name)
         self.loaded_data_cells: Set[DataCell] = set()
         self.stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
         self.aug_stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
         self.stack = []
 
     def __del__(self):
-        delattr(builtins, self.attr_tracer_name)
+        delattr(builtins, self.attr_tracer_start_name)
 
-    def push_stack(self):
-        self.stack.append((self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names))
+    def push_stack(self, new_scope: Scope):
+        self.stack.append((self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names,
+                           self.active_scope, self.prev_active_scope))
         self.stored_scope_qualified_names = set()
         self.aug_stored_scope_qualified_names = set()
+        self.active_scope = new_scope
 
     def pop_stack(self):
-        self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names = self.stack.pop()
+        (
+            self.stored_scope_qualified_names, self.aug_stored_scope_qualified_names,
+            self.active_scope, self.prev_active_scope
+        ) = self.stack.pop()
 
     @staticmethod
     def debug_attribute_tracer(obj, attr, ctx):
@@ -46,8 +54,14 @@ class AttributeTracingManager(object):
         if scope is None:
             class_scope = self.namespaces.get(id(obj.__class__), None)
             if class_scope is not None:
+                # print('found class scope %s containing %s' % (class_scope, class_scope.data_cell_by_name.keys()))
                 scope = class_scope.clone()
                 self.namespaces[obj_id] = scope
+            # else:
+            #     print('no scope for class', obj.__class__)
+        self.prev_active_scope = self.active_scope
+        # print('new active scope', scope)
+        self.active_scope = scope
         if scope is None:
             return obj
         if ctx == 'Load':
@@ -63,18 +77,19 @@ class AttributeTracingManager(object):
         return obj
 
     def reset(self):
+        self.active_scope = self.original_active_scope
         self.loaded_data_cells = set()
         self.stored_scope_qualified_names = set()
         self.aug_stored_scope_qualified_names = set()
 
 
 class AttributeTracingNodeTransformer(ast.NodeTransformer):
-    def __init__(self, instrumenter_name: str):
-        self.instrumenter_name = instrumenter_name
+    def __init__(self, start_tracer: str):
+        self.start_tracer = start_tracer
 
     def visit_Attribute(self, node: ast.Attribute):
         replacement_value = ast.Call(
-            func=ast.Name(self.instrumenter_name, ctx=ast.Load()),
+            func=ast.Name(self.start_tracer, ctx=ast.Load()),
             args=[self.visit(node.value), ast.Str(node.attr), ast.Str(node.ctx.__class__.__name__)],
             keywords=[]
         )

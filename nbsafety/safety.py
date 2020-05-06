@@ -40,7 +40,7 @@ class DependencySafety(object):
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.stale_dependency_detected = False
         self.trace_state = TraceState(self)
-        self.attr_trace_manager = AttributeTracingManager(self.namespaces)
+        self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope)
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
@@ -104,7 +104,7 @@ class DependencySafety(object):
 
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled:
-            self.trace_state.prev_trace_stmt_in_cur_frame.make_lhs_data_cells_if_has_lval()
+            self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
         self.attr_trace_manager.reset()
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state

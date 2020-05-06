@@ -541,6 +541,48 @@ class Foo(object):
     assert_not_detected('y does not depend on updated attrval foo.y')
 
 
+@skipif_known_failing
+def test_stale_use_of_attribute():
+    run_cell("""
+class Foo(object):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+""")
+    run_cell('foo = Foo(5, 6)')
+    run_cell('bar = Foo(7, 8)')
+    run_cell('foo.x = bar.x + bar.y')
+    run_cell('bar.y = 42')
+    run_cell('logging.info(foo.x)')
+    assert_detected('`foo.x` depends on stale `bar.y`')
+
+
+def test_long_chain_attribute():
+    run_cell("""
+class Foo(object):
+    shared = 99
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y + self.shared
+        
+    class Bar(object):
+        def __init__(self, a, b):
+            self.a = a
+            self.b = b
+            
+        def foo(self):
+            return Foo(self.a, self.b)
+""")
+    run_cell('foo = Foo(5, 6)')
+    run_cell('bar = Foo.Bar(7, 8)')
+    run_cell('foo.x = 42')
+    run_cell('logging.info(bar.a)')
+    assert_not_detected()
+    run_cell('Foo.Bar(9, 10).foo().shared = 100')
+    run_cell('logging.info(foo.y)')
+    assert_detected('we mutated a shared value on which `foo.y` depends')
+
+
 def test_numpy_subscripting():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')
@@ -761,7 +803,8 @@ for i in [a, b, c]:
 
 def test_same_cell_redefine():
     run_cell('a = 0')
-    run_cell("""b = a + 1
+    run_cell("""
+b = a + 1
 a = 42
 """)
     run_cell('logging.info(b)')

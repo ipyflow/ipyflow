@@ -23,10 +23,8 @@ if TYPE_CHECKING:
     from typing import Dict, Set, Optional
     from .data_cell import DataCell
 
-# logger = logging.getLogger()
-# logger.addHandler(logging.StreamHandler())
-# logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
@@ -47,6 +45,7 @@ class DependencySafety(object):
         self.trace_state = TraceState(self)
         self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope)
         self.store_history = kwargs.pop('store_history', True)
+        self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
@@ -58,6 +57,10 @@ class DependencySafety(object):
         self._track_dependencies = True
 
         self._disable_level = 0
+
+    def _logging_inited(self):
+        self.store_history = True
+        logger.setLevel(logging.WARNING)
 
     def _precheck_for_stale(self, cell):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
@@ -144,8 +147,8 @@ class DependencySafety(object):
         def _safety(line_: str):
             line = line_.split()
             if not line or line[0] not in [
-                "show_graph", "show_dependency", "show_stale", "set_disable_level",
-                "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for"
+                "show_graph", "show_dependency", "show_stale", "set_disable_level", "trace_messages",
+                "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for",
             ]:
                 print(line_magics.USAGE)
                 return
@@ -157,6 +160,8 @@ class DependencySafety(object):
                 return line_magics.show_stale(self)
             elif line[0] == "set_disable_level":
                 return line_magics.set_disable_level(self, line)
+            elif line[0] == "trace_messages":
+                return line_magics.configure_trace_messages(self, line)
             elif line[0] == "remove_dependency":
                 return line_magics.remove_dep(self, line)
             elif line[0] == "add_dependency":

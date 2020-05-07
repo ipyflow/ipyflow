@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 
 def make_tracer(safety: DependencySafety):
+    if safety.trace_messages_enabled:
+        logger.setLevel(logging.INFO)
+    else:
+        logger.setLevel(logging.WARNING)
+
     def tracer(frame: FrameType, evt: str, _):
         # notebook cells have filenames that appear as '<ipython-input...>'
         if not frame.f_code.co_filename.startswith('<ipython-input'):

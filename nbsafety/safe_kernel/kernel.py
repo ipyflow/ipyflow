@@ -38,7 +38,7 @@ def _foo():
 _foo()  # for some reason the fn call is necessary to properly init logging
 del _foo
 """, False)
-        self.shell.run_cell(f'{_SAFETY_STATE}.store_history = True')
+        self.shell.run_cell(f'{_SAFETY_STATE}._logging_inited()')
 
     def do_execute(self, code, silent, store_history=False,
                    user_expressions=None, allow_stdin=False):

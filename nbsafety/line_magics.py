@@ -98,6 +98,13 @@ def set_disable_level(safety: DependencySafety, line: List[str]):
     safety._disable_level = int(line[1])
 
 
+def configure_trace_messages(safety: DependencySafety, line: List[str]):
+    if len(line) != 2:
+        print("Usage: %safety trace_messages [enabled|disabled] ...")
+        return
+    safety.trace_messages_enabled = (line[1].lower().startswith("enable"))
+
+
 def remove_dep(safety: DependencySafety, line: List[str]):
     if len(line) != 3:
         print("Usage: %safety remove_dependency <parent_name> <child_name>")
@@ -137,7 +144,7 @@ def add_dep(safety: DependencySafety, line: List[str]):
 
 
 def turn_off_warnings_for(safety: DependencySafety, line: List[str]):
-    if len(line) == 1:
+    if len(line) <= 1:
         print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
         return
     for data_cell_name in line[1:]:
@@ -150,7 +157,7 @@ def turn_off_warnings_for(safety: DependencySafety, line: List[str]):
 
 
 def turn_on_warnings_for(safety: DependencySafety, line: List[str]):
-    if len(line) == 1:
+    if len(line) <= 1:
         print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
         return
     for data_cell_name in line[1:]:
@@ -160,4 +167,3 @@ def turn_on_warnings_for(safety: DependencySafety, line: List[str]):
             print("Warnings are turned on for", data_cell_name)
         else:
             print("Cannot find DataCell", data_cell_name)
-

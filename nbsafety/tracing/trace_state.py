@@ -87,7 +87,6 @@ class TraceState(object):
                 return_to_stmt.class_scope = self.cur_frame_scope
             else:
                 return_to_stmt.call_point_dependencies.append(trace_stmt.compute_rval_dependencies())
-                return_to_stmt.call_point_retvals.append(arg)
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt
             self.cur_frame_scope = return_to_stmt.scope

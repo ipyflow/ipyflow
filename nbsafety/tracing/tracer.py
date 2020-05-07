@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 def make_tracer(safety: DependencySafety):
     def tracer(frame: FrameType, evt: str, arg: Any):
-        # notebook cells have filenames that appear as 'ipython-input...'
+        # notebook cells have filenames that appear as '<ipython-input...>'
         if not frame.f_code.co_filename.startswith('<ipython-input'):
             return
 

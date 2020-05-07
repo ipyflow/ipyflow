@@ -23,7 +23,6 @@ class TraceStatement(object):
         self.scope = scope
         self.class_scope: Optional[Scope] = None
         self.call_point_dependencies: List[Set[DataCell]] = []
-        self.call_point_retvals: List[Any] = []  # TODO: should this hold ids or weak refs (instead of actual objs)?
         self.marked_finished = False
 
     @contextmanager

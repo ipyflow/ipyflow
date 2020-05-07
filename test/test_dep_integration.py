@@ -887,8 +887,6 @@ def test_line_magic():
 %lsmagic
 %lsmagic
 %lsmagic
-%lsmagic
-%lsmagic
 a = 0
 """)
     run_cell("""
@@ -901,19 +899,19 @@ x = a + 1
     run_cell("""
 %lsmagic
 %lsmagic
+%lsmagic
 a = 42
 """)
     run_cell("""
 %lsmagic
 %lsmagic
-%lsmagic
-%lsmagic
-%lsmagic
-%lsmagic
-%lsmagic
-%lsmagic
+logging.info(x)
+""")
+    assert_detected('`x` depends on stale value of `a`')
+    run_cell("""
 %lsmagic
 logging.info(x)
+%lsmagic
 """)
     assert_detected('`x` depends on stale value of `a`')
 

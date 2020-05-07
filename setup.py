@@ -19,9 +19,9 @@ setup(
     version=__version__,  # noqa
     author='Stephen Macke, Ray Gong',
     author_email='stephen.macke@gmail.com',
-    description='Language-agnostic synchronization of subtitles with video via speech detection.',
+    description='Fearless interactive computing for Jupyter notebooks.',
     long_description=read_file('README.md'),
-    url='https://github.com/runtime-jupyter-safety/runtime-jupyter-safety',  # maybe rename to nbsafety
+    url='https://github.com/runtime-jupyter-safety/nbsafety',  # maybe rename to nbsafety
     packages=find_packages(exclude=['docs', 'scratchspace', 'notebooks']),
     include_package_data=True,
     install_requires=requirements,

@@ -982,6 +982,20 @@ except:
     assert_not_detected('no stale dep for `x` because it is indep of `z` (attempted dep add threw)')
 
 
+def test_no_class_false_positives():
+    run_cell('x = 7')
+    run_cell('y = x + 1')
+    run_cell('x = 42')
+    run_cell("""
+try:
+    class Foo:
+        print(y)
+except:
+    pass
+""")
+    assert_not_detected('x inside class scope is different')
+
+
 @skipif_known_failing
 def test_cell_magic():
     # TODO: write this

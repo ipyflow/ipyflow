@@ -113,6 +113,10 @@ class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self.visit(node.args)
 
+    def visit_ClassDef(self, node: ast.ClassDef):
+        self.visit(node.bases)
+        self.visit(node.decorator_list)
+
     def visit_Attribute(self, node: ast.Attribute):
         self.name_set.add(get_attribute_symbol_chain(node))
 

@@ -78,8 +78,6 @@ class DependencySafety(object):
                         for node in nodes:
                             if node is None:
                                 continue
-                            if node.name == 'y':
-                                print('just hit y! and is it stale?', node.is_stale())
                             if node.is_stale() and self._disable_level < 2:
                                 _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
                                 self.stale_dependency_detected = True

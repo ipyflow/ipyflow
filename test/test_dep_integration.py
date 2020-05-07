@@ -961,6 +961,29 @@ f()
         delattr(builtins, test_passed)
 
 
+def test_throwing_statements_do_not_track_deps():
+    run_cell("""
+z = 10
+def foo():
+    def bar():
+        raise ValueError('foo!')
+    return bar() + z
+x = 0
+y = x + 1
+""")
+    run_cell("""
+try:
+    x = 42 + foo()
+except:
+    pass
+""")
+    run_cell('logging.info(y)')
+    assert_not_detected('no stale dep for `y` because update on `x` threw exception')
+    run_cell('z = 99')
+    run_cell('logging.info(x)')
+    assert_not_detected('no stale dep for `x` because it is indep of `z` (attempted dep add threw)')
+
+
 @skipif_known_failing
 def test_cell_magic():
     # TODO: write this

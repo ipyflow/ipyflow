@@ -107,7 +107,7 @@ class DependencySafety(object):
                 def _backup():
                     # something went wrong silently (e.g. due to line magic); fall back to just executing the code
                     logger.warning('Something failed while attempting traced execution; '
-                                 'falling back to uninstrumented execution.')
+                                   'falling back to uninstrumented execution.')
                     run_cell(cell, store_history=self.store_history)
 
                 # Stage 2: Trace / run the cell, updating dependencies as they are encountered.

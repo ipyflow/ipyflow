@@ -7,6 +7,7 @@ nbsafety
 
 Install
 -------
+To install, grab the package and install the Jupyter KernelSpec as follows:
 ```python
 pip install nbsafety
 python -m nbsafety.install
@@ -17,6 +18,7 @@ Running
 
 To run an `nbsafety` kernel, select "Python 3 (nbsafety)" from the list
 of notebook types in Jupyter's "New" dropdown dialogue:
+
 ![](img/nbsafety.png)
 
 Future
@@ -25,5 +27,6 @@ Future
 Currently `nbsafety` is supported for Jupyter notebooks (not JupyterLab).
 JupyterLab support is targeted for a future release.
 
-# License
+License
+-------
 Code in this project licensed under the [BSD-3-Clause License](https://opensource.org/licenses/BSD-3-Clause).

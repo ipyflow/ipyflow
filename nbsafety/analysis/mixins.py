@@ -2,6 +2,10 @@
 from __future__ import annotations
 import ast
 from contextlib import contextmanager
+from typing import Sequence, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Any, Union
 
 
 class SkipUnboundArgsMixin(ast.NodeVisitor):
@@ -12,10 +16,10 @@ class SkipUnboundArgsMixin(ast.NodeVisitor):
 
 
 class VisitListsMixin(ast.NodeVisitor):
-    def generic_visit(self, node):
+    def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]):
         if node is None:
             return
-        elif isinstance(node, list):
+        elif isinstance(node, Sequence):
             for item in node:
                 self.visit(item)
         else:

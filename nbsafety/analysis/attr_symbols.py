@@ -54,7 +54,7 @@ def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Call]) 
 
 
 class AttributeSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols: List[str, CallPoint]):
+    def __init__(self, symbols: List[Union[str, CallPoint]]):
         self.symbols: Tuple[Union[str, CallPoint], ...] = tuple(symbols)
         self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
 

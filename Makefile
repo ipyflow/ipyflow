@@ -19,7 +19,7 @@ devdeps:
 	pip install -r requirements-dev.txt
 
 kernel:
-	python -m nbsafety.safe_kernel.install
+	python -m nbsafety.install
 
 typecheck:
 	mypy --no-strict-optional --ignore-missing-import nbsafety/safety.py

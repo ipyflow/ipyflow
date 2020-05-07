@@ -7,11 +7,13 @@ import argparse
 from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory
 
+PACKAGE = __package__.split('.')[0]
+DISPLAY_NAME = f"Python 3 ({PACKAGE})"
 kernel_json = {
  "argv": [
-   sys.executable, "-m", "nbsafety.safe_kernel", "-f", "{connection_file}",
+   sys.executable, "-m", "nbsafety.kernel", "-f", "{connection_file}",
  ],
- "display_name": "SafePython",
+ "display_name": DISPLAY_NAME,
  "language": "python",
  "codemirror_mode": "shell",
 }
@@ -24,8 +26,8 @@ def install_my_kernel_spec(user=True, prefix=None):
             json.dump(kernel_json, f, sort_keys=True)
         # TODO: Copy resources once they're specified
 
-        print('Installing SafePython kernel spec')
-        KernelSpecManager().install_kernel_spec(td, 'safe-python', user=user, prefix=prefix)
+        print(f'Installing KernelSpec for {PACKAGE} kernel')
+        KernelSpecManager().install_kernel_spec(td, f'python3-{PACKAGE}', user=user, prefix=prefix)
 
 
 def _is_root():
@@ -37,7 +39,7 @@ def _is_root():
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description='Install KernelSpec for Safe Kernel'
+        description=f'Install KernelSpec for {PACKAGE} kernel.'
     )
     prefix_locations = parser.add_mutually_exclusive_group()
 

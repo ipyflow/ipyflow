@@ -14,7 +14,7 @@ _LINE_MAGIC_NAME = '__SAFETY_LINE_MAGIC'
 
 
 class SafeKernel(IPythonKernel):
-    implementation = 'safe_kernel'
+    implementation = 'kernel'
     implementation_version = __version__
 
     def __init__(self, **kwargs):

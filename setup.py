@@ -19,10 +19,10 @@ setup(
     version=__version__,  # noqa
     author='Stephen Macke, Ray Gong',
     author_email='stephen.macke@gmail.com',
-    description='Fearless interactive computing for Jupyter notebooks.',
+    description='Fearless interactive computing for Jupyter.',
     long_description=read_file('README.md'),
     url='https://github.com/runtime-jupyter-safety/nbsafety',  # maybe rename to nbsafety
-    packages=find_packages(exclude=['docs', 'scratchspace', 'notebooks']),
+    packages=find_packages(exclude=['docs', 'scratchspace', 'notebooks', 'img', 'test']),
     include_package_data=True,
     install_requires=requirements,
     license='MIT',

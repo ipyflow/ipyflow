@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
 import ast
+from contextlib import contextmanager
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -52,63 +53,78 @@ class DependencySafety(object):
 
         self._disable_level = 0
 
+    def _precheck_for_stale(self, cell):
+        # Precheck process. First obtain the names that need to be checked. Then we check if their
+        # `defined_cell_num` is greater than or equal to required; if not we give a warning and return `True`.
+        self._last_cell_ast = ast.parse('\n'.join(
+            [line for line in cell.strip().split('\n') if not line.startswith('%') and not line.endswith('?')])
+        )
+        self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
+        if self._last_refused_code is None or cell != self._last_refused_code:
+            for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
+                if isinstance(name, str):
+                    nodes = [self.global_scope.data_cell_by_name.get(name, None)]
+                elif isinstance(name, AttributeSymbolChain):
+                    nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
+                else:
+                    logging.warning('invalid type for name %s', name)
+                    continue
+                for node in nodes:
+                    if node is None:
+                        continue
+                    if node.is_stale() and self._disable_level < 2:
+                        _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                        self.stale_dependency_detected = True
+                        self._last_refused_code = cell
+                        if self._disable_level == 0:
+                            return True
+        else:
+            # TODO: break dependency chain here
+            pass
+
+        self._last_refused_code = None
+        return False
+
     def _make_cell_magic(self, cell_magic_name):
         def _dependency_safety(_, cell: str):
+            if self._disable_level == 3:
+                run_cell(cell)
+                return
+
             with save_number_of_currently_executing_cell():
-                if self._disable_level == 3:
-                    run_cell(cell)
+                # Stage 1: Precheck.
+                if self._precheck_for_stale(cell):
                     return
 
-                # Stage 1: Precheck.
-                # Precheck process. First obtain the names that need to be checked. Then we check if their
-                # defined_cell_num is greater than or equal to required, if not we give a warning and return.
-                self._last_cell_ast = ast.parse('\n'.join(
-                    [line for line in cell.strip().split('\n') if not line.startswith('%') and not line.endswith('?')])
-                )
-                self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
-                if self._last_refused_code is None or cell != self._last_refused_code:
-                    for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
-                        if isinstance(name, str):
-                            nodes = [self.global_scope.data_cell_by_name.get(name, None)]
-                        elif isinstance(name, AttributeSymbolChain):
-                            nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
-                        else:
-                            logging.warning('invalid type for name %s', name)
-                            continue
-                        for node in nodes:
-                            if node is None:
-                                continue
-                            if node.is_stale() and self._disable_level < 2:
-                                _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
-                                self.stale_dependency_detected = True
-                                self._last_refused_code = cell
-                                if self._disable_level == 0:
-                                    return
-                else:
-                    # TODO: break dependency chain here
-                    pass
-
-                self._last_refused_code = None
-
-                # TODO: use context manager to handle these next lines automatically
-                # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-                sys.settrace(make_tracer(self))
-                with ast_transformer_context(self.attr_trace_manager.ast_transformer):
-                    run_cell(cell)
-                sys.settrace(None)
-                if self.trace_state.prev_trace_stmt_in_cur_frame is None:
+                def _backup():
                     # something went wrong silently (e.g. due to line magic); fall back to just executing the code
-                    logging.warning('Last executed statement not available after attempting traced execution; '
+                    logging.warning('Something failed while attempting traced execution; '
                                     'falling back to uninstrumented execution.')
                     run_cell(cell)
-                else:
-                    self._reset_trace_state_hook()
-                return
+
+                # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
+                with self._tracing_context(untraced_backup=_backup):
+                    run_cell(cell)
 
         if cell_magic_name is not None:
             # TODO (smacke): probably not a great idea to rely on this
             _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
+
+    @contextmanager
+    def _tracing_context(self, untraced_backup=None):
+        sys.settrace(make_tracer(self))
+        try:
+            with ast_transformer_context(self.attr_trace_manager.ast_transformer):
+                yield
+        finally:
+            sys.settrace(None)
+            # TODO: add more explicit way to check for an error in dependency tracing code
+            if self.trace_state.prev_trace_stmt_in_cur_frame is None:
+                if untraced_backup is not None:
+                    untraced_backup()
+            else:
+                self._reset_trace_state_hook()
 
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled:

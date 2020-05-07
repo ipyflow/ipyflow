@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 
 # need PYTHONPATH="." for this to work
-import test
+try:
+    import test
+except ImportError:
+    import sys
+    sys.path.append(".")
+    import test
 
 if __name__ == '__main__':
     for name, mod in test.__dict__.items():

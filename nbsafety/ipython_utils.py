@@ -25,7 +25,7 @@ class _IpythonState(object):
 
     @contextmanager
     def ast_transformer_context(
-            self, transformers: Union[List[Union[ast.NodeTransformer, Type]], ast.NodeTransformer, Type]
+            self, transformers: 'Union[List[Union[ast.NodeTransformer, Type]], ast.NodeTransformer, Type]'
     ):
         if not isinstance(transformers, list):
             transformers = [transformers]

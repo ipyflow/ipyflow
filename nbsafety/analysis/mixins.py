@@ -15,7 +15,7 @@ class SkipUnboundArgsMixin(ast.NodeVisitor):
 
 
 class VisitListsMixin(ast.NodeVisitor):
-    def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]):
+    def generic_visit(self, node: 'Union[ast.AST, Sequence[ast.AST]]'):
         if node is None:
             return
         elif isinstance(node, Sequence):

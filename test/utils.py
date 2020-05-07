@@ -26,7 +26,7 @@ def assert_bool(val, msg=''):
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
-def make_safety_fixture(**kwargs) -> Tuple[Any, List[Optional[DependencySafety]], Any]:
+def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[DependencySafety]], Any]':
     safety_state: List[Optional[DependencySafety]] = [None]
 
     def run_cell(code):

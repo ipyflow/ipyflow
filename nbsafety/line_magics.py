@@ -43,7 +43,7 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
       stale dependencies now. Multiple variables should be separated with spaces."""
 
 
-def show_graph(safety: DependencySafety):
+def show_graph(safety: 'DependencySafety'):
     graph = nx.DiGraph()
     for name in safety.global_scope.data_cell_by_name:
         graph.add_node(name)
@@ -61,7 +61,7 @@ def show_graph(safety: DependencySafety):
     )
 
 
-def show_deps(safety: DependencySafety, line: List[str]):
+def show_deps(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) == 1:
         print("Usage: %safety show_dependency <variable_name> <variable_name2> ...")
         return
@@ -73,7 +73,7 @@ def show_deps(safety: DependencySafety, line: List[str]):
             print("Cannot find DataCell", data_cell_name)
 
 
-def show_stale(safety: DependencySafety):
+def show_stale(safety: 'DependencySafety'):
     stale_set = set()
     for data_cell in safety.global_scope.data_cell_by_name.values():
         if data_cell.is_stale():
@@ -86,7 +86,7 @@ def show_stale(safety: DependencySafety):
         print("DataCells with stale dependencies are:", [str(n) for n in stale_set])
 
 
-def set_disable_level(safety: DependencySafety, line: List[str]):
+def set_disable_level(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 2 or line[1] not in ['0', '1', '2', '3']:
         print("""Usage: %safety set_disable_level <integer>
 -level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
@@ -97,14 +97,14 @@ def set_disable_level(safety: DependencySafety, line: List[str]):
     safety._disable_level = int(line[1])
 
 
-def configure_trace_messages(safety: DependencySafety, line: List[str]):
+def configure_trace_messages(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")
         return
     safety.trace_messages_enabled = (line[1].lower().startswith("enable"))
 
 
-def remove_dep(safety: DependencySafety, line: List[str]):
+def remove_dep(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 3:
         print("Usage: %safety remove_dependency <parent_name> <child_name>")
         return
@@ -123,7 +123,7 @@ def remove_dep(safety: DependencySafety, line: List[str]):
     child_data_cell.parents.remove(parent_data_cell)
 
 
-def add_dep(safety: DependencySafety, line: List[str]):
+def add_dep(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 3:
         print("Usage: %safety add_dependency <parent_name> <child_name>")
         return
@@ -142,7 +142,7 @@ def add_dep(safety: DependencySafety, line: List[str]):
     child_data_cell.parents.add(parent_data_cell)
 
 
-def turn_off_warnings_for(safety: DependencySafety, line: List[str]):
+def turn_off_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) <= 1:
         print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
         return
@@ -155,7 +155,7 @@ def turn_off_warnings_for(safety: DependencySafety, line: List[str]):
             print("Cannot find DataCell", data_cell_name)
 
 
-def turn_on_warnings_for(safety: DependencySafety, line: List[str]):
+def turn_on_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) <= 1:
         print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
         return

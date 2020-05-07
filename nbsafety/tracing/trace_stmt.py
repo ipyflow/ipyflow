@@ -8,14 +8,14 @@ from ..data_cell import FunctionDataCell
 
 if TYPE_CHECKING:
     from types import FrameType
-    from typing import Any, List, Optional, Set
+    from typing import List, Optional, Set
     from ..data_cell import DataCell
     from ..safety import DependencySafety
     from ..scope import Scope
 
 
 class TraceStatement(object):
-    def __init__(self, safety: DependencySafety, frame: FrameType, stmt_node: ast.stmt, scope: Scope):
+    def __init__(self, safety: 'DependencySafety', frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
         self.safety = safety
         self.frame = frame
         self.stmt_node = stmt_node
@@ -41,7 +41,7 @@ class TraceStatement(object):
                 rval_data_cells.add(maybe_rval_dc)
         return rval_data_cells.union(*self.call_point_dependencies) | self.safety.attr_trace_manager.loaded_data_cells
 
-    def get_post_call_scope(self, old_scope: Scope):
+    def get_post_call_scope(self, old_scope: 'Scope'):
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately

@@ -8,6 +8,27 @@ if TYPE_CHECKING:
     from typing import List, Optional, Tuple
 
 
+class CallPoint(CommonEqualityMixin):
+    def __init__(self, symbol: str, retval: 'Optional[int]' = None):
+        self.symbol = symbol
+        self.retval = retval
+
+    def __hash__(self):
+        return hash(self.symbol)
+
+
+class AttributeSymbolChain(CommonEqualityMixin):
+    def __init__(self, symbols: 'List[Union[str, CallPoint]]'):
+        self.symbols: 'Tuple[Union[str, CallPoint], ...]' = tuple(symbols)
+        self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
+
+    def __hash__(self):
+        return hash(self.symbols)
+
+    def __repr__(self):
+        return repr(self.symbols)
+
+
 class GetAttributeSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, CallPoint]] = []
@@ -50,24 +71,3 @@ def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Call]) 
     if not isinstance(node, (ast.Attribute, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
     return GetAttributeSymbols()(node)
-
-
-class AttributeSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols: List[Union[str, CallPoint]]):
-        self.symbols: Tuple[Union[str, CallPoint], ...] = tuple(symbols)
-        self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
-
-    def __hash__(self):
-        return hash(self.symbols)
-
-    def __repr__(self):
-        return repr(self.symbols)
-
-
-class CallPoint(CommonEqualityMixin):
-    def __init__(self, symbol: str, retval: Optional[int] = None):
-        self.symbol = symbol
-        self.retval = retval
-
-    def __hash__(self):
-        return hash(self.symbol)

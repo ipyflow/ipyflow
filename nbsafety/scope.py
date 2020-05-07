@@ -15,7 +15,7 @@ class Scope(object):
 
     def __init__(
             self, scope_name: str = GLOBAL_SCOPE_NAME,
-            parent_scope: Optional[Scope] = None,
+            parent_scope: 'Optional[Scope]' = None,
             is_namespace_scope=False
     ):
         self.scope_name = scope_name
@@ -56,7 +56,7 @@ class Scope(object):
             ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
         return ret
 
-    def gen_data_cells_for_attr_symbol_chain(self, chain: AttributeSymbolChain, namespaces: Dict[int, Scope]):
+    def gen_data_cells_for_attr_symbol_chain(self, chain: AttributeSymbolChain, namespaces: 'Dict[int, Scope]'):
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
         for name in chain.symbols:
@@ -75,7 +75,7 @@ class Scope(object):
             name_to_obj = obj.__dict__
 
     def _upsert_and_mark_children_if_different_data_cell_type(
-            self, dc: Union[ClassDataCell, FunctionDataCell], name: str, deps: Set[DataCell]
+            self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'
     ):
         if self.is_globally_accessible and name in self.data_cell_by_name:
             old = self.data_cell_by_name[name]
@@ -85,21 +85,21 @@ class Scope(object):
         self.data_cell_by_name[name] = dc
         return dc
 
-    def _upsert_function_data_cell_for_name(self, name: str, deps: Set[DataCell]):
+    def _upsert_function_data_cell_for_name(self, name: str, deps: 'Set[DataCell]'):
         dc = FunctionDataCell(self.make_child_scope(name), name)
         return self._upsert_and_mark_children_if_different_data_cell_type(dc, name, deps)
 
-    def _upsert_class_data_cell_for_name(self, name: str, deps: Set[DataCell], class_scope: Scope):
+    def _upsert_class_data_cell_for_name(self, name: str, deps: 'Set[DataCell]', class_scope: 'Scope'):
         dc = ClassDataCell(class_scope, name)
         return self._upsert_and_mark_children_if_different_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
             self,
             name: str,
-            deps: Set[DataCell],
+            deps: 'Set[DataCell]',
             add=False,
             is_function_def=False,
-            class_scope: Optional[Scope] = None,
+            class_scope: 'Optional[Scope]' = None,
     ):
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
@@ -135,7 +135,7 @@ class Scope(object):
         return self.parent_scope.global_scope
 
     @property
-    def full_path(self) -> Tuple[str, ...]:
+    def full_path(self) -> 'Tuple[str, ...]':
         path = (self.scope_name,)
         if self.is_global:
             return path

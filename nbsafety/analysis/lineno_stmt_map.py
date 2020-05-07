@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from typing import Deque, Optional, Tuple, Union
 
 
-def compute_lineno_to_stmt_mapping(node: Union[str, ast.AST]):
+def compute_lineno_to_stmt_mapping(node: 'Union[str, ast.AST]'):
     if isinstance(node, str):
         node = ast.parse(node)
     q: Deque[Tuple[ast.AST, Optional[ast.AST]]] = deque([(node, None)])

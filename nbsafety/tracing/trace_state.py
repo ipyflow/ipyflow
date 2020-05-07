@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class TraceState(object):
-    def __init__(self, safety: DependencySafety):
+    def __init__(self, safety: 'DependencySafety'):
         self.safety = safety
         self.cur_frame_scope = safety.global_scope
         self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
@@ -26,7 +26,7 @@ class TraceState(object):
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.prev_event: Optional[TraceEvent] = None
 
-    def _check_prev_stmt_done_executing_hook(self, event: TraceEvent, trace_stmt: TraceStatement):
+    def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
         if event not in (
                 TraceEvent.line, TraceEvent.return_
         ) or self.prev_event in (
@@ -60,8 +60,8 @@ class TraceState(object):
 
     def state_transition_hook(
             self,
-            event: TraceEvent,
-            trace_stmt: TraceStatement
+            event: 'TraceEvent',
+            trace_stmt: 'TraceStatement'
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
@@ -97,6 +97,6 @@ class TraceState(object):
         self.prev_event = event
 
     @staticmethod
-    def get_position(frame: FrameType):
+    def get_position(frame: 'FrameType'):
         cell_num = int(frame.f_code.co_filename.split('-')[2])
         return cell_num, frame.f_lineno

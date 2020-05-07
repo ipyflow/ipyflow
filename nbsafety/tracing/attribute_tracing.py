@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class AttributeTracingManager(object):
-    def __init__(self, namespaces: Dict[int, Scope], active_scope: Scope):
+    def __init__(self, namespaces: 'Dict[int, Scope]', active_scope: 'Scope'):
         self.namespaces = namespaces
         self.original_active_scope = active_scope
         self.active_scope = active_scope
@@ -35,7 +35,7 @@ class AttributeTracingManager(object):
         if hasattr(builtins, self.end_tracer_name):
             delattr(builtins, self.end_tracer_name)
 
-    def push_stack(self, new_scope: Scope):
+    def push_stack(self, new_scope: 'Scope'):
         self.stack.append((
             self.stored_scope_qualified_names,
             self.aug_stored_scope_qualified_names,
@@ -114,7 +114,7 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
         yield
         self.inside_attr_load_chain = old
 
-    def visit_Attribute(self, node: ast.Attribute):
+    def visit_Attribute(self, node: 'ast.Attribute'):
         override_active_scope = isinstance(node.ctx, ast.Load)
         override_active_scope_arg = ast.Constant(override_active_scope)
         ast.copy_location(override_active_scope_arg, node)

@@ -15,7 +15,7 @@ class PreCheck(ast.NodeVisitor):
     def __init__(self):
         self.safe_set: Set[Union[str, AttributeSymbolChain]] = set()
 
-    def __call__(self, module_node: ast.Module, name_set: KeysView[str]):
+    def __call__(self, module_node: ast.Module, name_set: 'KeysView[str]'):
         """
         This function should be called when we want to precheck an ast.Module. For
         each line/block of the cell we first run the check of new assignments, then
@@ -89,7 +89,7 @@ class PreCheck(ast.NodeVisitor):
             self.visit(line)
 
 
-def precheck(code: Union[ast.Module, str], name_set: KeysView[str]):
+def precheck(code: 'Union[ast.Module, str]', name_set: 'KeysView[str]'):
     if isinstance(code, str):
         code = ast.parse(code)
     return PreCheck()(code, name_set)

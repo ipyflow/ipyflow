@@ -23,9 +23,14 @@ if TYPE_CHECKING:
     from typing import Dict, Set, Optional
     from .data_cell import DataCell
 
+# logger = logging.getLogger()
+# logger.addHandler(logging.StreamHandler())
+# logging.basicConfig(stream=sys.stderr, level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
-    logging.warning(
+    logger.warning(
         f'{name} defined in cell {defined_cell_num} may depend on '
         f'old version(s) of [{", ".join(str(dep) for dep in fresher_ancestors)}] '
         f'(lastest update in cell {required_cell_num}).'
@@ -41,6 +46,7 @@ class DependencySafety(object):
         self.stale_dependency_detected = False
         self.trace_state = TraceState(self)
         self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope)
+        self.store_history = kwargs.pop('store_history', True)
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
@@ -67,7 +73,7 @@ class DependencySafety(object):
                 elif isinstance(name, AttributeSymbolChain):
                     nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
                 else:
-                    logging.warning('invalid type for name %s', name)
+                    logger.warning('invalid type for name %s', name)
                     continue
                 for node in nodes:
                     if node is None:
@@ -98,13 +104,13 @@ class DependencySafety(object):
 
                 def _backup():
                     # something went wrong silently (e.g. due to line magic); fall back to just executing the code
-                    logging.warning('Something failed while attempting traced execution; '
-                                    'falling back to uninstrumented execution.')
-                    run_cell(cell)
+                    logger.warning('Something failed while attempting traced execution; '
+                                 'falling back to uninstrumented execution.')
+                    run_cell(cell, store_history=self.store_history)
 
                 # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
                 with self._tracing_context(untraced_backup=_backup):
-                    run_cell(cell)
+                    run_cell(cell, store_history=self.store_history)
 
         if cell_magic_name is not None:
             # TODO (smacke): probably not a great idea to rely on this

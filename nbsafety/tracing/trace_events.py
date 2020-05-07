@@ -13,3 +13,8 @@ class TraceEvent(Enum):
     c_call = 'c_call'
     c_return = 'c_return'
     c_exception = 'c_exception'
+
+    def __str__(self):
+        # maxlen = max(len(v.value) for v in self.__class__.__dict__.values() if isinstance(v, self.__class__))
+        # return ' ' * (maxlen - len(self.value)) + self.value
+        return self.value

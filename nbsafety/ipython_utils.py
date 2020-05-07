@@ -54,5 +54,5 @@ def cell_counter() -> int:
     return _IPY.cell_counter
 
 
-def run_cell(cell):
-    return _ipython().run_cell(cell, store_history=True)
+def run_cell(cell, **kwargs):
+    return _ipython().run_cell(cell, store_history=kwargs.pop('store_history', True))

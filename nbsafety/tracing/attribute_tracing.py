@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from typing import Dict, List, Set, Tuple, Union
     from ..scope import Scope
 
+logger = logging.getLogger(__name__)
+
 
 class AttributeTracingManager(object):
     def __init__(self, namespaces: Dict[int, Scope], active_scope: Scope):
@@ -56,7 +58,7 @@ class AttributeTracingManager(object):
 
     @staticmethod
     def debug_attribute_tracer(obj, attr, ctx):
-        logging.debug('%s attr %s of obj %s', ctx, attr, obj)
+        logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
     def attribute_tracer(self, obj, attr, ctx, override_active_scope):

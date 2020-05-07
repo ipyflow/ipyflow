@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from ..safety import DependencySafety
     from .trace_stmt import TraceStatement
 
+logger = logging.getLogger(__name__)
+
 
 class TraceState(object):
     def __init__(self, safety: DependencySafety):
@@ -74,11 +76,11 @@ class TraceState(object):
                 # print('active scope', trace_stmt.scope)
                 self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
                 # print('post call scope', self.cur_frame_scope)
-            logging.debug('entering scope %s', self.cur_frame_scope)
+            logger.debug('entering scope %s', self.cur_frame_scope)
             self.prev_trace_stmt_in_cur_frame = None
             self.safety.attr_trace_manager.push_stack(self.cur_frame_scope)
         if event == TraceEvent.return_:
-            logging.debug('leaving scope %s', self.cur_frame_scope)
+            logger.debug('leaving scope %s', self.cur_frame_scope)
             return_to_stmt = self.stack.pop()
             assert return_to_stmt is not None
             if self.prev_event != TraceEvent.exception:
@@ -92,7 +94,7 @@ class TraceState(object):
             self.prev_trace_stmt_in_cur_frame = return_to_stmt
             self.cur_frame_scope = return_to_stmt.scope
             self.safety.attr_trace_manager.pop_stack()
-            logging.debug('entering scope %s', self.cur_frame_scope)
+            logger.debug('entering scope %s', self.cur_frame_scope)
         self.prev_event = event
 
     @staticmethod

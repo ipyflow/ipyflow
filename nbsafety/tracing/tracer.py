@@ -1,21 +1,23 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+import logging
 from typing import TYPE_CHECKING
 
-# from IPython import get_ipython
+from IPython import get_ipython
 
 from .trace_stmt import TraceStatement
 from .trace_events import TraceEvent
 from .trace_state import TraceState
 
 if TYPE_CHECKING:
-    from typing import Any
     from types import FrameType
     from ..safety import DependencySafety
 
+logger = logging.getLogger(__name__)
+
 
 def make_tracer(safety: DependencySafety):
-    def tracer(frame: FrameType, evt: str, arg: Any):
+    def tracer(frame: FrameType, evt: str, _):
         # notebook cells have filenames that appear as '<ipython-input...>'
         if not frame.f_code.co_filename.startswith('<ipython-input'):
             return
@@ -36,10 +38,16 @@ def make_tracer(safety: DependencySafety):
                 return tracer
 
         cell_num, lineno = TraceState.get_position(frame)
-        stmt_node = safety.statement_cache[cell_num][lineno]
-        # source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
-        # print(lineno, event, source[lineno-1])
-        # print(lineno, event, stmt_node, source[lineno-1])
+        try:
+            stmt_node = safety.statement_cache[cell_num][lineno]
+        except KeyError:
+            return tracer
+        if safety.store_history and logger.getEffectiveLevel() <= logging.INFO:
+            try:
+                source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
+                logger.info(' %3d: %9s >>> %s', lineno, event, source[lineno-1])
+            except (KeyError, IndexError) as e:
+                logger.error('%s: cell %d, line %d', e, cell_num, lineno)
 
         trace_stmt = state.traced_statements.get(
             id(stmt_node),

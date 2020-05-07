@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 import ast
 from contextlib import contextmanager
 from typing import Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any, Union
+    from typing import Union
 
 
 class SkipUnboundArgsMixin(ast.NodeVisitor):

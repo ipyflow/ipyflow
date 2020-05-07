@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 import logging
 
 from .utils import make_safety_fixture, skipif_known_failing

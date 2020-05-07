@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 
 # need PYTHONPATH="." for this to work
 import test

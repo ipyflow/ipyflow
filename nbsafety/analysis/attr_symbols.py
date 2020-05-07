@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 import ast
 from typing import cast, Union, TYPE_CHECKING
 

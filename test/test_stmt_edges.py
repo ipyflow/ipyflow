@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 
-from nbsafety.analysis.attr_symbols import get_attribute_symbol_chain
 from nbsafety.analysis.stmt_edges import get_statement_lval_and_rval_symbols
 from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
 

@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from __future__ import annotations
 import ast
 import builtins
 from contextlib import contextmanager

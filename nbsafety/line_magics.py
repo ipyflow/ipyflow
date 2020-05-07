@@ -12,32 +12,36 @@ if TYPE_CHECKING:
 USAGE = """Options:
 
 show_graph: 
-    -This will print out the dependency graph of global variables. Stale nodes are labeled red. Notice that user might need to call this twice to have it to work.
+    - This will print out the dependency graph of global variables. Stale nodes are labeled red.
+      Notice that user might need to call this twice to have it to work.
 
 show_dependency <variable_name> <variable_name2> ...: 
-    -This will print out the dependencies for given global variables. Multiple variables should be separated with spaces.
+    - This will print out the dependencies for given global variables.
+      Multiple variables should be separated with spaces.
 
 show_stale: 
-    -This will print out all the global variables that are stale. 
+    - This will print out all the global variables that are stale. 
 
 set_disable_level <integer>:
-    -level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
-    -level 1: Warning,    Run code,    Record new dependencies, (Don't stop at the warning)
-    -level 2: No Warning, Run code,    Record new dependencies, (Don't show warnings)
-    -level 3: No warning, Run cocde,   No new dependencies,     (Original Kernel)
+    - level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
+    - level 1: Warning,    Run code,    Record new dependencies, (Don't stop at the warning)
+    - level 2: No Warning, Run code,    Record new dependencies, (Don't show warnings)
+    - level 3: No warning, Run cocde,   No new dependencies,     (Original Kernel)
 
 remove_dependency <parent_name> <child_name>:
-    -This will remove the dependency between parent variable and the child variable.
+    - This will remove the dependency between parent variable and the child variable.
 
 add_dependency <parent_name> <child_name>:
-    -This will add the dependency between parent variable and the child variable.
+    - This will add the dependency between parent variable and the child variable.
 
 turn_off_warnings_for  <variable_name> <variable_name2> ...: 
-    -This will turn off the warnings for given global variables. These variables will never be considered as stale anymore. Multiple variables should be separated with spaces.
+    - This will turn off the warnings for given global variables. These variables will not be
+      considered as stale anymore. Multiple variables should be separated with spaces.
 
 
 turn_off_warnings_for  <variable_name> <variable_name2> ...: 
-    -This will turn the warnings back on for given global variables. These variables could have a stale dependency now. Multiple variables should be separated with spaces."""
+    - This will turn the warnings back on for given global variables. These variables could have
+      stale dependencies now. Multiple variables should be separated with spaces."""
 
 
 def show_graph(safety: DependencySafety):

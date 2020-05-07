@@ -35,10 +35,6 @@ def make_tracer(safety: DependencySafety):
             if state.call_depth == 0:
                 return tracer
 
-        if state.last_event == TraceEvent.exception:
-            # TODO: unwind the stack
-            pass
-
         cell_num, lineno = TraceState.get_position(frame)
         stmt_node = safety.statement_cache[cell_num][lineno]
         # source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
@@ -50,6 +46,6 @@ def make_tracer(safety: DependencySafety):
             TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
         )
         state.traced_statements[id(stmt_node)] = trace_stmt
-        state.state_transition_hook(frame, event, arg, trace_stmt)
+        state.state_transition_hook(event, trace_stmt)
         return tracer
     return tracer

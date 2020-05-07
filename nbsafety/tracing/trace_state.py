@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from .trace_events import TraceEvent
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional
+    from typing import Dict, List, Optional
     from types import FrameType
     from ..safety import DependencySafety
     from .trace_stmt import TraceStatement
@@ -23,12 +23,12 @@ class TraceState(object):
         self.stack: List[TraceStatement] = []
         self.source: Optional[str] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
-        self.last_event: Optional[TraceEvent] = None
+        self.prev_event: Optional[TraceEvent] = None
 
     def _check_prev_stmt_done_executing_hook(self, event: TraceEvent, trace_stmt: TraceStatement):
         if event not in (
                 TraceEvent.line, TraceEvent.return_
-        ) or self.last_event in (
+        ) or self.prev_event in (
                 TraceEvent.call, TraceEvent.exception
         ):
             return
@@ -41,7 +41,7 @@ class TraceState(object):
             if prev_overall is not None and prev_overall is not self.stack[-1]:
                 prev_overall.finished_execution_hook()
 
-        if self.last_event == TraceEvent.return_:
+        if self.prev_event == TraceEvent.return_:
             if prev_this_frame is not None:  # and isinstance(prev_this_frame.stmt_node, ast.ClassDef):
                 prev_this_frame.finished_execution_hook()
             return
@@ -52,16 +52,14 @@ class TraceState(object):
         finished = prev_this_frame is not trace_stmt
         finished = finished and not (
             # classdefs are not finished until we reach the end of the class body
-            isinstance(prev_this_frame.stmt_node, ast.ClassDef) and self.last_event != TraceEvent.return_
+                isinstance(prev_this_frame.stmt_node, ast.ClassDef) and self.prev_event != TraceEvent.return_
         )
         if finished:
             prev_this_frame.finished_execution_hook()
 
     def state_transition_hook(
             self,
-            frame: FrameType,
             event: TraceEvent,
-            arg: Any,
             trace_stmt: TraceStatement
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
@@ -83,21 +81,19 @@ class TraceState(object):
             logging.debug('leaving scope %s', self.cur_frame_scope)
             return_to_stmt = self.stack.pop()
             assert return_to_stmt is not None
-            if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
-                return_to_stmt.class_scope = self.cur_frame_scope
-            else:
-                return_to_stmt.call_point_dependencies.append(trace_stmt.compute_rval_dependencies())
+            if self.prev_event != TraceEvent.exception:
+                # exception events are followed by return events until we hit an except clause
+                # no need to track dependencies in this case
+                if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
+                    return_to_stmt.class_scope = self.cur_frame_scope
+                else:
+                    return_to_stmt.call_point_dependencies.append(trace_stmt.compute_rval_dependencies())
             # reset 'cur_frame_last_line' for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt
             self.cur_frame_scope = return_to_stmt.scope
             self.safety.attr_trace_manager.pop_stack()
             logging.debug('entering scope %s', self.cur_frame_scope)
-        if event == TraceEvent.exception:
-            # TODO: save off the frame. when we hit the next trace event (the except clause), we'll count the
-            # number of times we need to pop the saved frame in order to determine how many times to pop
-            # our trace state's bespoke stack. See the `self.last_event == 'exception` comment in `tracer`.
-            pass
-        self.last_event = event
+        self.prev_event = event
 
     @staticmethod
     def get_position(frame: FrameType):

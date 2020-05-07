@@ -38,7 +38,9 @@ class GetAttributeSymbols(ast.NodeVisitor):
         return
 
     def generic_visit(self, node):
-        raise ValueError('we should never get here: %s' % node)
+        # raise ValueError('we should never get here: %s' % node)
+        # give up
+        return
 
 
 def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Call]) -> AttributeSymbolChain:

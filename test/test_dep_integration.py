@@ -918,13 +918,50 @@ logging.info(x)
     assert_detected('`x` depends on stale value of `a`')
 
 
+def test_exception_stack_unwind():
+    import builtins
+    safety_state = '_safety_state'
+    test_passed = 'test_passed'
+    setattr(builtins, safety_state, _safety_state[0])
+    setattr(builtins, test_passed, True)
+    test_passed = "'" + test_passed + "'"
+
+    def assert_stack_size(size):
+        return ';'.join([
+            f'can_pass = len({safety_state}.trace_state.stack) == {size} '
+            f'and len({safety_state}.attr_trace_manager.stack) == {size}',
+            f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)'
+        ])
+    try:
+        run_cell(f"""
+import builtins
+import numpy as np
+{assert_stack_size(0)}
+def f():
+    {assert_stack_size(1)}
+    def g():
+        {assert_stack_size(2)}
+        def h():
+            {assert_stack_size(3)}
+            return np.loadtxt('does-not-exist.txt')
+        return h()
+    try:
+        return g()
+    except:
+        {assert_stack_size(1)}
+f()
+{assert_stack_size(0)}
+""")
+    finally:
+        delattr(builtins, safety_state)
+    test_passed = test_passed.strip("'")
+    try:
+        assert getattr(builtins, test_passed), 'unexpected stack size somewhere'
+    finally:
+        delattr(builtins, test_passed)
+
+
 @skipif_known_failing
 def test_cell_magic():
-    # TODO: write this
-    pass
-
-
-@skipif_known_failing
-def test_exception_stack_unwind():
     # TODO: write this
     pass

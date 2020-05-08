@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import platform
 import os
 from setuptools import setup, find_packages
 from setuptools.command.develop import develop
@@ -15,7 +16,10 @@ def make_post_install_hook(install_or_develop):
         """Post-installation for installation mode."""
         def run(self):
             install_or_develop.run(self)
-            check_call(f'python3 -m {pkg_name}.install'.split())
+            python_command_suffix = ''
+            if 'win' in platform.system().lower():
+                python_command_suffix = '.exe'
+            check_call(f'python3{python_command_suffix} -m {pkg_name}.install'.split())
     return PostInstallHook
 
 

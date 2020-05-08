@@ -76,6 +76,7 @@ class DependencySafety(object):
                     nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
                 else:
                     logger.warning('invalid type for name %s', name)
+                    continue
                 for node in nodes:
                     if node is None:
                         continue

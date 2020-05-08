@@ -38,7 +38,7 @@ setup(
     author_email='stephen.macke@gmail.com',
     description='Fearless interactivity for Jupyter notebooks.',
     long_description=read_file('README.md'),
-    url='https://github.com/runtime-jupyter-safety/nbsafety',  # maybe rename to nbsafety
+    url='https://github.com/runtime-jupyter-safety/nbsafety',
     packages=find_packages(exclude=['docs', 'scratchspace', 'notebooks', 'img', 'test']),
     include_package_data=True,
     install_requires=requirements,

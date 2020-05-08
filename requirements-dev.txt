@@ -4,3 +4,4 @@ mypy
 numpy
 py
 pytest
+twine

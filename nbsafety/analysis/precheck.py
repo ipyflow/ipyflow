@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import logging
 from typing import TYPE_CHECKING
 
 from .attr_symbols import get_attribute_symbol_chain
@@ -9,7 +10,10 @@ if TYPE_CHECKING:
     from .attr_symbols import AttributeSymbolChain
     from typing import KeysView, List, Set, Union
 
+logger = logging.getLogger(__name__)
 
+
+# TODO: have the logger warnings additionally raise exceptions for tests
 class PreCheck(ast.NodeVisitor):
 
     def __init__(self):
@@ -38,25 +42,19 @@ class PreCheck(ast.NodeVisitor):
     # `target` would be an ast.Tuple node in the case of "a,b = 3,4". Thus
     # we need to break the tuple in that case.
     def visit_Assign(self, node: ast.Assign):
-        ignore_node_types = (ast.Subscript, ast.Attribute)
         for target_node in node.targets:
-            if isinstance(target_node, ignore_node_types):
-                continue
-            elif isinstance(target_node, ast.Tuple):
+            if isinstance(target_node, ast.Tuple):
                 for element_node in target_node.elts:
                     if isinstance(element_node, ast.Name):
                         self.safe_set.add(element_node.id)
-            elif isinstance(target_node, ast.Name):
-                self.safe_set.add(target_node.id)
-            elif isinstance(target_node, ast.Attribute):
-                self.safe_set.add(get_attribute_symbol_chain(target_node))
             else:
-                raise TypeError('unsupported type for node %s' % target_node)
+                self.visit_Assign_or_AugAssign_target(target_node)
 
-    # Similar to assignment, but multiple augassignment is not allowed
     def visit_AugAssign(self, node: ast.AugAssign):
-        target_node = node.target
-        ignore_node_types = (ast.Subscript, ast.Attribute)
+        self.visit_Assign_or_AugAssign_target(node.target)
+
+    def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript]'):
+        ignore_node_types = (ast.Subscript,)
         if isinstance(target_node, ignore_node_types):
             return
         elif isinstance(target_node, ast.Name):
@@ -64,7 +62,7 @@ class PreCheck(ast.NodeVisitor):
         elif isinstance(target_node, ast.Attribute):
             self.safe_set.add(get_attribute_symbol_chain(target_node))
         else:
-            raise TypeError('unsupported type for node %s' % target_node)
+            logger.warning('unsupported type for node %s' % target_node)
 
     # We also put the name of new functions in the safe_set
     def visit_FunctionDef(self, node: ast.FunctionDef):
@@ -77,12 +75,12 @@ class PreCheck(ast.NodeVisitor):
                 if isinstance(name_node, ast.Name):
                     self.safe_set.add(name_node.id)
                 else:
-                    raise TypeError('unsupported type for node %s' % name_node)
+                    logger.warning('unsupported type for node %s' % name_node)
         # case "for a in something"
         elif isinstance(node.target, ast.Name):
             self.safe_set.add(node.target.id)
         else:
-            raise TypeError('unsupported type for node %s' % node.target)
+            logger.warning('unsupported type for node %s' % node.target)
 
         # Then we keep doing the visit for the body of the loop.
         for line in node.body:

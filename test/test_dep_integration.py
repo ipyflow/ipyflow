@@ -1018,7 +1018,7 @@ x = 7
     run_cell('logging.info(foo.y)')
     assert_detected('`foo.y` depends on stale `x`')
     run_cell('foo.y = 10')
-    run_cell('x = foo.y = 1')
+    run_cell('x = foo.y + 1')
     run_cell('foo.y = 12')
     run_cell('logging.info(x)')
     assert_detected('`x` depends on stale `foo.y`')
@@ -1036,6 +1036,53 @@ except:
     pass
 """)
     assert_not_detected('x inside class scope is different')
+
+
+def test_tuple_unpack_simple():
+    run_cell('x, y = 0, 1')
+    run_cell('a, b = x + 2, y + 3')
+    run_cell('x, y = 42, 43')
+    run_cell('logging.info(a)')
+    assert_detected('`a` depends on stale `x`')
+    run_cell('logging.info(b)')
+    assert_detected('`b` depends on stale `y`')
+
+
+@skipif_known_failing
+def test_tuple_unpack_hard():
+    run_cell('x, y = 0, 1')
+    run_cell('a, b = x + 2, y + 3')
+    run_cell('y = 43')
+    run_cell('logging.info(a)')
+    assert_not_detected('`a` does not depend on `y`')
+    run_cell('logging.info(b)')
+    assert_detected('`b` depends on stale `y`')
+    run_cell('b = y + 10')
+    run_cell('x = 99')
+    run_cell('logging.info(b)')
+    assert_not_detected('`b` does not depend on `x`')
+    run_cell('logging.info(a)')
+    assert_detected('`a` depends on stale `x`')
+
+
+def test_attr_dep_with_top_level_overwrite():
+    run_cell("""
+class Foo:
+    def __init__(self):
+        self.y = 99
+foo = Foo()
+x = 42
+foo.y = x + 7
+""")
+    run_cell('x = 43')
+    run_cell('logging.info(foo)')
+    assert_not_detected('only `foo.y` depends on x')
+    run_cell('foo.y = 70')
+    assert_not_detected('we just fixed stale dep of `foo.y` by changing its deps')
+    run_cell('x = foo.y + 7')
+    run_cell('foo = 81')
+    run_cell('logging.info(x)')
+    assert_detected('`x` has stale dep on `foo` (transitively through `foo.y`)')
 
 
 @skipif_known_failing

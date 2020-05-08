@@ -88,6 +88,10 @@ class DependencySafety(object):
                             return True
         else:
             # TODO: break dependency chain here
+            # actually, breaking the chain might not be the right thing to do.
+            # if we got a false positive, it could be b/c the true dependency is on a
+            # "subset" of the stale DC in question, and that subset might not itself be stale,
+            # in which case we should maintain the dependency
             pass
 
         self._last_refused_code = None

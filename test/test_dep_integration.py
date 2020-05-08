@@ -981,6 +981,49 @@ except:
     assert_not_detected('no stale dep for `x` because it is indep of `z` (attempted dep add threw)')
 
 
+def test_attr_dep_from_somewhere_else():
+    run_cell('import sys')
+    run_cell('sys.path.append("./test")')
+    run_cell('import fake')
+    run_cell('fake.y = 7')
+    run_cell('x = fake.y + 1')
+    run_cell('fake.y = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on old value of `fake.y`')
+
+
+def test_attr_use_from_somewhere_else():
+    run_cell('import sys')
+    run_cell('sys.path.append("./test")')
+    run_cell('import fake')
+    run_cell('x = 7')
+    run_cell('fake.y = x + 1')
+    run_cell('x = 42')
+    run_cell('logging.info(fake.y)')
+    assert_detected('`fake.y` depends on old value of `x`')
+
+
+def test_class_assignment():
+    run_cell("""
+class Foo:
+    def __init__(self):
+        self.y = 99
+
+Bar = Foo
+foo = Bar()
+x = 7
+""")
+    run_cell('foo.y = x + 1')
+    run_cell('x = 42')
+    run_cell('logging.info(foo.y)')
+    assert_detected('`foo.y` depends on stale `x`')
+    run_cell('foo.y = 10')
+    run_cell('x = foo.y = 1')
+    run_cell('foo.y = 12')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on stale `foo.y`')
+
+
 def test_no_class_false_positives():
     run_cell('x = 7')
     run_cell('y = x + 1')

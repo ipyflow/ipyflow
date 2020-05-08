@@ -63,9 +63,8 @@ class Scope(object):
             if isinstance(name, CallPoint):
                 break
             dc = cur_scope.data_cell_by_name.get(name, None)
-            if dc is None:
-                break
-            yield dc
+            if dc is not None:
+                yield dc
             obj = name_to_obj.get(name, None)
             if obj is None:
                 break

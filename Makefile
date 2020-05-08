@@ -2,7 +2,7 @@
 .PHONY: clean deploy check test tests deps devdeps typecheck checkall testall
 
 clean:
-	rm -r build/ dist/
+	rm -rf build/ dist/ nbsafety.egg-info/
 
 deploy: clean
 	python setup.py sdist bdist_wheel --universal

@@ -6,10 +6,10 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..data_cell import DataCell
+from ..scope import Scope
 
 if TYPE_CHECKING:
     from typing import Dict, List, Set, Tuple, Union
-    from ..scope import Scope
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +70,11 @@ class AttributeTracingManager(object):
                 # print('found class scope %s containing %s' % (class_scope, class_scope.data_cell_by_name.keys()))
                 scope = class_scope.clone()
                 self.namespaces[obj_id] = scope
-            # else:
-            #     print('no scope for class', obj.__class__)
+            else:
+                # print('no scope for class', obj.__class__)
+                # TODO: is it safe to have a global namespace scope? I think so but would be good to verify.
+                scope = Scope('<namespace scope of %s>' % obj, is_namespace_scope=True)
+                self.namespaces[obj_id] = scope
         # print('new active scope', scope)
         if override_active_scope:
             self.active_scope = scope

@@ -25,7 +25,7 @@ setup(
     packages=find_packages(exclude=['docs', 'scratchspace', 'notebooks', 'img', 'test']),
     include_package_data=True,
     install_requires=requirements,
-    license='MIT',
+    license='BSD-3-Clause',
     zip_safe=False,
     classifiers=[
         'Development Status :: 3 - Alpha',

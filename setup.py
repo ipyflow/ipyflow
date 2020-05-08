@@ -3,6 +3,20 @@
 
 import os
 from setuptools import setup, find_packages
+from setuptools.command.develop import develop
+from setuptools.command.install import install
+from subprocess import check_call
+
+pkg_name = 'nbsafety'
+
+
+def make_post_install_hook(install_or_develop):
+    class PostInstallHook(install_or_develop):
+        """Post-installation for installation mode."""
+        def run(self):
+            install_or_develop.run(self)
+            check_call(f'python3 -m {pkg_name}.install'.split())
+    return PostInstallHook
 
 
 def read_file(fname):
@@ -12,7 +26,6 @@ def read_file(fname):
 
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
-pkg_name = 'nbsafety'
 exec(read_file(os.path.join(pkg_name, 'version.py')))
 setup(
     name=pkg_name,
@@ -30,11 +43,15 @@ setup(
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
-        'License :: OSI Approved :: BSD License',
+        'License :: OSI Approved :: BSD3 License',
         'Natural Language :: English',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
+    cmdclass={
+        'develop': make_post_install_hook(develop),
+        'install': make_post_install_hook(install),
+    },
 )
 
 # python setup.py sdist bdist_wheel --universal

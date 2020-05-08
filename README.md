@@ -2,7 +2,7 @@ nbsafety
 ========
 
 [![](https://github.com/runtime-jupyter-safety/nbsafety/workflows/master/badge.svg)](https://github.com/runtime-jupyter-safety/nbsafety/actions)
-[![License: BSD](https://img.shields.io/badge/License-BSD-maroon.svg)](https://opensource.org/licenses/BSD-3-Clause)
+[![License: BSD3](https://img.shields.io/badge/License-BSD3-maroon.svg)](https://opensource.org/licenses/BSD-3-Clause)
 ![](https://img.shields.io/pypi/v/nbsafety.svg)
 ![](https://img.shields.io/pypi/pyversions/nbsafety.svg)
 
@@ -11,7 +11,6 @@ Install
 To install, grab the package and install the Jupyter KernelSpec as follows:
 ```
 pip install nbsafety
-python -m nbsafety.install
 ```
 
 Running

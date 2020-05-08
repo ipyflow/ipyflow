@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
-.PHONY: check test tests deps devdeps typecheck checkall testall
+.PHONY: clean check test tests deps devdeps typecheck checkall testall
+
+clean:
+	rm -r build/ dist/
 
 check:
 	./runtests.sh

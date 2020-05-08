@@ -17,7 +17,7 @@ def make_post_install_hook(install_or_develop):
         def run(self):
             install_or_develop.run(self)
             python_command_suffix = ''
-            if 'win' in platform.system().lower():
+            if platform.system().lower().starswith('win'):
                 python_command_suffix = '.exe'
             check_call(f'python3{python_command_suffix} -m {pkg_name}.install'.split())
     return PostInstallHook

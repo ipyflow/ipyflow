@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean check test tests deps devdeps typecheck checkall testall
+.PHONY: clean deploy check test tests deps devdeps typecheck checkall testall
 
 clean:
 	rm -r build/ dist/
+
+deploy: clean
+	python setup.py sdist bdist_wheel --universal
+	twine upload dist/*
 
 check:
 	./runtests.sh

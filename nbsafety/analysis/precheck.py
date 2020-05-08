@@ -53,7 +53,7 @@ class PreCheck(ast.NodeVisitor):
     def visit_AugAssign(self, node: ast.AugAssign):
         self.visit_Assign_or_AugAssign_target(node.target)
 
-    def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript]'):
+    def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.expr]'):
         ignore_node_types = (ast.Subscript,)
         if isinstance(target_node, ignore_node_types):
             return

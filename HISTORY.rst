@@ -28,3 +28,7 @@ History
 0.0.12 (2020-05-08)
 ------------------
 * Readme formatting for PyPI;
+
+0.0.13 (2020-05-08)
+------------------
+* Refresh nodes w/ stale deps upon user override to avoid multiple of same warning;

@@ -25,6 +25,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+MAX_WARNINGS = 10
+
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
     logger.warning(
@@ -57,7 +59,7 @@ class DependencySafety(object):
 
         self._disable_level = 0
         self._refresh_all_stale_nodes = True
-        self._stale_nodes = set()
+        self._prev_cell_nodes_with_stale_deps: Set[DataCell] = set()
 
     def _logging_inited(self):
         self.store_history = True
@@ -71,6 +73,7 @@ class DependencySafety(object):
         )
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
+            self._prev_cell_nodes_with_stale_deps.clear()
             for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
                 if isinstance(name, str):
                     nodes = [self.global_scope.data_cell_by_name.get(name, None)]
@@ -80,15 +83,14 @@ class DependencySafety(object):
                     logger.warning('invalid type for name %s', name)
                     continue
                 for node in nodes:
-                    if node is None:
-                        continue
-                    if node.is_stale():
-                        self._stale_nodes.add(node)
-            if self._stale_nodes and self._disable_level < 10:
+                    if node is not None and node.is_stale():
+                        self._prev_cell_nodes_with_stale_deps.add(node)
+            if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
                 warning_counter = 0
-                for node in self._stale_nodes:
-                    if warning_counter >= 2:
-                        logger.warning(str(len(self._stale_nodes) - warning_counter)+ " more stale nodes are folded...")
+                for node in self._prev_cell_nodes_with_stale_deps:
+                    if warning_counter >= MAX_WARNINGS:
+                        logger.warning(str(len(self._prev_cell_nodes_with_stale_deps) - warning_counter) +
+                                       " more nodes with stale dependencies skipped...")
                         break
                     _safety_warning(node.name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
                     warning_counter += 1
@@ -97,19 +99,14 @@ class DependencySafety(object):
                 if self._disable_level == 0:
                     return True
         else:
-            # TODO: break dependency chain here
-            # actually, breaking the chain might not be the right thing to do.
-            # if we got a false positive, it could be b/c the true dependency is on a
-            # "subset" of the stale DC in question, and that subset might not itself be stale,
-            # in which case we should maintain the dependency
-
-            #Instead of breaking the dependency chain, I just simply refresh the stale nodes to its according required number
+            # Instead of breaking the dependency chain, simply refresh the nodes
+            # with stale deps to their required cell numbers
             if self._refresh_all_stale_nodes:
-                for node in self._stale_nodes:
+                for node in self._prev_cell_nodes_with_stale_deps:
                     node.defined_cell_num = node.required_cell_num
+            self._prev_cell_nodes_with_stale_deps.clear()
 
         self._last_refused_code = None
-        self._stale_nodes = set()
         return False
 
     def _make_cell_magic(self, cell_magic_name):

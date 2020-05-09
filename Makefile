@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean deploy check test tests deps devdeps typecheck checkall testall
+.PHONY: clean dist deploy check test tests deps devdeps typecheck checkall testall
 
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/
 
-deploy: clean
+dist: clean
 	python setup.py sdist bdist_wheel --universal
+
+deploy: dist
 	twine upload dist/*
 
 check:

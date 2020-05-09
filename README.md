@@ -6,7 +6,6 @@ nbsafety
 <a href="https://opensource.org/licenses/BSD-3-Clause"><img src="https://img.shields.io/badge/License-BSD3-maroon.svg" alt="License: BSD3" align="center" /></a>
 <a href="https://pypi.org/project/nbsafety/"><img src="https://img.shields.io/pypi/v/nbsafety.svg" align="center" /></a>
 <img src="https://img.shields.io/pypi/pyversions/nbsafety.svg" align="center" />
-<a href="https://github.com/runtime-jupyter-safety/nbsafety/actions"><img src="https://github.com/runtime-jupyter-safety/nbsafety/workflows/master/badge.svg" align="center" /></a>
 </p>
 
 Install

@@ -24,3 +24,7 @@ History
 0.0.11 (2020-05-08)
 ------------------
 * Readme formatting for PyPI;
+
+0.0.12 (2020-05-08)
+------------------
+* Readme formatting for PyPI;

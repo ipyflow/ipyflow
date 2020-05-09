@@ -63,7 +63,7 @@ class DependencySafety(object):
         self.store_history = True
         logger.setLevel(logging.WARNING)
 
-    def _precheck_for_stale(self, cell, current_cell_number):
+    def _precheck_for_stale(self, cell):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
         # `defined_cell_num` is greater than or equal to required; if not we give a warning and return `True`.
         self._last_cell_ast = ast.parse('\n'.join(

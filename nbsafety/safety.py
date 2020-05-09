@@ -56,7 +56,7 @@ class DependencySafety(object):
         self._track_dependencies = True
 
         self._disable_level = 0
-
+        self._refresh_all_stale_to_current
     def _logging_inited(self):
         self.store_history = True
         logger.setLevel(logging.WARNING)
@@ -77,21 +77,26 @@ class DependencySafety(object):
                 else:
                     logger.warning('invalid type for name %s', name)
                     continue
+                stale_nodes = set()
                 for node in nodes:
                     if node is None:
                         continue
                     if node.is_stale() and self._disable_level < 2:
-                        _safety_warning(name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
-                        self.stale_dependency_detected = True
-                        self._last_refused_code = cell
-                        if self._disable_level == 0:
-                            return True
+                        stale_nodes.add(node)
+                if stale_nodes and self._disable_level < 2:
+                    for node in stale_nodes:
+                        _safety_warning(node.name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                    self.stale_dependency_detected = True
+                    self._last_refused_code = cell
+                    if self._disable_level == 0:
+                        return True
         else:
             # TODO: break dependency chain here
             # actually, breaking the chain might not be the right thing to do.
             # if we got a false positive, it could be b/c the true dependency is on a
             # "subset" of the stale DC in question, and that subset might not itself be stale,
             # in which case we should maintain the dependency
+
             pass
 
         self._last_refused_code = None

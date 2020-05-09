@@ -20,3 +20,7 @@ History
 0.0.10 (2020-05-08)
 ------------------
 * Rename kernel from `python3-nbsafety` to `nbsafety`;
+
+0.0.11 (2020-05-08)
+------------------
+* Readme formatting for PyPI;

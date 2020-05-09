@@ -27,7 +27,7 @@ def install_my_kernel_spec(user=True, prefix=None):
         # TODO: Copy resources once they're specified
 
         print(f'Installing KernelSpec for {PACKAGE} kernel')
-        KernelSpecManager().install_kernel_spec(td, f'python3-{PACKAGE}', user=user, prefix=prefix)
+        KernelSpecManager().install_kernel_spec(td, kernel_name=f'{PACKAGE}', user=user, prefix=prefix)
 
 
 def _is_root():

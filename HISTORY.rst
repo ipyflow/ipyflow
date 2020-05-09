@@ -9,3 +9,14 @@ History
 ------------------
 * Fix kernel install commmand for Windows;
 
+0.0.8 (2020-05-08)
+------------------
+* Misc bug fixes;
+
+0.0.9 (2020-05-08)
+------------------
+* Misc bug fixes;
+
+0.0.10 (2020-05-08)
+------------------
+* Rename kernel from `python3-nbsafety` to `nbsafety`;

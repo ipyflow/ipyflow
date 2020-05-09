@@ -56,12 +56,14 @@ class DependencySafety(object):
         self._track_dependencies = True
 
         self._disable_level = 0
-        self._refresh_all_stale_to_current
+        self._refresh_all_stale_nodes = True
+        self._stale_nodes = set()
+
     def _logging_inited(self):
         self.store_history = True
         logger.setLevel(logging.WARNING)
 
-    def _precheck_for_stale(self, cell):
+    def _precheck_for_stale(self, cell, current_cell_number):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
         # `defined_cell_num` is greater than or equal to required; if not we give a warning and return `True`.
         self._last_cell_ast = ast.parse('\n'.join(
@@ -77,14 +79,14 @@ class DependencySafety(object):
                 else:
                     logger.warning('invalid type for name %s', name)
                     continue
-                stale_nodes = set()
+                self._stale_nodes = set()
                 for node in nodes:
                     if node is None:
                         continue
                     if node.is_stale() and self._disable_level < 2:
-                        stale_nodes.add(node)
-                if stale_nodes and self._disable_level < 2:
-                    for node in stale_nodes:
+                        self._stale_nodes.add(node)
+                if self._stale_nodes and self._disable_level < 2:
+                    for node in self._stale_nodes:
                         _safety_warning(node.name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
                     self.stale_dependency_detected = True
                     self._last_refused_code = cell
@@ -97,9 +99,13 @@ class DependencySafety(object):
             # "subset" of the stale DC in question, and that subset might not itself be stale,
             # in which case we should maintain the dependency
 
-            pass
+            #Instead of breaking the dependency chain, I just simply refresh the stale nodes to its according required number
+            if self._refresh_all_stale_nodes:
+                for node in self._stale_nodes:
+                    node.defined_cell_num = node.required_cell_num
 
         self._last_refused_code = None
+        self._stale_nodes = set()
         return False
 
     def _make_cell_magic(self, cell_magic_name):

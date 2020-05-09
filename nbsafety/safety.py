@@ -79,19 +79,23 @@ class DependencySafety(object):
                 else:
                     logger.warning('invalid type for name %s', name)
                     continue
-                self._stale_nodes = set()
                 for node in nodes:
                     if node is None:
                         continue
-                    if node.is_stale() and self._disable_level < 2:
+                    if node.is_stale():
                         self._stale_nodes.add(node)
-                if self._stale_nodes and self._disable_level < 2:
-                    for node in self._stale_nodes:
-                        _safety_warning(node.name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
-                    self.stale_dependency_detected = True
-                    self._last_refused_code = cell
-                    if self._disable_level == 0:
-                        return True
+            if self._stale_nodes and self._disable_level < 10:
+                warning_counter = 0
+                for node in self._stale_nodes:
+                    if warning_counter >= 2:
+                        logger.warning(str(len(self._stale_nodes) - warning_counter)+ " more stale nodes are folded...")
+                        break
+                    _safety_warning(node.name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                    warning_counter += 1
+                self.stale_dependency_detected = True
+                self._last_refused_code = cell
+                if self._disable_level == 0:
+                    return True
         else:
             # TODO: break dependency chain here
             # actually, breaking the chain might not be the right thing to do.

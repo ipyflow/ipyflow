@@ -7,6 +7,22 @@ nbsafety
 ![](https://img.shields.io/pypi/v/nbsafety.svg)
 ![](https://img.shields.io/pypi/pyversions/nbsafety.svg)
 
+About
+-----
+`nbsafety` adds a layer of protection to computational notebooks by solving the
+*stale dependency problem*, a problem which exists due to the fact that
+notebooks segment execution into "cells" with implicit dependencies amongst
+themselves. Here's an example in action:
+
+![](https://raw.githubusercontent.com/runtime-jupyter-safety/nbsafety/master/img/nbsafety-demo.gif)
+
+`nbsafety` accomplishes its magic using a combination of runtime tracer (to
+build the implicit dependency graph) and a static checker (to provide warnings
+before running a cell), both of which are deeply aware of Python's data model.
+In particular, `nbsafety` requires ***minimal to no changes*** in user
+behavior, opting to get out of the way unless absolutely necessary and letting
+you use notebooks the way you prefer.
+
 Install
 -------
 To install, grab the package and install the Jupyter KernelSpec as follows:

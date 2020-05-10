@@ -4,7 +4,7 @@ nbsafety
 [![](https://github.com/runtime-jupyter-safety/nbsafety/workflows/master/badge.svg)](https://github.com/runtime-jupyter-safety/nbsafety/actions)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 [![License: BSD3](https://img.shields.io/badge/License-BSD3-maroon.svg)](https://opensource.org/licenses/BSD-3-Clause)
-![](https://img.shields.io/pypi/v/nbsafety.svg)
+[![](https://img.shields.io/pypi/v/nbsafety.svg)](https://pypi.org/project/nbsafety)
 ![](https://img.shields.io/pypi/pyversions/nbsafety.svg)
 
 About
@@ -16,7 +16,7 @@ themselves. Here's an example in action:
 
 ![](https://raw.githubusercontent.com/runtime-jupyter-safety/nbsafety/master/img/nbsafety-demo.gif)
 
-`nbsafety` accomplishes its magic using a combination of runtime tracer (to
+`nbsafety` accomplishes its magic using a combination of a runtime tracer (to
 build the implicit dependency graph) and a static checker (to provide warnings
 before running a cell), both of which are deeply aware of Python's data model.
 In particular, `nbsafety` requires ***minimal to no changes*** in user

@@ -32,3 +32,7 @@ History
 0.0.13 (2020-05-08)
 ------------------
 * Refresh nodes w/ stale deps upon user override to avoid multiple of same warning;
+
+0.0.14 (2020-05-08)
+------------------
+* Fix cornercase bug for objects without __dict__ attribute (such as dictionaries);

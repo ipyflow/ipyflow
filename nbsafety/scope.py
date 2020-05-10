@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import inspect
 from typing import TYPE_CHECKING
 
 from IPython import get_ipython
@@ -71,7 +72,7 @@ class Scope(object):
             cur_scope = namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
-            name_to_obj = obj.__dict__
+            name_to_obj = dict(inspect.getmembers(obj))
 
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'

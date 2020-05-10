@@ -30,8 +30,8 @@ MAX_WARNINGS = 10
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
     logger.warning(
-        f'{name} defined in cell {defined_cell_num} may depend on '
-        f'old version(s) of [{", ".join(str(dep) for dep in fresher_ancestors)}] '
+        f'`{name}` defined in cell {defined_cell_num} may depend on '
+        f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_ancestors)}] '
         f'(lastest update in cell {required_cell_num}).'
     )
 

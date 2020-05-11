@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 def make_tracer(safety: 'DependencySafety'):
     if safety.trace_messages_enabled:
-        logger.setLevel(logging.INFO)
-    else:
         logger.setLevel(logging.WARNING)
+    else:
+        logger.setLevel(logging.ERROR)
 
     def tracer(frame: 'FrameType', evt: str, _):
         # notebook cells have filenames that appear as '<ipython-input...>'
@@ -46,10 +46,10 @@ def make_tracer(safety: 'DependencySafety'):
             stmt_node = safety.statement_cache[cell_num][lineno]
         except KeyError:
             return tracer
-        if safety.store_history and logger.getEffectiveLevel() <= logging.INFO:
+        if safety.store_history and logger.getEffectiveLevel() <= logging.WARNING:
             try:
                 source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
-                logger.info(' %3d: %9s >>> %s', lineno, event, source[lineno-1])
+                logger.warning(' %3d: %9s >>> %s', lineno, event, source[lineno-1])
             except (KeyError, IndexError) as e:
                 logger.error('%s: cell %d, line %d', e, cell_num, lineno)
 

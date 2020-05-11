@@ -662,6 +662,15 @@ def test_list_mutation():
     assert_detected('lst depends on stale x')
 
 
+@skipif_known_failing
+def test_list_mutation_2():
+    run_cell('lst = list(range(5))')
+    run_cell('x = lst + [42, 43]')
+    run_cell('lst.append(99)')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on stale `lst`')
+
+
 def test_numpy_subscripting_fp():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')

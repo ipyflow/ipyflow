@@ -15,10 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 class AttributeTracingManager(object):
-    def __init__(self, namespaces: 'Dict[int, Scope]', active_scope: 'Scope'):
+    def __init__(self, namespaces: 'Dict[int, Scope]', active_scope: 'Scope', trace_event_counter: 'List[int]'):
         self.namespaces = namespaces
         self.original_active_scope = active_scope
         self.active_scope = active_scope
+        self.trace_event_counter = trace_event_counter
         self.start_tracer_name = '_ATTR_TRACER_START'
         self.end_tracer_name = '_ATTR_TRACER_END'
         setattr(builtins, self.start_tracer_name, self.attribute_tracer)
@@ -81,6 +82,9 @@ class AttributeTracingManager(object):
         if scope is None:
             return obj
         if ctx == 'Load':
+            # TODO: save off event counter, object name (datacell?), maybe other stuff
+            # if event counter didn't change when we process the Call retval, and if the
+            # retval is None, this is a likely signal that we have a mutation
             data_cell = scope.data_cell_by_name.get(attr, None)
             if data_cell is None:
                 data_cell = DataCell(attr)

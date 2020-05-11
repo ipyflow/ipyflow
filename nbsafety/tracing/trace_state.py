@@ -63,6 +63,8 @@ class TraceState(object):
             event: 'TraceEvent',
             trace_stmt: 'TraceStatement'
     ):
+        self.safety.trace_event_counter[0] += 1
+
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
         self.prev_trace_stmt = trace_stmt

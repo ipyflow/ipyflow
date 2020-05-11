@@ -32,7 +32,7 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
     logger.warning(
         f'`{name}` defined in cell {defined_cell_num} may depend on '
         f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_ancestors)}] '
-        f'(lastest update in cell {required_cell_num}).'
+        f'(latest update in cell {required_cell_num}).'
     )
 
 
@@ -42,9 +42,10 @@ class DependencySafety(object):
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
+        self.trace_event_counter = [0]
         self.stale_dependency_detected = False
         self.trace_state = TraceState(self)
-        self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope)
+        self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope, self.trace_event_counter)
         self.store_history = kwargs.pop('store_history', True)
         self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)

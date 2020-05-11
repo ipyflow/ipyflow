@@ -13,11 +13,12 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         # TODO: current complete bipartite subgraph will add unncessary edges
         self.lval_symbol_set: Set[str] = set()
         self.rval_symbol_set: Set[str] = set()
+        self.should_add = False
         self.gather_rvals = True
 
     def __call__(self, node):
         self.visit(node)
-        return self.lval_symbol_set, self.rval_symbol_set
+        return self.lval_symbol_set, self.rval_symbol_set, self.should_add
 
     @property
     def to_add_set(self):
@@ -42,6 +43,8 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         self.to_add_set.add(node.id)
 
     def visit_Subscript(self, node: ast.Subscript):
+        # TODO: this should probably be considered as a mutation
+        self.should_add = self.should_add or not self.gather_rvals
         self.visit(node.value)
         with self.gather_rvals_context():
             self.visit(node.slice)
@@ -53,6 +56,7 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         self.visit(node.value)
 
     def visit_AugAssign(self, node):
+        self.should_add = True
         with self.gather_lvals_context():
             self.visit(node.target)
         with self.gather_rvals_context():

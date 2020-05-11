@@ -658,6 +658,20 @@ def test_subscript_sensitivity():
     assert_detected('lst depends on stale i')
 
 
+def test_subscript_adds():
+    run_cell('x = 42')
+    run_cell("""
+d = {
+    'foo': x,
+    'bar': 77
+}
+""")
+    run_cell('d["bar"] = 99')
+    run_cell('x = 100')
+    run_cell('logging.info(d)')
+    assert_detected('`d` depends on stale `x`')
+
+
 @skipif_known_failing
 def test_list_mutation():
     run_cell('lst = list(range(5))')

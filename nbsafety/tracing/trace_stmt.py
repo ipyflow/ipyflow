@@ -33,7 +33,7 @@ class TraceStatement(object):
 
     def compute_rval_dependencies(self, rval_symbols=None):
         if rval_symbols is None:
-            _, rval_symbols = get_statement_lval_and_rval_symbols(self.stmt_node)
+            _, rval_symbols, _ = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_data_cells = set()
         for name in rval_symbols:
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
@@ -68,11 +68,10 @@ class TraceStatement(object):
             return
         if not self.safety.dependency_tracking_enabled:
             return
-        lval_symbols, rval_symbols = get_statement_lval_and_rval_symbols(self.stmt_node)
+        lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_deps = self.compute_rval_dependencies(rval_symbols=rval_symbols - lval_symbols)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
-        should_add = isinstance(self.stmt_node, ast.AugAssign)
         if is_function_def or is_class_def:
             assert len(lval_symbols) == 1
             assert not lval_symbols.issubset(rval_symbols)

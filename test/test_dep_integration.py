@@ -623,6 +623,9 @@ class Foo(object):
             
         def foo(self):
             return Foo(self.a, self.b)
+            
+        def bar(self):
+            return Foo
 """)
     run_cell('foo = Foo(5, 6)')
     run_cell('bar = Foo.Bar(7, 8)')
@@ -630,6 +633,9 @@ class Foo(object):
     run_cell('logging.info(bar.a)')
     assert_not_detected()
     run_cell('Foo.Bar(9, 10).foo().shared = 100')
+    run_cell('logging.info(foo.y)')
+    assert_not_detected('we mutated `shared` on obj and not on `Foo` (the one on which `foo.y` depends)')
+    run_cell('Foo.Bar(9, 10).bar().shared = 100')
     run_cell('logging.info(foo.y)')
     assert_detected('we mutated a shared value on which `foo.y` depends')
 
@@ -669,6 +675,25 @@ def test_list_mutation_2():
     run_cell('lst.append(99)')
     run_cell('logging.info(x)')
     assert_detected('`x` depends on stale `lst`')
+
+
+def test_lazy_class_scope_resolution():
+    run_cell("""
+class Foo(object):
+    shared = 99
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('foo = Foo(10)')
+    run_cell('y = 11')
+    run_cell('Foo.shared = y + 42')
+    run_cell('y = 12')
+    run_cell('logging.info(foo.shared)')
+    assert_detected('`foo.shared` should point to same DataCell as `Foo.shared` and thus also has stale dep')
+    run_cell('foo.shared = 89')
+    run_cell('logging.info(Foo.shared)')
+    assert_detected('Even though we refreshed `foo.shared`, this '
+                    'has no bearing on the original class member `Foo.shared`')
 
 
 def test_numpy_subscripting_fp():

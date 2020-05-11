@@ -48,7 +48,7 @@ class DataCell(object):
         self.defined_cell_num = cell_counter()
         if mark_children:
             for child in self.children:
-                child.update_cellnum_node_pair((cell_counter(), self))
+                child.update_cellnum_node_pair((self.defined_cell_num, self))
 
     # TODO: don't use a tuple for this
     def update_cellnum_node_pair(self, pair: 'Tuple[int, DataCell]', seen=None):

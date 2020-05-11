@@ -17,12 +17,13 @@ class Scope(object):
     def __init__(
             self, scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
-            is_namespace_scope=False
+            is_namespace_scope=False,
     ):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
+        self.cloned_from = None
         self.is_namespace_scope = is_namespace_scope
-        self.data_cell_by_name: Dict[str, DataCell] = {}
+        self._data_cell_by_name: Dict[str, DataCell] = {}
 
     def __hash__(self):
         return hash(self.full_path)
@@ -33,9 +34,8 @@ class Scope(object):
     def clone(self):
         cloned = Scope()
         cloned.__dict__ = dict(self.__dict__)
-        # we don't want copies of the data cells but aliases instead,
-        # but we still want separate dictionaries for newly created DataCells
-        cloned.data_cell_by_name = dict(self.data_cell_by_name)
+        cloned.cloned_from = self
+        cloned._data_cell_by_name = {}
         return cloned
 
     @property
@@ -51,8 +51,25 @@ class Scope(object):
     def make_child_scope(self, scope_name, is_namespace_scope=False):
         return self.__class__(scope_name, parent_scope=self, is_namespace_scope=is_namespace_scope)
 
+    def put(self, name: str, val: DataCell):
+        self._data_cell_by_name[name] = val
+
+    def lookup_data_cell_by_name_this_indentation(self, name):
+        ret = self._data_cell_by_name.get(name, None)
+        if ret is None and self.cloned_from is not None:
+            ret = self.cloned_from.lookup_data_cell_by_name_this_indentation(name)
+        return ret
+
+    def all_data_cells_this_indentation(self):
+        if self.cloned_from is None:
+            ret = {}
+        else:
+            ret = self.cloned_from.all_data_cells_this_indentation()
+        ret.update(self._data_cell_by_name)
+        return ret
+
     def lookup_data_cell_by_name(self, name):
-        ret = self.data_cell_by_name.get(name, None)
+        ret = self.lookup_data_cell_by_name_this_indentation(name)
         if ret is None and self.non_namespace_parent_scope is not None:
             ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
         return ret
@@ -63,7 +80,7 @@ class Scope(object):
         for name in chain.symbols:
             if isinstance(name, CallPoint):
                 break
-            dc = cur_scope.data_cell_by_name.get(name, None)
+            dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
             if dc is not None:
                 yield dc
             obj = name_to_obj.get(name, None)
@@ -77,12 +94,13 @@ class Scope(object):
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'
     ):
-        if self.is_globally_accessible and name in self.data_cell_by_name:
-            old = self.data_cell_by_name[name]
-            # don't mark children as having stale dep unless old dep was of same type
-            old.update_deps(set(), add=False, mark_children=isinstance(old, type(dc)))
+        if self.is_globally_accessible:
+            old = self.lookup_data_cell_by_name_this_indentation(name)
+            if old is not None:
+                # don't mark children as having stale dep unless old dep was of same type
+                old.update_deps(set(), add=False, mark_children=isinstance(old, type(dc)))
         dc.update_deps(deps, add=False)
-        self.data_cell_by_name[name] = dc
+        self.put(name, dc)
         return dc
 
     def _upsert_function_data_cell_for_name(self, name: str, deps: 'Set[DataCell]'):
@@ -108,14 +126,20 @@ class Scope(object):
         if class_scope is not None:
             assert not add
             return self._upsert_class_data_cell_for_name(name, deps, class_scope)
-        if self.is_globally_accessible and name in self.data_cell_by_name:
-            # TODO: handle case where new dc is of different type
-            dc = self.data_cell_by_name[name]
-            dc.update_deps(deps, add=add)
-            # TODO: garbage collect old names
-            return dc
+        if self.is_globally_accessible:
+            dc = self.lookup_data_cell_by_name_this_indentation(name)
+            if dc is not None:
+                # TODO: garbage collect old names
+                # TODO: handle case where new dc is of different type
+                if name in self._data_cell_by_name:
+                    dc.update_deps(deps, add=add)
+                    return dc
+                else:
+                    # in this case, we are copying from a class and should add the dc from which we are copying
+                    # as an additional dependency
+                    deps.add(dc)
         dc = DataCell(name, deps)
-        self.data_cell_by_name[name] = dc
+        self.put(name, dc)
         for dep in deps:
             dep.children.add(dc)
         return dc

@@ -75,9 +75,9 @@ class DependencySafety(object):
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
             self._prev_cell_nodes_with_stale_deps.clear()
-            for name in precheck(self._last_cell_ast, self.global_scope.data_cell_by_name.keys()):
+            for name in precheck(self._last_cell_ast, self.global_scope.all_data_cells_this_indentation().keys()):
                 if isinstance(name, str):
-                    nodes = [self.global_scope.data_cell_by_name.get(name, None)]
+                    nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
                 elif isinstance(name, AttributeSymbolChain):
                     nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
                 else:

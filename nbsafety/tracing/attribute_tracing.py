@@ -10,6 +10,8 @@ from ..scope import Scope
 
 if TYPE_CHECKING:
     from typing import Dict, List, Set, Tuple, Union
+    Mutation = Tuple[DataCell, Set[DataCell]]
+    QualifiedName = Tuple[Scope, str]
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,10 @@ class AttributeTracingManager(object):
         setattr(builtins, self.end_tracer_name, self.expr_tracer)
         self.ast_transformer = AttributeTracingNodeTransformer(self.start_tracer_name, self.end_tracer_name)
         self.loaded_data_cells: Set[DataCell] = set()
-        self.stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
-        self.aug_stored_scope_qualified_names: Set[Tuple[Scope, str]] = set()
-        self.stack: List[Tuple[Set[Tuple[Scope, str]], Set[Tuple[Scope, str]], Scope, Scope]] = []
+        self.stored_scope_qualified_names: Set[QualifiedName] = set()
+        self.aug_stored_scope_qualified_names: Set[QualifiedName] = set()
+        self.mutations: List[Mutation] = []
+        self.stack: List[Tuple[Set[QualifiedName], Set[QualifiedName], List[Mutation], Scope, Scope]] = []
 
     def __del__(self):
         if hasattr(builtins, self.start_tracer_name):
@@ -40,11 +43,13 @@ class AttributeTracingManager(object):
         self.stack.append((
             self.stored_scope_qualified_names,
             self.aug_stored_scope_qualified_names,
+            self.mutations,
             self.active_scope,
             self.original_active_scope,
         ))
         self.stored_scope_qualified_names = set()
         self.aug_stored_scope_qualified_names = set()
+        self.mutations = []
         self.original_active_scope = new_scope
         self.active_scope = new_scope
 
@@ -52,6 +57,7 @@ class AttributeTracingManager(object):
         (
             self.stored_scope_qualified_names,
             self.aug_stored_scope_qualified_names,
+            self.mutations,
             self.active_scope,
             self.original_active_scope,
         ) = self.stack.pop()
@@ -82,13 +88,13 @@ class AttributeTracingManager(object):
         if scope is None:
             return obj
         if ctx == 'Load':
-            # TODO: save off event counter, object name (datacell?), maybe other stuff
+            # TODO: save off event counter, object name (DataCell?), maybe other stuff
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
-            data_cell = scope.data_cell_by_name.get(attr, None)
+            data_cell = scope.lookup_data_cell_by_name_this_indentation(attr)
             if data_cell is None:
                 data_cell = DataCell(attr)
-                scope.data_cell_by_name[attr] = data_cell
+                scope.put(attr, data_cell)
             self.loaded_data_cells.add(data_cell)
         if ctx == 'Store':
             self.stored_scope_qualified_names.add((scope, attr))

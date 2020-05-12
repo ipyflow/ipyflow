@@ -3,3 +3,4 @@ ipython
 jupyter
 matplotlib
 networkx
+pandas

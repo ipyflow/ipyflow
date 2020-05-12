@@ -84,18 +84,7 @@ class TraceStatement(object):
             for alias_dc in self.safety.aliases[obj_id]:
                 alias_dc.update_deps(set(), add=True)
 
-    def make_lhs_data_cells_if_has_lval(self):
-        if not self.safety.dependency_tracking_enabled:
-            return
-        # TODO: move handling of mutations somewhere else (doesn't fit into lval paradigm)
-        for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
-            mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
-            for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dcs, add=True)
-        if not self.has_lval:
-            assert len(self.safety.attr_trace_manager.saved_store_data) == 0
-            assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0
-            return
+    def _make_lval_data_cells(self):
         lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_deps = self.compute_rval_dependencies(rval_symbols=rval_symbols - lval_symbols)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -134,12 +123,25 @@ class TraceStatement(object):
             )
             self._handle_aliases(old_id, old_dc, obj_id, dc)
 
+    def handle_dependencies(self):
+        if not self.safety.dependency_tracking_enabled:
+            return
+        for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
+            mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
+            for mutated_dc in self.safety.aliases[mutated_obj_id]:
+                mutated_dc.update_deps(mutation_arg_dcs, add=True)
+        if self.has_lval:
+            self._make_lval_data_cells()
+        else:
+            assert len(self.safety.attr_trace_manager.saved_store_data) == 0
+            assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0
+
     def finished_execution_hook(self):
         if self.marked_finished:
             return
         # print('finishing stmt', self.stmt_node)
         self.marked_finished = True
-        self.make_lhs_data_cells_if_has_lval()
+        self.handle_dependencies()
 
     @property
     def has_lval(self):

@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
-    from typing import Optional, Set, Tuple
+    from typing import Optional, Set
 
 
 class DataCell(object):
@@ -37,7 +37,7 @@ class DataCell(object):
     def __str__(self):
         return self.name
 
-    def update_deps(self, new_deps: 'Set[DataCell]', add=False, mark_children=True):
+    def update_deps(self, new_deps: 'Set[DataCell]', add=False, propagate_to_children=True):
         if not add:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)
@@ -48,21 +48,23 @@ class DataCell(object):
             self.parents.add(new_parent)
 
         self.defined_cell_num = cell_counter()
-        if mark_children:
+        if propagate_to_children:
             for child in self.children:
-                child.update_cellnum_node_pair((self.defined_cell_num, self))
+                child._propagate_update(self)
 
-    # TODO: don't use a tuple for this
-    def update_cellnum_node_pair(self, pair: 'Tuple[int, DataCell]', seen=None):
+    def mark_mutated(self, propagate_to_children=True):
+        self.update_deps(set(), add=True, propagate_to_children=propagate_to_children)
+
+    def _propagate_update(self, updated_dep: 'DataCell', seen=None):
         if seen is None:
             seen = set()
         if self in seen:
             return
         seen.add(self)
-        self.required_cell_num = pair[0]
-        self.fresher_ancestors.add(pair[1])
+        self.required_cell_num = updated_dep.defined_cell_num
+        self.fresher_ancestors.add(updated_dep)
         for child in self.children:
-            child.update_cellnum_node_pair(pair, seen)
+            child._propagate_update(updated_dep, seen=seen)
 
     def is_stale(self):
         if self.no_warning:

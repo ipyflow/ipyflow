@@ -101,7 +101,7 @@ class Scope(object):
             if old_dc is not None:
                 old_id = old_dc.obj_id
                 # don't mark children as having stale dep unless old dep was of same type
-                old_dc.update_deps(set(), add=False, mark_children=isinstance(old_dc, type(dc)))
+                old_dc.update_deps(set(), add=False, propagate_to_children=isinstance(old_dc, type(dc)))
         dc.update_deps(deps, add=False)
         self.put(name, dc)
         return dc, old_dc, old_id

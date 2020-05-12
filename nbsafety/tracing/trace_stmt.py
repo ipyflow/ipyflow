@@ -73,8 +73,8 @@ class TraceStatement(object):
 
     def _handle_aliases(
             self,
-            old_id: Optional[int], old_dc: Optional[DataCell],
-            obj_id: Optional[int], dc: Optional[DataCell]
+            old_id: 'Optional[int]', old_dc: 'Optional[DataCell]',
+            obj_id: 'Optional[int]', dc: 'Optional[DataCell]'
     ):
         if old_id is not None and old_dc is not None:
             self.safety.aliases[old_id].discard(old_dc)

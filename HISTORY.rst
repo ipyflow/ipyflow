@@ -36,3 +36,7 @@ History
 0.0.14 (2020-05-08)
 ------------------
 * Fix cornercase bug for objects without __dict__ attribute (such as dictionaries);
+
+0.0.15 (2020-05-11)
+------------------
+* Fix bugs related to attr resolution for class attributes and add functionality to handle basic aliasing / mutation;

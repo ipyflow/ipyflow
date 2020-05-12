@@ -681,7 +681,6 @@ def test_list_mutation():
     assert_detected('lst depends on stale x')
 
 
-@skipif_known_failing
 def test_list_mutation_2():
     run_cell('lst = list(range(5))')
     run_cell('x = lst + [42, 43]')

@@ -85,11 +85,15 @@ class TraceStatement(object):
                 alias_dc.update_deps(set(), add=True)
 
     def make_lhs_data_cells_if_has_lval(self):
+        if not self.safety.dependency_tracking_enabled:
+            return
+        # TODO: move handling of mutations somewhere else (doesn't fit into lval paradigm)
+        for mutated_obj_id in self.safety.attr_trace_manager.mutations:
+            for mutated_dc in self.safety.aliases[mutated_obj_id]:
+                mutated_dc.update_deps(set(), add=True)
         if not self.has_lval:
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
             assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0
-            return
-        if not self.safety.dependency_tracking_enabled:
             return
         lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_deps = self.compute_rval_dependencies(rval_symbols=rval_symbols - lval_symbols)

@@ -88,9 +88,10 @@ class TraceStatement(object):
         if not self.safety.dependency_tracking_enabled:
             return
         # TODO: move handling of mutations somewhere else (doesn't fit into lval paradigm)
-        for mutated_obj_id in self.safety.attr_trace_manager.mutations:
+        for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
+            mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(set(), add=True)
+                mutated_dc.update_deps(mutation_arg_dcs, add=True)
         if not self.has_lval:
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
             assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0

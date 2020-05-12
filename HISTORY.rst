@@ -40,3 +40,7 @@ History
 0.0.15 (2020-05-11)
 ------------------
 * Fix bugs related to attr resolution for class attributes and add functionality to handle basic aliasing / mutation;
+
+0.0.16 (2020-05-12)
+------------------
+* Handle simple mutation deps for method calls (simple ast.Name args are added as deps);

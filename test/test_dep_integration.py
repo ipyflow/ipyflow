@@ -1131,6 +1131,20 @@ foo.y = x + 7
     assert_detected('`x` has stale dep on `foo` (transitively through `foo.y`)')
 
 
+def test_pandas():
+    run_cell('import numpy as np')
+    run_cell('import pandas as pd')
+    run_cell('arr = 1 + np.arange(10)')
+    run_cell('df = pd.DataFrame({"col": arr})')
+    run_cell('df2 = df.dropna()')
+    run_cell('df.dropna()')
+    run_cell('logging.info(df2)')
+    assert_not_detected('`df.dropna()` did not mutate `df`')
+    run_cell('df.dropna(inplace=True)')
+    run_cell('logging.info(df2)')
+    assert_detected('`df.dropna(inplace=True)` mutated `df`')
+
+
 @skipif_known_failing
 def test_cell_magic():
     # TODO: write this

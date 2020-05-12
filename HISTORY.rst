@@ -44,3 +44,7 @@ History
 0.0.16 (2020-05-12)
 ------------------
 * Handle simple mutation deps for method calls (simple ast.Name args are added as deps);
+
+0.0.17 (2020-05-12)
+------------------
+* Add workaround for weird pandas attributes;

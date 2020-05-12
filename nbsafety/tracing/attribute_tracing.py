@@ -3,7 +3,7 @@ import ast
 import builtins
 from contextlib import contextmanager
 import logging
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 from ..data_cell import DataCell
 from ..scope import Scope
@@ -194,11 +194,11 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
         replacement_args = []
         for arg in node.args:
             if isinstance(arg, ast.Name):
-                replacement_args.append(ast.Call(
+                replacement_args.append(cast(ast.expr, ast.Call(
                     func=ast.Name(self.arg_recorder, ctx=ast.Load()),
                     args=[arg, ast.Str(arg.id)],
                     keywords=[]
-                ))
+                )))
                 ast.copy_location(replacement_args[-1], arg)
             else:
                 replacement_args.append(arg)

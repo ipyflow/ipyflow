@@ -43,8 +43,10 @@ class TraceState(object):
                 prev_overall.finished_execution_hook()
 
         if self.prev_event == TraceEvent.return_:
-            if prev_this_frame is not None:  # and isinstance(prev_this_frame.stmt_node, ast.ClassDef):
-                prev_this_frame.finished_execution_hook()
+            if prev_this_frame is not None:
+                if len(self.stack) == 0 or prev_this_frame is not self.stack[-1]:
+                    # this condition ensures we're not inside of a list comprehension or something with multiple calls
+                    prev_this_frame.finished_execution_hook()
             return
 
         if prev_this_frame is None or prev_this_frame.marked_finished:

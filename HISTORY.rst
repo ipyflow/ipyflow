@@ -48,3 +48,7 @@ History
 0.0.17 (2020-05-12)
 ------------------
 * Add workaround for weird pandas attributes;
+
+0.0.18 (2020-05-12)
+------------------
+* Fix issue detecting completion of statement with calls inside of comprehensions;

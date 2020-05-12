@@ -93,56 +93,62 @@ class Scope(object):
 
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'
-    ):
+    ) -> 'Tuple[DataCell, Optional[int]]':
+        old_id = None
         if self.is_globally_accessible:
             old = self.lookup_data_cell_by_name_this_indentation(name)
             if old is not None:
+                old_id = old.obj_id
                 # don't mark children as having stale dep unless old dep was of same type
                 old.update_deps(set(), add=False, mark_children=isinstance(old, type(dc)))
         dc.update_deps(deps, add=False)
         self.put(name, dc)
-        return dc
+        return dc, old_id
 
-    def _upsert_function_data_cell_for_name(self, name: str, deps: 'Set[DataCell]'):
-        dc = FunctionDataCell(self.make_child_scope(name), name)
+    def _upsert_function_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]'):
+        dc = FunctionDataCell(self.make_child_scope(name), name, obj_id)
         return self._upsert_and_mark_children_if_different_data_cell_type(dc, name, deps)
 
-    def _upsert_class_data_cell_for_name(self, name: str, deps: 'Set[DataCell]', class_scope: 'Scope'):
-        dc = ClassDataCell(class_scope, name)
+    def _upsert_class_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]', class_scope: 'Scope'):
+        dc = ClassDataCell(class_scope, name, obj_id)
         return self._upsert_and_mark_children_if_different_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
             self,
             name: str,
+            obj_id: int,
             deps: 'Set[DataCell]',
             add=False,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-    ):
+    ) -> 'Tuple[DataCell, Optional[int]]':
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert not add
-            return self._upsert_function_data_cell_for_name(name, deps)
+            return self._upsert_function_data_cell_for_name(name, obj_id, deps)
         if class_scope is not None:
             assert not add
-            return self._upsert_class_data_cell_for_name(name, deps, class_scope)
+            return self._upsert_class_data_cell_for_name(name, obj_id, deps, class_scope)
+        old_id = None
         if self.is_globally_accessible:
             dc = self.lookup_data_cell_by_name_this_indentation(name)
             if dc is not None:
+                old_id = dc.obj_id
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
                     dc.update_deps(deps, add=add)
-                    return dc
+                    dc.obj_id = obj_id
+                    return dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(dc)
-        dc = DataCell(name, deps)
+        dc = DataCell(name, obj_id, deps)
         self.put(name, dc)
         for dep in deps:
             dep.children.add(dc)
-        return dc
+        return dc, old_id
 
     @property
     def is_global(self):

@@ -9,9 +9,9 @@ from ..data_cell import DataCell
 from ..scope import Scope
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Set, Tuple, Union
+    from typing import Any, Dict, List, Set, Tuple, Union
     Mutation = Tuple[DataCell, Set[DataCell]]
-    QualifiedName = Tuple[Scope, str]
+    SavedStoreData = Tuple[Scope, Any, str]
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ class AttributeTracingManager(object):
         setattr(builtins, self.end_tracer_name, self.expr_tracer)
         self.ast_transformer = AttributeTracingNodeTransformer(self.start_tracer_name, self.end_tracer_name)
         self.loaded_data_cells: Set[DataCell] = set()
-        self.stored_scope_qualified_names: Set[QualifiedName] = set()
-        self.aug_stored_scope_qualified_names: Set[QualifiedName] = set()
+        self.saved_store_data: Set[SavedStoreData] = set()
+        self.saved_aug_store_data: Set[SavedStoreData] = set()
         self.mutations: List[Mutation] = []
-        self.stack: List[Tuple[Set[QualifiedName], Set[QualifiedName], List[Mutation], Scope, Scope]] = []
+        self.stack: List[Tuple[Set[SavedStoreData], Set[SavedStoreData], List[Mutation], Scope, Scope]] = []
 
     def __del__(self):
         if hasattr(builtins, self.start_tracer_name):
@@ -41,22 +41,22 @@ class AttributeTracingManager(object):
 
     def push_stack(self, new_scope: 'Scope'):
         self.stack.append((
-            self.stored_scope_qualified_names,
-            self.aug_stored_scope_qualified_names,
+            self.saved_store_data,
+            self.saved_aug_store_data,
             self.mutations,
             self.active_scope,
             self.original_active_scope,
         ))
-        self.stored_scope_qualified_names = set()
-        self.aug_stored_scope_qualified_names = set()
+        self.saved_store_data = set()
+        self.saved_aug_store_data = set()
         self.mutations = []
         self.original_active_scope = new_scope
         self.active_scope = new_scope
 
     def pop_stack(self):
         (
-            self.stored_scope_qualified_names,
-            self.aug_stored_scope_qualified_names,
+            self.saved_store_data,
+            self.saved_aug_store_data,
             self.mutations,
             self.active_scope,
             self.original_active_scope,
@@ -93,13 +93,13 @@ class AttributeTracingManager(object):
             # retval is None, this is a likely signal that we have a mutation
             data_cell = scope.lookup_data_cell_by_name_this_indentation(attr)
             if data_cell is None:
-                data_cell = DataCell(attr)
+                data_cell = DataCell(attr, id(getattr(obj, attr, None)))
                 scope.put(attr, data_cell)
             self.loaded_data_cells.add(data_cell)
         if ctx == 'Store':
-            self.stored_scope_qualified_names.add((scope, attr))
+            self.saved_store_data.add((scope, obj, attr))
         if ctx == 'AugStore':
-            self.aug_stored_scope_qualified_names.add((scope, attr))
+            self.saved_aug_store_data.add((scope, obj, attr))
         return obj
 
     def expr_tracer(self, obj):
@@ -109,11 +109,12 @@ class AttributeTracingManager(object):
 
     def reset(self):
         self.loaded_data_cells = set()
-        self.stored_scope_qualified_names = set()
-        self.aug_stored_scope_qualified_names = set()
+        self.saved_store_data = set()
+        self.saved_aug_store_data = set()
         self.active_scope = self.original_active_scope
 
 
+# TODO: handle subscripts
 class AttributeTracingNodeTransformer(ast.NodeTransformer):
     def __init__(self, start_tracer: str, end_tracer: str):
         self.start_tracer = start_tracer

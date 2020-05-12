@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 from contextlib import contextmanager
+import logging
 from typing import TYPE_CHECKING
 
 from ..analysis import get_statement_lval_and_rval_symbols
@@ -12,6 +13,8 @@ if TYPE_CHECKING:
     from ..data_cell import DataCell
     from ..safety import DependencySafety
     from ..scope import Scope
+
+logger = logging.getLogger(__name__)
 
 
 class TraceStatement(object):
@@ -61,10 +64,17 @@ class TraceStatement(object):
             raise TypeError('got non-function data cell %s for name %s' % (func_cell, func_name))
         return func_cell.scope
 
+    def _get_obj_id_for_name(self, name):
+        try:
+            return id(self.frame.f_locals[name])
+        except KeyError:
+            logger.error('unable to find object for name %s', name)
+            return id(None)
+
     def make_lhs_data_cells_if_has_lval(self):
         if not self.has_lval:
-            assert len(self.safety.attr_trace_manager.stored_scope_qualified_names) == 0
-            assert len(self.safety.attr_trace_manager.aug_stored_scope_qualified_names) == 0
+            assert len(self.safety.attr_trace_manager.saved_store_data) == 0
+            assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0
             return
         if not self.safety.dependency_tracking_enabled:
             return
@@ -83,17 +93,21 @@ class TraceStatement(object):
                 self.safety.namespaces[id(class_ref)] = self.class_scope
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
+            obj_id = self._get_obj_id_for_name(name)
             self.scope.upsert_data_cell_for_name(
-                name, rval_deps, add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
+                name, obj_id, rval_deps,
+                add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
             )
-        if len(self.safety.attr_trace_manager.stored_scope_qualified_names) > 0:
+        if len(self.safety.attr_trace_manager.saved_store_data) > 0:
             assert isinstance(self.stmt_node, ast.Assign)
-        if len(self.safety.attr_trace_manager.aug_stored_scope_qualified_names) > 0:
+        if len(self.safety.attr_trace_manager.saved_aug_store_data) > 0:
             assert isinstance(self.stmt_node, ast.AugAssign)
-        for scope, name in self.safety.attr_trace_manager.stored_scope_qualified_names:
-            scope.upsert_data_cell_for_name(name, rval_deps, add=False, is_function_def=False, class_scope=None)
-        for scope, name in self.safety.attr_trace_manager.aug_stored_scope_qualified_names:
-            scope.upsert_data_cell_for_name(name, rval_deps, add=True, is_function_def=False, class_scope=None)
+        for scope, obj, attr in self.safety.attr_trace_manager.saved_store_data:
+            obj_id = id(getattr(obj, attr, None))
+            scope.upsert_data_cell_for_name(attr, obj_id, rval_deps, add=False, is_function_def=False, class_scope=None)
+        for scope, obj, attr in self.safety.attr_trace_manager.saved_aug_store_data:
+            obj_id = id(getattr(obj, attr, None))
+            scope.upsert_data_cell_for_name(attr, obj_id, rval_deps, add=True, is_function_def=False, class_scope=None)
 
     def finished_execution_hook(self):
         if self.marked_finished:

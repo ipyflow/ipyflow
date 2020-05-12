@@ -11,9 +11,11 @@ class DataCell(object):
     def __init__(
             self,
             name: str,
+            obj_id: int,
             parents: 'Optional[Set[DataCell]]' = None,
     ):
         self.name = str(name)
+        self.obj_id = obj_id
         if parents is None:
             parents = set()
         self.parents: Set[DataCell] = parents

@@ -3,7 +3,10 @@ import inspect
 from typing import TYPE_CHECKING
 
 from IPython import get_ipython
-import pandas as pd
+try:
+    import pandas
+except ImportError:
+    pandas = None
 
 from .analysis import AttributeSymbolChain, CallPoint
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
@@ -92,15 +95,13 @@ class Scope(object):
             cur_scope = namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
-            # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
-            try:
-                if isinstance(obj, pd.DataFrame):
-                    name_to_obj = obj.__dict__
-                    name_to_obj.update(obj.to_dict())
-                else:
-                    name_to_obj = dict(inspect.getmembers(obj))
-            except:  # noqa
-                name_to_obj = None
+            
+            if (pandas is not None) and isinstance(obj, pandas.DataFrame):
+                # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
+                name_to_obj = obj.__dict__
+                name_to_obj.update(obj.to_dict())
+            else:
+                name_to_obj = dict(inspect.getmembers(obj))
 
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'

@@ -52,3 +52,7 @@ History
 0.0.18 (2020-05-12)
 ------------------
 * Fix issue detecting completion of statement with calls inside of comprehensions;
+
+0.0.19 (2020-05-12)
+------------------
+* Don't require pandas;

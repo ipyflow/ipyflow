@@ -674,7 +674,8 @@ d = {
 def test_list_mutation():
     run_cell('lst = list(range(5))')
     run_cell('x = 42')
-    run_cell('lst.append(x)')
+    run_cell('asdf = []')
+    run_cell('asdf.append(lst.append(x))')
     run_cell('x = 43')
     run_cell('logging.info(lst)')
     assert_detected('lst depends on stale x')

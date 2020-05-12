@@ -157,12 +157,12 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
     @contextmanager
     def attribute_load_context(self, override=True):
         old = self.inside_attr_load_chain
-        self.inside_attr_load_chain = override or old
+        self.inside_attr_load_chain = override
         yield
         self.inside_attr_load_chain = old
 
     def visit_Attribute(self, node: 'ast.Attribute'):
-        override_active_scope = isinstance(node.ctx, ast.Load)
+        override_active_scope = isinstance(node.ctx, ast.Load) or self.inside_attr_load_chain
         override_active_scope_arg = ast.Constant(override_active_scope)
         ast.copy_location(override_active_scope_arg, node)
         with self.attribute_load_context(override_active_scope):
@@ -201,7 +201,8 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
                 )))
                 ast.copy_location(replacement_args[-1], arg)
             else:
-                replacement_args.append(arg)
+                with self.attribute_load_context(False):
+                    replacement_args.append(self.visit(arg))
         node.args = replacement_args
         if self.inside_attr_load_chain:
             return node

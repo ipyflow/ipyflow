@@ -349,7 +349,6 @@ def foo(y=x):
     assert_detected("Should have detected stale dependency of fn foo() on x")
 
 
-@skipif_known_failing
 def test_same_pointer():
     # a and b are actually pointing to the same thing
     run_cell('a = [7]')
@@ -358,9 +357,9 @@ def test_same_pointer():
 
     run_cell('a[0] = 8')
     run_cell('logging.info(b)')
-    assert_not_detected("b is an alias of a, updating a should automatically update b as well")
+    assert_not_detected('`b` is an alias of `a`, updating a should automatically update `b` as well')
     run_cell('logging.info(c)')
-    assert_detected("c does not point to the same thing as a or b, thus there is a stale dependency here ")
+    assert_detected('`c` does not point to the same thing as `a` or `b`, thus there is a stale dependency here')
 
 
 def test_func_assign_objs():

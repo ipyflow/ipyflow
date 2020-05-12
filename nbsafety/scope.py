@@ -93,17 +93,18 @@ class Scope(object):
 
     def _upsert_and_mark_children_if_different_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'
-    ) -> 'Tuple[DataCell, Optional[int]]':
+    ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
         old_id = None
+        old_dc = None
         if self.is_globally_accessible:
-            old = self.lookup_data_cell_by_name_this_indentation(name)
-            if old is not None:
-                old_id = old.obj_id
+            old_dc = self.lookup_data_cell_by_name_this_indentation(name)
+            if old_dc is not None:
+                old_id = old_dc.obj_id
                 # don't mark children as having stale dep unless old dep was of same type
-                old.update_deps(set(), add=False, mark_children=isinstance(old, type(dc)))
+                old_dc.update_deps(set(), add=False, mark_children=isinstance(old_dc, type(dc)))
         dc.update_deps(deps, add=False)
         self.put(name, dc)
-        return dc, old_id
+        return dc, old_dc, old_id
 
     def _upsert_function_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]'):
         dc = FunctionDataCell(self.make_child_scope(name), name, obj_id)
@@ -121,7 +122,7 @@ class Scope(object):
             add=False,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-    ) -> 'Tuple[DataCell, Optional[int]]':
+    ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert not add
@@ -130,25 +131,26 @@ class Scope(object):
             assert not add
             return self._upsert_class_data_cell_for_name(name, obj_id, deps, class_scope)
         old_id = None
+        old_dc = None
         if self.is_globally_accessible:
-            dc = self.lookup_data_cell_by_name_this_indentation(name)
-            if dc is not None:
-                old_id = dc.obj_id
+            old_dc = self.lookup_data_cell_by_name_this_indentation(name)
+            if old_dc is not None:
+                old_id = old_dc.obj_id
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
-                    dc.update_deps(deps, add=add)
-                    dc.obj_id = obj_id
-                    return dc, old_id
+                    old_dc.update_deps(deps, add=add)
+                    old_dc.obj_id = obj_id
+                    return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
-                    deps.add(dc)
+                    deps.add(old_dc)
         dc = DataCell(name, obj_id, deps)
         self.put(name, dc)
         for dep in deps:
             dep.children.add(dc)
-        return dc, old_id
+        return dc, old_dc, old_id
 
     @property
     def is_global(self):

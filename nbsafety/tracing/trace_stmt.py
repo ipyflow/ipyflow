@@ -71,6 +71,19 @@ class TraceStatement(object):
             logger.error('unable to find object for name %s', name)
             return id(None)
 
+    def _handle_aliases(
+            self,
+            old_id: Optional[int], old_dc: Optional[DataCell],
+            obj_id: Optional[int], dc: Optional[DataCell]
+    ):
+        if old_id is not None and old_dc is not None:
+            self.safety.aliases[old_id].discard(old_dc)
+        if obj_id is not None and dc is not None:
+            self.safety.aliases[obj_id].add(dc)
+        if old_id == obj_id:
+            for alias_dc in self.safety.aliases[obj_id]:
+                alias_dc.update_deps(set(), add=True)
+
     def make_lhs_data_cells_if_has_lval(self):
         if not self.has_lval:
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
@@ -94,20 +107,27 @@ class TraceStatement(object):
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             obj_id = self._get_obj_id_for_name(name)
-            self.scope.upsert_data_cell_for_name(
+            dc, old_dc, old_id = self.scope.upsert_data_cell_for_name(
                 name, obj_id, rval_deps,
                 add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
             )
+            self._handle_aliases(old_id, old_dc, obj_id, dc)
         if len(self.safety.attr_trace_manager.saved_store_data) > 0:
             assert isinstance(self.stmt_node, ast.Assign)
         if len(self.safety.attr_trace_manager.saved_aug_store_data) > 0:
             assert isinstance(self.stmt_node, ast.AugAssign)
         for scope, obj, attr in self.safety.attr_trace_manager.saved_store_data:
             obj_id = id(getattr(obj, attr, None))
-            scope.upsert_data_cell_for_name(attr, obj_id, rval_deps, add=False, is_function_def=False, class_scope=None)
+            dc, old_dc, old_id = scope.upsert_data_cell_for_name(
+                attr, obj_id, rval_deps, add=False, is_function_def=False, class_scope=None
+            )
+            self._handle_aliases(old_id, old_dc, obj_id, dc)
         for scope, obj, attr in self.safety.attr_trace_manager.saved_aug_store_data:
             obj_id = id(getattr(obj, attr, None))
-            scope.upsert_data_cell_for_name(attr, obj_id, rval_deps, add=True, is_function_def=False, class_scope=None)
+            dc, old_dc, old_id = scope.upsert_data_cell_for_name(
+                attr, obj_id, rval_deps, add=True, is_function_def=False, class_scope=None
+            )
+            self._handle_aliases(old_id, old_dc, obj_id, dc)
 
     def finished_execution_hook(self):
         if self.marked_finished:

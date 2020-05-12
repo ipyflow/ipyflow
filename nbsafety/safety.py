@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import sys
@@ -41,6 +42,7 @@ class DependencySafety(object):
     def __init__(self, cell_magic_name=None, line_magic_name=None, **kwargs):
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
+        self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False

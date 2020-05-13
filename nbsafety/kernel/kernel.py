@@ -10,7 +10,6 @@ from ..version import __version__
 
 _SAFETY_STATE = '__SAFETY_STATE'
 _CELL_MAGIC_NAME = '__SAFETY_CELL_MAGIC'
-_LINE_MAGIC_NAME = '__SAFETY_LINE_MAGIC'
 
 
 class SafeKernel(IPythonKernel):
@@ -26,7 +25,6 @@ class SafeKernel(IPythonKernel):
         self.shell.run_cell(
             f'{_SAFETY_STATE} = {DependencySafety.__name__}'
             f'(cell_magic_name="{_CELL_MAGIC_NAME}",'
-            f' line_magic_name="{_LINE_MAGIC_NAME}",'
             f' store_history=False'
             f')'
         )
@@ -42,8 +40,5 @@ del _foo
 
     def do_execute(self, code, silent, store_history=False,
                    user_expressions=None, allow_stdin=False):
-        if code.split()[0] == "%safety":
-            code = "%{} {}".format(_LINE_MAGIC_NAME, ' '.join(code.split()[1:]))
-            return super().do_execute(code, silent, False, user_expressions, allow_stdin)
         code = f"%%{_CELL_MAGIC_NAME}\n{code}"
         return super().do_execute(code, silent, False, user_expressions, allow_stdin)

@@ -60,3 +60,7 @@ History
 0.0.20 (2020-05-12)
 ------------------
 * Minor stability fix;
+
+0.0.21 (2020-05-12)
+------------------
+* Increment cell numbers properly with %safety magic; other minor bugfixes;

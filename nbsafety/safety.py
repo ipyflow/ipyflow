@@ -26,7 +26,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-MAX_WARNINGS = 10
+_MAX_WARNINGS = 10
+_SAFETY_LINE_MAGIC = 'safety'
 
 
 def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
@@ -39,7 +40,7 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
 
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
-    def __init__(self, cell_magic_name=None, line_magic_name=None, **kwargs):
+    def __init__(self, cell_magic_name=None, **kwargs):
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
@@ -55,7 +56,7 @@ class DependencySafety(object):
             self.prev_trace_state: Optional[TraceState] = None
         self._cell_magic = self._make_cell_magic(cell_magic_name)
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
-        self._line_magic = self._make_line_magic(line_magic_name)
+        self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self._last_cell_ast: Optional[ast.Module] = None
         self._track_dependencies = True
@@ -91,7 +92,7 @@ class DependencySafety(object):
             if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_nodes_with_stale_deps:
-                    if warning_counter >= MAX_WARNINGS:
+                    if warning_counter >= _MAX_WARNINGS:
                         logger.warning(str(len(self._prev_cell_nodes_with_stale_deps) - warning_counter) +
                                        " more nodes with stale dependencies skipped...")
                         break
@@ -146,22 +147,22 @@ class DependencySafety(object):
                 yield
         finally:
             sys.settrace(None)
-            # TODO: add more explicit way to check for an error in dependency tracing code
-            if self.trace_state.prev_trace_stmt_in_cur_frame is None:
+            # TODO: actually handle errors that occurred in our code while tracing
+            if self.trace_state.error_occurred:
                 if untraced_backup is not None:
                     untraced_backup()
             else:
                 self._reset_trace_state_hook()
 
     def _reset_trace_state_hook(self):
-        if self.dependency_tracking_enabled:
+        if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
             self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
         self.attr_trace_manager.reset()
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state
         self.trace_state = TraceState(self)
 
-    def _make_line_magic(self, line_magic_name):
+    def _make_line_magic(self):
         def _safety(line_: str):
             line = line_.split()
             if not line or line[0] not in [
@@ -189,8 +190,8 @@ class DependencySafety(object):
             elif line[0] == "turn_on_warnings_for":
                 return line_magics.turn_on_warnings_for(self, line)
 
-        if line_magic_name is not None:
-            _safety.__name__ = line_magic_name
+        # TODO (smacke): probably not a great idea to rely on this
+        _safety.__name__ = _SAFETY_LINE_MAGIC
         return register_line_magic(_safety)
 
     @property

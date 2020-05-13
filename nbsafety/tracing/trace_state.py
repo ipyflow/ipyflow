@@ -25,6 +25,7 @@ class TraceState(object):
         self.source: Optional[str] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.prev_event: Optional[TraceEvent] = None
+        self.error_occurred = False
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
         if event not in (

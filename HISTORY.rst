@@ -80,3 +80,7 @@ History
 0.0.25 (2020-05-13)
 ------------------
 * Hack to try and install kernel spec as post install script;
+
+0.0.26 (2020-05-13)
+------------------
+* More hacks to try and install kernel spec as post install script (switch to egg + use manifest);

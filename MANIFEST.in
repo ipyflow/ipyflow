@@ -1,0 +1,2 @@
+include README.md HISTORY.rst requirements.txt
+include resources/*

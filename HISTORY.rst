@@ -76,3 +76,7 @@ History
 0.0.24 (2020-05-13)
 ------------------
 * Add logo;
+
+0.0.25 (2020-05-13)
+------------------
+* Hack to try and install kernel spec as post install script;

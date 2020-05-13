@@ -55,6 +55,11 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
                 self.visit(target)
         self.visit(node.value)
 
+    def visit_AnnAssign(self, node):
+        with self.gather_lvals_context():
+            self.visit(node.target)
+        self.visit(node.value)
+
     def visit_AugAssign(self, node):
         self.should_add = True
         with self.gather_lvals_context():

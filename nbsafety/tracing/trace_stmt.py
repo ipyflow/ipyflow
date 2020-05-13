@@ -107,7 +107,7 @@ class TraceStatement(object):
             )
             self._handle_aliases(old_id, old_dc, obj_id, dc)
         if len(self.safety.attr_trace_manager.saved_store_data) > 0:
-            assert isinstance(self.stmt_node, ast.Assign)
+            assert isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign))
         if len(self.safety.attr_trace_manager.saved_aug_store_data) > 0:
             assert isinstance(self.stmt_node, ast.AugAssign)
         for scope, obj, attr in self.safety.attr_trace_manager.saved_store_data:
@@ -147,5 +147,5 @@ class TraceStatement(object):
     def has_lval(self):
         # TODO: expand to method calls, etc.
         return isinstance(self.stmt_node, (
-            ast.Assign, ast.AugAssign, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.For
+            ast.Assign, ast.AnnAssign, ast.AugAssign, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.For
         ))

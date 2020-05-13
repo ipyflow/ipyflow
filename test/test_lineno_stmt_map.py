@@ -7,15 +7,15 @@ from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
 def test_for_loop():
     code = """
 for i in range(10):
-    a = i
+    a: int = i
     b = a + i
-    lst = [a, b]
+    lst: List[int] = [a, b]
 """.strip()
     mapping = compute_lineno_to_stmt_mapping(code)
     assert isinstance(mapping[1], ast.For)
-    assert isinstance(mapping[2], ast.Assign)
+    assert isinstance(mapping[2], ast.AnnAssign)
     assert isinstance(mapping[3], ast.Assign)
-    assert isinstance(mapping[4], ast.Assign)
+    assert isinstance(mapping[4], ast.AnnAssign)
 
 
 def test_multiline_for_loop():

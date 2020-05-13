@@ -50,6 +50,9 @@ class PreCheck(ast.NodeVisitor):
             else:
                 self.visit_Assign_or_AugAssign_target(target_node)
 
+    def visit_AnnAssign(self, node: ast.AnnAssign):
+        self.visit_Assign_or_AugAssign_target(node.target)
+
     def visit_AugAssign(self, node: ast.AugAssign):
         self.visit_Assign_or_AugAssign_target(node.target)
 

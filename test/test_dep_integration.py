@@ -1131,6 +1131,14 @@ foo.y = x + 7
     assert_detected('`x` has stale dep on `foo` (transitively through `foo.y`)')
 
 
+def test_typed_assignment():
+    run_cell('a = 0')
+    run_cell('b: int = a + 1')
+    run_cell('a: int = 42')
+    run_cell('logging.info(b)')
+    assert_detected('`b` has stale dep on `a`')
+
+
 def test_pandas():
     run_cell('import numpy as np')
     run_cell('import pandas as pd')

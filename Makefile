@@ -5,7 +5,7 @@ clean:
 	rm -rf build/ dist/ nbsafety.egg-info/
 
 dist: clean
-	python setup.py sdist bdist_egg
+	python setup.py sdist bdist_wheel --universal
 
 deploy: dist
 	twine upload dist/*

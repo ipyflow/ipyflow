@@ -84,3 +84,7 @@ History
 0.0.26 (2020-05-13)
 ------------------
 * More hacks to try and install kernel spec as post install script (switch to egg + use manifest);
+
+0.0.27 (2020-05-13)
+------------------
+* Give up on bdist_egg;

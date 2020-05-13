@@ -11,15 +11,12 @@ from subprocess import check_call
 pkg_name = 'nbsafety'
 
 
-def make_post_install_hook(install_or_develop, is_develop):
+def make_post_install_hook(install_or_develop):
     class PostInstallHook(install_or_develop):
         """Post-installation for installation mode."""
         def run(self):
             # ref: https://stackoverflow.com/questions/21915469/python-setuptools-install-requires-is-ignored-when-overriding-cmdclass
-            if is_develop:
-                super().run()
-            else:
-                super().do_egg_install()
+            super().run()
             python_command_suffix = ''
             if platform.system().lower().startswith('win'):
                 python_command_suffix = '.exe'
@@ -58,8 +55,8 @@ setup(
         'Programming Language :: Python :: 3.7',
     ],
     cmdclass={
-        'develop': make_post_install_hook(develop, True),
-        'install': make_post_install_hook(install, False),
+        'develop': make_post_install_hook(develop),
+        'install': make_post_install_hook(install),
     },
 )
 

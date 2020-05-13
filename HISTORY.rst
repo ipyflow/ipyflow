@@ -64,3 +64,7 @@ History
 0.0.21 (2020-05-12)
 ------------------
 * Increment cell numbers properly with %safety magic; other minor bugfixes;
+
+0.0.22 (2020-05-12)
+------------------
+* Increment cell number if precheck failed;

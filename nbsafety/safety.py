@@ -122,6 +122,9 @@ class DependencySafety(object):
             with save_number_of_currently_executing_cell():
                 # Stage 1: Precheck.
                 if self._precheck_for_stale(cell):
+                    # FIXME: hack to increase cell number
+                    # ideally we won't show a cell number at all if we fail precheck since nothing executed
+                    run_cell('None', store_history=self.store_history)
                     return
 
                 def _backup():

@@ -88,3 +88,7 @@ History
 0.0.27 (2020-05-13)
 ------------------
 * Give up on bdist_egg;
+
+0.0.28 (2020-05-13)
+------------------
+* Resort to hacky `atexit` command register call to facilitate post install script for kernel;

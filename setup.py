@@ -1,27 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import atexit
 import platform
 import os
 from setuptools import setup, find_packages
-from setuptools.command.develop import develop
-from setuptools.command.install import install
 from subprocess import check_call
 
 pkg_name = 'nbsafety'
 
 
-def make_post_install_hook(install_or_develop):
-    class PostInstallHook(install_or_develop):
-        """Post-installation for installation mode."""
-        def run(self):
-            # ref: https://stackoverflow.com/questions/21915469/python-setuptools-install-requires-is-ignored-when-overriding-cmdclass
-            super().run()
-            python_command_suffix = ''
-            if platform.system().lower().startswith('win'):
-                python_command_suffix = '.exe'
-            check_call(f'python{python_command_suffix} -m {pkg_name}.install'.split())
-    return PostInstallHook
+def _post_install_hook():
+    python_command_suffix = ''
+    if platform.system().lower().startswith('win'):
+        python_command_suffix = '.exe'
+    check_call(f'python{python_command_suffix} -m {pkg_name}.install'.split())
+
+
+atexit.register(_post_install_hook)
 
 
 def read_file(fname):
@@ -54,10 +50,6 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
     ],
-    cmdclass={
-        'develop': make_post_install_hook(develop),
-        'install': make_post_install_hook(install),
-    },
 )
 
 # python setup.py sdist bdist_wheel --universal

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import platform
 import sys
 import argparse
 
@@ -22,6 +23,13 @@ kernel_json = {
 def install_my_kernel_spec(user=True, prefix=None):
     with TemporaryDirectory() as td:
         os.chmod(td, 0o755)  # Starts off as 700, not user readable
+        cp = 'cp'
+        if platform.system().lower().startswith('win'):
+            cp = 'copy'
+        resources = 'resources'
+        logo32 = os.path.join(resources, 'logo-32x32.png')
+        logo64 = os.path.join(resources, 'logo-64x64.png')
+        os.system(f'{cp} {logo32} {logo64} {td}')
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
         # TODO: Copy resources once they're specified

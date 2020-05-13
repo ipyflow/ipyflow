@@ -69,6 +69,10 @@ History
 ------------------
 * Increment cell number if precheck failed;
 
-0.0.23 (2020-05-12)
+0.0.23 (2020-05-13)
 ------------------
 * Support AnnAssign (i.e. assignment with type annotations);
+
+0.0.24 (2020-05-13)
+------------------
+* Add logo;

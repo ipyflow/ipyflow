@@ -108,7 +108,7 @@ class DependencySafety(object):
             if self._refresh_all_stale_nodes:
                 for node in self._prev_cell_nodes_with_stale_deps:
                     node.defined_cell_num = node.required_cell_num
-            self._prev_cell_nodes_with_stale_deps.clear()
+                self._prev_cell_nodes_with_stale_deps.clear()
 
         self._last_refused_code = None
         return False

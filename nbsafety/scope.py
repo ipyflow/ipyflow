@@ -188,3 +188,6 @@ class Scope(object):
             return path
         else:
             return self.parent_scope.full_path + path
+
+    def get_scope_dictionary(self):
+        return self._data_cell_by_name

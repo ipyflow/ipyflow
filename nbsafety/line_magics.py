@@ -45,9 +45,9 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
 
 def show_graph(safety: 'DependencySafety'):
     graph = nx.DiGraph()
-    for name in safety.global_scope.data_cell_by_name:
+    for name in safety.global_scope.get_scope_dictionary():
         graph.add_node(name)
-    for node in safety.global_scope.data_cell_by_name.values():
+    for node in safety.global_scope.get_scope_dictionary().values():
         name = node.name
         for child_node in node.children:
             graph.add_edge(name, child_node.name)
@@ -75,7 +75,7 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
 
 def show_stale(safety: 'DependencySafety'):
     stale_set = set()
-    for data_cell in safety.global_scope.data_cell_by_name.values():
+    for data_cell in safety.global_scope.get_scope_dictionary().values():
         if data_cell.is_stale():
             stale_set.add(data_cell)
     if not stale_set:

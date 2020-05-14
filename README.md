@@ -30,11 +30,6 @@ Install
 To install, grab the package and install the Jupyter kernel spec as follows:
 ```bash
 pip install nbsafety
-```
-The kernel spec should be automatically installed. In case you do not see
-a kernel named `nbsafety` when doing `jupyter kernelspec list`, try running
-the following command:
-```bash
 python -m nbsafety.install
 ```
 

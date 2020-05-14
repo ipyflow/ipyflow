@@ -92,3 +92,7 @@ History
 0.0.28 (2020-05-13)
 ------------------
 * Resort to hacky `atexit` command register call to facilitate post install script for kernel;
+
+0.0.29 (2020-05-13)
+------------------
+* Give up on post installation of kernel spec and try to include resources dir in package;

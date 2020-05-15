@@ -92,7 +92,7 @@ class AttributeTracingManager(object):
         if scope is None:
             class_scope = self.namespaces.get(id(obj.__class__), None)
             if class_scope is not None:
-                # print('found class scope %s containing %s' % (class_scope, class_scope.data_cell_by_name.keys()))
+                # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_cells_this_indentation().keys()))
                 scope = class_scope.clone()
                 self.namespaces[obj_id] = scope
             else:
@@ -113,8 +113,13 @@ class AttributeTracingManager(object):
             self.mutation_candidate = (self.trace_event_counter[0], obj_id)
             data_cell = scope.lookup_data_cell_by_name_this_indentation(attr)
             if data_cell is None:
-                data_cell = DataCell(attr, id(getattr(obj, attr, None)))
-                scope.put(attr, data_cell)
+                try:
+                    obj_id = id(getattr(obj, attr, None))
+                except AttributeError:
+                    obj_id = None
+                if obj_id is not None:
+                    data_cell = DataCell(attr, obj_id)
+                    scope.put(attr, data_cell)
             self.loaded_data_cells.add(data_cell)
         if ctx == 'Store':
             self.saved_store_data.add((scope, obj, attr))

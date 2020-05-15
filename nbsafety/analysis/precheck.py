@@ -3,11 +3,10 @@ import ast
 import logging
 from typing import TYPE_CHECKING
 
-from .attr_symbols import get_attribute_symbol_chain
+from .attr_symbols import get_attribute_symbol_chain, AttributeSymbolChain
 from .mixins import SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from .attr_symbols import AttributeSymbolChain
     from typing import KeysView, List, Set, Union
 
 logger = logging.getLogger(__name__)
@@ -31,8 +30,11 @@ class PreCheck(ast.NodeVisitor):
         for node in module_node.body:
             self.visit(node)
             for name in get_all_names(node):
-                if name not in self.safe_set:
-                    check_set.add(name)
+                if name in self.safe_set:
+                    continue
+                if isinstance(name, AttributeSymbolChain) and name.symbols[0] in self.safe_set:
+                    continue
+                check_set.add(name)
         return check_set
 
     # In case of assignment, we put the new assigned variable into a safe_set

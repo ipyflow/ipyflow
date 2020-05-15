@@ -20,7 +20,8 @@ from .scope import Scope
 from .tracing import AttributeTracingManager, make_tracer, TraceState
 
 if TYPE_CHECKING:
-    from typing import Dict, Set, Optional
+    from typing import Dict, Set, Optional, Union
+    from ipykernel.comm import Comm
     from .data_cell import DataCell
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,7 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, **kwargs):
-        self.comm = kwargs.pop('comm', None)
+        self.comm: Comm = kwargs.pop('comm', None)
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
@@ -69,26 +70,39 @@ class DependencySafety(object):
         self.store_history = True
         logger.setLevel(logging.WARNING)
 
+    @staticmethod
+    def _get_cell_ast(cell):
+        return ast.parse('\n'.join(
+            [line for line in cell.strip().split('\n') if not line.startswith('%') and not line.endswith('?')])
+        )
+
+    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
+        if isinstance(cell, str):
+            cell = self._get_cell_ast(cell)
+        stale_nodes = set()
+        for name in precheck(cell, self.global_scope.all_data_cells_this_indentation().keys()):
+            if isinstance(name, str):
+                nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
+            elif isinstance(name, AttributeSymbolChain):
+                nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
+            else:
+                logger.warning('invalid type for name %s', name)
+                continue
+            for node in nodes:
+                if node is not None and node.is_stale():
+                    stale_nodes.add(node)
+        return stale_nodes
+
+    def _precheck_simple(self, cell):
+        return len(self._precheck_stale_nodes(cell)) > 0
+
     def _precheck_for_stale(self, cell):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
         # `defined_cell_num` is greater than or equal to required; if not we give a warning and return `True`.
-        self._last_cell_ast = ast.parse('\n'.join(
-            [line for line in cell.strip().split('\n') if not line.startswith('%') and not line.endswith('?')])
-        )
+        self._last_cell_ast = self._get_cell_ast(cell)
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_nodes_with_stale_deps.clear()
-            for name in precheck(self._last_cell_ast, self.global_scope.all_data_cells_this_indentation().keys()):
-                if isinstance(name, str):
-                    nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
-                elif isinstance(name, AttributeSymbolChain):
-                    nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
-                else:
-                    logger.warning('invalid type for name %s', name)
-                    continue
-                for node in nodes:
-                    if node is not None and node.is_stale():
-                        self._prev_cell_nodes_with_stale_deps.add(node)
+            self._prev_cell_nodes_with_stale_deps = self._precheck_stale_nodes(self._last_cell_ast)
             if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_nodes_with_stale_deps:
@@ -114,9 +128,27 @@ class DependencySafety(object):
         return False
 
     def _make_cell_magic(self, cell_magic_name):
+        if self.comm is not None:
+            def _responder(msg):
+                tasks = msg['content']['data']['payload']
+                stale_cells = []
+                fresh_cells = []
+                refresher_cells = []
+                for cell_id, cell_content in tasks.items():
+                    if self._precheck_simple(cell_content):
+                        stale_cells.append(cell_id)
+                    else:
+                        fresh_cells.append(cell_id)
+                for fresh_cell_id in fresh_cells:
+                    fresh_cell = tasks[fresh_cell_id]
+                    if any(not self._precheck_simple(
+                            f'{fresh_cell}\n{tasks[bad_cell]}'
+                    ) for bad_cell in stale_cells):
+                        refresher_cells.append(fresh_cell_id)
+                self.comm.send({'stale_cells': stale_cells, 'refresher_cells': refresher_cells})
+            self.comm.on_msg(_responder)
+
         def _dependency_safety(_, cell: str):
-            if self.comm is not None:
-                self.comm.send({'foo': 'bar'})
             if self._disable_level == 3:
                 run_cell(cell)
                 return

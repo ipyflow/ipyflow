@@ -98,7 +98,7 @@ class Scope(object):
 
             if (pandas is not None) and isinstance(obj, pandas.DataFrame):
                 # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
-                name_to_obj = obj.__dict__
+                name_to_obj = dict(obj.__dict__)
                 name_to_obj.update(obj.to_dict())
             else:
                 try:

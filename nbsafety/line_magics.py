@@ -75,7 +75,7 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
 
 def show_stale(safety: 'DependencySafety'):
     stale_set = set()
-    for data_cell in safety.global_scope.get_scope_dictionary().values():
+    for data_cell in safety.global_scope.all_data_cells_this_indentation().values():
         if data_cell.is_stale():
             stale_set.add(data_cell)
     if not stale_set:

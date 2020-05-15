@@ -38,6 +38,9 @@ class DataCell(object):
         return self.name
 
     def update_deps(self, new_deps: 'Set[DataCell]', add=False, propagate_to_children=True):
+        self.fresher_ancestors = set()
+        self.defined_cell_num = cell_counter()
+        self.required_cell_num = self.defined_cell_num
         if not add:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)

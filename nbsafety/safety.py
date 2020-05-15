@@ -41,6 +41,7 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, **kwargs):
+        self.comm = kwargs.pop('comm', None)
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
@@ -62,7 +63,6 @@ class DependencySafety(object):
         self._track_dependencies = True
 
         self._disable_level = 0
-        self._refresh_all_stale_nodes = True
         self._prev_cell_nodes_with_stale_deps: Set[DataCell] = set()
 
     def _logging_inited(self):
@@ -105,16 +105,18 @@ class DependencySafety(object):
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers
-            if self._refresh_all_stale_nodes:
-                for node in self._prev_cell_nodes_with_stale_deps:
-                    node.defined_cell_num = node.required_cell_num
-                self._prev_cell_nodes_with_stale_deps.clear()
+            for node in self._prev_cell_nodes_with_stale_deps:
+                node.defined_cell_num = node.required_cell_num
+                node.fresher_ancestors = set()
+            self._prev_cell_nodes_with_stale_deps.clear()
 
         self._last_refused_code = None
         return False
 
     def _make_cell_magic(self, cell_magic_name):
         def _dependency_safety(_, cell: str):
+            if self.comm is not None:
+                self.comm.send({'foo': 'bar'})
             if self._disable_level == 3:
                 run_cell(cell)
                 return

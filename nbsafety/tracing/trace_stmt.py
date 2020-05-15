@@ -68,8 +68,10 @@ class TraceStatement(object):
         try:
             return id(self.frame.f_locals[name])
         except KeyError:
-            logger.error('unable to find object for name %s', name)
-            return id(None)
+            # this can happen if assignment threw an exception, or if we
+            # iterate over an empty for loop
+            # logger.error('unable to find object for name %s', name)
+            return None
 
     def _handle_aliases(
             self,
@@ -101,11 +103,12 @@ class TraceStatement(object):
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             obj_id = self._get_obj_id_for_name(name)
-            dc, old_dc, old_id = self.scope.upsert_data_cell_for_name(
-                name, obj_id, rval_deps,
-                add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
-            )
-            self._handle_aliases(old_id, old_dc, obj_id, dc)
+            if obj_id is not None:
+                dc, old_dc, old_id = self.scope.upsert_data_cell_for_name(
+                    name, obj_id, rval_deps,
+                    add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
+                )
+                self._handle_aliases(old_id, old_dc, obj_id, dc)
         if len(self.safety.attr_trace_manager.saved_store_data) > 0:
             assert isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign))
         if len(self.safety.attr_trace_manager.saved_aug_store_data) > 0:

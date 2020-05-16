@@ -4,4 +4,5 @@ channels:
 dependencies:
 - python=3
 - nodejs
+- jupyterlab>=2
 - pip

@@ -4,7 +4,7 @@ import {
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { KernelMessage, Kernel } from '@jupyterlab/services';
+import { Kernel } from '@jupyterlab/services';
 
 import {
   INotebookTracker,
@@ -31,6 +31,13 @@ const extension: JupyterFrontEndPlugin<void> = {
           session.session.kernel,
           nbPanel.content
         );
+        session.kernelChanged.connect(() => {
+          commDisconnectHandler();
+          commDisconnectHandler = connectToComm(
+            session.session.kernel,
+            nbPanel.content
+          );
+        });
         session.statusChanged.connect((session, status) => {
           if (status === 'restarting' || status === 'autorestarting') {
             session.ready.then(() => {
@@ -55,23 +62,6 @@ const connectToComm = (
   notebook: Notebook
 ) => {
   const comm = kernel.createComm('nbsafety');
-  comm.open({});
-  comm.onMsg = (msg: KernelMessage.ICommMsgMsg) => {
-    const staleCellIds: any = msg['content']['data']['stale_cells'];
-    const refresherCellIds: any = msg['content']['data']['refresher_cells'];
-    notebook.widgets.forEach((cell, idx) => {
-      const inputCollapser =
-        cell.node.childNodes[1].firstChild.parentElement.firstElementChild;
-      if (staleCellIds.indexOf(cell.model.id) > -1) {
-        inputCollapser.classList.add(staleClass);
-      } else if (refresherCellIds.indexOf(cell.model.id) > -1) {
-        inputCollapser.classList.add(refresherClass);
-      } else {
-        inputCollapser.classList.remove(staleClass);
-        inputCollapser.classList.remove(refresherClass);
-      }
-    });
-  };
   const onExecution = (_: any, args: { notebook: Notebook; cell: any }) => {
     if (notebook !== args.notebook) {
       return;
@@ -82,7 +72,27 @@ const connectToComm = (
     });
     comm.send({ payload: payload });
   };
-  NotebookActions.executed.connect(onExecution, NotebookActions.executed);
+  comm.onMsg = (msg) => {
+    if (msg.content.data['type'] === 'establish') {
+      NotebookActions.executed.connect(onExecution, NotebookActions.executed);
+    } else if (msg.content.data['type'] === 'cell_freshness') {
+      const staleCellIds: any = msg.content.data['stale_cells'];
+      const refresherCellIds: any = msg.content.data['refresher_cells'];
+      notebook.widgets.forEach((cell, idx) => {
+        const inputCollapser =
+            cell.node.childNodes[1].firstChild.parentElement.firstElementChild;
+        if (staleCellIds.indexOf(cell.model.id) > -1) {
+          inputCollapser.classList.add(staleClass);
+        } else if (refresherCellIds.indexOf(cell.model.id) > -1) {
+          inputCollapser.classList.add(refresherClass);
+        } else {
+          inputCollapser.classList.remove(staleClass);
+          inputCollapser.classList.remove(refresherClass);
+        }
+      });
+    }
+  };
+  comm.open({});
   // return a disconnection handle
   return () => {
     NotebookActions.executed.disconnect(onExecution, NotebookActions.executed);

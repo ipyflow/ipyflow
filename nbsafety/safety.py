@@ -88,7 +88,13 @@ class DependencySafety(object):
                         f'{fresh_cell}\n{tasks[bad_cell]}'
                 ) for bad_cell in stale_cells):
                     refresher_cells.append(fresh_cell_id)
-            comm.send({'stale_cells': stale_cells, 'refresher_cells': refresher_cells})
+            comm.send({
+                'type': 'cell_freshness',
+                'stale_cells': stale_cells,
+                'refresher_cells': refresher_cells
+            })
+
+        comm.send({'type': 'establish'})
 
     def _logging_inited(self):
         self.store_history = True

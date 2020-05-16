@@ -5,6 +5,3 @@ dependencies:
 - python=3
 - nodejs
 - pip
-- pip:
-    - jupyterlab=2
-    - nbsafety

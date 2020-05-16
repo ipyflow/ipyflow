@@ -6,6 +6,7 @@ import logging
 import sys
 from typing import TYPE_CHECKING
 
+from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
 from .analysis import AttributeSymbolChain, precheck, compute_lineno_to_stmt_mapping
@@ -42,7 +43,6 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, **kwargs):
-        self.comm: Comm = kwargs.pop('comm', None)
         self.global_scope = Scope()
         self.namespaces: Dict[int, Scope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
@@ -52,6 +52,7 @@ class DependencySafety(object):
         self.trace_state = TraceState(self)
         self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope, self.trace_event_counter)
         self.store_history = kwargs.pop('store_history', True)
+        self.use_comm = kwargs.pop('use_comm', False)
         self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
@@ -65,6 +66,29 @@ class DependencySafety(object):
 
         self._disable_level = 0
         self._prev_cell_nodes_with_stale_deps: Set[DataCell] = set()
+
+        if self.use_comm:
+            get_ipython().kernel.comm_manager.register_target('nbsafety', self._comm_target)
+
+    def _comm_target(self, comm, open_msg):
+        @comm.on_msg
+        def _responder(msg):
+            tasks = msg['content']['data']['payload']
+            stale_cells = []
+            fresh_cells = []
+            refresher_cells = []
+            for cell_id, cell_content in tasks.items():
+                if self._precheck_simple(cell_content):
+                    stale_cells.append(cell_id)
+                else:
+                    fresh_cells.append(cell_id)
+            for fresh_cell_id in fresh_cells:
+                fresh_cell = tasks[fresh_cell_id]
+                if any(not self._precheck_simple(
+                        f'{fresh_cell}\n{tasks[bad_cell]}'
+                ) for bad_cell in stale_cells):
+                    refresher_cells.append(fresh_cell_id)
+            comm.send({'stale_cells': stale_cells, 'refresher_cells': refresher_cells})
 
     def _logging_inited(self):
         self.store_history = True
@@ -128,25 +152,6 @@ class DependencySafety(object):
         return False
 
     def _make_cell_magic(self, cell_magic_name):
-        if self.comm is not None:
-            def _responder(msg):
-                tasks = msg['content']['data']['payload']
-                stale_cells = []
-                fresh_cells = []
-                refresher_cells = []
-                for cell_id, cell_content in tasks.items():
-                    if self._precheck_simple(cell_content):
-                        stale_cells.append(cell_id)
-                    else:
-                        fresh_cells.append(cell_id)
-                for fresh_cell_id in fresh_cells:
-                    fresh_cell = tasks[fresh_cell_id]
-                    if any(not self._precheck_simple(
-                            f'{fresh_cell}\n{tasks[bad_cell]}'
-                    ) for bad_cell in stale_cells):
-                        refresher_cells.append(fresh_cell_id)
-                self.comm.send({'stale_cells': stale_cells, 'refresher_cells': refresher_cells})
-            self.comm.on_msg(_responder)
 
         def _dependency_safety(_, cell: str):
             if self._disable_level == 3:

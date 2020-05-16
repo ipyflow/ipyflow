@@ -78,6 +78,8 @@ class TraceState(object):
             # print('scope', trace_stmt.scope)
             with trace_stmt.replace_active_scope(self.safety.attr_trace_manager.active_scope):
                 # print('active scope', trace_stmt.scope)
+                # TODO: race condition with attr tracer here -- might not have finished tracing the Attribute ast node!
+                # To fix, we should set the scope for the Call event *after* it is done processing
                 self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
                 # print('post call scope', self.cur_frame_scope)
             logger.debug('entering scope %s', self.cur_frame_scope)

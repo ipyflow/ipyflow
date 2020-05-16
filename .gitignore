@@ -2,10 +2,15 @@
 **/__pycache__
 **/.mypy_cache
 **/.ipynb_checkpoints
+*.bundle.*
+*.tsbuildinfo
+lib/
+node_modules/
 build/
 dist/
 *.egg-info
 *.pyc
 *.ipynb
 !notebooks/*.ipynb
+**/[uU]ntitled*
 MANIFEST

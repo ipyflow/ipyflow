@@ -1,0 +1,8 @@
+
+.stale-cell {
+  border: 1px solid red;
+}
+
+.refresher-cell {
+  border: 1px solid forestgreen;
+}

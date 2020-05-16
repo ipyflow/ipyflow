@@ -1,4 +1,5 @@
 pip install -e .
 python -m nbsafety.install
+npm install
 jlpm build
 jupyter labextension link .

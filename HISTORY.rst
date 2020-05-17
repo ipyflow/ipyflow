@@ -96,3 +96,7 @@ History
 0.0.29 (2020-05-13)
 ------------------
 * Give up on post installation of kernel spec and try to include resources dir in package;
+
+0.0.30 (2020-05-16)
+------------------
+* Add front-end labextension to highlight stale and refresher cells;

@@ -1,8 +1,33 @@
 
-.stale-cell {
+.stale-cell .jp-InputCollapser {
   border: 1px solid red;
 }
 
-.refresher-cell {
+.stale-cell.jp-mod-selected .jp-Collapser-child {
+  background-color: red;
+}
+.stale-cell .jp-Collapser:hover > .jp-Collapser-child {
+  background-color: red;
+}
+
+.jp-Collapser-child.linked-stale {
+  background-color: red;
+  opacity: 0.6;
+}
+
+.refresher-cell .jp-Collapser {
   border: 1px solid forestgreen;
+}
+
+.refresher-cell.jp-mod-selected .jp-Collapser-child {
+  background-color: forestgreen;
+}
+
+.refresher-cell .jp-Collapser:hover > .jp-Collapser-child {
+  background-color: forestgreen;
+}
+
+.jp-Collapser-child.linked-refresher {
+  background-color: forestgreen;
+  opacity: 0.6;
 }

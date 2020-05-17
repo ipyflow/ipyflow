@@ -76,22 +76,23 @@ class DependencySafety(object):
             tasks = msg['content']['data']['payload']
             stale_cells = []
             fresh_cells = []
-            refresher_cells = []
             for cell_id, cell_content in tasks.items():
                 if self._precheck_simple(cell_content):
                     stale_cells.append(cell_id)
                 else:
                     fresh_cells.append(cell_id)
+            stale_links = defaultdict(list)
+            refresher_links = defaultdict(list)
             for fresh_cell_id in fresh_cells:
                 fresh_cell = tasks[fresh_cell_id]
-                if any(not self._precheck_simple(
-                        f'{fresh_cell}\n{tasks[bad_cell]}'
-                ) for bad_cell in stale_cells):
-                    refresher_cells.append(fresh_cell_id)
+                for stale_cell_id in stale_cells:
+                    if not self._precheck_simple(f'{fresh_cell}\n{tasks[stale_cell_id]}'):
+                        stale_links[stale_cell_id].append(fresh_cell_id)
+                        refresher_links[fresh_cell_id].append(stale_cell_id)
             comm.send({
                 'type': 'cell_freshness',
-                'stale_cells': stale_cells,
-                'refresher_cells': refresher_cells
+                'stale_links': stale_links,
+                'refresher_links': refresher_links,
             })
 
         comm.send({'type': 'establish'})

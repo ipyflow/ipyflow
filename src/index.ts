@@ -27,11 +27,13 @@ const extension: JupyterFrontEndPlugin<void> = {
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
+        clearStaleAndRefreshMarkerState(nbPanel.content);
         let commDisconnectHandler = connectToComm(
           session.session.kernel,
           nbPanel.content
         );
         session.kernelChanged.connect(() => {
+          clearStaleAndRefreshMarkerState(nbPanel.content);
           commDisconnectHandler();
           commDisconnectHandler = connectToComm(
             session.session.kernel,
@@ -41,6 +43,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         session.statusChanged.connect((session, status) => {
           if (status === 'restarting' || status === 'autorestarting') {
             session.ready.then(() => {
+              clearStaleAndRefreshMarkerState(nbPanel.content);
               commDisconnectHandler();
               commDisconnectHandler = connectToComm(
                 session.session.kernel,
@@ -56,6 +59,27 @@ const extension: JupyterFrontEndPlugin<void> = {
 
 const staleClass = 'stale-cell';
 const refresherClass = 'refresher-cell';
+const linkedStaleClass = 'linked-stale';
+const linkedRefresherClass = 'linked-refresher';
+
+const getJpCollapser = (elem: HTMLElement) => {
+  return elem.children.item(1).firstElementChild;
+};
+
+const clearStaleAndRefreshMarkerState = (notebook: Notebook) => {
+  notebook.widgets.forEach((cell, idx) => {
+    // clear any old event listeners
+    const oldCollapser = getJpCollapser(cell.node);
+    oldCollapser.firstElementChild.classList.remove(linkedStaleClass);
+    oldCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+
+    const newCollapser = oldCollapser.cloneNode(true);
+    oldCollapser.parentNode.replaceChild(newCollapser, oldCollapser);
+
+    cell.node.classList.remove(staleClass);
+    cell.node.classList.remove(refresherClass);
+  });
+};
 
 const connectToComm = (
   kernel: Kernel.IKernelConnection,
@@ -76,20 +100,40 @@ const connectToComm = (
     if (msg.content.data['type'] === 'establish') {
       NotebookActions.executed.connect(onExecution, NotebookActions.executed);
     } else if (msg.content.data['type'] === 'cell_freshness') {
-      const staleCellIds: any = msg.content.data['stale_cells'];
-      const refresherCellIds: any = msg.content.data['refresher_cells'];
+      clearStaleAndRefreshMarkerState(notebook);
+      const staleLinks: any = msg.content.data['stale_links'];
+      const refresherLinks: any = msg.content.data['refresher_links'];
+      const cellsById: {[id: string]: HTMLElement} = {};
       notebook.widgets.forEach((cell, idx) => {
-        const inputCollapser =
-            cell.node.childNodes[1].firstChild.parentElement.firstElementChild;
-        if (staleCellIds.indexOf(cell.model.id) > -1) {
-          inputCollapser.classList.add(staleClass);
-        } else if (refresherCellIds.indexOf(cell.model.id) > -1) {
-          inputCollapser.classList.add(refresherClass);
-        } else {
-          inputCollapser.classList.remove(staleClass);
-          inputCollapser.classList.remove(refresherClass);
-        }
+        cellsById[cell.model.id] = cell.node;
       });
+      for (const [id, elem] of Object.entries(cellsById)) {
+        if (staleLinks.hasOwnProperty(id)) {
+          elem.classList.add(staleClass);
+          getJpCollapser(elem).addEventListener('mouseover', () => {
+            for (const refresherId of staleLinks[id]) {
+              getJpCollapser(cellsById[refresherId]).firstElementChild.classList.add(linkedRefresherClass);
+            }
+          });
+          getJpCollapser(elem).addEventListener('mouseout', () => {
+            for (const refresherId of staleLinks[id]) {
+              getJpCollapser(cellsById[refresherId]).firstElementChild.classList.remove(linkedRefresherClass);
+            }
+          });
+        } else if (refresherLinks.hasOwnProperty(id)) {
+          elem.classList.add(refresherClass);
+          getJpCollapser(elem).addEventListener('mouseover', () => {
+            for (const staleId of refresherLinks[id]) {
+              getJpCollapser(cellsById[staleId]).firstElementChild.classList.add(linkedStaleClass);
+            }
+          });
+          getJpCollapser(elem).addEventListener('mouseout', () => {
+            for (const staleId of refresherLinks[id]) {
+              getJpCollapser(cellsById[staleId]).firstElementChild.classList.remove(linkedStaleClass);
+            }
+          });
+        }
+      }
     }
   };
   comm.open({});

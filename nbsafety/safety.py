@@ -103,9 +103,15 @@ class DependencySafety(object):
 
     @staticmethod
     def _get_cell_ast(cell):
-        return ast.parse('\n'.join(
-            [line for line in cell.strip().split('\n') if not line.startswith('%') and not line.endswith('?')])
-        )
+        return ast.parse('\n'.join([
+            line for line in cell.strip().split('\n')
+            if (
+                    not line.startswith('%')
+                    and not line.startswith('!')
+                    and not line.startswith('cd')
+                    and not line.endswith('?')
+            )
+        ]))
 
     def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
         if isinstance(cell, str):
@@ -206,7 +212,7 @@ class DependencySafety(object):
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
             self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
-        self.attr_trace_manager.reset()
+        self.attr_trace_manager.reset()  # should happen on finish_execution_hook, but since its idempotent do it again
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state
         self.trace_state = TraceState(self)

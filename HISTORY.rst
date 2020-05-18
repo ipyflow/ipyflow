@@ -100,3 +100,7 @@ History
 0.0.30 (2020-05-16)
 ------------------
 * Add front-end labextension to highlight stale and refresher cells;
+
+0.0.31 (2020-05-18)
+------------------
+* Bugfixes; version npm package and PyPI package in lockstep;

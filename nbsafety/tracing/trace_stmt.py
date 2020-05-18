@@ -136,6 +136,8 @@ class TraceStatement(object):
         if self.has_lval:
             self._make_lval_data_cells()
         else:
+            if len(self.safety.attr_trace_manager.saved_store_data) > 0:
+                print(self.safety.attr_trace_manager.saved_store_data)
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
             assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0
 
@@ -145,6 +147,7 @@ class TraceStatement(object):
         # print('finishing stmt', self.stmt_node)
         self.marked_finished = True
         self.handle_dependencies()
+        self.safety.attr_trace_manager.reset()
 
     @property
     def has_lval(self):

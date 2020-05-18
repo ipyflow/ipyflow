@@ -84,7 +84,7 @@ class TraceStatement(object):
             self.safety.aliases[obj_id].add(dc)
         if old_id == obj_id:
             for alias_dc in self.safety.aliases[obj_id]:
-                alias_dc.update_deps(set(), add=True)
+                alias_dc.mark_mutated()
 
     def _make_lval_data_cells(self):
         lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)

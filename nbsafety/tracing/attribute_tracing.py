@@ -26,10 +26,10 @@ class AttributeTracingManager(object):
         self.start_tracer_name = '_NBSAFETY_ATTR_TRACER_START'
         self.end_tracer_name = '_NBSAFETY_ATTR_TRACER_END'
         self.arg_recorder_name = '_NBSAFETY_ARG_RECORDER'
-        setattr(builtins, self.start_tracer_name, self.attribute_tracer)
+        setattr(builtins, self.start_tracer_name, self.attrsub_tracer)
         setattr(builtins, self.end_tracer_name, self.expr_tracer)
         setattr(builtins, self.arg_recorder_name, self.arg_recorder)
-        self.ast_transformer = AttributeTracingNodeTransformer(
+        self.ast_transformer = AttrSubTracingNodeTransformer(
             self.start_tracer_name, self.end_tracer_name, self.arg_recorder_name
         )
         self.loaded_data_cells: Set[DataCell] = set()
@@ -83,7 +83,7 @@ class AttributeTracingManager(object):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def attribute_tracer(self, obj, attr, ctx, override_active_scope):
+    def attrsub_tracer(self, obj, attr_or_subscript, ctx, override_active_scope):
         if obj is None:
             return None
         obj_id = id(obj)
@@ -111,20 +111,20 @@ class AttributeTracingManager(object):
             # retval is None, this is a likely signal that we have a mutation
             # TODO: this strategy won't work if the arguments themselves lead to traced function calls
             self.mutation_candidate = (self.trace_event_counter[0], obj_id)
-            data_cell = scope.lookup_data_cell_by_name_this_indentation(attr)
+            data_cell = scope.lookup_data_cell_by_name_this_indentation(attr_or_subscript)
             if data_cell is None:
                 try:
-                    obj_id = id(getattr(obj, attr, None))
+                    obj_id = id(getattr(obj, attr_or_subscript, None))
                 except AttributeError:
                     obj_id = None
                 if obj_id is not None:
-                    data_cell = DataCell(attr, obj_id)
-                    scope.put(attr, data_cell)
+                    data_cell = DataCell(attr_or_subscript, obj_id, scope)
+                    scope.put(attr_or_subscript, data_cell)
             self.loaded_data_cells.add(data_cell)
         if ctx == 'Store':
-            self.saved_store_data.add((scope, obj, attr))
+            self.saved_store_data.add((scope, obj, attr_or_subscript))
         if ctx == 'AugStore':
-            self.saved_aug_store_data.add((scope, obj, attr))
+            self.saved_aug_store_data.add((scope, obj, attr_or_subscript))
         return obj
 
     def expr_tracer(self, obj):
@@ -152,25 +152,25 @@ class AttributeTracingManager(object):
 
 
 # TODO: handle subscripts
-class AttributeTracingNodeTransformer(ast.NodeTransformer):
+class AttrSubTracingNodeTransformer(ast.NodeTransformer):
     def __init__(self, start_tracer: str, end_tracer: str, arg_recorder: str):
         self.start_tracer = start_tracer
         self.end_tracer = end_tracer
         self.arg_recorder = arg_recorder
-        self.inside_attr_load_chain = False
+        self.inside_attrsub_load_chain = False
 
     @contextmanager
-    def attribute_load_context(self, override=True):
-        old = self.inside_attr_load_chain
-        self.inside_attr_load_chain = override
+    def attrsub_load_context(self, override=True):
+        old = self.inside_attrsub_load_chain
+        self.inside_attrsub_load_chain = override
         yield
-        self.inside_attr_load_chain = old
+        self.inside_attrsub_load_chain = old
 
     def visit_Attribute(self, node: 'ast.Attribute'):
-        override_active_scope = isinstance(node.ctx, ast.Load) or self.inside_attr_load_chain
+        override_active_scope = isinstance(node.ctx, ast.Load) or self.inside_attrsub_load_chain
         override_active_scope_arg = ast.Constant(override_active_scope)
         ast.copy_location(override_active_scope_arg, node)
-        with self.attribute_load_context(override_active_scope):
+        with self.attrsub_load_context(override_active_scope):
             replacement_value = ast.Call(
                 func=ast.Name(self.start_tracer, ctx=ast.Load()),
                 args=[
@@ -182,7 +182,7 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
         ast.copy_location(replacement_value, node.value)
         node.value = replacement_value
         new_node: Union[ast.Attribute, ast.Call] = node
-        if not self.inside_attr_load_chain and override_active_scope:
+        if not self.inside_attrsub_load_chain and override_active_scope:
             new_node = ast.Call(
                 func=ast.Name(self.end_tracer, ctx=ast.Load()),
                 args=[node],
@@ -194,7 +194,7 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
         if not isinstance(node.func, ast.Attribute):
             return node
         assert isinstance(node.func.ctx, ast.Load)
-        with self.attribute_load_context():
+        with self.attrsub_load_context():
             node.func = self.visit_Attribute(node.func)
         replacement_args = []
         for arg in node.args:
@@ -206,10 +206,10 @@ class AttributeTracingNodeTransformer(ast.NodeTransformer):
                 )))
                 ast.copy_location(replacement_args[-1], arg)
             else:
-                with self.attribute_load_context(False):
+                with self.attrsub_load_context(False):
                     replacement_args.append(self.visit(arg))
         node.args = replacement_args
-        if self.inside_attr_load_chain:
+        if self.inside_attrsub_load_chain:
             return node
         replacement_node = ast.Call(
             func=ast.Name(self.end_tracer, ctx=ast.Load()),

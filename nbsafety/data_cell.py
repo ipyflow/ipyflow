@@ -5,6 +5,7 @@ from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Optional, Set
+    from .scope import Scope
 
 
 class DataCell(object):
@@ -12,14 +13,17 @@ class DataCell(object):
             self,
             name: str,
             obj_id: int,
+            containing_scope: 'Scope',
             parents: 'Optional[Set[DataCell]]' = None,
     ):
         self.name = str(name)
         self.obj_id = obj_id
+        self.containing_scope = containing_scope
         if parents is None:
             parents = set()
         self.parents: Set[DataCell] = parents
         self.children: Set[DataCell] = set()
+
         self.defined_cell_num = cell_counter()
 
         # The notebook cell number this is required to have to not be considered stale

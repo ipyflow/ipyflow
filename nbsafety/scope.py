@@ -96,13 +96,15 @@ class Scope(object):
             if cur_scope is None:
                 break
 
-            if (pandas is not None) and isinstance(obj, pandas.DataFrame):
-                # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
-                name_to_obj = dict(obj.__dict__)
-                name_to_obj.update(obj.to_dict())
-            else:
+            try:
+                name_to_obj = obj.__dict__
+                if (pandas is not None) and isinstance(obj, pandas.DataFrame):
+                    # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
+                    name_to_obj = dict(name_to_obj)
+                    name_to_obj.update(obj.to_dict())
+            except:  # noqa
                 try:
-                    name_to_obj = dict(inspect.getmembers(obj))
+                    name_to_obj = inspect.getmembers(obj)
                 except:  # noqa
                     name_to_obj = None
 
@@ -130,11 +132,11 @@ class Scope(object):
         return dc, old_dc, old_id
 
     def _upsert_function_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]'):
-        dc = FunctionDataCell(self.make_child_scope(name), name, obj_id)
+        dc = FunctionDataCell(self.make_child_scope(name), name, self, obj_id)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def _upsert_class_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]', class_scope: 'Scope'):
-        dc = ClassDataCell(class_scope, name, obj_id)
+        dc = ClassDataCell(class_scope, name, self, obj_id)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
@@ -169,7 +171,7 @@ class Scope(object):
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataCell(name, obj_id, deps)
+        dc = DataCell(name, obj_id, self, deps)
         self.put(name, dc)
         for dep in deps:
             dep.children.add(dc)

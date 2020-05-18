@@ -22,7 +22,6 @@ from .tracing import AttributeTracingManager, make_tracer, TraceState
 
 if TYPE_CHECKING:
     from typing import Dict, Set, Optional, Union
-    from ipykernel.comm import Comm
     from .data_cell import DataCell
 
 logger = logging.getLogger(__name__)
@@ -49,8 +48,10 @@ class DependencySafety(object):
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
-        self.trace_state = TraceState(self)
-        self.attr_trace_manager = AttributeTracingManager(self.namespaces, self.global_scope, self.trace_event_counter)
+        self.trace_state: TraceState = TraceState(self)
+        self.attr_trace_manager: AttributeTracingManager = AttributeTracingManager(
+            self.namespaces, self.global_scope, self.trace_event_counter
+        )
         self.store_history = kwargs.pop('store_history', True)
         self.use_comm = kwargs.pop('use_comm', False)
         self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)

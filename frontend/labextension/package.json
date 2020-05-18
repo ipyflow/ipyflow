@@ -7,9 +7,9 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/runtime-jupyter-safety/nbsafety",
+  "homepage": "https://github.com/nbsafety-project/nbsafety",
   "bugs": {
-    "url": "https://github.com/runtime-jupyter-safety/nbsafety/issues"
+    "url": "https://github.com/nbsafety-project/nbsafety/issues"
   },
   "license": "BSD-3-Clause",
   "author": "Stephen Macke",
@@ -22,7 +22,7 @@
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/runtime-jupyter-safety/nbsafety.git"
+    "url": "https://github.com/nbsafety-project/nbsafety.git"
   },
   "scripts": {
     "build": "tsc",

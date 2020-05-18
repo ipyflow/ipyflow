@@ -48,7 +48,7 @@ class TraceStatement(object):
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return self.scope.make_child_scope(self.stmt_node.name, is_namespace_scope=True)
+            return self.scope.make_child_scope(self.stmt_node.name, namespace_obj_ref=-1)
 
         if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
@@ -99,7 +99,9 @@ class TraceStatement(object):
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
-                self.safety.namespaces[id(class_ref)] = self.class_scope
+                class_obj_id = id(class_ref)
+                self.class_scope.namespace_obj_ref = class_obj_id
+                self.safety.namespaces[class_obj_id] = self.class_scope
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             obj_id = self._get_obj_id_for_name(name)

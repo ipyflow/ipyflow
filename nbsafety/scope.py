@@ -21,12 +21,12 @@ class Scope(object):
     def __init__(
             self, scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
-            is_namespace_scope=False,
+            namespace_obj_ref: 'Optional[int]' = None,
     ):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
         self.cloned_from = None
-        self.is_namespace_scope = is_namespace_scope
+        self.namespace_obj_ref = namespace_obj_ref
         self._data_cell_by_name: Dict[str, DataCell] = {}
 
     def __hash__(self):
@@ -35,12 +35,17 @@ class Scope(object):
     def __str__(self):
         return str(self.full_path)
 
-    def clone(self):
+    def clone(self, namespace_obj_ref: int):
         cloned = Scope()
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
+        cloned.namespace_obj_ref = namespace_obj_ref
         cloned._data_cell_by_name = {}
         return cloned
+
+    @property
+    def is_namespace_scope(self):
+        return self.namespace_obj_ref is not None
 
     @property
     def non_namespace_parent_scope(self):
@@ -52,8 +57,8 @@ class Scope(object):
             return self.parent_scope.non_namespace_parent_scope
         return self.parent_scope
 
-    def make_child_scope(self, scope_name, is_namespace_scope=False):
-        return self.__class__(scope_name, parent_scope=self, is_namespace_scope=is_namespace_scope)
+    def make_child_scope(self, scope_name, namespace_obj_ref=None):
+        return self.__class__(scope_name, parent_scope=self, namespace_obj_ref=namespace_obj_ref)
 
     def put(self, name: str, val: DataCell):
         self._data_cell_by_name[name] = val

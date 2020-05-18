@@ -61,7 +61,6 @@ class DependencySafety(object):
         # Maybe switch update this too when you are implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
-        self._last_cell_ast: Optional[ast.Module] = None
         self._track_dependencies = True
 
         self._disable_level = 0
@@ -77,18 +76,24 @@ class DependencySafety(object):
             stale_cells = []
             fresh_cells = []
             for cell_id, cell_content in tasks.items():
-                if self._precheck_simple(cell_content):
-                    stale_cells.append(cell_id)
-                else:
-                    fresh_cells.append(cell_id)
+                try:
+                    if self._precheck_simple(cell_content):
+                        stale_cells.append(cell_id)
+                    else:
+                        fresh_cells.append(cell_id)
+                except SyntaxError:
+                    continue
             stale_links = defaultdict(list)
             refresher_links = defaultdict(list)
             for fresh_cell_id in fresh_cells:
                 fresh_cell = tasks[fresh_cell_id]
                 for stale_cell_id in stale_cells:
-                    if not self._precheck_simple(f'{fresh_cell}\n{tasks[stale_cell_id]}'):
-                        stale_links[stale_cell_id].append(fresh_cell_id)
-                        refresher_links[fresh_cell_id].append(stale_cell_id)
+                    try:
+                        if not self._precheck_simple(f'{fresh_cell}\n{tasks[stale_cell_id]}'):
+                            stale_links[stale_cell_id].append(fresh_cell_id)
+                            refresher_links[fresh_cell_id].append(stale_cell_id)
+                    except SyntaxError:
+                        continue
             comm.send({
                 'type': 'cell_freshness',
                 'stale_links': stale_links,
@@ -106,6 +111,7 @@ class DependencySafety(object):
         return ast.parse('\n'.join([
             line for line in cell.strip().split('\n')
             if (
+                    # TODO: figure out more robust strategy to strip these out
                     not line.startswith('%')
                     and not line.startswith('!')
                     and not line.startswith('cd')
@@ -133,13 +139,16 @@ class DependencySafety(object):
     def _precheck_simple(self, cell):
         return len(self._precheck_stale_nodes(cell)) > 0
 
-    def _precheck_for_stale(self, cell):
+    def _precheck_for_stale(self, cell: str):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
         # `defined_cell_num` is greater than or equal to required; if not we give a warning and return `True`.
-        self._last_cell_ast = self._get_cell_ast(cell)
-        self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(self._last_cell_ast)
+        try:
+            cell_ast = self._get_cell_ast(cell)
+        except SyntaxError:
+            return False
+        self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_nodes_with_stale_deps = self._precheck_stale_nodes(self._last_cell_ast)
+            self._prev_cell_nodes_with_stale_deps = self._precheck_stale_nodes(cell_ast)
             if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_nodes_with_stale_deps:

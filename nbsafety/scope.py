@@ -25,7 +25,7 @@ class Scope(object):
     ):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
-        self.cloned_from = None
+        self.cloned_from: Optional[Scope] = None
         self.namespace_obj_ref = namespace_obj_ref
         self._data_cell_by_name: Dict[str, DataCell] = {}
 

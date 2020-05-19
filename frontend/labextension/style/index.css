@@ -6,6 +6,7 @@
 .stale-cell.jp-mod-selected .jp-Collapser-child {
   background-color: red;
 }
+
 .stale-cell .jp-Collapser:hover > .jp-Collapser-child {
   background-color: red;
 }
@@ -15,7 +16,7 @@
   opacity: 0.6;
 }
 
-.refresher-cell .jp-Collapser {
+.refresher-cell .jp-InputCollapser {
   border: 1px solid forestgreen;
 }
 
@@ -30,4 +31,30 @@
 .jp-Collapser-child.linked-refresher {
   background-color: forestgreen;
   opacity: 0.6;
+}
+
+/* put input / output cells later since they should take precedence */
+
+.stale-output-cell .jp-OutputCollapser {
+  border: 1px solid red;
+}
+
+.stale-output-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
+  background-color: red;
+}
+
+.stale-output-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
+  background-color: red;
+}
+
+.refresher-input-cell .jp-InputCollapser {
+  border: 1px solid forestgreen;
+}
+
+.refresher-input-cell.jp-mod-selected .jp-InputCollapser .jp-Collapser-child {
+  background-color: forestgreen;
+}
+
+.refresher-input-cell .jp-InputCollapser:hover > .jp-Collapser-child {
+  background-color: forestgreen;
 }

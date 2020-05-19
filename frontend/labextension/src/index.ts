@@ -12,6 +12,10 @@ import {
   NotebookActions
 } from '@jupyterlab/notebook';
 
+import {
+  Cell
+} from '@jupyterlab/cells';
+
 /**
  * Initialization data for the jupyterlab-nbsafety extension.
  */
@@ -27,13 +31,13 @@ const extension: JupyterFrontEndPlugin<void> = {
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
-        clearStaleAndRefreshMarkerState(nbPanel.content);
+        clearCellState(nbPanel.content);
         let commDisconnectHandler = connectToComm(
           session.session.kernel,
           nbPanel.content
         );
         session.kernelChanged.connect(() => {
-          clearStaleAndRefreshMarkerState(nbPanel.content);
+          clearCellState(nbPanel.content);
           commDisconnectHandler();
           commDisconnectHandler = connectToComm(
             session.session.kernel,
@@ -43,7 +47,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         session.statusChanged.connect((session, status) => {
           if (status === 'restarting' || status === 'autorestarting') {
             session.ready.then(() => {
-              clearStaleAndRefreshMarkerState(nbPanel.content);
+              clearCellState(nbPanel.content);
               commDisconnectHandler();
               commDisconnectHandler = connectToComm(
                 session.session.kernel,
@@ -58,26 +62,42 @@ const extension: JupyterFrontEndPlugin<void> = {
 };
 
 const staleClass = 'stale-cell';
+const staleOutputClass = 'stale-output-cell';
 const refresherClass = 'refresher-cell';
+const refresherInputClass = 'refresher-input-cell';
 const linkedStaleClass = 'linked-stale';
 const linkedRefresherClass = 'linked-refresher';
 
-const getJpCollapser = (elem: HTMLElement) => {
+const getJpInputCollapser = (elem: HTMLElement) => {
   return elem.children.item(1).firstElementChild;
 };
 
-const clearStaleAndRefreshMarkerState = (notebook: Notebook) => {
+const getJpOutputCollapser = (elem: HTMLElement) => {
+  return elem.children.item(2).firstElementChild;
+};
+
+const clearCellState = (notebook: Notebook) => {
   notebook.widgets.forEach((cell, idx) => {
     // clear any old event listeners
-    const oldCollapser = getJpCollapser(cell.node);
-    oldCollapser.firstElementChild.classList.remove(linkedStaleClass);
-    oldCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+    const oldInputCollapser = getJpInputCollapser(cell.node);
+    oldInputCollapser.firstElementChild.classList.remove(linkedStaleClass);
+    oldInputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
 
-    const newCollapser = oldCollapser.cloneNode(true);
-    oldCollapser.parentNode.replaceChild(newCollapser, oldCollapser);
+    const newInputCollapser = oldInputCollapser.cloneNode(true);
+    oldInputCollapser.parentNode.replaceChild(newInputCollapser, oldInputCollapser);
+
+    const oldOutputCollapser = getJpOutputCollapser(cell.node);
+    oldOutputCollapser.firstElementChild.classList.remove(linkedStaleClass);
+    oldOutputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+
+    const newOutputCollapser = oldOutputCollapser.cloneNode(true);
+    oldOutputCollapser.parentNode.replaceChild(newOutputCollapser, oldOutputCollapser);
 
     cell.node.classList.remove(staleClass);
     cell.node.classList.remove(refresherClass);
+
+    cell.node.classList.remove(staleOutputClass);
+    cell.node.classList.remove(refresherInputClass);
   });
 };
 
@@ -86,21 +106,28 @@ const connectToComm = (
   notebook: Notebook
 ) => {
   const comm = kernel.createComm('nbsafety');
-  const onExecution = (_: any, args: { notebook: Notebook; cell: any }) => {
+  const onExecution = (_: any, args: { notebook: Notebook; cell: Cell }) => {
     if (notebook !== args.notebook) {
       return;
     }
-    const payload: any = {};
+    const content_by_cell_id: any = {};
+    args.cell.node.classList.remove(staleOutputClass);
+    args.cell.node.classList.remove(refresherInputClass);
     notebook.widgets.forEach((cell, idx) => {
-      payload[cell.model.id] = cell.model.value.text;
+      content_by_cell_id[cell.model.id] = cell.model.value.text;
     });
-    comm.send({ payload: payload });
+    comm.send({
+      executed_cell_id: args.cell.model.id,
+      content_by_cell_id: content_by_cell_id
+    });
   };
   comm.onMsg = (msg) => {
     if (msg.content.data['type'] === 'establish') {
       NotebookActions.executed.connect(onExecution, NotebookActions.executed);
     } else if (msg.content.data['type'] === 'cell_freshness') {
-      clearStaleAndRefreshMarkerState(notebook);
+      clearCellState(notebook);
+      const staleInputCells: any = msg.content.data['stale_input_cells'];
+      const staleOutputCells: any = msg.content.data['stale_output_cells'];
       const staleLinks: any = msg.content.data['stale_links'];
       const refresherLinks: any = msg.content.data['refresher_links'];
       const cellsById: {[id: string]: HTMLElement} = {};
@@ -108,28 +135,73 @@ const connectToComm = (
         cellsById[cell.model.id] = cell.node;
       });
       for (const [id, elem] of Object.entries(cellsById)) {
-        if (staleLinks.hasOwnProperty(id)) {
+        if (staleInputCells.indexOf(id) > -1) {
           elem.classList.add(staleClass);
-          getJpCollapser(elem).addEventListener('mouseover', () => {
+          elem.classList.add(staleOutputClass);
+          elem.classList.remove(refresherInputClass);
+        } else if (staleOutputCells.indexOf(id) > -1) {
+          elem.classList.add(refresherInputClass);
+          elem.classList.add(staleOutputClass);
+
+          getJpInputCollapser(elem).addEventListener('mouseover', () => {
+              getJpOutputCollapser(elem).firstElementChild.classList.add(linkedStaleClass);
+          });
+          getJpInputCollapser(elem).addEventListener('mouseout', () => {
+            getJpOutputCollapser(elem).firstElementChild.classList.remove(linkedStaleClass);
+          });
+
+          getJpOutputCollapser(elem).addEventListener('mouseover', () => {
+            getJpInputCollapser(elem).firstElementChild.classList.add(linkedRefresherClass);
+          });
+          getJpOutputCollapser(elem).addEventListener('mouseout', () => {
+            getJpInputCollapser(elem).firstElementChild.classList.remove(linkedRefresherClass);
+          });
+        }
+
+        if (staleLinks.hasOwnProperty(id)) {
+          getJpInputCollapser(elem).addEventListener('mouseover', () => {
             for (const refresherId of staleLinks[id]) {
-              getJpCollapser(cellsById[refresherId]).firstElementChild.classList.add(linkedRefresherClass);
+              getJpInputCollapser(cellsById[refresherId]).firstElementChild.classList.add(linkedRefresherClass);
             }
           });
-          getJpCollapser(elem).addEventListener('mouseout', () => {
+          getJpOutputCollapser(elem).addEventListener('mouseover', () => {
             for (const refresherId of staleLinks[id]) {
-              getJpCollapser(cellsById[refresherId]).firstElementChild.classList.remove(linkedRefresherClass);
+              getJpInputCollapser(cellsById[refresherId]).firstElementChild.classList.add(linkedRefresherClass);
             }
           });
-        } else if (refresherLinks.hasOwnProperty(id)) {
+          getJpInputCollapser(elem).addEventListener('mouseout', () => {
+            for (const refresherId of staleLinks[id]) {
+              getJpInputCollapser(cellsById[refresherId]).firstElementChild.classList.remove(linkedRefresherClass);
+            }
+          });
+          getJpOutputCollapser(elem).addEventListener('mouseout', () => {
+            for (const refresherId of staleLinks[id]) {
+              getJpInputCollapser(cellsById[refresherId]).firstElementChild.classList.remove(linkedRefresherClass);
+            }
+          });
+        }
+
+        if (refresherLinks.hasOwnProperty(id)) {
           elem.classList.add(refresherClass);
-          getJpCollapser(elem).addEventListener('mouseover', () => {
+          elem.classList.add(staleOutputClass);
+          getJpInputCollapser(elem).addEventListener('mouseover', () => {
             for (const staleId of refresherLinks[id]) {
-              getJpCollapser(cellsById[staleId]).firstElementChild.classList.add(linkedStaleClass);
+              getJpInputCollapser(cellsById[staleId]).firstElementChild.classList.add(linkedStaleClass);
             }
           });
-          getJpCollapser(elem).addEventListener('mouseout', () => {
+          getJpInputCollapser(elem).addEventListener('mouseover', () => {
             for (const staleId of refresherLinks[id]) {
-              getJpCollapser(cellsById[staleId]).firstElementChild.classList.remove(linkedStaleClass);
+              getJpOutputCollapser(cellsById[staleId]).firstElementChild.classList.add(linkedStaleClass);
+            }
+          });
+          getJpInputCollapser(elem).addEventListener('mouseout', () => {
+            for (const staleId of refresherLinks[id]) {
+              getJpInputCollapser(cellsById[staleId]).firstElementChild.classList.remove(linkedStaleClass);
+            }
+          });
+          getJpInputCollapser(elem).addEventListener('mouseout', () => {
+            for (const staleId of refresherLinks[id]) {
+              getJpOutputCollapser(cellsById[staleId]).firstElementChild.classList.remove(linkedStaleClass);
             }
           });
         }

@@ -55,6 +55,9 @@ class DependencySafety(object):
         self.store_history = kwargs.pop('store_history', True)
         self.use_comm = kwargs.pop('use_comm', False)
         self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
+        self.change_set: Set[DataCell] = set()
+        self._last_execution_counter: int = 0
+        self._counters_by_cell_id: Dict[str, int] = {}
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
@@ -73,30 +76,40 @@ class DependencySafety(object):
     def _comm_target(self, comm, open_msg):
         @comm.on_msg
         def _responder(msg):
-            tasks = msg['content']['data']['payload']
-            stale_cells = []
+            cell_id = msg['content']['data']['executed_cell_id']
+            self._counters_by_cell_id[cell_id] = self._last_execution_counter
+            tasks = msg['content']['data']['content_by_cell_id']
+            stale_input_cells = []
+            stale_output_cells = []
             fresh_cells = []
             for cell_id, cell_content in tasks.items():
                 try:
-                    if self._precheck_simple(cell_content):
-                        stale_cells.append(cell_id)
+                    stale_nodes, used_nodes = self._precheck_stale_nodes(cell_content, get_used=True)
+                    if len(stale_nodes) > 0:
+                        stale_input_cells.append(cell_id)
+                    elif max(
+                            (dc.defined_cell_num for dc in used_nodes), default=-1
+                    ) > self._counters_by_cell_id.get(cell_id, 0):
+                        stale_output_cells.append(cell_id)
                     else:
                         fresh_cells.append(cell_id)
                 except SyntaxError:
                     continue
             stale_links = defaultdict(list)
             refresher_links = defaultdict(list)
-            for fresh_cell_id in fresh_cells:
-                fresh_cell = tasks[fresh_cell_id]
-                for stale_cell_id in stale_cells:
+            for candidate_refresher_cell_id in fresh_cells + stale_output_cells:
+                candidate_refresher_cell = tasks[candidate_refresher_cell_id]
+                for stale_cell_id in stale_input_cells:
                     try:
-                        if not self._precheck_simple(f'{fresh_cell}\n{tasks[stale_cell_id]}'):
-                            stale_links[stale_cell_id].append(fresh_cell_id)
-                            refresher_links[fresh_cell_id].append(stale_cell_id)
+                        if not self._precheck_simple(f'{candidate_refresher_cell}\n{tasks[stale_cell_id]}'):
+                            stale_links[stale_cell_id].append(candidate_refresher_cell_id)
+                            refresher_links[candidate_refresher_cell_id].append(stale_cell_id)
                     except SyntaxError:
                         continue
             comm.send({
                 'type': 'cell_freshness',
+                'stale_input_cells': stale_input_cells,
+                'stale_output_cells': stale_output_cells,
                 'stale_links': stale_links,
                 'refresher_links': refresher_links,
             })
@@ -120,10 +133,11 @@ class DependencySafety(object):
             )
         ]))
 
-    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
+    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]', get_used=False):
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         stale_nodes = set()
+        used_nodes = set()
         for name in precheck(cell, self.global_scope.all_data_cells_this_indentation().keys()):
             if isinstance(name, str):
                 nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
@@ -133,8 +147,13 @@ class DependencySafety(object):
                 logger.warning('invalid type for name %s', name)
                 continue
             for node in nodes:
-                if node is not None and node.is_stale():
-                    stale_nodes.add(node)
+                if node is not None:
+                    if node.is_stale():
+                        stale_nodes.add(node)
+                    if get_used:
+                        used_nodes.add(node)
+        if get_used:
+            return stale_nodes, used_nodes
         return stale_nodes
 
     def _precheck_simple(self, cell):
@@ -175,13 +194,13 @@ class DependencySafety(object):
         return False
 
     def _make_cell_magic(self, cell_magic_name):
-
         def _dependency_safety(_, cell: str):
             if self._disable_level == 3:
                 run_cell(cell)
                 return
 
             with save_number_of_currently_executing_cell():
+                self._last_execution_counter = cell_counter()
                 # Stage 1: Precheck.
                 if self._precheck_for_stale(cell):
                     # FIXME: hack to increase cell number
@@ -193,9 +212,11 @@ class DependencySafety(object):
                     # something went wrong silently (e.g. due to line magic); fall back to just executing the code
                     logger.warning('Something failed while attempting traced execution; '
                                    'falling back to uninstrumented execution.')
+                    self.change_set = set()
                     run_cell(cell, store_history=self.store_history)
 
                 # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
+                self.change_set = set()
                 with self._tracing_context(untraced_backup=_backup):
                     run_cell(cell, store_history=self.store_history)
 

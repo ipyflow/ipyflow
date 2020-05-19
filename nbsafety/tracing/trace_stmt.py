@@ -85,6 +85,7 @@ class TraceStatement(object):
         if old_id == obj_id:
             for alias_dc in self.safety.aliases[obj_id]:
                 alias_dc.mark_mutated()
+                self.safety.change_set.add(alias_dc)
 
     def _make_lval_data_cells(self):
         lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)
@@ -110,6 +111,7 @@ class TraceStatement(object):
                     name, obj_id, rval_deps,
                     add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
                 )
+                self.safety.change_set.add(dc)
                 self._handle_aliases(old_id, old_dc, obj_id, dc)
         if len(self.safety.attr_trace_manager.saved_store_data) > 0:
             assert isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign))
@@ -120,12 +122,14 @@ class TraceStatement(object):
             dc, old_dc, old_id = scope.upsert_data_cell_for_name(
                 attr, obj_id, rval_deps, add=False, is_function_def=False, class_scope=None
             )
+            self.safety.change_set.add(dc)
             self._handle_aliases(old_id, old_dc, obj_id, dc)
         for scope, obj, attr in self.safety.attr_trace_manager.saved_aug_store_data:
             obj_id = id(getattr(obj, attr, None))
             dc, old_dc, old_id = scope.upsert_data_cell_for_name(
                 attr, obj_id, rval_deps, add=True, is_function_def=False, class_scope=None
             )
+            self.safety.change_set.add(dc)
             self._handle_aliases(old_id, old_dc, obj_id, dc)
 
     def handle_dependencies(self):
@@ -135,6 +139,7 @@ class TraceStatement(object):
             mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
                 mutated_dc.update_deps(mutation_arg_dcs, add=True)
+                self.safety.change_set.add(mutated_dc)
         if self.has_lval:
             self._make_lval_data_cells()
         else:

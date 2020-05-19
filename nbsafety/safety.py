@@ -89,7 +89,7 @@ class DependencySafety(object):
                         stale_input_cells.append(cell_id)
                     elif max(
                             (dc.defined_cell_num for dc in used_nodes), default=-1
-                    ) > self._counters_by_cell_id.get(cell_id, 0):
+                    ) > self._counters_by_cell_id.get(cell_id, float('inf')):
                         stale_output_cells.append(cell_id)
                     else:
                         fresh_cells.append(cell_id)

@@ -113,21 +113,10 @@ class TraceStatement(object):
                 )
                 self.safety.change_set.add(dc)
                 self._handle_aliases(old_id, old_dc, obj_id, dc)
-        if len(self.safety.attr_trace_manager.saved_store_data) > 0:
-            assert isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign))
-        if len(self.safety.attr_trace_manager.saved_aug_store_data) > 0:
-            assert isinstance(self.stmt_node, ast.AugAssign)
-        for scope, obj, attr in self.safety.attr_trace_manager.saved_store_data:
-            obj_id = id(getattr(obj, attr, None))
+        for scope, obj_id, attr in self.safety.attr_trace_manager.saved_store_data:
+            should_add = isinstance(self.stmt_node, ast.AugAssign)
             dc, old_dc, old_id = scope.upsert_data_cell_for_name(
-                attr, obj_id, rval_deps, add=False, is_function_def=False, class_scope=None
-            )
-            self.safety.change_set.add(dc)
-            self._handle_aliases(old_id, old_dc, obj_id, dc)
-        for scope, obj, attr in self.safety.attr_trace_manager.saved_aug_store_data:
-            obj_id = id(getattr(obj, attr, None))
-            dc, old_dc, old_id = scope.upsert_data_cell_for_name(
-                attr, obj_id, rval_deps, add=True, is_function_def=False, class_scope=None
+                attr, obj_id, rval_deps, add=should_add, is_function_def=False, class_scope=None
             )
             self.safety.change_set.add(dc)
             self._handle_aliases(old_id, old_dc, obj_id, dc)
@@ -146,7 +135,6 @@ class TraceStatement(object):
             if len(self.safety.attr_trace_manager.saved_store_data) > 0:
                 print(self.safety.attr_trace_manager.saved_store_data)
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
-            assert len(self.safety.attr_trace_manager.saved_aug_store_data) == 0
 
     def finished_execution_hook(self):
         if self.marked_finished:

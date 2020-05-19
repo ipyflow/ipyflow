@@ -84,12 +84,10 @@ class DependencySafety(object):
             fresh_cells = []
             for cell_id, cell_content in tasks.items():
                 try:
-                    stale_nodes, used_nodes = self._precheck_stale_nodes(cell_content, get_used=True)
+                    stale_nodes, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
                     if len(stale_nodes) > 0:
                         stale_input_cells.append(cell_id)
-                    elif max(
-                            (dc.defined_cell_num for dc in used_nodes), default=-1
-                    ) > self._counters_by_cell_id.get(cell_id, float('inf')):
+                    elif max_defined_cell_num > self._counters_by_cell_id.get(cell_id, float('inf')):
                         stale_output_cells.append(cell_id)
                     else:
                         fresh_cells.append(cell_id)
@@ -133,11 +131,11 @@ class DependencySafety(object):
             )
         ]))
 
-    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]', get_used=False):
+    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         stale_nodes = set()
-        used_nodes = set()
+        max_defined_cell_num = -1
         for name in precheck(cell, self.global_scope.all_data_cells_this_indentation().keys()):
             if isinstance(name, str):
                 nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
@@ -148,16 +146,13 @@ class DependencySafety(object):
                 continue
             for node in nodes:
                 if node is not None:
+                    max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
                     if node.is_stale():
                         stale_nodes.add(node)
-                    if get_used:
-                        used_nodes.add(node)
-        if get_used:
-            return stale_nodes, used_nodes
-        return stale_nodes
+        return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):
-        return len(self._precheck_stale_nodes(cell)) > 0
+        return len(self._precheck_stale_nodes(cell)[0]) > 0
 
     def _precheck_for_stale(self, cell: str):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
@@ -168,7 +163,7 @@ class DependencySafety(object):
             return False
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_nodes_with_stale_deps = self._precheck_stale_nodes(cell_ast)
+            self._prev_cell_nodes_with_stale_deps, _ = self._precheck_stale_nodes(cell_ast)
             if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_nodes_with_stale_deps:

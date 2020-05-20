@@ -119,6 +119,15 @@ class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
         self.generic_visit(node.bases)
         self.generic_visit(node.decorator_list)
 
+    def visit_Call(self, node: ast.Call):
+        self.visit(node.args)
+        for kwarg in node.keywords:
+            self.visit(kwarg.value)
+        if isinstance(node.func, ast.Attribute):
+            self.name_set.add(get_attribute_symbol_chain(node))
+        else:
+            self.visit(node.func)
+
     def visit_Attribute(self, node: ast.Attribute):
         self.name_set.add(get_attribute_symbol_chain(node))
 

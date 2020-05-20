@@ -36,7 +36,7 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
     def visit_Attribute(self, node):
         # skip node.attr -- this is handled by the attribute tracer
         # also only add rvals -- lvals will also be handled by tracer
-        with self.gather_rvals_context():
+        if self.gather_rvals:
             self.visit(node.value)
 
     def visit_Name(self, node):
@@ -53,12 +53,14 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         with self.gather_lvals_context():
             for target in node.targets:
                 self.visit(target)
-        self.visit(node.value)
+        with self.gather_rvals_context():
+            self.visit(node.value)
 
     def visit_AnnAssign(self, node):
         with self.gather_lvals_context():
             self.visit(node.target)
-        self.visit(node.value)
+        with self.gather_rvals_context():
+            self.visit(node.value)
 
     def visit_AugAssign(self, node):
         self.should_add = True
@@ -66,6 +68,10 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
             self.visit(node.target)
         with self.gather_rvals_context():
             self.visit(node.value)
+
+    def visit_Call(self, node):
+        with self.gather_rvals_context():
+            self.generic_visit(node)
 
     def visit_For(self, node):
         # skip body -- will have dummy since this visitor works line-by-line

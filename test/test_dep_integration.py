@@ -1111,6 +1111,7 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
+@skipif_known_failing
 def test_attr_dep_with_top_level_overwrite():
     run_cell("""
 class Foo:
@@ -1121,8 +1122,8 @@ x = 42
 foo.y = x + 7
 """)
     run_cell('x = 43')
-    run_cell('logging.info(foo)')
-    assert_not_detected('only `foo.y` depends on x')
+    run_cell('logging.info(foo)')  # this should be a 'deep' usage of foo
+    assert_detected('logging.info could display `foo.y` which depends on x')
     run_cell('foo.y = 70')
     assert_not_detected('we just fixed stale dep of `foo.y` by changing its deps')
     run_cell('x = foo.y + 7')

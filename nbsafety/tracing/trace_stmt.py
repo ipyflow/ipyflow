@@ -77,14 +77,21 @@ class TraceStatement(object):
             old_alias_dcs.discard(old_dc)
         if dc is not None and dc.obj_id is not None:
             new_alias_dcs.add(dc)
-        old_alias_dcs_copy = list(old_alias_dcs)
-        for alias_dc in old_alias_dcs_copy:
-            if alias_dc.obj_id == dc.obj_id:
-                alias_dc.mark_mutated()
-                old_alias_dcs.discard(alias_dc)
-                new_alias_dcs.add(alias_dc)
-        if len(old_alias_dcs) == 0:
-            del self.safety.aliases[old_id]
+        try:
+            # if we're just adding another alias, no need to handle mutations
+            # FIXME: remove the subscript check once subscripts are working properly
+            # (in this case, subscripts will have their own data cells)
+            if isinstance(self.stmt_node, ast.Assign) and not isinstance(self.stmt_node.targets[0], ast.Subscript):
+                return
+            old_alias_dcs_copy = list(old_alias_dcs)
+            for alias_dc in old_alias_dcs_copy:
+                if alias_dc.obj_id == dc.obj_id:
+                    alias_dc.mark_mutated()
+                    old_alias_dcs.discard(alias_dc)
+                    new_alias_dcs.add(alias_dc)
+        finally:
+            if len(old_alias_dcs) == 0:
+                del self.safety.aliases[old_id]
 
     def _make_lval_data_cells(self):
         lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)

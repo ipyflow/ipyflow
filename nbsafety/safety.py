@@ -50,7 +50,7 @@ class DependencySafety(object):
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)
         self.attr_trace_manager: AttributeTracingManager = AttributeTracingManager(
-            self.namespaces, self.global_scope, self.trace_event_counter
+            self.namespaces, self.aliases, self.global_scope, self.trace_event_counter
         )
         self.store_history = kwargs.pop('store_history', True)
         self.use_comm = kwargs.pop('use_comm', False)

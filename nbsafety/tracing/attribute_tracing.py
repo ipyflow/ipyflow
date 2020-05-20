@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 class AttributeTracingManager(object):
-    def __init__(self, namespaces: 'Dict[int, Scope]', active_scope: 'Scope', trace_event_counter: 'List[int]'):
+    def __init__(self, namespaces: 'Dict[int, Scope]', aliases: 'Dict[int, Set[DataCell]]',
+                 active_scope: 'Scope', trace_event_counter: 'List[int]'):
         self.namespaces = namespaces
+        self.aliases = aliases
         self.original_active_scope = active_scope
         self.active_scope = active_scope
         self.trace_event_counter = trace_event_counter
@@ -113,8 +115,11 @@ class AttributeTracingManager(object):
                 data_cell = scope.lookup_data_cell_by_name_this_indentation(attr_or_subscript)
                 if data_cell is None:
                     try:
-                        data_cell = DataCell(attr_or_subscript, getattr(obj, attr_or_subscript), scope)
+                        obj_attr = getattr(obj, attr_or_subscript)
+                        data_cell = DataCell(attr_or_subscript, obj_attr, scope)
                         scope.put(attr_or_subscript, data_cell)
+                        # FIXME: DataCells should probably register themselves with the alias manager at creation
+                        self.aliases[id(obj_attr)].add(data_cell)
                     except AttributeError:
                         pass
                 self.loaded_data_cells.add(data_cell)

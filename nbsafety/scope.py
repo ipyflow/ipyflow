@@ -138,11 +138,11 @@ class Scope(object):
         return dc, old_dc, old_id
 
     def _upsert_function_data_cell_for_name(self, name: str, obj: 'Any', deps: 'Set[DataCell]'):
-        dc = FunctionDataCell(self.make_child_scope(name), name, self, obj)
+        dc = FunctionDataCell(self.make_child_scope(name), name, obj, self)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def _upsert_class_data_cell_for_name(self, name: str, obj: 'Any', deps: 'Set[DataCell]', class_scope: 'Scope'):
-        dc = ClassDataCell(class_scope, name, self, obj)
+        dc = ClassDataCell(class_scope, name, obj, self)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
@@ -204,3 +204,23 @@ class Scope(object):
             return path
         else:
             return self.parent_scope.full_path + path
+
+    @property
+    def full_namespace_path(self) -> str:
+        if not self.is_namespace_scope:
+            return ''
+        if self.parent_scope is not None:
+            prefix = self.parent_scope.full_namespace_path
+        else:
+            prefix = ''
+        if prefix:
+            return prefix + '.' + self.scope_name
+        else:
+            return self.scope_name
+
+    def make_namespace_qualified_name(self, name):
+        path = self.full_namespace_path
+        if path:
+            return path + '.' + name
+        else:
+            return name

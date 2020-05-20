@@ -18,6 +18,7 @@ class DataCell(object):
             parents: 'Optional[Set[DataCell]]' = None,
     ):
         self.name = str(name)
+        self.readable_name = containing_scope.make_namespace_qualified_name(self.name)
         self._has_weakref = True
         try:
             self.obj_ref = weakref.ref(obj)
@@ -43,10 +44,10 @@ class DataCell(object):
         self.no_warning = False
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} for variable {self.name}>'
+        return f'<{self.__class__.__name__} for variable {self.readable_name}>'
 
     def __str__(self):
-        return self.name
+        return self.readable_name
 
     @property
     def obj_id(self):

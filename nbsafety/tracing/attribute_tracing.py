@@ -95,8 +95,11 @@ class AttributeTracingManager(object):
                 self.namespaces[obj_id] = scope
             else:
                 # print('no scope for class', obj.__class__)
-                # TODO: is it safe to have a global namespace scope? I think so but would be good to verify.
-                scope = Scope('<namespace scope of %s>' % obj, namespace_obj_ref=obj_id)
+                try:
+                    scope_name = next(iter(self.aliases[obj_id])).name
+                except StopIteration:
+                    scope_name = '<unknown namespace>'
+                scope = Scope(scope_name, namespace_obj_ref=obj_id, parent_scope=self.active_scope)
                 self.namespaces[obj_id] = scope
         # print('new active scope', scope)
         if override_active_scope:

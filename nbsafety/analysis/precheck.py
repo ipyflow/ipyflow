@@ -120,7 +120,7 @@ class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
         self.generic_visit(node.decorator_list)
 
     def visit_Call(self, node: ast.Call):
-        self.visit(node.args)
+        self.generic_visit(node.args)
         for kwarg in node.keywords:
             self.visit(kwarg.value)
         if isinstance(node.func, ast.Attribute):

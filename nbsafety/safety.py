@@ -55,7 +55,6 @@ class DependencySafety(object):
         self.store_history = kwargs.pop('store_history', True)
         self.use_comm = kwargs.pop('use_comm', False)
         self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
-        self.change_set: Set[DataCell] = set()
         self._last_execution_counter: int = 0
         self._counters_by_cell_id: Dict[str, int] = {}
         self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
@@ -207,11 +206,9 @@ class DependencySafety(object):
                     # something went wrong silently (e.g. due to line magic); fall back to just executing the code
                     logger.warning('Something failed while attempting traced execution; '
                                    'falling back to uninstrumented execution.')
-                    self.change_set = set()
                     run_cell(cell, store_history=self.store_history)
 
                 # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-                self.change_set = set()
                 with self._tracing_context(untraced_backup=_backup):
                     run_cell(cell, store_history=self.store_history)
 

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 from contextlib import contextmanager
+import ctypes
 import logging
 from typing import TYPE_CHECKING
 
@@ -64,27 +65,26 @@ class TraceStatement(object):
             raise TypeError('got non-function data cell %s for name %s' % (func_cell, func_name))
         return func_cell.scope
 
-    def _get_obj_id_for_name(self, name):
-        try:
-            return id(self.frame.f_locals[name])
-        except KeyError:
-            # this can happen if assignment threw an exception, or if we
-            # iterate over an empty for loop
-            # logger.error('unable to find object for name %s', name)
-            return None
-
     def _handle_aliases(
             self,
-            old_id: 'Optional[int]', old_dc: 'Optional[DataCell]',
-            obj_id: 'Optional[int]', dc: 'Optional[DataCell]'
+            old_id: 'Optional[int]',
+            old_dc: 'Optional[DataCell]',
+            dc: 'Optional[DataCell]'
     ):
+        old_alias_dcs = self.safety.aliases[old_id]
+        new_alias_dcs = self.safety.aliases[dc.obj_id]
         if old_id is not None and old_dc is not None:
-            self.safety.aliases[old_id].discard(old_dc)
-        if obj_id is not None and dc is not None:
-            self.safety.aliases[obj_id].add(dc)
-        if old_id == obj_id:
-            for alias_dc in self.safety.aliases[obj_id]:
+            old_alias_dcs.discard(old_dc)
+        if dc is not None and dc.obj_id is not None:
+            new_alias_dcs.add(dc)
+        old_alias_dcs_copy = list(old_alias_dcs)
+        for alias_dc in old_alias_dcs_copy:
+            if alias_dc.obj_id == dc.obj_id:
                 alias_dc.mark_mutated()
+                old_alias_dcs.discard(alias_dc)
+                new_alias_dcs.add(alias_dc)
+        if len(old_alias_dcs) == 0:
+            del self.safety.aliases[old_id]
 
     def _make_lval_data_cells(self):
         lval_symbols, rval_symbols, should_add = get_statement_lval_and_rval_symbols(self.stmt_node)
@@ -104,19 +104,25 @@ class TraceStatement(object):
                 self.safety.namespaces[class_obj_id] = self.class_scope
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
-            obj_id = self._get_obj_id_for_name(name)
-            if obj_id is not None:
+            try:
+                obj = self.frame.f_locals[name]
                 dc, old_dc, old_id = self.scope.upsert_data_cell_for_name(
-                    name, obj_id, rval_deps,
+                    name, obj, rval_deps,
                     add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
                 )
-                self._handle_aliases(old_id, old_dc, obj_id, dc)
-        for scope, obj_id, attr in self.safety.attr_trace_manager.saved_store_data:
+                self._handle_aliases(old_id, old_dc, dc)
+            except KeyError:
+                pass
+        for scope, obj, attr in self.safety.attr_trace_manager.saved_store_data:
+            try:
+                obj = getattr(obj, attr)
+            except AttributeError:
+                continue
             should_add = isinstance(self.stmt_node, ast.AugAssign)
             dc, old_dc, old_id = scope.upsert_data_cell_for_name(
-                attr, obj_id, rval_deps, add=should_add, is_function_def=False, class_scope=None
+                attr, obj, rval_deps, add=should_add, is_function_def=False, class_scope=None
             )
-            self._handle_aliases(old_id, old_dc, obj_id, dc)
+            self._handle_aliases(old_id, old_dc, dc)
 
     def handle_dependencies(self):
         if not self.safety.dependency_tracking_enabled:
@@ -128,8 +134,8 @@ class TraceStatement(object):
         if self.has_lval:
             self._make_lval_data_cells()
         else:
-            if len(self.safety.attr_trace_manager.saved_store_data) > 0:
-                print(self.safety.attr_trace_manager.saved_store_data)
+            # if len(self.safety.attr_trace_manager.saved_store_data) > 0:
+            #     print(self.safety.attr_trace_manager.saved_store_data)
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
 
     def finished_execution_hook(self):

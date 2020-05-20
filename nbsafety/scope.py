@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import inspect
 from typing import TYPE_CHECKING
+import weakref
 
 from IPython import get_ipython
 try:
@@ -12,7 +13,7 @@ from .analysis import AttributeSymbolChain, CallPoint
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
-    from typing import Dict, Optional, Set, Tuple, Union
+    from typing import Any, Dict, Optional, Set, Tuple, Union
 
 
 class Scope(object):
@@ -125,7 +126,7 @@ class Scope(object):
                 for child in old_dc.children:
                     child.parents.discard(old_dc)
                     child.fresher_ancestors.discard(old_dc)
-                old_id = old_dc.obj_id
+                old_id = old_dc.cached_obj_id
                 # don't mark children as having stale dep unless old dep was of same type
                 should_propagate = isinstance(old_dc, type(dc))
         if should_propagate and old_dc is not None:
@@ -136,18 +137,18 @@ class Scope(object):
         self.put(name, dc)
         return dc, old_dc, old_id
 
-    def _upsert_function_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]'):
-        dc = FunctionDataCell(self.make_child_scope(name), name, self, obj_id)
+    def _upsert_function_data_cell_for_name(self, name: str, obj: 'Any', deps: 'Set[DataCell]'):
+        dc = FunctionDataCell(self.make_child_scope(name), name, self, obj)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
-    def _upsert_class_data_cell_for_name(self, name: str, obj_id: int, deps: 'Set[DataCell]', class_scope: 'Scope'):
-        dc = ClassDataCell(class_scope, name, self, obj_id)
+    def _upsert_class_data_cell_for_name(self, name: str, obj: 'Any', deps: 'Set[DataCell]', class_scope: 'Scope'):
+        dc = ClassDataCell(class_scope, name, self, obj)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
             self,
             name: str,
-            obj_id: int,
+            obj: 'Any',
             deps: 'Set[DataCell]',
             add=False,
             is_function_def=False,
@@ -156,27 +157,27 @@ class Scope(object):
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert not add
-            return self._upsert_function_data_cell_for_name(name, obj_id, deps)
+            return self._upsert_function_data_cell_for_name(name, obj, deps)
         if class_scope is not None:
             assert not add
-            return self._upsert_class_data_cell_for_name(name, obj_id, deps, class_scope)
+            return self._upsert_class_data_cell_for_name(name, obj, deps, class_scope)
         old_id = None
         old_dc = None
         if self.is_globally_accessible:
             old_dc = self.lookup_data_cell_by_name_this_indentation(name)
             if old_dc is not None:
-                old_id = old_dc.obj_id
+                old_id = old_dc.cached_obj_id
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
                     old_dc.update_deps(deps, add=add)
-                    old_dc.obj_id = obj_id
+                    old_dc.update_obj_ref(obj)
                     return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataCell(name, obj_id, self, deps)
+        dc = DataCell(name, obj, self, deps)
         self.put(name, dc)
         for dep in deps:
             dep.children.add(dc)

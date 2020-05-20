@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 from typing import TYPE_CHECKING
+import weakref
 
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
-    from typing import Optional, Set
+    from typing import Any, Optional, Set
     from .scope import Scope
 
 
@@ -12,12 +13,18 @@ class DataCell(object):
     def __init__(
             self,
             name: str,
-            obj_id: int,
+            obj: 'Any',
             containing_scope: 'Scope',
             parents: 'Optional[Set[DataCell]]' = None,
     ):
         self.name = str(name)
-        self.obj_id = obj_id
+        self._has_weakref = True
+        try:
+            self.obj_ref = weakref.ref(obj)
+        except TypeError:
+            self._has_weakref = False
+            self.obj_ref = obj
+        self.cached_obj_id = self.obj_id
         self.containing_scope = containing_scope
         if parents is None:
             parents = set()
@@ -40,6 +47,22 @@ class DataCell(object):
 
     def __str__(self):
         return self.name
+
+    @property
+    def obj_id(self):
+        if self._has_weakref:
+            return id(self.obj_ref())
+        else:
+            return id(self.obj_ref)
+
+    def update_obj_ref(self, obj):
+        try:
+            self.obj_ref = weakref.ref(obj)
+            self._has_weakref = True
+        except TypeError:
+            self.obj_ref = obj
+            self._has_weakref = False
+        self.cached_obj_id = self.obj_id
 
     def update_deps(self, new_deps: 'Set[DataCell]', add=False, propagate_to_children=True):
         self.fresher_ancestors = set()

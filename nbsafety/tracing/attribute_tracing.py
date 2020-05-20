@@ -9,10 +9,10 @@ from ..data_cell import DataCell
 from ..scope import Scope
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Set, Tuple, Union
+    from typing import Any, Dict, List, Optional, Set, Tuple, Union
     Mutation = Tuple[int, Tuple[str, ...]]
     MutCand = Optional[Tuple[int, int]]
-    SavedStoreData = Tuple[Scope, int, str]
+    SavedStoreData = Tuple[Scope, Any, str]
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +33,11 @@ class AttributeTracingManager(object):
             self.start_tracer_name, self.end_tracer_name, self.arg_recorder_name
         )
         self.loaded_data_cells: Set[DataCell] = set()
-        self.saved_store_data: Set[SavedStoreData] = set()
+        self.saved_store_data: List[SavedStoreData] = []
         self.mutations: Set[Mutation] = set()
         self.recorded_args: Set[str] = set()
         self.stack: List[
-            Tuple[Set[SavedStoreData], Set[Mutation], MutCand, Set[str], Scope, Scope]
+            Tuple[List[SavedStoreData], Set[Mutation], MutCand, Set[str], Scope, Scope]
         ] = []
         self.mutation_candidate: MutCand = None
 
@@ -58,7 +58,7 @@ class AttributeTracingManager(object):
             self.active_scope,
             self.original_active_scope,
         ))
-        self.saved_store_data = set()
+        self.saved_store_data = []
         self.mutations = set()
         self.recorded_args = set()
         self.original_active_scope = new_scope
@@ -78,13 +78,6 @@ class AttributeTracingManager(object):
     def debug_attribute_tracer(obj, attr, ctx):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
-
-    @staticmethod
-    def _obj_id_or_none(obj, attr_or_subscript):
-        try:
-            return id(getattr(obj, attr_or_subscript, None))
-        except AttributeError:
-            return None
 
     def attrsub_tracer(self, obj, attr_or_subscript, ctx, call_context, override_active_scope):
         if obj is None:
@@ -119,15 +112,14 @@ class AttributeTracingManager(object):
                 self.mutation_candidate = None
                 data_cell = scope.lookup_data_cell_by_name_this_indentation(attr_or_subscript)
                 if data_cell is None:
-                    obj_id = self._obj_id_or_none(obj, attr_or_subscript)
-                    if obj_id is not None:
-                        data_cell = DataCell(attr_or_subscript, obj_id, scope)
+                    try:
+                        data_cell = DataCell(attr_or_subscript, getattr(obj, attr_or_subscript), scope)
                         scope.put(attr_or_subscript, data_cell)
+                    except AttributeError:
+                        pass
                 self.loaded_data_cells.add(data_cell)
         if ctx in ('Store', 'AugStore'):
-            obj_id = self._obj_id_or_none(obj, attr_or_subscript)
-            if obj_id is not None:
-                self.saved_store_data.add((scope, obj_id, attr_or_subscript))
+            self.saved_store_data.append((scope, obj, attr_or_subscript))
         return obj
 
     def expr_tracer(self, obj):
@@ -147,7 +139,7 @@ class AttributeTracingManager(object):
 
     def reset(self):
         self.loaded_data_cells = set()
-        self.saved_store_data = set()
+        self.saved_store_data = []
         self.mutations = set()
         self.mutation_candidate = None
         self.active_scope = self.original_active_scope

@@ -44,14 +44,20 @@ const extension: JupyterFrontEndPlugin<void> = {
             nbPanel.content
           );
         });
+        let shouldReconnect = false;
         session.statusChanged.connect((session, status) => {
           if (status === 'restarting' || status === 'autorestarting') {
+            shouldReconnect = true;
+          }
+
+          if ((status === 'idle' || status === 'busy') && shouldReconnect) {
+            shouldReconnect = false;
             session.ready.then(() => {
               clearCellState(nbPanel.content);
               commDisconnectHandler();
               commDisconnectHandler = connectToComm(
-                session.session.kernel,
-                nbPanel.content
+                  session.session.kernel,
+                  nbPanel.content
               );
             });
           }

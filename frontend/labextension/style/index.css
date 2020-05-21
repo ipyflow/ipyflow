@@ -1,60 +1,60 @@
 
 .stale-cell .jp-InputCollapser {
-  border: 1px solid red;
+  border: 1px solid rgb(254,0,82);
 }
 
 .stale-cell.jp-mod-selected .jp-Collapser-child {
-  background-color: red;
+  background-color: rgb(254,0,82);
 }
 
 .stale-cell .jp-Collapser:hover > .jp-Collapser-child {
-  background-color: red;
+  background-color: rgb(254,0,82);
 }
 
 .jp-Collapser-child.linked-stale {
-  background-color: red;
+  background-color: rgb(254,0,82);
   opacity: 0.6;
 }
 
 .refresher-cell .jp-InputCollapser {
-  border: 1px solid forestgreen;
+  border: 1px solid rgb(0,197,158);
 }
 
 .refresher-cell.jp-mod-selected .jp-Collapser-child {
-  background-color: forestgreen;
+  background-color: rgb(0,197,158);
 }
 
 .refresher-cell .jp-Collapser:hover > .jp-Collapser-child {
-  background-color: forestgreen;
+  background-color: rgb(0,197,158);
 }
 
 .jp-Collapser-child.linked-refresher {
-  background-color: forestgreen;
+  background-color: rgb(0,197,158);
   opacity: 0.6;
 }
 
 /* put input / output cells later since they should take precedence */
 
 .stale-output-cell .jp-OutputCollapser {
-  border: 1px solid red;
+  border: 1px solid rgb(254,0,82);
 }
 
 .stale-output-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
-  background-color: red;
+  background-color: rgb(254,0,82);
 }
 
 .stale-output-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
-  background-color: red;
+  background-color: rgb(254,0,82);
 }
 
 .refresher-input-cell .jp-InputCollapser {
-  border: 1px solid forestgreen;
+  border: 1px solid rgb(0,197,158);
 }
 
 .refresher-input-cell.jp-mod-selected .jp-InputCollapser .jp-Collapser-child {
-  background-color: forestgreen;
+  background-color: rgb(0,197,158);
 }
 
 .refresher-input-cell .jp-InputCollapser:hover > .jp-Collapser-child {
-  background-color: forestgreen;
+  background-color: rgb(0,197,158);
 }

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import inspect
 from typing import TYPE_CHECKING
-import weakref
 
 from IPython import get_ipython
 try:
@@ -87,12 +86,14 @@ class Scope(object):
     def gen_data_cells_for_attr_symbol_chain(self, chain: AttributeSymbolChain, namespaces: 'Dict[int, Scope]'):
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
+        dc = None
+        # TODO: change `yield` to `return` after testing this
         for name in chain.symbols:
             if isinstance(name, CallPoint):
                 break
             dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
-            if dc is not None:
-                yield dc
+            # if dc is not None:
+            #     yield dc
             if name_to_obj is None:
                 break
             obj = name_to_obj.get(name, None)
@@ -113,6 +114,8 @@ class Scope(object):
                     name_to_obj = inspect.getmembers(obj)
                 except:  # noqa
                     name_to_obj = None
+        if dc is not None:
+            yield dc
 
     def _upsert_and_mark_children_if_same_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'

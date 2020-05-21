@@ -170,7 +170,9 @@ class DependencySafety(object):
                         logger.warning(str(len(self._prev_cell_nodes_with_stale_deps) - warning_counter) +
                                        " more nodes with stale dependencies skipped...")
                         break
-                    _safety_warning(node.name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors)
+                    _safety_warning(
+                        node.readable_name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors
+                    )
                     warning_counter += 1
                 self.stale_dependency_detected = True
                 self._last_refused_code = cell

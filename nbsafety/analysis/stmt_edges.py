@@ -46,12 +46,11 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         # skip node.slice -- this is handled by the attribute tracer
         # also only add rvals -- lvals will also be handled by tracer
         # note that the slice should be considered as an rval if it is an ast.Name
-        if not self.gather_rvals:
+        if not self.gather_rvals and isinstance(node.slice, ast.Index) and isinstance(node.slice.value, ast.Name):
             with self.gather_rvals_context():
                 self.visit(node.slice.value)
         with self.gather_rvals_context():
             self.visit(node.value)
-            # self.visit(node.slice)
 
     def visit_Assign(self, node):
         with self.gather_lvals_context():

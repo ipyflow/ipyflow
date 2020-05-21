@@ -183,16 +183,18 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         ast.copy_location(override_active_scope_arg, node)
         is_subscript = isinstance(node, ast.Subscript)
         if is_subscript:
-            if isinstance(node.slice, ast.Index):
-                attr_or_sub = node.slice.value
-            elif isinstance(node.slice, ast.Slice):
-                raise ValueError('unimpled slice: %s' % node.slice)
-            elif isinstance(node.slice, ast.ExtSlice):
-                raise ValueError('unimpled slice: %s' % node.slice)
+            sub_node = cast(ast.Subscript, node)
+            if isinstance(sub_node.slice, ast.Index):
+                attr_or_sub = sub_node.slice.value
+            elif isinstance(sub_node.slice, ast.Slice):
+                raise ValueError('unimpled slice: %s' % sub_node.slice)
+            elif isinstance(sub_node.slice, ast.ExtSlice):
+                raise ValueError('unimpled slice: %s' % sub_node.slice)
             else:
-                raise ValueError('unexpected slice: %s' % node.slice)
+                raise ValueError('unexpected slice: %s' % sub_node.slice)
         else:
-            attr_or_sub = ast.Str(node.attr)
+            attr_node = cast(ast.Attribute, node)
+            attr_or_sub = ast.Str(attr_node.attr)
         with self.attrsub_load_context(override_active_scope):
             replacement_value = ast.Call(
                 func=ast.Name(self.start_tracer, ctx=ast.Load()),
@@ -208,7 +210,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             )
         ast.copy_location(replacement_value, node.value)
         node.value = replacement_value
-        new_node: Union[ast.Attribute, ast.Call] = node
+        new_node: Union[ast.Attribute, ast.Subscript, ast.Call] = node
         if not self.inside_attrsub_load_chain and override_active_scope:
             new_node = ast.Call(
                 func=ast.Name(self.end_tracer, ctx=ast.Load()),

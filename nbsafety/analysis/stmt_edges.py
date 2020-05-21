@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import List, Set
+    from typing import List, Set, Union
 
 
 class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: current complete bipartite subgraph will add unncessary edges
         self.lval_symbol_set: Set[str] = set()
-        self.rval_symbol_set: Set[str] = set()
+        self.rval_symbol_set: Set[Union[str, int]] = set()
         self.should_add = False
         self.gather_rvals = True
 
@@ -43,11 +43,15 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         self.to_add_set.add(node.id)
 
     def visit_Subscript(self, node: ast.Subscript):
-        # TODO: this should probably be considered as a mutation
-        self.should_add = self.should_add or not self.gather_rvals
-        self.visit(node.value)
+        # skip node.slice -- this is handled by the attribute tracer
+        # also only add rvals -- lvals will also be handled by tracer
+        # note that the slice should be considered as an rval if it is an ast.Name
+        if not self.gather_rvals:
+            with self.gather_rvals_context():
+                self.visit(node.slice.value)
         with self.gather_rvals_context():
-            self.visit(node.slice)
+            self.visit(node.value)
+            # self.visit(node.slice)
 
     def visit_Assign(self, node):
         with self.gather_lvals_context():

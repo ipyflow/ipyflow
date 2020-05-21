@@ -8,7 +8,7 @@ try:
 except ImportError:
     pandas = None
 
-from .analysis import AttributeSymbolChain, CallPoint
+from .analysis import AttrSubSymbolChain, CallPoint
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ class Scope(object):
             ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
         return ret
 
-    def gen_data_cells_for_attr_symbol_chain(self, chain: AttributeSymbolChain, namespaces: 'Dict[int, Scope]'):
+    def gen_data_cells_for_attr_symbol_chain(self, chain: AttrSubSymbolChain, namespaces: 'Dict[int, Scope]'):
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
         dc = None
@@ -153,6 +153,7 @@ class Scope(object):
             name: str,
             obj: 'Any',
             deps: 'Set[DataCell]',
+            is_subscript,
             add=False,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
@@ -160,9 +161,11 @@ class Scope(object):
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert not add
+            assert not is_subscript
             return self._upsert_function_data_cell_for_name(name, obj, deps)
         if class_scope is not None:
             assert not add
+            assert not is_subscript
             return self._upsert_class_data_cell_for_name(name, obj, deps, class_scope)
         old_id = None
         old_dc = None
@@ -180,7 +183,7 @@ class Scope(object):
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataCell(name, obj, self, deps)
+        dc = DataCell(name, obj, self, deps, is_subscript=is_subscript)
         self.put(name, dc)
         for dep in deps:
             dep.children.add(dc)
@@ -221,9 +224,12 @@ class Scope(object):
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, name):
+    def make_namespace_qualified_name(self, dc: 'DataCell'):
         path = self.full_namespace_path
         if path:
-            return path + '.' + name
+            if dc.is_subscript:
+                return f'{path}[{dc.name}]'
+            else:
+                return f'{path}.{dc.name}'
         else:
-            return name
+            return dc.name

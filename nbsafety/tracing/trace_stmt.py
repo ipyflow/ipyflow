@@ -114,20 +114,23 @@ class TraceStatement(object):
             try:
                 obj = self.frame.f_locals[name]
                 dc, old_dc, old_id = self.scope.upsert_data_cell_for_name(
-                    name, obj, rval_deps,
+                    name, obj, rval_deps, False,  # TODO: handle subscript properly
                     add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
                 )
                 self._handle_aliases(old_id, old_dc, dc)
             except KeyError:
                 pass
-        for scope, obj, attr in self.safety.attr_trace_manager.saved_store_data:
+        for scope, obj, attr_or_sub, is_subscript in self.safety.attr_trace_manager.saved_store_data:
             try:
-                obj = getattr(obj, attr)
-            except AttributeError:
+                if is_subscript:
+                    obj = obj[attr_or_sub]
+                else:
+                    obj = getattr(obj, attr_or_sub)
+            except (AttributeError, KeyError, IndexError):
                 continue
             should_add = isinstance(self.stmt_node, ast.AugAssign)
             dc, old_dc, old_id = scope.upsert_data_cell_for_name(
-                attr, obj, rval_deps, add=should_add, is_function_def=False, class_scope=None
+                attr_or_sub, obj, rval_deps, is_subscript, add=should_add, is_function_def=False, class_scope=None
             )
             self._handle_aliases(old_id, old_dc, dc)
 

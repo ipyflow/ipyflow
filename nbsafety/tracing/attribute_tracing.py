@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
     Mutation = Tuple[int, Tuple[str, ...]]
     MutCand = Optional[Tuple[int, int]]
-    SavedStoreData = Tuple[Scope, Any, str]
+    SavedStoreData = Tuple[Scope, Any, str, bool]
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class AttributeTracingManager(object):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def attrsub_tracer(self, obj, attr_or_subscript, ctx, call_context, override_active_scope):
+    def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, override_active_scope):
         if obj is None:
             return None
         obj_id = id(obj)
@@ -89,7 +89,7 @@ class AttributeTracingManager(object):
         # print('%s attr %s of obj %s' % (ctx, attr, obj))
         if scope is None:
             class_scope = self.namespaces.get(id(obj.__class__), None)
-            if class_scope is not None:
+            if class_scope is not None and not is_subscript:
                 # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_cells_this_indentation().keys()))
                 scope = class_scope.clone(obj_id)
                 self.namespaces[obj_id] = scope
@@ -118,16 +118,19 @@ class AttributeTracingManager(object):
                 data_cell = scope.lookup_data_cell_by_name_this_indentation(attr_or_subscript)
                 if data_cell is None:
                     try:
-                        obj_attr = getattr(obj, attr_or_subscript)
-                        data_cell = DataCell(attr_or_subscript, obj_attr, scope)
+                        if is_subscript:
+                            obj_attr_or_sub = obj[attr_or_subscript]
+                        else:
+                            obj_attr_or_sub = getattr(obj, attr_or_subscript)
+                        data_cell = DataCell(attr_or_subscript, obj_attr_or_sub, scope, is_subscript=is_subscript)
                         scope.put(attr_or_subscript, data_cell)
                         # FIXME: DataCells should probably register themselves with the alias manager at creation
-                        self.aliases[id(obj_attr)].add(data_cell)
+                        self.aliases[id(obj_attr_or_sub)].add(data_cell)
                     except AttributeError:
                         pass
                 self.loaded_data_cells.add(data_cell)
         if ctx in ('Store', 'AugStore'):
-            self.saved_store_data.append((scope, obj, attr_or_subscript))
+            self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
         return obj
 
     def expr_tracer(self, obj):
@@ -169,15 +172,34 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         self.inside_attrsub_load_chain = old
 
     def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
+        return self.visit_Attribute_or_Subscript(node, call_context)
+
+    def visit_Subscript(self, node: 'ast.Subscript', call_context=False):
+        return self.visit_Attribute_or_Subscript(node, call_context)
+
+    def visit_Attribute_or_Subscript(self, node: 'Union[ast.Attribute, ast.Subscript]', call_context=False):
         override_active_scope = isinstance(node.ctx, ast.Load) or self.inside_attrsub_load_chain
         override_active_scope_arg = ast.Constant(override_active_scope)
         ast.copy_location(override_active_scope_arg, node)
+        is_subscript = isinstance(node, ast.Subscript)
+        if is_subscript:
+            if isinstance(node.slice, ast.Index):
+                attr_or_sub = node.slice.value
+            elif isinstance(node.slice, ast.Slice):
+                raise ValueError('unimpled slice: %s' % node.slice)
+            elif isinstance(node.slice, ast.ExtSlice):
+                raise ValueError('unimpled slice: %s' % node.slice)
+            else:
+                raise ValueError('unexpected slice: %s' % node.slice)
+        else:
+            attr_or_sub = ast.Str(node.attr)
         with self.attrsub_load_context(override_active_scope):
             replacement_value = ast.Call(
                 func=ast.Name(self.start_tracer, ctx=ast.Load()),
                 args=[
                     self.visit(node.value),
-                    ast.Str(node.attr),
+                    attr_or_sub,
+                    ast.NameConstant(is_subscript),
                     ast.Str(node.ctx.__class__.__name__),
                     ast.NameConstant(call_context),
                     override_active_scope_arg

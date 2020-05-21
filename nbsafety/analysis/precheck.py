@@ -3,7 +3,7 @@ import ast
 import logging
 from typing import TYPE_CHECKING
 
-from .attr_symbols import get_attribute_symbol_chain, AttributeSymbolChain
+from .attr_symbols import get_attribute_symbol_chain, AttrSubSymbolChain
 from .mixins import SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class PreCheck(ast.NodeVisitor):
 
     def __init__(self):
-        self.safe_set: Set[Union[str, AttributeSymbolChain]] = set()
+        self.safe_set: Set[Union[str, AttrSubSymbolChain]] = set()
 
     def __call__(self, module_node: ast.Module, name_set: 'KeysView[str]'):
         """
@@ -32,7 +32,7 @@ class PreCheck(ast.NodeVisitor):
             for name in get_all_names(node):
                 if name in self.safe_set:
                     continue
-                if isinstance(name, AttributeSymbolChain) and name.symbols[0] in self.safe_set:
+                if isinstance(name, AttrSubSymbolChain) and name.symbols[0] in self.safe_set:
                     continue
                 check_set.add(name)
         return check_set
@@ -59,12 +59,9 @@ class PreCheck(ast.NodeVisitor):
         self.visit_Assign_or_AugAssign_target(node.target)
 
     def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.expr]'):
-        ignore_node_types = (ast.Subscript,)
-        if isinstance(target_node, ignore_node_types):
-            return
-        elif isinstance(target_node, ast.Name):
+        if isinstance(target_node, ast.Name):
             self.safe_set.add(target_node.id)
-        elif isinstance(target_node, ast.Attribute):
+        elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
             self.safe_set.add(get_attribute_symbol_chain(target_node))
         else:
             logger.warning('unsupported type for node %s' % target_node)
@@ -102,7 +99,7 @@ def precheck(code: 'Union[ast.Module, str]', name_set: 'KeysView[str]'):
 # Helper Class
 class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
-        self.name_set: Set[Union[str, AttributeSymbolChain]] = set()
+        self.name_set: Set[Union[str, AttrSubSymbolChain]] = set()
 
     def __call__(self, node: ast.AST):
         self.visit(node)

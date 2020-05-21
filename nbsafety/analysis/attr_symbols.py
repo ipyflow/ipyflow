@@ -5,11 +5,11 @@ from typing import cast, Union, TYPE_CHECKING
 from ..utils.mixins import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Tuple
+    from typing import List, Optional, Tuple, Union
 
 
 class CallPoint(CommonEqualityMixin):
-    def __init__(self, symbol: str, retval: 'Optional[int]' = None):
+    def __init__(self, symbol: 'Union[str, int]', retval: 'Optional[int]' = None):
         self.symbol = symbol
         self.retval = retval
 
@@ -17,7 +17,7 @@ class CallPoint(CommonEqualityMixin):
         return hash(self.symbol)
 
 
-class AttributeSymbolChain(CommonEqualityMixin):
+class AttrSubSymbolChain(CommonEqualityMixin):
     def __init__(self, symbols: 'List[Union[str, CallPoint]]'):
         self.symbols: 'Tuple[Union[str, CallPoint], ...]' = tuple(symbols)
         self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
@@ -29,18 +29,21 @@ class AttributeSymbolChain(CommonEqualityMixin):
         return repr(self.symbols)
 
 
-class GetAttributeSymbols(ast.NodeVisitor):
+class GetAttrSubSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, CallPoint]] = []
 
-    def __call__(self, node: Union[ast.Attribute, ast.Call]) -> AttributeSymbolChain:
+    def __call__(self, node: Union[ast.Attribute, ast.Call]) -> AttrSubSymbolChain:
         self.visit(node)
         self.symbol_chain.reverse()
-        return AttributeSymbolChain(self.symbol_chain)
+        return AttrSubSymbolChain(self.symbol_chain)
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
             self.symbol_chain.append(CallPoint(node.func.attr))
+            self.visit(node.func.value)
+        elif isinstance(node.func, ast.Subscript):
+            self.symbol_chain.append(CallPoint(node.func.slice))
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Name):
             self.symbol_chain.append(CallPoint(node.func.id))
@@ -49,6 +52,23 @@ class GetAttributeSymbols(ast.NodeVisitor):
 
     def visit_Attribute(self, node):
         self.symbol_chain.append(node.attr)
+        self.visit(node.value)
+
+    def visit_Subscript(self, node):
+        node_slice = node.slice
+        if isinstance(node_slice, ast.Str):
+            self.symbol_chain.append(node_slice.s)
+        elif isinstance(node_slice, ast.Num):
+            self.symbol_chain.append(node_slice.n)
+        elif isinstance(node_slice, ast.Name):
+            # FIXME: hack to make the static checker stop here
+            # In the future, it should try to attempt to resolve
+            # the value of the ast.Name node
+            self.symbol_chain.append(CallPoint(node_slice.id))
+        else:
+            # give up
+            return
+            # raise TypeError('unexpected type for node.slice %s' % node_slice)
         self.visit(node.value)
 
     def visit_Name(self, node):
@@ -63,11 +83,11 @@ class GetAttributeSymbols(ast.NodeVisitor):
         return
 
 
-def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Call]) -> AttributeSymbolChain:
-    if isinstance(maybe_node, (ast.Attribute, ast.Call)):
+def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Subscript, ast.Call]) -> AttrSubSymbolChain:
+    if isinstance(maybe_node, (ast.Attribute, ast.Subscript, ast.Call)):
         node = maybe_node
     else:
-        node = cast(Union[ast.Attribute, ast.Call], cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
-    if not isinstance(node, (ast.Attribute, ast.Call)):
+        node = cast(Union[ast.Attribute, ast.Subscript, ast.Call], cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
+    if not isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
-    return GetAttributeSymbols()(node)
+    return GetAttrSubSymbols()(node)

@@ -5,20 +5,20 @@ import weakref
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
-    from typing import Any, Optional, Set
+    from typing import Any, Optional, Set, Union
     from .scope import Scope
 
 
 class DataCell(object):
     def __init__(
             self,
-            name: str,
+            name: 'Union[str, int]',
             obj: 'Any',
             containing_scope: 'Scope',
             parents: 'Optional[Set[DataCell]]' = None,
+            is_subscript: bool = False
     ):
-        self.name = str(name)
-        self.readable_name = containing_scope.make_namespace_qualified_name(self.name)
+        self.name = name
         self._has_weakref = True
         try:
             self.obj_ref = weakref.ref(obj)
@@ -31,6 +31,8 @@ class DataCell(object):
             parents = set()
         self.parents: Set[DataCell] = parents
         self.children: Set[DataCell] = set()
+        self.is_subscript = is_subscript
+        self.readable_name = containing_scope.make_namespace_qualified_name(self)
 
         self.defined_cell_num = cell_counter()
 

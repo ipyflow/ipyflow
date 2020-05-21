@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import AttributeSymbolChain, precheck, compute_lineno_to_stmt_mapping
+from .analysis import AttrSubSymbolChain, precheck, compute_lineno_to_stmt_mapping
 from .ipython_utils import (
     ast_transformer_context,
     cell_counter,
@@ -138,7 +138,7 @@ class DependencySafety(object):
         for name in precheck(cell, self.global_scope.all_data_cells_this_indentation().keys()):
             if isinstance(name, str):
                 nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
-            elif isinstance(name, AttributeSymbolChain):
+            elif isinstance(name, AttrSubSymbolChain):
                 nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
             else:
                 logger.warning('invalid type for name %s', name)

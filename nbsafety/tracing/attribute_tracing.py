@@ -6,19 +6,20 @@ import logging
 from typing import cast, TYPE_CHECKING
 
 from ..data_cell import DataCell
-from ..scope import Scope
+from ..scope import NamespaceScope
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
     Mutation = Tuple[int, Tuple[str, ...]]
     MutCand = Optional[Tuple[int, int]]
-    SavedStoreData = Tuple[Scope, Any, str, bool]
+    SavedStoreData = Tuple[NamespaceScope, Any, str, bool]
+    from ..scope import Scope
 
 logger = logging.getLogger(__name__)
 
 
 class AttributeTracingManager(object):
-    def __init__(self, namespaces: 'Dict[int, Scope]', aliases: 'Dict[int, Set[DataCell]]',
+    def __init__(self, namespaces: 'Dict[int, NamespaceScope]', aliases: 'Dict[int, Set[DataCell]]',
                  active_scope: 'Scope', trace_event_counter: 'List[int]'):
         self.namespaces = namespaces
         self.aliases = aliases
@@ -99,7 +100,7 @@ class AttributeTracingManager(object):
                     scope_name = next(iter(self.aliases[obj_id])).name
                 except StopIteration:
                     scope_name = '<unknown namespace>'
-                scope = Scope(scope_name, namespace_obj_ref=obj_id, parent_scope=self.active_scope)
+                scope = NamespaceScope(obj_id, scope_name, parent_scope=self.active_scope)
                 self.namespaces[obj_id] = scope
         # print('new active scope', scope)
         if override_active_scope:

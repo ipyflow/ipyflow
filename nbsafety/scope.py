@@ -21,12 +21,9 @@ class Scope(object):
     def __init__(
             self, scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
-            namespace_obj_ref: 'Optional[int]' = None,
     ):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
-        self.cloned_from: Optional[Scope] = None
-        self.namespace_obj_ref = namespace_obj_ref
         self._data_cell_by_name: Dict[str, DataCell] = {}
 
     def __hash__(self):
@@ -35,17 +32,9 @@ class Scope(object):
     def __str__(self):
         return str(self.full_path)
 
-    def clone(self, namespace_obj_ref: int):
-        cloned = Scope()
-        cloned.__dict__ = dict(self.__dict__)
-        cloned.cloned_from = self
-        cloned.namespace_obj_ref = namespace_obj_ref
-        cloned._data_cell_by_name = {}
-        return cloned
-
     @property
     def is_namespace_scope(self):
-        return self.namespace_obj_ref is not None
+        return isinstance(self, NamespaceScope)
 
     @property
     def non_namespace_parent_scope(self):
@@ -58,24 +47,19 @@ class Scope(object):
         return self.parent_scope
 
     def make_child_scope(self, scope_name, namespace_obj_ref=None):
-        return self.__class__(scope_name, parent_scope=self, namespace_obj_ref=namespace_obj_ref)
+        if namespace_obj_ref is None:
+            return Scope(scope_name, parent_scope=self)
+        else:
+            return NamespaceScope(namespace_obj_ref, scope_name, parent_scope=self)
 
     def put(self, name: str, val: DataCell):
         self._data_cell_by_name[name] = val
 
     def lookup_data_cell_by_name_this_indentation(self, name):
-        ret = self._data_cell_by_name.get(name, None)
-        if ret is None and self.cloned_from is not None:
-            ret = self.cloned_from.lookup_data_cell_by_name_this_indentation(name)
-        return ret
+        return self._data_cell_by_name.get(name, None)
 
     def all_data_cells_this_indentation(self):
-        if self.cloned_from is None:
-            ret = {}
-        else:
-            ret = self.cloned_from.all_data_cells_this_indentation()
-        ret.update(self._data_cell_by_name)
-        return ret
+        return self._data_cell_by_name
 
     def lookup_data_cell_by_name(self, name):
         ret = self.lookup_data_cell_by_name_this_indentation(name)
@@ -220,9 +204,27 @@ class Scope(object):
         else:
             prefix = ''
         if prefix:
-            return prefix + '.' + self.scope_name
+            return f'{prefix}.{self.scope_name}'
         else:
             return self.scope_name
+
+    def make_namespace_qualified_name(self, dc: 'DataCell'):
+        return dc.name
+
+
+class NamespaceScope(Scope):
+    def __init__(self, namespace_obj_ref: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cloned_from: Optional[Scope] = None
+        self.namespace_obj_ref = namespace_obj_ref
+
+    def clone(self, namespace_obj_ref: int):
+        cloned = NamespaceScope(namespace_obj_ref)
+        cloned.__dict__ = dict(self.__dict__)
+        cloned.cloned_from = self
+        cloned.namespace_obj_ref = namespace_obj_ref
+        cloned._data_cell_by_name = {}
+        return cloned
 
     def make_namespace_qualified_name(self, dc: 'DataCell'):
         path = self.full_namespace_path
@@ -233,3 +235,14 @@ class Scope(object):
                 return f'{path}.{dc.name}'
         else:
             return dc.name
+
+    def lookup_data_cell_by_name_this_indentation(self, name):
+        ret = self._data_cell_by_name.get(name, None)
+        if ret is None and self.cloned_from is not None:
+            ret = self.cloned_from.lookup_data_cell_by_name_this_indentation(name)
+        return ret
+
+    def all_data_cells_this_indentation(self):
+        ret = self.cloned_from.all_data_cells_this_indentation()
+        ret.update(self._data_cell_by_name)
+        return ret

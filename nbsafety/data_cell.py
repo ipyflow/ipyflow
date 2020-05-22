@@ -5,7 +5,7 @@ import weakref
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
-    from typing import Any, Optional, Set, Union
+    from typing import Any, Dict, Optional, Set, Union
     from .scope import Scope, NamespaceScope
 
 
@@ -67,7 +67,13 @@ class DataCell(object):
             self._has_weakref = False
         self.cached_obj_id = self.obj_id
 
-    def update_deps(self, new_deps: 'Set[DataCell]', add=False, propagate_to_children=True):
+    def update_deps(
+            self,
+            new_deps: 'Set[DataCell]',
+            add=False,
+            propagate_to_children=True,
+            aliases: 'Optional[Dict[int, Set[DataCell]]]' = None
+    ):
         self.fresher_ancestors = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
@@ -88,6 +94,13 @@ class DataCell(object):
         if propagate_to_children:
             for child in self.children:
                 child._propagate_update(self)
+
+        if aliases is not None:
+            assert add
+            for alias in aliases[self.obj_id]:
+                if alias is self:
+                    continue
+                alias.update_deps(new_deps, add=True, propagate_to_children=propagate_to_children)
 
     def mark_mutated(self, propagate_to_children=True):
         self.update_deps(set(), add=True, propagate_to_children=propagate_to_children)

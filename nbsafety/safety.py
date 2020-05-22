@@ -23,6 +23,7 @@ from .tracing import AttributeTracingManager, make_tracer, TraceState
 if TYPE_CHECKING:
     from typing import Dict, Set, Optional, Union
     from .data_cell import DataCell
+    from .scope import NamespaceScope
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -43,7 +44,7 @@ class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, **kwargs):
         self.global_scope = Scope()
-        self.namespaces: Dict[int, Scope] = {}
+        self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]

@@ -12,7 +12,7 @@ from .analysis import AttrSubSymbolChain, CallPoint
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Optional, Set, Tuple, Union
+    from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 
 class Scope(object):
@@ -216,6 +216,7 @@ class NamespaceScope(Scope):
     def __init__(self, namespace_obj_ref: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
+        self.child_clones: List[NamespaceScope] = []
         self.namespace_obj_ref = namespace_obj_ref
         self.max_defined_timestamp = 0
         self._data_cells_with_stale_ancestors: Set[DataCell] = set()
@@ -226,6 +227,12 @@ class NamespaceScope(Scope):
         ret = len(self._data_cells_with_stale_ancestors) > 0
         ret = ret or (self.cloned_from is not None and self.cloned_from.has_data_cells_with_stale_ancestors)
         return ret
+
+    def deep_mutate(self, deps: 'Set[DataCell]', aliases: 'Dict[int, Set[DataCell]]'):
+        for child in self.child_clones:
+            child.deep_mutate(deps, aliases)
+        for dc in self._data_cell_by_name.values():
+            dc.update_deps(deps, add=True)
 
     @property
     def has_data_cells_with_stale_ancestors_deep(self):
@@ -259,6 +266,7 @@ class NamespaceScope(Scope):
         cloned.cloned_from = self
         cloned.namespace_obj_ref = namespace_obj_ref
         cloned._data_cell_by_name = {}
+        self.child_clones.append(cloned)
         return cloned
 
     def make_namespace_qualified_name(self, dc: 'DataCell'):

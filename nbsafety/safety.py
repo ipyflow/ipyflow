@@ -146,7 +146,7 @@ class DependencySafety(object):
             for node in nodes:
                 if node is not None:
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
-                    if node.is_stale():
+                    if node.has_stale_ancestor:
                         stale_nodes.add(node)
         return stale_nodes, max_defined_cell_num
 

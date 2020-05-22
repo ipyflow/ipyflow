@@ -215,9 +215,43 @@ class Scope(object):
 class NamespaceScope(Scope):
     def __init__(self, namespace_obj_ref: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cloned_from: Optional[Scope] = None
+        self.cloned_from: Optional[NamespaceScope] = None
         self.namespace_obj_ref = namespace_obj_ref
-        self.deep_required_cell_num = 0
+        self.max_defined_timestamp = 0
+        self._data_cells_with_stale_ancestors: Set[DataCell] = set()
+        self._cloned_scopes_with_data_cells_with_stale_ancestors: Set[NamespaceScope] = set()
+
+    @property
+    def has_data_cells_with_stale_ancestors(self):
+        ret = len(self._data_cells_with_stale_ancestors) > 0
+        ret = ret or (self.cloned_from is not None and self.cloned_from.has_data_cells_with_stale_ancestors)
+        return ret
+
+    @property
+    def has_data_cells_with_stale_ancestors_deep(self):
+        return self.has_data_cells_with_stale_ancestors or len(
+            self._cloned_scopes_with_data_cells_with_stale_ancestors
+        ) > 0
+
+    def mark_data_cell_as_having_stale_ancestors(self, dc: 'DataCell'):
+        self._data_cells_with_stale_ancestors.add(dc)
+        if self.cloned_from is not None:
+            self.cloned_from.mark_cloned_scope_as_having_data_cells_with_stale_ancestors(self)
+
+    def mark_cloned_scope_as_having_data_cells_with_stale_ancestors(self, scope: 'NamespaceScope'):
+        self._cloned_scopes_with_data_cells_with_stale_ancestors.add(scope)
+        if self.cloned_from is not None:
+            self.cloned_from.mark_cloned_scope_as_having_data_cells_with_stale_ancestors(self)
+
+    def mark_data_cell_as_not_having_stale_ancestors(self, dc: 'DataCell'):
+        self._data_cells_with_stale_ancestors.discard(dc)
+        if self.cloned_from is not None and not self.has_data_cells_with_stale_ancestors_deep:
+            self.cloned_from.mark_cloned_scope_as_not_having_data_cells_with_stale_ancestors(self)
+
+    def mark_cloned_scope_as_not_having_data_cells_with_stale_ancestors(self, scope: 'NamespaceScope'):
+        self._cloned_scopes_with_data_cells_with_stale_ancestors.discard(scope)
+        if self.cloned_from is not None and not self.has_data_cells_with_stale_ancestors_deep:
+            self.cloned_from.mark_cloned_scope_as_not_having_data_cells_with_stale_ancestors(self)
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref)
@@ -248,16 +282,16 @@ class NamespaceScope(Scope):
         ret.update(self._data_cell_by_name)
         return ret
 
-    def percolate_required_timestamp(self, ts):
-        if ts > self.deep_required_cell_num:
-            self.deep_required_cell_num = ts
+    def percolate_max_defined_timestamp(self, ts):
+        if ts > self.max_defined_timestamp:
+            self.max_defined_timestamp = ts
             namespace_parent = self.namespace_parent_scope
             if namespace_parent is not None:
-                namespace_parent.percolate_required_timestamp(ts)
+                namespace_parent.percolate_max_defined_timestamp(ts)
 
     def put(self, name: str, val: DataCell):
         super().put(name, val)
-        self.percolate_required_timestamp(val.required_cell_num)
+        self.percolate_max_defined_timestamp(val.defined_cell_num)
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

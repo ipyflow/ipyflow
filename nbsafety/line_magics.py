@@ -53,7 +53,11 @@ def show_graph(safety: 'DependencySafety'):
             graph.add_edge(name, child_node.name)
     nx.draw_networkx(
         graph,
-        node_color=["#ff0000" if safety.global_scope.lookup_data_cell_by_name(name).is_stale() else "#cccccc" for name in graph.nodes()],
+        node_color=[
+            "#ff0000" if safety.global_scope.lookup_data_cell_by_name(name).has_stale_ancestor
+            else "#cccccc"
+            for name in graph.nodes()
+        ],
         arrowstyle='->',
         arrowsize=30,
         node_size=1000,
@@ -76,7 +80,7 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
 def show_stale(safety: 'DependencySafety'):
     stale_set = set()
     for data_cell in safety.global_scope.all_data_cells_this_indentation().values():
-        if data_cell.is_stale():
+        if data_cell.has_stale_ancestor:
             stale_set.add(data_cell)
     if not stale_set:
         print("No DataCell has stale dependency for now!")

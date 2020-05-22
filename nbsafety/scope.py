@@ -217,6 +217,7 @@ class NamespaceScope(Scope):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[Scope] = None
         self.namespace_obj_ref = namespace_obj_ref
+        self.deep_required_cell_num = 0
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref)
@@ -246,3 +247,20 @@ class NamespaceScope(Scope):
         ret = self.cloned_from.all_data_cells_this_indentation()
         ret.update(self._data_cell_by_name)
         return ret
+
+    def percolate_required_timestamp(self, ts):
+        if ts > self.deep_required_cell_num:
+            self.deep_required_cell_num = ts
+            namespace_parent = self.namespace_parent_scope
+            if namespace_parent is not None:
+                namespace_parent.percolate_required_timestamp(ts)
+
+    def put(self, name: str, val: DataCell):
+        super().put(name, val)
+        self.percolate_required_timestamp(val.required_cell_num)
+
+    @property
+    def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':
+        if self.parent_scope is not None and isinstance(self.parent_scope, NamespaceScope):
+            return self.parent_scope
+        return None

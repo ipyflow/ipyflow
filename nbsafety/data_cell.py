@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 import weakref
 
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
-    from .scope import Scope
+    from .scope import Scope, NamespaceScope
 
 
 class DataCell(object):
@@ -71,6 +71,9 @@ class DataCell(object):
         self.fresher_ancestors = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
+        if self.containing_scope.is_namespace_scope:
+            containing_scope = cast('NamespaceScope', self.containing_scope)
+            containing_scope.percolate_required_timestamp(self.required_cell_num)
         if not add:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)
@@ -95,6 +98,9 @@ class DataCell(object):
             return
         seen.add(self)
         self.required_cell_num = updated_dep.defined_cell_num
+        if self.containing_scope.is_namespace_scope:
+            containing_scope = cast('NamespaceScope', self.containing_scope)
+            containing_scope.percolate_required_timestamp(self.required_cell_num)
         self.fresher_ancestors.add(updated_dep)
         for child in self.children:
             child._propagate_update(updated_dep, seen=seen)

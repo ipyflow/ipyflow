@@ -5,13 +5,12 @@ from typing import cast, Union, TYPE_CHECKING
 from ..utils.mixins import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Tuple, Union
+    from typing import List, Tuple, Union
 
 
 class CallPoint(CommonEqualityMixin):
-    def __init__(self, symbol: 'Union[str, int]', retval: 'Optional[int]' = None):
+    def __init__(self, symbol: 'Union[str, int]'):
         self.symbol = symbol
-        self.retval = retval
 
     def __hash__(self):
         return hash(self.symbol)

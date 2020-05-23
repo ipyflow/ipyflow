@@ -8,7 +8,7 @@ try:
 except ImportError:
     pandas = None
 
-from .analysis import AttrSubSymbolChain, CallPoint
+from .analysis import AttrSubSymbolChain, CallPoint, SymbolRef
 from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ class Scope(object):
     def put(self, name: str, val: DataCell):
         self._data_cell_by_name[name] = val
 
-    def lookup_data_cell_by_name_this_indentation(self, name):
+    def lookup_data_cell_by_name_this_indentation(self, name) -> 'Optional[DataCell]':
         return self._data_cell_by_name.get(name, None)
 
     def all_data_cells_this_indentation(self):
@@ -67,14 +67,20 @@ class Scope(object):
             ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
         return ret
 
-    def gen_data_cells_for_attr_symbol_chain(self, chain: AttrSubSymbolChain, namespaces: 'Dict[int, Scope]'):
+    def gen_data_cells_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
+        """
+        Yield the DataCell as well as whether it is a deep reference
+        """
+        assert isinstance(chain.symbol, AttrSubSymbolChain)
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
         dc = None
-        # TODO: change `yield` to `return` after testing this
-        for name in chain.symbols:
+        for name in chain.symbol.symbols:
             if isinstance(name, CallPoint):
-                break
+                yield dc, True
+                dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
+                yield dc, False
+                return
             dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
             # if dc is not None:
             #     yield dc
@@ -99,7 +105,7 @@ class Scope(object):
                 except:  # noqa
                     name_to_obj = None
         if dc is not None:
-            yield dc
+            yield dc, chain.deep
 
     def _upsert_and_mark_children_if_same_data_cell_type(
             self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'

@@ -4,21 +4,24 @@ import logging
 from typing import TYPE_CHECKING
 
 from .attr_symbols import get_attribute_symbol_chain, AttrSubSymbolChain
-from .mixins import SkipUnboundArgsMixin, VisitListsMixin
+from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from .symbol_ref import SymbolRef
 
 if TYPE_CHECKING:
-    from typing import KeysView, List, Set, Union
+    from typing import List, Set, Union
+    from ..safety import DependencySafety
 
 logger = logging.getLogger(__name__)
 
 
 # TODO: have the logger warnings additionally raise exceptions for tests
-class PreCheck(ast.NodeVisitor):
+class ComputeReachableSymbolRefs(ast.NodeVisitor):
 
-    def __init__(self):
+    def __init__(self, safety: 'DependencySafety'):
+        self.safety = safety
         self.safe_set: Set[Union[str, AttrSubSymbolChain]] = set()
 
-    def __call__(self, module_node: ast.Module, name_set: 'KeysView[str]'):
+    def __call__(self, module_node: ast.Module):
         """
         This function should be called when we want to precheck an ast.Module. For
         each line/block of the cell we first run the check of new assignments, then
@@ -29,12 +32,15 @@ class PreCheck(ast.NodeVisitor):
         check_set = set()
         for node in module_node.body:
             self.visit(node)
-            for name in get_all_names(node):
-                if name in self.safe_set:
+            for ref in _get_all_symbol_refs(node):
+                if ref.symbol in self.safe_set:
                     continue
-                if isinstance(name, AttrSubSymbolChain) and name.symbols[0] in self.safe_set:
-                    continue
-                check_set.add(name)
+                # TODO: check for all subchains in the safe set, not just the first symbol
+                if isinstance(ref.symbol, AttrSubSymbolChain):
+                    leading_symbol = ref.symbol.symbols[0]
+                    if isinstance(leading_symbol, str) and leading_symbol in self.safe_set:
+                        continue
+                check_set.add(ref)
         return check_set
 
     # In case of assignment, we put the new assigned variable into a safe_set
@@ -89,24 +95,22 @@ class PreCheck(ast.NodeVisitor):
             self.visit(line)
 
 
-def precheck(code: 'Union[ast.Module, str]', name_set: 'KeysView[str]'):
-    if isinstance(code, str):
-        code = ast.parse(code)
-    return PreCheck()(code, name_set)
-
-
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.
 # Helper Class
-class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
-        self.name_set: Set[Union[str, AttrSubSymbolChain]] = set()
+        self.ref_set: Set[SymbolRef] = set()
+        self.deep = False
 
     def __call__(self, node: ast.AST):
         self.visit(node)
-        return self.name_set
+        return self.ref_set
+
+    def deep_context(self, deep_override=True):
+        return self.push_attributes(deep=deep_override)
 
     def visit_Name(self, node: ast.Name):
-        self.name_set.add(node.id)
+        self.ref_set.add(SymbolRef(node.id, deep=self.deep))
 
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
     def visit_FunctionDef(self, node: ast.FunctionDef):
@@ -117,17 +121,19 @@ class GetAllNames(SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
         self.generic_visit(node.decorator_list)
 
     def visit_Call(self, node: ast.Call):
-        self.generic_visit(node.args)
-        for kwarg in node.keywords:
-            self.visit(kwarg.value)
-        if isinstance(node.func, ast.Attribute):
-            self.name_set.add(get_attribute_symbol_chain(node))
-        else:
-            self.visit(node.func)
+        with self.deep_context():
+            self.generic_visit(node.args)
+            for kwarg in node.keywords:
+                self.visit(kwarg.value)
+        with self.deep_context(False):
+            if isinstance(node.func, ast.Attribute):
+                self.ref_set.add(SymbolRef(get_attribute_symbol_chain(node), deep=self.deep))
+            else:
+                self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute):
-        self.name_set.add(get_attribute_symbol_chain(node))
+        self.ref_set.add(SymbolRef(get_attribute_symbol_chain(node), deep=self.deep))
 
 
-def get_all_names(node: ast.AST):
-    return GetAllNames()(node)
+def _get_all_symbol_refs(node: ast.AST):
+    return GetAllSymbolRefs()(node)

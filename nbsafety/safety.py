@@ -4,12 +4,12 @@ from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import sys
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import AttrSubSymbolChain, precheck, compute_lineno_to_stmt_mapping
+from .analysis import AttrSubSymbolChain, ComputeReachableSymbolRefs, compute_lineno_to_stmt_mapping
 from .ipython_utils import (
     ast_transformer_context,
     cell_counter,
@@ -17,13 +17,13 @@ from .ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from . import line_magics
-from .scope import Scope
+from .scope import Scope, NamespaceScope
 from .tracing import AttributeTracingManager, make_tracer, TraceState
 
 if TYPE_CHECKING:
-    from typing import Dict, Set, Optional, Union
+    from typing import Dict, List, Set, Optional, Tuple, Union
+    from .analysis import SymbolRef
     from .data_cell import DataCell
-    from .scope import NamespaceScope
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -131,24 +131,37 @@ class DependencySafety(object):
             )
         ]))
 
+    def compute_reachable_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
+        if isinstance(code, str):
+            code = ast.parse(code)
+        return ComputeReachableSymbolRefs(self)(code)
+
     def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         stale_nodes = set()
         max_defined_cell_num = -1
-        for name in precheck(cell, self.global_scope.all_data_cells_this_indentation().keys()):
-            if isinstance(name, str):
-                nodes = [self.global_scope.lookup_data_cell_by_name_this_indentation(name)]
-            elif isinstance(name, AttrSubSymbolChain):
-                nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(name, self.namespaces)
+        for symbol_ref in self.compute_reachable_symbol_refs(cell):
+            if isinstance(symbol_ref.symbol, str):
+                nodes: List[Tuple[DataCell, bool]] = [(
+                    self.global_scope.lookup_data_cell_by_name_this_indentation(symbol_ref.symbol),
+                    symbol_ref.deep
+                )]
+            elif isinstance(symbol_ref.symbol, AttrSubSymbolChain):
+                nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(symbol_ref, self.namespaces)
             else:
-                logger.warning('invalid type for name %s', name)
+                logger.warning('invalid type for ref %s', symbol_ref)
                 continue
-            for node in nodes:
+            for node, deep_ref in nodes:
                 if node is not None:
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
                     if node.has_stale_ancestor:
                         stale_nodes.add(node)
+                    if deep_ref and node.obj_id in self.namespaces:
+                        namespace_scope = self.namespaces[node.obj_id]
+                        max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+                        if namespace_scope.has_data_cells_with_stale_ancestors_deep or node.has_stale_ancestor:
+                            stale_nodes.add(node)
         return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):

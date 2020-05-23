@@ -649,7 +649,6 @@ def test_numpy_subscripting():
     assert_detected('y depends on stale x[3]')
 
 
-@skipif_known_failing
 def test_subscript_sensitivity():
     run_cell('lst = list(range(5))')
     run_cell('i = 0')
@@ -1116,7 +1115,6 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
-@skipif_known_failing
 def test_attr_dep_with_top_level_overwrite():
     run_cell("""
 class Foo:

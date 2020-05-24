@@ -44,9 +44,9 @@ class DataCell(object):
         # or if this symbol is used as an argument to a function call)
         self.deep_required_cell_num = self.defined_cell_num
 
-        # Set of ancestors defined more recently
         self.fresher_ancestors: Set[DataCell] = set()
         self.deep_fresher_ancestors: Set[DataCell] = set()
+        self.namespace_data_cells_with_stale: Set[DataCell] = set()
 
         #Will never be stale if no_warning is True
         self.no_warning = False
@@ -83,6 +83,7 @@ class DataCell(object):
     ):
         self.fresher_ancestors = set()
         self.deep_fresher_ancestors = set()
+        self.namespace_data_cells_with_stale = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
         self.deep_required_cell_num = self.defined_cell_num
@@ -131,15 +132,25 @@ class DataCell(object):
             )
             namespace_obj_ref = containing_scope.namespace_obj_ref
             for alias in aliases[namespace_obj_ref]:
-                if updated_dep is self:
-                    for alias_child in alias.children_for_deep(True):
-                        if alias_child.obj_id != namespace_obj_ref:
-                            alias_child._propagate_update(updated_dep, aliases, seen, deep=True)
-                else:
-                    alias._propagate_update(updated_dep, aliases, seen, deep=True)
+                alias._mark_namespace_data_cell_as_non_stale(updated_dep, aliases)
+                for alias_child in alias.children_for_deep(True):
+                    if alias_child.obj_id != namespace_obj_ref:
+                        alias_child._propagate_update(updated_dep, aliases, seen, deep=True)
+                if updated_dep is not self:
+                    alias.namespace_data_cells_with_stale.add(self)
 
         for child in self.children_for_deep(deep):
             child._propagate_update(updated_dep, aliases, seen=seen, deep=deep)
+
+    def _mark_namespace_data_cell_as_non_stale(self, updated_dep: 'DataCell', aliases: 'Dict[int, Set[DataCell]]'):
+        if len(self.namespace_data_cells_with_stale) == 0:
+            return
+        self.namespace_data_cells_with_stale.discard(updated_dep)
+        if len(self.namespace_data_cells_with_stale) == 0 and self.containing_scope.is_namespace_scope:
+            containing_scope = cast('NamespaceScope', self.containing_scope)
+            namespace_obj_ref = containing_scope.namespace_obj_ref
+            for alias in aliases[namespace_obj_ref]:
+                alias._mark_namespace_data_cell_as_non_stale(self, aliases)
 
     def children_for_deep(self, deep):
         if deep:
@@ -157,7 +168,7 @@ class DataCell(object):
     def has_deep_stale_ancestor(self):
         if self.no_warning:
             return False
-        return self.defined_cell_num < self.deep_required_cell_num
+        return len(self.namespace_data_cells_with_stale) > 0 or self.defined_cell_num < self.deep_required_cell_num
 
 
 class FunctionDataCell(DataCell):

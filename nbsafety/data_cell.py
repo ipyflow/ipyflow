@@ -31,6 +31,7 @@ class DataCell(object):
             parents = set()
         self.parents: Set[DataCell] = parents
         self.children: Set[DataCell] = set()
+        self.deep_immune_children: Set[DataCell] = set()
         self.is_subscript = is_subscript
         self.readable_name = containing_scope.make_namespace_qualified_name(self)
 
@@ -39,8 +40,13 @@ class DataCell(object):
         # The notebook cell number this is required to have to not be considered stale
         self.required_cell_num = self.defined_cell_num
 
+        # Same, but for 'deep' references (i.e., if a method is called on this symbol,
+        # or if this symbol is used as an argument to a function call)
+        self.deep_required_cell_num = self.defined_cell_num
+
         # Set of ancestors defined more recently
         self.fresher_ancestors: Set[DataCell] = set()
+        self.deep_fresher_ancestors: Set[DataCell] = set()
 
         #Will never be stale if no_warning is True
         self.no_warning = False
@@ -70,60 +76,88 @@ class DataCell(object):
     def update_deps(
             self,
             new_deps: 'Set[DataCell]',
+            new_deep_immune_deps: 'Set[DataCell]',
+            aliases: 'Dict[int, Set[DataCell]]',
             add=False,
             propagate_to_children=True,
-            aliases: 'Optional[Dict[int, Set[DataCell]]]' = None
     ):
         self.fresher_ancestors = set()
+        self.deep_fresher_ancestors = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
+        self.deep_required_cell_num = self.defined_cell_num
         if self.containing_scope.is_namespace_scope:
             containing_scope = cast('NamespaceScope', self.containing_scope)
-            containing_scope.percolate_max_defined_timestamp(self.required_cell_num)
-            containing_scope.mark_data_cell_as_not_having_stale_ancestors(self)
+            containing_scope.propagate_max_defined_timestamp(self.required_cell_num)
         if not add:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)
+            for parent in self.parents - new_deep_immune_deps:
+                parent.deep_immune_children.discard(self)
             self.parents = set()
 
         for new_parent in new_deps - self.parents:
             new_parent.children.add(self)
             self.parents.add(new_parent)
 
+        for new_parent in new_deep_immune_deps - self.parents:
+            new_parent.deep_immune_children.add(self)
+            self.parents.add(new_parent)
+
         self.defined_cell_num = cell_counter()
         if propagate_to_children:
-            for child in self.children:
-                child._propagate_update(self)
+            self._propagate_update(self, aliases)
 
-        if aliases is not None:
-            assert add
-            for alias in aliases[self.obj_id]:
-                if alias is self:
-                    continue
-                alias.update_deps(new_deps, add=True, propagate_to_children=propagate_to_children)
+    def mark_mutated(self, aliases: 'Dict[int, Set[DataCell]]', propagate_to_children=True):
+        self.update_deps(set(), set(), aliases, add=True, propagate_to_children=propagate_to_children)
 
-    def mark_mutated(self, propagate_to_children=True):
-        self.update_deps(set(), add=True, propagate_to_children=propagate_to_children)
-
-    def _propagate_update(self, updated_dep: 'DataCell', seen=None):
+    def _propagate_update(self, updated_dep: 'DataCell', aliases: 'Dict[int, Set[DataCell]]', seen=None, deep=False):
         if seen is None:
             seen = set()
         if self in seen:
             return
         seen.add(self)
-        self.required_cell_num = updated_dep.defined_cell_num
-        if self.required_cell_num > self.defined_cell_num and self.containing_scope.is_namespace_scope:
-            self.fresher_ancestors.add(updated_dep)
+        if updated_dep is not self:
+            if deep:
+                self.deep_required_cell_num = updated_dep.defined_cell_num
+                self.deep_fresher_ancestors.add(updated_dep)
+            else:
+                self.required_cell_num = updated_dep.defined_cell_num
+                self.fresher_ancestors.add(updated_dep)
+        if self.containing_scope.is_namespace_scope:
             containing_scope = cast('NamespaceScope', self.containing_scope)
-            containing_scope.mark_data_cell_as_having_stale_ancestors(self)
-        for child in self.children:
-            child._propagate_update(updated_dep, seen=seen)
+            containing_scope.max_defined_timestamp = max(
+                containing_scope.max_defined_timestamp, updated_dep.defined_cell_num
+            )
+            namespace_obj_ref = containing_scope.namespace_obj_ref
+            for alias in aliases[namespace_obj_ref]:
+                if updated_dep is self:
+                    for alias_child in alias.children_for_deep(True):
+                        if alias_child.obj_id != namespace_obj_ref:
+                            alias_child._propagate_update(updated_dep, aliases, seen, deep=True)
+                else:
+                    alias._propagate_update(updated_dep, aliases, seen, deep=True)
+
+        for child in self.children_for_deep(deep):
+            child._propagate_update(updated_dep, aliases, seen=seen, deep=deep)
+
+    def children_for_deep(self, deep):
+        if deep:
+            return self.children
+        else:
+            return self.children | self.deep_immune_children
 
     @property
     def has_stale_ancestor(self):
         if self.no_warning:
             return False
         return self.defined_cell_num < self.required_cell_num
+
+    @property
+    def has_deep_stale_ancestor(self):
+        if self.no_warning:
+            return False
+        return self.defined_cell_num < self.deep_required_cell_num
 
 
 class FunctionDataCell(DataCell):

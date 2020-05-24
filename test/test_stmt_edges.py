@@ -16,15 +16,18 @@ class Baz(Foo, Bar):
     pass
 """.strip()
     mapping = compute_lineno_to_stmt_mapping(code)
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[1])
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[1])
     assert lvals == {'Foo'}
     assert rvals == {'object'}
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[4])
+    assert di_rvals == set()
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[4])
     assert lvals == {'Bar'}
     assert rvals == {'Foo'}
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[7])
+    assert di_rvals == set()
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[7])
     assert lvals == {'Baz'}
     assert rvals == {'Foo', 'Bar'}
+    assert di_rvals == set()
 
 
 def test_for_loop():
@@ -35,18 +38,22 @@ for i in range(10):
     lst = [a, b]
 """.strip()
     mapping = compute_lineno_to_stmt_mapping(code)
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[1])
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[1])
     assert lvals == {'i'}
     assert rvals == {'range'}
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[2])
+    assert di_rvals == set()
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[2])
     assert lvals == {'a'}
     assert rvals == {'i'}
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[3])
+    assert di_rvals == set()
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[3])
     assert lvals == {'b'}
     assert rvals == {'a', 'i'}
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[4])
+    assert di_rvals == set()
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[4])
     assert lvals == {'lst'}
     assert rvals == {'a', 'b'}
+    assert di_rvals == set()
 
 
 def test_context_manager():
@@ -56,9 +63,12 @@ with open(fname) as f:
     contents = f.read()
 """.strip()
     mapping = compute_lineno_to_stmt_mapping(code)
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[2])
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[2])
     assert lvals == {'f'}
     assert rvals == {'fname', 'open'}
-    lvals, rvals, _ = get_statement_lval_and_rval_symbols(mapping[3])
+    assert di_rvals == set()
+    lvals, rvals, di_rvals, _ = get_statement_lval_and_rval_symbols(mapping[3])
     assert lvals == {'contents'}
-    assert rvals == {'f'}  # attributes should be skipped
+    # attributes should be skipped
+    assert rvals == set()
+    assert di_rvals == {'f'}

@@ -100,7 +100,7 @@ class AttributeTracingManager(object):
                     scope_name = next(iter(self.aliases[obj_id])).name
                 except StopIteration:
                     scope_name = '<unknown namespace>'
-                scope = NamespaceScope(obj_id, scope_name, parent_scope=self.active_scope)
+                scope = NamespaceScope(obj_id, self.aliases, scope_name, parent_scope=self.active_scope)
                 self.namespaces[obj_id] = scope
         # print('new active scope', scope)
         if override_active_scope:

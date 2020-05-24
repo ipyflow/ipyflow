@@ -19,9 +19,12 @@ class Scope(object):
     GLOBAL_SCOPE_NAME = '<module>'
 
     def __init__(
-            self, scope_name: str = GLOBAL_SCOPE_NAME,
+            self,
+            aliases: 'Dict[int, Set[DataCell]]',
+            scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
     ):
+        self.aliases = aliases
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
         self._data_cell_by_name: Dict[str, DataCell] = {}
@@ -48,9 +51,9 @@ class Scope(object):
 
     def make_child_scope(self, scope_name, namespace_obj_ref=None):
         if namespace_obj_ref is None:
-            return Scope(scope_name, parent_scope=self)
+            return Scope(self.aliases, scope_name, parent_scope=self)
         else:
-            return NamespaceScope(namespace_obj_ref, scope_name, parent_scope=self)
+            return NamespaceScope(namespace_obj_ref, self.aliases, scope_name, parent_scope=self)
 
     def put(self, name: str, val: DataCell):
         self._data_cell_by_name[name] = val
@@ -108,7 +111,8 @@ class Scope(object):
             yield dc, chain.deep
 
     def _upsert_and_mark_children_if_same_data_cell_type(
-            self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]'
+            self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str,
+            deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]'
     ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
         old_id = None
         old_dc = None
@@ -126,23 +130,45 @@ class Scope(object):
             dc.children = old_dc.children
             for child in dc.children:
                 child.parents.add(dc)
-        dc.update_deps(deps, add=False)
+        dc.update_deps(deps, deep_immune_deps, self.aliases, add=False)
         self.put(name, dc)
         return dc, old_dc, old_id
 
-    def _upsert_function_data_cell_for_name(self, name: str, obj: 'Any', deps: 'Set[DataCell]'):
+    def _upsert_function_data_cell_for_name(
+            self, name: str, obj: 'Any', deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]'
+    ):
         dc = FunctionDataCell(self.make_child_scope(name), name, obj, self)
-        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
+        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps, deep_immune_deps)
 
-    def _upsert_class_data_cell_for_name(self, name: str, obj: 'Any', deps: 'Set[DataCell]', class_scope: 'Scope'):
+    def _upsert_class_data_cell_for_name(
+            self, name: str, obj: 'Any', deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]', class_scope: 'Scope'
+    ):
         dc = ClassDataCell(class_scope, name, obj, self)
-        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
+        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps, deep_immune_deps)
 
     def upsert_data_cell_for_name(
             self,
             name: str,
             obj: 'Any',
             deps: 'Set[DataCell]',
+            deep_immune_deps: 'Set[DataCell]',
+            is_subscript,
+            add=False,
+            is_function_def=False,
+            class_scope: 'Optional[Scope]' = None,
+    ):
+        dc, old_dc, old_id = self._upsert_data_cell_for_name_inner(
+            name, obj, deps, deep_immune_deps, is_subscript,
+            add=add, is_function_def=is_function_def, class_scope=class_scope
+        )
+        self._handle_aliases(old_id, old_dc, dc)
+
+    def _upsert_data_cell_for_name_inner(
+            self,
+            name: str,
+            obj: 'Any',
+            deps: 'Set[DataCell]',
+            deep_immune_deps: 'Set[DataCell]',
             is_subscript,
             add=False,
             is_function_def=False,
@@ -152,11 +178,11 @@ class Scope(object):
         if is_function_def:
             assert not add
             assert not is_subscript
-            return self._upsert_function_data_cell_for_name(name, obj, deps)
+            return self._upsert_function_data_cell_for_name(name, obj, deps, deep_immune_deps)
         if class_scope is not None:
             assert not add
             assert not is_subscript
-            return self._upsert_class_data_cell_for_name(name, obj, deps, class_scope)
+            return self._upsert_class_data_cell_for_name(name, obj, deps, deep_immune_deps, class_scope)
         old_id = None
         old_dc = None
         if self.is_globally_accessible:
@@ -166,18 +192,42 @@ class Scope(object):
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
-                    old_dc.update_deps(deps, add=add)
+                    old_dc.update_deps(deps, deep_immune_deps, self.aliases, add=add)
                     old_dc.update_obj_ref(obj)
                     return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataCell(name, obj, self, deps, is_subscript=is_subscript)
+        dc = DataCell(name, obj, self, set(), is_subscript=is_subscript)
         self.put(name, dc)
-        for dep in deps:
-            dep.children.add(dc)
+        dc.update_deps(
+            deps, deep_immune_deps, self.aliases, add=False, propagate_to_children=self.is_globally_accessible
+        )
         return dc, old_dc, old_id
+
+    def _handle_aliases(
+            self,
+            old_id: 'Optional[int]',
+            old_dc: 'Optional[DataCell]',
+            dc: 'Optional[DataCell]'
+    ):
+        old_alias_dcs = self.aliases[old_id]
+        new_alias_dcs = self.aliases[dc.obj_id]
+        if old_id is not None and old_dc is not None:
+            old_alias_dcs.discard(old_dc)
+        if dc is not None and dc.obj_id is not None:
+            new_alias_dcs.add(dc)
+        try:
+            old_alias_dcs_copy = list(old_alias_dcs)
+            for alias_dc in old_alias_dcs_copy:
+                if alias_dc.obj_id == dc.obj_id:
+                    alias_dc.mark_mutated(self.aliases)
+                    old_alias_dcs.discard(alias_dc)
+                    new_alias_dcs.add(alias_dc)
+        finally:
+            if len(old_alias_dcs) == 0:
+                del self.aliases[old_id]
 
     @property
     def is_global(self):
@@ -238,36 +288,10 @@ class NamespaceScope(Scope):
         for child in self.child_clones:
             child.deep_mutate(deps, aliases)
         for dc in self._data_cell_by_name.values():
-            dc.update_deps(deps, add=True)
-
-    @property
-    def has_data_cells_with_stale_ancestors_deep(self):
-        return self.has_data_cells_with_stale_ancestors or len(
-            self._cloned_scopes_with_data_cells_with_stale_ancestors
-        ) > 0
-
-    def mark_data_cell_as_having_stale_ancestors(self, dc: 'DataCell'):
-        self._data_cells_with_stale_ancestors.add(dc)
-        if self.cloned_from is not None:
-            self.cloned_from.mark_cloned_scope_as_having_data_cells_with_stale_ancestors(self)
-
-    def mark_cloned_scope_as_having_data_cells_with_stale_ancestors(self, scope: 'NamespaceScope'):
-        self._cloned_scopes_with_data_cells_with_stale_ancestors.add(scope)
-        if self.cloned_from is not None:
-            self.cloned_from.mark_cloned_scope_as_having_data_cells_with_stale_ancestors(self)
-
-    def mark_data_cell_as_not_having_stale_ancestors(self, dc: 'DataCell'):
-        self._data_cells_with_stale_ancestors.discard(dc)
-        if self.cloned_from is not None and not self.has_data_cells_with_stale_ancestors_deep:
-            self.cloned_from.mark_cloned_scope_as_not_having_data_cells_with_stale_ancestors(self)
-
-    def mark_cloned_scope_as_not_having_data_cells_with_stale_ancestors(self, scope: 'NamespaceScope'):
-        self._cloned_scopes_with_data_cells_with_stale_ancestors.discard(scope)
-        if self.cloned_from is not None and not self.has_data_cells_with_stale_ancestors_deep:
-            self.cloned_from.mark_cloned_scope_as_not_having_data_cells_with_stale_ancestors(self)
+            dc.update_deps(deps, set(), aliases, add=True)
 
     def clone(self, namespace_obj_ref: int):
-        cloned = NamespaceScope(namespace_obj_ref)
+        cloned = NamespaceScope(namespace_obj_ref, self.aliases)
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
         cloned.namespace_obj_ref = namespace_obj_ref
@@ -296,16 +320,16 @@ class NamespaceScope(Scope):
         ret.update(self._data_cell_by_name)
         return ret
 
-    def percolate_max_defined_timestamp(self, ts):
+    def propagate_max_defined_timestamp(self, ts):
         if ts > self.max_defined_timestamp:
             self.max_defined_timestamp = ts
             namespace_parent = self.namespace_parent_scope
             if namespace_parent is not None:
-                namespace_parent.percolate_max_defined_timestamp(ts)
+                namespace_parent.propagate_max_defined_timestamp(ts)
 
     def put(self, name: str, val: DataCell):
         super().put(name, val)
-        self.percolate_max_defined_timestamp(val.defined_cell_num)
+        self.propagate_max_defined_timestamp(val.defined_cell_num)
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

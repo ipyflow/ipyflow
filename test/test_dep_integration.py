@@ -349,7 +349,6 @@ def foo(y=x):
     assert_detected("Should have detected stale dependency of fn foo() on x")
 
 
-@skipif_known_failing
 def test_same_pointer():
     # a and b are actually pointing to the same thing
     run_cell('a = [7]')

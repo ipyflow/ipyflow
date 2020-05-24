@@ -43,9 +43,9 @@ def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fr
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, **kwargs):
-        self.global_scope = Scope()
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
+        self.global_scope = Scope(self.aliases)
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
@@ -157,11 +157,14 @@ class DependencySafety(object):
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
                     if node.has_stale_ancestor:
                         stale_nodes.add(node)
-                    if deep_ref and node.obj_id in self.namespaces:
-                        namespace_scope = self.namespaces[node.obj_id]
-                        max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-                        if namespace_scope.has_data_cells_with_stale_ancestors_deep or node.has_stale_ancestor:
+                    if deep_ref:
+                        if node.obj_id in self.namespaces:
+                            namespace_scope = self.namespaces[node.obj_id]
+                            max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+                        if node.has_deep_stale_ancestor:
                             stale_nodes.add(node)
+                        # if namespace_scope.has_data_cells_with_stale_ancestors_deep or node.has_stale_ancestor:
+                        #     stale_nodes.add(node)
         return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):

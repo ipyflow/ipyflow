@@ -13,17 +13,22 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         # TODO: current complete bipartite subgraph will add unncessary edges
         self.lval_symbol_set: Set[str] = set()
         self.rval_symbol_set: Set[Union[str, int]] = set()
+        self.deep_immune_rval_symbol_set: Set[Union[str, int]] = set()
         self.should_add = False
         self.gather_rvals = True
+        self.deep_immune = False
 
     def __call__(self, node):
         self.visit(node)
-        return self.lval_symbol_set, self.rval_symbol_set, self.should_add
+        return self.lval_symbol_set, self.rval_symbol_set, self.deep_immune_rval_symbol_set, self.should_add
 
     @property
     def to_add_set(self):
         if self.gather_rvals:
-            return self.rval_symbol_set
+            if self.deep_immune:
+                return self.deep_immune_rval_symbol_set
+            else:
+                return self.rval_symbol_set
         else:
             return self.lval_symbol_set
 
@@ -33,11 +38,17 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
     def gather_rvals_context(self):
         return self.push_attributes(gather_rvals=True)
 
+    def deep_immune_context(self):
+        return self.push_attributes(deep_immune=True)
+
     def visit_Attribute(self, node):
         # skip node.attr -- this is handled by the attribute tracer
         # also only add rvals -- lvals will also be handled by tracer
-        if self.gather_rvals:
-            self.visit(node.value)
+        # if self.gather_rvals:
+        #     self.visit(node.value)
+        with self.gather_rvals_context():
+            with self.deep_immune_context():
+                self.visit(node.value)
 
     def visit_Name(self, node):
         self.to_add_set.add(node.id)
@@ -50,7 +61,8 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
             with self.gather_rvals_context():
                 self.visit(node.slice.value)
         with self.gather_rvals_context():
-            self.visit(node.value)
+            with self.deep_immune_context():
+                self.visit(node.value)
 
     def visit_Assign(self, node):
         with self.gather_lvals_context():

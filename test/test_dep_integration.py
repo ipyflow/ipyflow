@@ -648,6 +648,19 @@ def test_numpy_subscripting():
     assert_detected('y depends on stale x[3]')
 
 
+def test_dict_subscripting():
+    run_cell('d = {"foo": "bar", 0: "bat"}')
+    run_cell('x = 7')
+    run_cell('d[0] = x')
+    run_cell('x += 1')
+    run_cell('z = d["foo"] + " asdf"')
+    assert_not_detected('`d["foo"]` does not depend on stale `x`, unlike `d[0]`')
+    run_cell('logging.info(z)')
+    assert_not_detected()
+    run_cell('logging.info(d["foo"])')
+    assert_not_detected()
+
+
 def test_subscript_sensitivity():
     run_cell('lst = list(range(5))')
     run_cell('i = 0')

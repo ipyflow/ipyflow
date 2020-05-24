@@ -72,12 +72,13 @@ class Scope(object):
 
     def gen_data_cells_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
         """
-        Yield the DataCell as well as whether it is a deep reference
+        Yield DataCells in the chain as well as whether they are deep references
         """
         assert isinstance(chain.symbol, AttrSubSymbolChain)
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
         dc = None
+        to_yield = None
         for name in chain.symbol.symbols:
             if isinstance(name, CallPoint):
                 yield dc, True
@@ -85,12 +86,17 @@ class Scope(object):
                 yield dc, False
                 return
             dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
-            # if dc is not None:
-            #     yield dc
+            if dc is not None:
+                if to_yield is not None:
+                    # we only yield the last symbol in the chain as a potentially deep ref
+                    yield to_yield, False
+                # save off current part of chain
+                to_yield = dc
             if name_to_obj is None:
                 break
-            obj = name_to_obj.get(name, None)
-            if obj is None:
+            try:
+                obj = name_to_obj[name]
+            except (KeyError, IndexError, Exception):
                 break
             cur_scope = namespaces.get(id(obj), None)
             if cur_scope is None:
@@ -107,7 +113,7 @@ class Scope(object):
                     name_to_obj = inspect.getmembers(obj)
                 except:  # noqa
                     name_to_obj = None
-        if dc is not None:
+        if to_yield is not None:
             yield dc, chain.deep
 
     def _upsert_and_mark_children_if_same_data_cell_type(

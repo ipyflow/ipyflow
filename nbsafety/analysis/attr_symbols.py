@@ -55,19 +55,24 @@ class GetAttrSubSymbols(ast.NodeVisitor):
 
     def visit_Subscript(self, node):
         node_slice = node.slice
-        if isinstance(node_slice, ast.Str):
-            self.symbol_chain.append(node_slice.s)
-        elif isinstance(node_slice, ast.Num):
-            self.symbol_chain.append(node_slice.n)
-        elif isinstance(node_slice, ast.Name):
-            # FIXME: hack to make the static checker stop here
-            # In the future, it should try to attempt to resolve
-            # the value of the ast.Name node
-            self.symbol_chain.append(CallPoint(node_slice.id))
+        if isinstance(node_slice, ast.Index):
+            slice_index = node_slice.value
+            if isinstance(slice_index, ast.Str):
+                self.symbol_chain.append(slice_index.s)
+            elif isinstance(slice_index, ast.Num):
+                self.symbol_chain.append(slice_index.n)
+            elif isinstance(slice_index, ast.Name):
+                # FIXME: hack to make the static checker stop here
+                # In the future, it should try to attempt to resolve
+                # the value of the ast.Name node
+                self.symbol_chain.append(CallPoint(slice_index.id))
+            else:
+                # give up
+                pass
+                # raise TypeError('unexpected type for node.slice %s' % node_slice)
         else:
             # give up
-            return
-            # raise TypeError('unexpected type for node.slice %s' % node_slice)
+            pass
         self.visit(node.value)
 
     def visit_Name(self, node):
@@ -82,7 +87,7 @@ class GetAttrSubSymbols(ast.NodeVisitor):
         return
 
 
-def get_attribute_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Subscript, ast.Call]) -> AttrSubSymbolChain:
+def get_attrsub_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Subscript, ast.Call]) -> AttrSubSymbolChain:
     if isinstance(maybe_node, (ast.Attribute, ast.Subscript, ast.Call)):
         node = maybe_node
     else:

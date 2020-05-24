@@ -3,7 +3,7 @@ import ast
 import logging
 from typing import TYPE_CHECKING
 
-from .attr_symbols import get_attribute_symbol_chain, AttrSubSymbolChain
+from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from .symbol_ref import SymbolRef
 
@@ -68,7 +68,7 @@ class ComputeReachableSymbolRefs(ast.NodeVisitor):
         if isinstance(target_node, ast.Name):
             self.safe_set.add(target_node.id)
         elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
-            self.safe_set.add(get_attribute_symbol_chain(target_node))
+            self.safe_set.add(get_attrsub_symbol_chain(target_node))
         else:
             logger.warning('unsupported type for node %s' % target_node)
 
@@ -127,12 +127,15 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
                 self.visit(kwarg.value)
         with self.deep_context(False):
             if isinstance(node.func, ast.Attribute):
-                self.ref_set.add(SymbolRef(get_attribute_symbol_chain(node), deep=self.deep))
+                self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node), deep=self.deep))
             else:
                 self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute):
-        self.ref_set.add(SymbolRef(get_attribute_symbol_chain(node), deep=self.deep))
+        self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node), deep=self.deep))
+
+    def visit_Subscript(self, node: ast.Subscript):
+        self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node), deep=self.deep))
 
 
 def _get_all_symbol_refs(node: ast.AST):

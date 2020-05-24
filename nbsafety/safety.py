@@ -4,7 +4,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import sys
-from typing import cast, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
@@ -32,9 +32,17 @@ _MAX_WARNINGS = 10
 _SAFETY_LINE_MAGIC = 'safety'
 
 
-def _safety_warning(name: str, defined_cell_num: int, required_cell_num: int, fresher_ancestors: 'Set[DataCell]'):
+def _safety_warning(node: 'DataCell'):
+    if node.has_stale_ancestor:
+        required_cell_num = node.required_cell_num
+        fresher_ancestors = node.fresher_ancestors
+    elif node.has_deep_stale_ancestor:
+        fresher_ancestors = node.deep_fresher_ancestors
+        required_cell_num = node.deep_required_cell_num
+    else:
+        raise ValueError('Expected node with stale ancestor; got %s' % node)
     logger.warning(
-        f'`{name}` defined in cell {defined_cell_num} may depend on '
+        f'`{node.readable_name}` defined in cell {node.defined_cell_num} may depend on '
         f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_ancestors)}] '
         f'(latest update in cell {required_cell_num}).'
     )
@@ -163,8 +171,6 @@ class DependencySafety(object):
                             max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
                         if node.has_deep_stale_ancestor:
                             stale_nodes.add(node)
-                        # if namespace_scope.has_data_cells_with_stale_ancestors_deep or node.has_stale_ancestor:
-                        #     stale_nodes.add(node)
         return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):
@@ -187,9 +193,7 @@ class DependencySafety(object):
                         logger.warning(str(len(self._prev_cell_nodes_with_stale_deps) - warning_counter) +
                                        " more nodes with stale dependencies skipped...")
                         break
-                    _safety_warning(
-                        node.readable_name, node.defined_cell_num, node.required_cell_num, node.fresher_ancestors
-                    )
+                    _safety_warning(node)
                     warning_counter += 1
                 self.stale_dependency_detected = True
                 self._last_refused_code = cell

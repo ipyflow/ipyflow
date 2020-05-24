@@ -661,6 +661,32 @@ def test_dict_subscripting():
     assert_not_detected()
 
 
+def test_pandas_attr_mutation_with_alias():
+    run_cell('import pandas as pd')
+    run_cell('df = pd.DataFrame({"a": [0,1], "b": [2., 3.]})')
+    run_cell('asdf = df.b')
+    run_cell('df.b *= 7')
+    run_cell('logging.info(asdf)')
+    assert_detected('`asdf` has same values as `df.b`, but they now point to different things, '
+                    'which in general could be dangerous')
+
+
+def test_list_alias_breaking():
+    run_cell('x = [0]')
+    run_cell('y = x')
+    run_cell('x = [7]')
+    run_cell('logging.info(y)')
+    assert_detected('`y` has stale dependency on old `x`')
+
+
+def test_list_alias_no_break():
+    run_cell('x = [0]')
+    run_cell('y = x')
+    run_cell('x *= 7')
+    run_cell('logging.info(y)')
+    assert_not_detected('`y` still aliases `x`')
+
+
 def test_subscript_sensitivity():
     run_cell('lst = list(range(5))')
     run_cell('i = 0')

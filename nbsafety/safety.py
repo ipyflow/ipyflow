@@ -53,13 +53,13 @@ class DependencySafety(object):
     def __init__(self, cell_magic_name=None, **kwargs):
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
-        self.global_scope = Scope(self.aliases)
+        self.global_scope = Scope(self)
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)
         self.attr_trace_manager: AttributeTracingManager = AttributeTracingManager(
-            self.namespaces, self.aliases, self.global_scope, self.trace_event_counter
+            self, self.global_scope, self.trace_event_counter
         )
         self.store_history = kwargs.pop('store_history', True)
         self.use_comm = kwargs.pop('use_comm', False)
@@ -162,7 +162,11 @@ class DependencySafety(object):
                 continue
             for node, deep_ref in nodes:
                 if node is not None:
+                    # print(node, deep_ref)
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
+                    # if node.name == 'z':
+                    #     print(node, deep_ref, node.has_stale_ancestor, node.has_deep_stale_ancestor, node.defined_cell_num,
+                    #           node.required_cell_num, node.deep_required_cell_num, node.fresher_ancestors, node.deep_fresher_ancestors)
                     if node.has_stale_ancestor:
                         stale_nodes.add(node)
                     if deep_ref:

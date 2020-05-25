@@ -13,16 +13,16 @@ if TYPE_CHECKING:
     Mutation = Tuple[int, Tuple[str, ...]]
     MutCand = Optional[Tuple[int, int]]
     SavedStoreData = Tuple[NamespaceScope, Any, str, bool]
+    from ..safety import DependencySafety
     from ..scope import Scope
 
 logger = logging.getLogger(__name__)
 
 
 class AttributeTracingManager(object):
-    def __init__(self, namespaces: 'Dict[int, NamespaceScope]', aliases: 'Dict[int, Set[DataCell]]',
+    def __init__(self, safety: 'DependencySafety',
                  active_scope: 'Scope', trace_event_counter: 'List[int]'):
-        self.namespaces = namespaces
-        self.aliases = aliases
+        self.safety = safety
         self.original_active_scope = active_scope
         self.active_scope = active_scope
         self.trace_event_counter = trace_event_counter
@@ -85,23 +85,25 @@ class AttributeTracingManager(object):
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, override_active_scope):
         if obj is None:
             return None
+        if not isinstance(attr_or_subscript, (str, int)):
+            return obj
         obj_id = id(obj)
-        scope = self.namespaces.get(obj_id, None)
+        scope = self.safety.namespaces.get(obj_id, None)
         # print('%s attr %s of obj %s' % (ctx, attr, obj))
         if scope is None:
-            class_scope = self.namespaces.get(id(obj.__class__), None)
+            class_scope = self.safety.namespaces.get(id(obj.__class__), None)
             if class_scope is not None and not is_subscript:
                 # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_cells_this_indentation().keys()))
                 scope = class_scope.clone(obj_id)
-                self.namespaces[obj_id] = scope
+                self.safety.namespaces[obj_id] = scope
             else:
                 # print('no scope for class', obj.__class__)
                 try:
-                    scope_name = next(iter(self.aliases[obj_id])).name
+                    scope_name = next(iter(self.safety.aliases[obj_id])).name
                 except StopIteration:
                     scope_name = '<unknown namespace>'
-                scope = NamespaceScope(obj_id, self.aliases, scope_name, parent_scope=self.active_scope)
-                self.namespaces[obj_id] = scope
+                scope = NamespaceScope(obj_id, self.safety, scope_name, parent_scope=self.active_scope)
+                self.safety.namespaces[obj_id] = scope
         # print('new active scope', scope)
         if override_active_scope:
             self.active_scope = scope
@@ -126,7 +128,7 @@ class AttributeTracingManager(object):
                         data_cell = DataCell(attr_or_subscript, obj_attr_or_sub, scope, is_subscript=is_subscript)
                         scope.put(attr_or_subscript, data_cell)
                         # FIXME: DataCells should probably register themselves with the alias manager at creation
-                        self.aliases[id(obj_attr_or_sub)].add(data_cell)
+                        self.safety.aliases[id(obj_attr_or_sub)].add(data_cell)
                     except AttributeError:
                         pass
                 self.loaded_data_cells.add(data_cell)

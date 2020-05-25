@@ -11,6 +11,8 @@ if TYPE_CHECKING:
 class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: current complete bipartite subgraph will add unncessary edges
+        # TODO: this is actually pretty important to handle things like a.b.c properly,
+        # we should switch to generating the lval, rval, deep_rval set
         self.lval_symbol_set: Set[str] = set()
         self.rval_symbol_set: Set[Union[str, int]] = set()
         self.deep_immune_rval_symbol_set: Set[Union[str, int]] = set()

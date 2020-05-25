@@ -26,6 +26,7 @@ class DataCell(object):
             self._has_weakref = False
             self.obj_ref = obj
         self.cached_obj_id = self.obj_id
+        self.cached_obj_type = type(self._get_obj())
         self.containing_scope = containing_scope
         if parents is None:
             parents = set()
@@ -57,6 +58,12 @@ class DataCell(object):
     def __str__(self):
         return self.readable_name
 
+    def _get_obj(self):
+        if self._has_weakref:
+            return self.obj_ref()
+        else:
+            return self.obj_ref
+
     @property
     def obj_id(self):
         if self._has_weakref:
@@ -71,15 +78,16 @@ class DataCell(object):
         except TypeError:
             self.obj_ref = obj
             self._has_weakref = False
-        self.cached_obj_id = self.obj_id
 
     def update_deps(
             self,
             new_deps: 'Set[DataCell]',
             new_deep_immune_deps: 'Set[DataCell]',
             aliases: 'Dict[int, Set[DataCell]]',
+            namespaces: 'Dict[int, NamespaceScope]' = None,
             add=False,
             propagate_to_children=True,
+            mutated=False,
     ):
         self.fresher_ancestors = set()
         self.deep_fresher_ancestors = set()
@@ -107,12 +115,47 @@ class DataCell(object):
 
         self.defined_cell_num = cell_counter()
         if propagate_to_children:
-            self._propagate_update(self, aliases)
+            # deep = not mutated and self.cached_obj_id == self.obj_id and not issubclass(type(self._get_obj()), int)
+            # deep = (
+            #     not mutated and
+            #     self.cached_obj_type == type(self._get_obj()) and
+            #     not issubclass(type(self._get_obj()), int)
+            # )
+            deep = False
+            self._propagate_update(self, aliases, deep=deep)
+            if not mutated and namespaces is not None:
+                self._refresh_namespace_children(aliases, namespaces)
+        self.cached_obj_id = self.obj_id
+        self.cached_obj_type = type(self._get_obj())
+
+    def _refresh_namespace_children(self, aliases: 'Dict[int, Set[DataCell]]', namespaces: 'Dict[int, NamespaceScope]'):
+        for child in self.deep_immune_children:
+            if child.containing_scope == namespaces[self.obj_id]:
+                try:
+                    if child.is_subscript:
+                        try:
+                            self._get_obj()[child.name]
+                        except (KeyError, IndexError):
+                            continue
+                    else:
+                        if not hasattr(self._get_obj(), child.name):
+                            continue
+                except:
+                    # if anything goes wrong, assume child isn't visible inside of us anymore
+                    continue
+                child.mark_mutated(aliases)
+                child._refresh_namespace_children(aliases, namespaces)
 
     def mark_mutated(self, aliases: 'Dict[int, Set[DataCell]]', propagate_to_children=True):
-        self.update_deps(set(), set(), aliases, add=True, propagate_to_children=propagate_to_children)
+        self.update_deps(set(), set(), aliases, add=True, propagate_to_children=propagate_to_children, mutated=True)
 
-    def _propagate_update(self, updated_dep: 'DataCell', aliases: 'Dict[int, Set[DataCell]]', seen=None, deep=False):
+    def _propagate_update(
+            self,
+            updated_dep: 'DataCell',
+            aliases: 'Dict[int, Set[DataCell]]',
+            seen=None,
+            deep=False
+    ):
         if seen is None:
             seen = set()
         if self in seen:
@@ -135,12 +178,16 @@ class DataCell(object):
                 alias._mark_namespace_data_cell_as_non_stale(updated_dep, aliases)
                 for alias_child in alias.children_for_deep(True):
                     if alias_child.obj_id != namespace_obj_ref:
-                        alias_child._propagate_update(updated_dep, aliases, seen, deep=True)
+                        alias_child._propagate_update(
+                            updated_dep, aliases, seen, deep=True
+                        )
                 if updated_dep is not self:
                     alias.namespace_data_cells_with_stale.add(self)
 
         for child in self.children_for_deep(deep):
-            child._propagate_update(updated_dep, aliases, seen=seen, deep=deep)
+            child._propagate_update(
+                updated_dep, aliases, seen=seen, deep=deep
+            )
 
     def _mark_namespace_data_cell_as_non_stale(self, updated_dep: 'DataCell', aliases: 'Dict[int, Set[DataCell]]'):
         if len(self.namespace_data_cells_with_stale) == 0:

@@ -13,6 +13,7 @@ from .data_cell import ClassDataCell, DataCell, FunctionDataCell
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from .safety import DependencySafety
 
 
 class Scope(object):
@@ -20,11 +21,11 @@ class Scope(object):
 
     def __init__(
             self,
-            aliases: 'Dict[int, Set[DataCell]]',
+            safety: 'DependencySafety',
             scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
     ):
-        self.aliases = aliases
+        self.safety = safety
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
         self._data_cell_by_name: Dict[str, DataCell] = {}
@@ -51,9 +52,9 @@ class Scope(object):
 
     def make_child_scope(self, scope_name, namespace_obj_ref=None):
         if namespace_obj_ref is None:
-            return Scope(self.aliases, scope_name, parent_scope=self)
+            return Scope(self.safety, scope_name, parent_scope=self)
         else:
-            return NamespaceScope(namespace_obj_ref, self.aliases, scope_name, parent_scope=self)
+            return NamespaceScope(namespace_obj_ref, self.safety, scope_name, parent_scope=self)
 
     def put(self, name: str, val: DataCell):
         self._data_cell_by_name[name] = val
@@ -136,7 +137,8 @@ class Scope(object):
             dc.children = old_dc.children
             for child in dc.children:
                 child.parents.add(dc)
-        dc.update_deps(deps, deep_immune_deps, self.aliases, add=False)
+        dc.update_deps(deps, deep_immune_deps, self.safety.aliases, namespaces=self.safety.namespaces,
+                       add=False, mutated=(old_dc is None or old_id != dc.obj_id))
         self.put(name, dc)
         return dc, old_dc, old_id
 
@@ -198,8 +200,9 @@ class Scope(object):
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
-                    old_dc.update_deps(deps, deep_immune_deps, self.aliases, add=add)
                     old_dc.update_obj_ref(obj)
+                    old_dc.update_deps(deps, deep_immune_deps, self.safety.aliases,
+                                       namespaces=self.safety.namespaces, add=add)
                     return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
@@ -208,7 +211,9 @@ class Scope(object):
         dc = DataCell(name, obj, self, set(), is_subscript=is_subscript)
         self.put(name, dc)
         dc.update_deps(
-            deps, deep_immune_deps, self.aliases, add=False, propagate_to_children=self.is_globally_accessible
+            deps, deep_immune_deps, self.safety.aliases,
+            namespaces=self.safety.namespaces,
+            add=False, propagate_to_children=self.is_globally_accessible
         )
         return dc, old_dc, old_id
 
@@ -218,8 +223,8 @@ class Scope(object):
             old_dc: 'Optional[DataCell]',
             dc: 'Optional[DataCell]'
     ):
-        old_alias_dcs = self.aliases[old_id]
-        new_alias_dcs = self.aliases[dc.obj_id]
+        old_alias_dcs = self.safety.aliases[old_id]
+        new_alias_dcs = self.safety.aliases[dc.obj_id]
         if old_id is not None and old_dc is not None:
             old_alias_dcs.discard(old_dc)
         if dc is not None and dc.obj_id is not None:
@@ -228,12 +233,12 @@ class Scope(object):
             old_alias_dcs_copy = list(old_alias_dcs)
             for alias_dc in old_alias_dcs_copy:
                 if alias_dc.obj_id == dc.obj_id:
-                    alias_dc.mark_mutated(self.aliases)
+                    alias_dc.mark_mutated(self.safety.aliases)
                     old_alias_dcs.discard(alias_dc)
                     new_alias_dcs.add(alias_dc)
         finally:
             if len(old_alias_dcs) == 0:
-                del self.aliases[old_id]
+                del self.safety.aliases[old_id]
 
     @property
     def is_global(self):
@@ -294,10 +299,10 @@ class NamespaceScope(Scope):
         for child in self.child_clones:
             child.deep_mutate(deps, aliases)
         for dc in self._data_cell_by_name.values():
-            dc.update_deps(deps, set(), aliases, add=True)
+            dc.update_deps(deps, set(), aliases, add=True, mutated=True)
 
     def clone(self, namespace_obj_ref: int):
-        cloned = NamespaceScope(namespace_obj_ref, self.aliases)
+        cloned = NamespaceScope(namespace_obj_ref, self.safety)
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
         cloned.namespace_obj_ref = namespace_obj_ref

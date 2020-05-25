@@ -1207,6 +1207,12 @@ def test_pandas():
 
 
 @skipif_known_failing
+def test_chain_with_toplevel_assignment():
+    # TODO:
+    pass
+
+
+@skipif_known_failing
 def test_cell_magic():
     # TODO: write this
     pass

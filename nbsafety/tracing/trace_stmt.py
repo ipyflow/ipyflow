@@ -128,7 +128,7 @@ class TraceStatement(object):
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
             mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dcs, set(), self.safety.aliases, add=True)
+                mutated_dc.update_deps(mutation_arg_dcs, set(), self.safety.aliases, add=True, mutated=True)
             mutated_scope = self.safety.namespaces.get(mutated_obj_id, None)
             if mutated_scope is not None:
                 mutated_scope.deep_mutate(mutation_arg_dcs, self.safety.aliases)

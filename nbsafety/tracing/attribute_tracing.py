@@ -10,8 +10,9 @@ from ..scope import NamespaceScope
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    DeepRef = Tuple[int, Optional[str], Tuple[str, ...]]
     Mutation = Tuple[int, Tuple[str, ...]]
-    MutCand = Optional[Tuple[int, int]]
+    RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     SavedStoreData = Tuple[NamespaceScope, Any, str, bool]
     from ..safety import DependencySafety
     from ..scope import Scope
@@ -38,11 +39,12 @@ class AttributeTracingManager(object):
         self.loaded_data_cells: Set[DataCell] = set()
         self.saved_store_data: List[SavedStoreData] = []
         self.mutations: Set[Mutation] = set()
+        self.deep_refs: Set[DeepRef] = set()
         self.recorded_args: Set[str] = set()
         self.stack: List[
-            Tuple[List[SavedStoreData], Set[Mutation], MutCand, Set[str], Scope, Scope]
+            Tuple[List[SavedStoreData], Set[DeepRef], Set[Mutation], RefCandidate, Set[str], Scope, Scope]
         ] = []
-        self.mutation_candidate: MutCand = None
+        self.deep_ref_candidate: RefCandidate = None
 
     def __del__(self):
         if hasattr(builtins, self.start_tracer_name):
@@ -55,13 +57,15 @@ class AttributeTracingManager(object):
     def push_stack(self, new_scope: 'Scope'):
         self.stack.append((
             self.saved_store_data,
+            self.deep_refs,
             self.mutations,
-            self.mutation_candidate,
+            self.deep_ref_candidate,
             self.recorded_args,
             self.active_scope,
             self.original_active_scope,
         ))
         self.saved_store_data = []
+        self.deep_refs = set()
         self.mutations = set()
         self.recorded_args = set()
         self.original_active_scope = new_scope
@@ -70,8 +74,9 @@ class AttributeTracingManager(object):
     def pop_stack(self):
         (
             self.saved_store_data,
+            self.deep_refs,
             self.mutations,
-            self.mutation_candidate,
+            self.deep_ref_candidate,
             self.recorded_args,
             self.active_scope,
             self.original_active_scope,
@@ -82,7 +87,8 @@ class AttributeTracingManager(object):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, override_active_scope):
+    def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx,
+                       call_context, override_active_scope, obj_name=None):
         if obj is None:
             return None
         if not isinstance(attr_or_subscript, (str, int)):
@@ -115,9 +121,9 @@ class AttributeTracingManager(object):
             # retval is None, this is a likely signal that we have a mutation
             # TODO: this strategy won't work if the arguments themselves lead to traced function calls
             if call_context:
-                self.mutation_candidate = (self.trace_event_counter[0], obj_id)
+                self.deep_ref_candidate = (self.trace_event_counter[0], obj_id, obj_name)
             else:
-                self.mutation_candidate = None
+                self.deep_ref_candidate = None
                 data_cell = scope.lookup_data_cell_by_name_this_indentation(attr_or_subscript)
                 if data_cell is None:
                     try:
@@ -125,7 +131,8 @@ class AttributeTracingManager(object):
                             obj_attr_or_sub = obj[attr_or_subscript]
                         else:
                             obj_attr_or_sub = getattr(obj, attr_or_subscript)
-                        data_cell = DataCell(attr_or_subscript, obj_attr_or_sub, scope, is_subscript=is_subscript)
+                        data_cell = DataCell(attr_or_subscript, obj_attr_or_sub, scope,
+                                             self.safety, is_subscript=is_subscript)
                         scope.put(attr_or_subscript, data_cell)
                         # FIXME: DataCells should probably register themselves with the alias manager at creation
                         self.safety.aliases[id(obj_attr_or_sub)].add(data_cell)
@@ -138,11 +145,14 @@ class AttributeTracingManager(object):
 
     def expr_tracer(self, obj):
         # print('reset active scope to', self.original_active_scope)
-        if self.mutation_candidate is not None:
-            evt_counter, obj_id = self.mutation_candidate
-            self.mutation_candidate = None
-            if evt_counter == self.trace_event_counter[0] and obj is None:
-                self.mutations.add((obj_id, tuple(self.recorded_args)))
+        if self.deep_ref_candidate is not None:
+            evt_counter, obj_id, obj_name = self.deep_ref_candidate
+            self.deep_ref_candidate = None
+            if evt_counter == self.trace_event_counter[0]:
+                if obj is None:
+                    self.mutations.add((obj_id, tuple(self.recorded_args)))
+                else:
+                    self.deep_refs.add((obj_id, None, tuple(self.recorded_args)))
         self.active_scope = self.original_active_scope
         self.recorded_args = set()
         return obj
@@ -154,8 +164,9 @@ class AttributeTracingManager(object):
     def reset(self):
         self.loaded_data_cells = set()
         self.saved_store_data = []
+        self.deep_refs = set()
         self.mutations = set()
-        self.mutation_candidate = None
+        self.deep_ref_candidate = None
         self.active_scope = self.original_active_scope
 
 

@@ -2,6 +2,7 @@
 import ast
 from typing import TYPE_CHECKING
 
+from .attr_symbols import get_attrsub_symbol_chain
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:

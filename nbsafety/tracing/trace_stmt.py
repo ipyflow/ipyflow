@@ -84,6 +84,7 @@ class TraceStatement(object):
             rval_symbols=rval_symbols - lval_symbols,
             deep_immune_rval_symbols=deep_immune_rval_symbols - lval_symbols
         )
+        rval_deps |= self._gather_deep_ref_rval_dcs()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         if is_function_def or is_class_def:
@@ -122,13 +123,28 @@ class TraceStatement(object):
                 add=should_add, is_function_def=False, class_scope=None
             )
 
+    def _gather_deep_ref_rval_dcs(self):
+        deep_ref_rval_dcs = set()
+        for deep_ref_obj_id, deep_ref_name, deep_ref_args in self.safety.attr_trace_manager.deep_refs:
+            deep_ref_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in deep_ref_args) - {None}
+            deep_ref_rval_dcs |= deep_ref_arg_dcs
+            if deep_ref_name is None:
+                deep_ref_rval_dcs |= self.safety.aliases.get(deep_ref_obj_id, set())
+            else:
+                deep_ref_dc = self.scope.lookup_data_cell_by_name(deep_ref_name)
+                if deep_ref_dc is not None and deep_ref_dc.obj_id == deep_ref_obj_id:
+                    deep_ref_rval_dcs.add(deep_ref_dc)
+                else:
+                    deep_ref_rval_dcs |= self.safety.aliases.get(deep_ref_obj_id, set())
+        return deep_ref_rval_dcs
+
     def handle_dependencies(self):
         if not self.safety.dependency_tracking_enabled:
             return
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
             mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dcs, set(), self.safety.aliases, add=True, mutated=True)
+                mutated_dc.update_deps(mutation_arg_dcs, set(), add=True, mutated=True)
             mutated_scope = self.safety.namespaces.get(mutated_obj_id, None)
             if mutated_scope is not None:
                 mutated_scope.deep_mutate(mutation_arg_dcs, self.safety.aliases)

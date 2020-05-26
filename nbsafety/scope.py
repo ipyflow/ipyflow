@@ -137,21 +137,20 @@ class Scope(object):
             dc.children = old_dc.children
             for child in dc.children:
                 child.parents.add(dc)
-        dc.update_deps(deps, deep_immune_deps, self.safety.aliases, namespaces=self.safety.namespaces,
-                       add=False, mutated=(old_dc is None or old_id != dc.obj_id))
+        dc.update_deps(deps, deep_immune_deps, add=False, mutated=(old_dc is None or old_id != dc.obj_id))
         self.put(name, dc)
         return dc, old_dc, old_id
 
     def _upsert_function_data_cell_for_name(
             self, name: str, obj: 'Any', deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]'
     ):
-        dc = FunctionDataCell(self.make_child_scope(name), name, obj, self)
+        dc = FunctionDataCell(self.make_child_scope(name), name, obj, self, self.safety)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps, deep_immune_deps)
 
     def _upsert_class_data_cell_for_name(
             self, name: str, obj: 'Any', deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]', class_scope: 'Scope'
     ):
-        dc = ClassDataCell(class_scope, name, obj, self)
+        dc = ClassDataCell(class_scope, name, obj, self, self.safety)
         return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps, deep_immune_deps)
 
     def upsert_data_cell_for_name(
@@ -201,19 +200,16 @@ class Scope(object):
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
                     old_dc.update_obj_ref(obj)
-                    old_dc.update_deps(deps, deep_immune_deps, self.safety.aliases,
-                                       namespaces=self.safety.namespaces, add=add)
+                    old_dc.update_deps(deps, deep_immune_deps, add=add)
                     return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataCell(name, obj, self, set(), is_subscript=is_subscript)
+        dc = DataCell(name, obj, self, self.safety, set(), is_subscript=is_subscript)
         self.put(name, dc)
         dc.update_deps(
-            deps, deep_immune_deps, self.safety.aliases,
-            namespaces=self.safety.namespaces,
-            add=False, propagate_to_children=self.is_globally_accessible
+            deps, deep_immune_deps, add=False, propagate_to_children=self.is_globally_accessible
         )
         return dc, old_dc, old_id
 
@@ -233,12 +229,21 @@ class Scope(object):
             old_alias_dcs_copy = list(old_alias_dcs)
             for alias_dc in old_alias_dcs_copy:
                 if alias_dc.obj_id == dc.obj_id:
-                    alias_dc.mark_mutated(self.safety.aliases)
+                    alias_dc.mark_mutated()
                     old_alias_dcs.discard(alias_dc)
                     new_alias_dcs.add(alias_dc)
         finally:
             if len(old_alias_dcs) == 0:
                 del self.safety.aliases[old_id]
+
+    def _handle_namespace(self, dc: 'Optional[DataCell]'):
+        if dc is None:
+            return
+        namespace = self.safety.namespaces.get(dc.obj_id, None)
+        if namespace is None:
+            return
+        # TODO: walk all objects and mark them as not stale if they are reachable
+        #  from here and were not previously stale
 
     @property
     def is_global(self):
@@ -327,6 +332,8 @@ class NamespaceScope(Scope):
         return ret
 
     def all_data_cells_this_indentation(self):
+        if self.cloned_from is None:
+            return dict(self._data_cell_by_name)
         ret = self.cloned_from.all_data_cells_this_indentation()
         ret.update(self._data_cell_by_name)
         return ret

@@ -104,3 +104,7 @@ History
 0.0.31 (2020-05-18)
 ------------------
 * Bugfixes; version npm package and PyPI package in lockstep;
+
+0.0.32 (2020-05-27)
+------------------
+* Bugfixes; improve propagation of updated dependencies along namespace hierarchies;

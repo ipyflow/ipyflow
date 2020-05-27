@@ -133,6 +133,8 @@ class AttributeTracingManager(object):
                             obj_attr_or_sub = getattr(obj, attr_or_subscript)
                         data_cell = DataCell(attr_or_subscript, obj_attr_or_sub, scope,
                                              self.safety, is_subscript=is_subscript)
+                        # this is to prevent refs to the scope object from being considered as stale if we just load it
+                        data_cell.defined_cell_num = data_cell.required_cell_num = scope.max_defined_timestamp
                         scope.put(attr_or_subscript, data_cell)
                         # FIXME: DataCells should probably register themselves with the alias manager at creation
                         self.safety.aliases[id(obj_attr_or_sub)].add(data_cell)

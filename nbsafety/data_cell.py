@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from collections import defaultdict
 import logging
 from typing import cast, TYPE_CHECKING
 import weakref
@@ -65,6 +64,9 @@ class DataCell(object):
         else:
             return self.obj_ref
 
+    def shallow_clone(self, new_obj, new_containing_scope, **extra_kwargs):
+        return self.__class__(self.name, new_obj, new_containing_scope, self.safety, **extra_kwargs)
+
     @property
     def obj_id(self):
         if self._has_weakref:
@@ -83,7 +85,6 @@ class DataCell(object):
     def update_deps(
             self,
             new_deps: 'Set[DataCell]',
-            new_deep_immune_deps: 'Set[DataCell]',
             add=False,
             propagate_to_children=True,
             mutated=False,
@@ -104,12 +105,13 @@ class DataCell(object):
         self.defined_cell_num = cell_counter()
         self.namespace_data_cells_with_stale.discard(self)
         if propagate_to_children:
-            self._propagate_update(self, set())
+            self._propagate_update(self, set(), set(), set())
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = type(self._get_obj())
 
     def _propagate_update_to_namespace_children(
-            self, old_id: int, new_id: 'Optional[int]', updated_dep: 'DataCell', seen, toplevel=False, refresh=False
+            self, old_id: int, new_id: 'Optional[int]', updated_dep: 'DataCell', seen, parent_seen, child_seen,
+            toplevel=False, refresh=False
     ):
         # look at old obj_id and cur obj_id
         # walk down namespace hierarchy from old obj_id, and track corresponding DCs from cur obj_id
@@ -122,18 +124,21 @@ class DataCell(object):
         #    Technically it should already be fresh, since if it's still a descendent of this namespace, we probably
         #    had to ref the namespace ancestor, which should have been caught by the checker if the descendent has
         #    some other stale ancestor. If not fresh, let's mark it so and log a warning about a potentially stale usage
+        if self in child_seen:
+            return
+        child_seen.add(self)
         if not toplevel:
             if not refresh:
-                self._propagate_update(updated_dep, seen, do_namespace_propagation=False)
+                self._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
             if new_id is None or old_id != new_id:
-                self._propagate_update(updated_dep, seen, do_namespace_propagation=False)
+                self._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
                 for alias in self.safety.aliases[old_id]:
-                    alias._propagate_update(updated_dep, seen, do_namespace_propagation=False)
+                    alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
             elif refresh:
                 for alias in self.safety.aliases[old_id]:
-                    # if alias.defined_cell_num < alias.required_cell_num:
-                    #     logger.warning('possible stale usage of namespace descendent %s' % alias)
-                    alias._propagate_update(updated_dep, seen, do_namespace_propagation=False)
+                    if alias.defined_cell_num < alias.required_cell_num:
+                        logger.warning('possible stale usage of namespace descendent %s' % alias)
+                    alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
                     alias.defined_cell_num = alias.required_cell_num
                     # print('mark', alias, 'as fresh')
             if old_id == new_id:
@@ -145,7 +150,8 @@ class DataCell(object):
             return
         for dc in namespace._data_cell_by_name.values():
             if new_id is None:
-                dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen, refresh=refresh)
+                dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen, parent_seen, child_seen,
+                                                           refresh=refresh)
             else:
                 try:
                     obj = self._get_obj()
@@ -156,27 +162,38 @@ class DataCell(object):
                             raise KeyError()
                         obj = obj[dc.name]
                         dc._propagate_update_to_namespace_children(
-                            dc.obj_id, id(obj), updated_dep, seen, refresh=refresh
+                            dc.obj_id, id(obj), updated_dep, seen, parent_seen, child_seen, refresh=refresh
                         )
                     else:
                         if not hasattr(obj, dc.name):
                             raise AttributeError()
                         obj = getattr(obj, dc.name)
                         dc._propagate_update_to_namespace_children(
-                            dc.obj_id, id(obj), updated_dep, seen, refresh=refresh
+                            dc.obj_id, id(obj), updated_dep, seen, parent_seen, child_seen, refresh=refresh
                         )
+                    if new_id != old_id:
+                        new_namespace = self.safety.namespaces.get(new_id, None)
+                        if new_namespace is None:
+                            new_namespace = namespace.shallow_clone(new_id)
+                            self.safety.namespaces[new_id] = new_namespace
+                        # TODO: handle class data cells properly;
+                        #  in fact; we still need to handle aliases of class data cells
+                        new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
                 except:
-                    dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen, refresh=refresh)
+                    dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen,
+                                                               parent_seen, child_seen, refresh=refresh)
             if not dc.has_stale_ancestor:
                 self.namespace_data_cells_with_stale.discard(dc)
 
     def mark_mutated(self, propagate_to_children=True):
-        self.update_deps(set(), set(), add=True, propagate_to_children=propagate_to_children, mutated=True)
+        self.update_deps(set(), add=True, propagate_to_children=propagate_to_children, mutated=True)
 
     def _propagate_update(
             self,
             updated_dep: 'DataCell',
             seen,
+            parent_seen,
+            child_seen,
             do_namespace_propagation=True
     ):
         if self in seen:
@@ -187,15 +204,20 @@ class DataCell(object):
             self.required_cell_num = updated_dep.defined_cell_num
             # print('mark', self, 'as stale due to', updated_dep)
         for child in self.children:
-            child._propagate_update(updated_dep, seen)
+            child._propagate_update(updated_dep, seen, parent_seen, child_seen)
         if do_namespace_propagation:
-            self._propagate_update_to_namespace_children(self.cached_obj_id, self.obj_id, updated_dep, seen,
+            self._propagate_update_to_namespace_children(self.cached_obj_id, self.obj_id, updated_dep,
+                                                         seen, parent_seen, child_seen,
                                                          toplevel=True, refresh=updated_dep is self)
-            self._propagate_update_to_namespace_parents(updated_dep, seen, refresh=updated_dep is self)
+            self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, child_seen,
+                                                        refresh=updated_dep is self)
 
-    def _propagate_update_to_namespace_parents(self, updated_dep, seen, refresh):
+    def _propagate_update_to_namespace_parents(self, updated_dep, seen, parent_seen, child_seen, refresh):
         if not self.containing_scope.is_namespace_scope:
             return
+        if self in parent_seen:
+            return
+        parent_seen.add(self)
         containing_scope = cast('NamespaceScope', self.containing_scope)
         containing_scope.max_defined_timestamp = max(
             updated_dep.defined_cell_num, containing_scope.max_defined_timestamp)
@@ -206,14 +228,14 @@ class DataCell(object):
                 if not alias.has_stale_ancestor:
                     alias.fresher_ancestors = set()
             if refresh:
-                alias._propagate_update_to_namespace_parents(updated_dep, seen, refresh)
+                alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, child_seen, refresh)
                 for alias_child in alias.children:
                     if alias_child.obj_id != namespace_obj_ref:
-                        alias_child._propagate_update(updated_dep, seen)
+                        alias_child._propagate_update(updated_dep, seen, parent_seen, child_seen)
             else:
                 alias.namespace_data_cells_with_stale.add(self)
                 old_required_cell_num = alias.required_cell_num
-                alias._propagate_update(updated_dep, seen)
+                alias._propagate_update(updated_dep, seen, parent_seen, child_seen)
                 alias.required_cell_num = old_required_cell_num
 
     @property
@@ -224,12 +246,13 @@ class DataCell(object):
 
 
 class FunctionDataCell(DataCell):
-    def __init__(self, scope, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.scope = scope
+        self.scope = self.containing_scope.make_child_scope(self.name)
 
 
 class ClassDataCell(DataCell):
-    def __init__(self, scope, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
+        class_scope = kwargs.pop('class_scope')
         super().__init__(*args, **kwargs)
-        self.scope = scope
+        self.scope = class_scope

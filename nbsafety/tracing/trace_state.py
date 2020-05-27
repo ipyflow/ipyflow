@@ -95,9 +95,7 @@ class TraceState(object):
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
                     return_to_stmt.class_scope = self.cur_frame_scope
                 else:
-                    rval_deps, deep_immune_rval_deps = trace_stmt.compute_rval_dependencies()
-                    return_to_stmt.call_point_deps.append(rval_deps)
-                    return_to_stmt.deep_immune_call_point_deps.append(deep_immune_rval_deps)
+                    return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
             # reset for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt
             self.cur_frame_scope = return_to_stmt.scope

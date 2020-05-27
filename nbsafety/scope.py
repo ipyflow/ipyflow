@@ -58,6 +58,7 @@ class Scope(object):
 
     def put(self, name: str, val: DataCell):
         self._data_cell_by_name[name] = val
+        val.containing_scope = self
 
     def lookup_data_cell_by_name_this_indentation(self, name) -> 'Optional[DataCell]':
         return self._data_cell_by_name.get(name, None)
@@ -118,8 +119,7 @@ class Scope(object):
             yield dc, chain.deep
 
     def _upsert_and_mark_children_if_same_data_cell_type(
-            self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str,
-            deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]'
+            self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]',
     ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
         old_id = None
         old_dc = None
@@ -137,35 +137,34 @@ class Scope(object):
             dc.children = old_dc.children
             for child in dc.children:
                 child.parents.add(dc)
-        dc.update_deps(deps, deep_immune_deps, add=False, mutated=(old_dc is None or old_id != dc.obj_id))
+        dc.update_deps(deps, add=False, mutated=(old_dc is None or old_id != dc.obj_id))
         self.put(name, dc)
         return dc, old_dc, old_id
 
     def _upsert_function_data_cell_for_name(
-            self, name: str, obj: 'Any', deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]'
+            self, name: str, obj: 'Any', deps: 'Set[DataCell]',
     ):
-        dc = FunctionDataCell(self.make_child_scope(name), name, obj, self, self.safety)
-        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps, deep_immune_deps)
+        dc = FunctionDataCell(name, obj, self, self.safety)
+        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def _upsert_class_data_cell_for_name(
-            self, name: str, obj: 'Any', deps: 'Set[DataCell]', deep_immune_deps: 'Set[DataCell]', class_scope: 'Scope'
+            self, name: str, obj: 'Any', deps: 'Set[DataCell]', class_scope: 'Scope'
     ):
-        dc = ClassDataCell(class_scope, name, obj, self, self.safety)
-        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps, deep_immune_deps)
+        dc = ClassDataCell(name, obj, self, self.safety, class_scope=class_scope)
+        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
 
     def upsert_data_cell_for_name(
             self,
             name: str,
             obj: 'Any',
             deps: 'Set[DataCell]',
-            deep_immune_deps: 'Set[DataCell]',
             is_subscript,
             add=False,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
     ):
         dc, old_dc, old_id = self._upsert_data_cell_for_name_inner(
-            name, obj, deps, deep_immune_deps, is_subscript,
+            name, obj, deps, is_subscript,
             add=add, is_function_def=is_function_def, class_scope=class_scope
         )
         self._handle_aliases(old_id, old_dc, dc)
@@ -175,7 +174,6 @@ class Scope(object):
             name: str,
             obj: 'Any',
             deps: 'Set[DataCell]',
-            deep_immune_deps: 'Set[DataCell]',
             is_subscript,
             add=False,
             is_function_def=False,
@@ -185,11 +183,11 @@ class Scope(object):
         if is_function_def:
             assert not add
             assert not is_subscript
-            return self._upsert_function_data_cell_for_name(name, obj, deps, deep_immune_deps)
+            return self._upsert_function_data_cell_for_name(name, obj, deps)
         if class_scope is not None:
             assert not add
             assert not is_subscript
-            return self._upsert_class_data_cell_for_name(name, obj, deps, deep_immune_deps, class_scope)
+            return self._upsert_class_data_cell_for_name(name, obj, deps, class_scope)
         old_id = None
         old_dc = None
         if self.is_globally_accessible:
@@ -200,7 +198,7 @@ class Scope(object):
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
                     old_dc.update_obj_ref(obj)
-                    old_dc.update_deps(deps, deep_immune_deps, add=add)
+                    old_dc.update_deps(deps, add=add)
                     return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
@@ -209,7 +207,7 @@ class Scope(object):
         dc = DataCell(name, obj, self, self.safety, set(), is_subscript=is_subscript)
         self.put(name, dc)
         dc.update_deps(
-            deps, deep_immune_deps, add=False, propagate_to_children=self.is_globally_accessible
+            deps, add=False, propagate_to_children=self.is_globally_accessible
         )
         return dc, old_dc, old_id
 
@@ -313,6 +311,12 @@ class NamespaceScope(Scope):
         cloned.namespace_obj_ref = namespace_obj_ref
         cloned._data_cell_by_name = {}
         self.child_clones.append(cloned)
+        return cloned
+
+    def shallow_clone(self, namespace_obj_ref: int):
+        cloned = NamespaceScope(namespace_obj_ref, self.safety)
+        cloned.scope_name = self.scope_name
+        cloned.parent_scope = self.parent_scope
         return cloned
 
     def make_namespace_qualified_name(self, dc: 'DataCell'):

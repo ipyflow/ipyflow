@@ -25,7 +25,6 @@ class TraceStatement(object):
         self.scope = scope
         self.class_scope: Optional[Scope] = None
         self.call_point_deps: List[Set[DataCell]] = []
-        self.deep_immune_call_point_deps: List[Set[DataCell]] = []
         self.marked_finished = False
 
     @contextmanager
@@ -35,25 +34,15 @@ class TraceStatement(object):
         yield
         self.scope = old_scope
 
-    def compute_rval_dependencies(self, rval_symbols=None, deep_immune_rval_symbols=None):
-        if deep_immune_rval_symbols is None:
-            deep_immune_rval_symbols = set()
+    def compute_rval_dependencies(self, rval_symbols=None):
         if rval_symbols is None:
-            _, rval_symbols, deep_immune_rval_symbols, _ = get_statement_lval_and_rval_symbols(self.stmt_node)
+            _, rval_symbols, _, _ = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_data_cells = set()
-        deep_immune_rval_data_cells = set()
-        for check_set, add_set in (
-                (rval_symbols, rval_data_cells),
-                (deep_immune_rval_symbols, deep_immune_rval_data_cells)
-        ):
-            for name in check_set:
-                maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
-                if maybe_rval_dc is not None:
-                    add_set.add(maybe_rval_dc)
-        return (
-            rval_data_cells.union(*self.call_point_deps) | self.safety.attr_trace_manager.loaded_data_cells,
-            deep_immune_rval_data_cells.union(*self.deep_immune_call_point_deps)
-        )
+        for name in rval_symbols:
+            maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
+            if maybe_rval_dc is not None:
+                rval_data_cells.add(maybe_rval_dc)
+        return rval_data_cells.union(*self.call_point_deps) | self.safety.attr_trace_manager.loaded_data_cells
 
     def get_post_call_scope(self, old_scope: 'Scope'):
         if isinstance(self.stmt_node, ast.ClassDef):
@@ -78,12 +67,9 @@ class TraceStatement(object):
     def _make_lval_data_cells(self):
         (
             lval_symbols, rval_symbols,
-            deep_immune_rval_symbols, should_add
+            _, should_add
         ) = get_statement_lval_and_rval_symbols(self.stmt_node)
-        rval_deps, deep_immune_rval_deps = self.compute_rval_dependencies(
-            rval_symbols=rval_symbols - lval_symbols,
-            deep_immune_rval_symbols=deep_immune_rval_symbols - lval_symbols
-        )
+        rval_deps = self.compute_rval_dependencies(rval_symbols=rval_symbols - lval_symbols)
         rval_deps |= self._gather_deep_ref_rval_dcs()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
@@ -103,7 +89,7 @@ class TraceStatement(object):
             try:
                 obj = self.frame.f_locals[name]
                 self.scope.upsert_data_cell_for_name(
-                    name, obj, rval_deps, deep_immune_rval_deps, False,
+                    name, obj, rval_deps, False,
                     add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
                 )
             except KeyError:
@@ -119,7 +105,7 @@ class TraceStatement(object):
                 continue
             should_add = isinstance(self.stmt_node, ast.AugAssign)
             scope.upsert_data_cell_for_name(
-                attr_or_sub, obj, rval_deps, deep_immune_rval_deps, is_subscript,
+                attr_or_sub, obj, rval_deps, is_subscript,
                 add=should_add, is_function_def=False, class_scope=None
             )
 
@@ -144,7 +130,7 @@ class TraceStatement(object):
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
             mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dcs, set(), add=True, mutated=True)
+                mutated_dc.update_deps(mutation_arg_dcs, add=True, mutated=True)
             mutated_scope = self.safety.namespaces.get(mutated_obj_id, None)
             if mutated_scope is not None:
                 mutated_scope.deep_mutate(mutation_arg_dcs)

@@ -83,14 +83,14 @@ class Scope(object):
         for name in chain.symbol.symbols:
             if isinstance(name, CallPoint):
                 yield dc, True
-                dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
-                yield dc, False
+                # dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
+                # yield dc, False
                 return
             dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
             if dc is not None:
-                if to_yield is not None:
-                    # we only yield the last symbol in the chain as a potentially deep ref
-                    yield to_yield, False
+                # if to_yield is not None:
+                #     # we only yield the last symbol in the chain as a potentially deep ref
+                #     yield to_yield, False
                 # save off current part of chain
                 to_yield = dc
             if name_to_obj is None:
@@ -291,20 +291,20 @@ class NamespaceScope(Scope):
         self.child_clones: List[NamespaceScope] = []
         self.namespace_obj_ref = namespace_obj_ref
         self.max_defined_timestamp = 0
-        self._data_cells_with_stale_ancestors: Set[DataCell] = set()
-        self._cloned_scopes_with_data_cells_with_stale_ancestors: Set[NamespaceScope] = set()
+        # self._data_cells_with_stale_ancestors: Set[DataCell] = set()
+        # self._cloned_scopes_with_data_cells_with_stale_ancestors: Set[NamespaceScope] = set()
 
-    @property
-    def has_data_cells_with_stale_ancestors(self):
-        ret = len(self._data_cells_with_stale_ancestors) > 0
-        ret = ret or (self.cloned_from is not None and self.cloned_from.has_data_cells_with_stale_ancestors)
-        return ret
+    # @property
+    # def has_data_cells_with_stale_ancestors(self):
+    #     ret = len(self._data_cells_with_stale_ancestors) > 0
+    #     ret = ret or (self.cloned_from is not None and self.cloned_from.has_data_cells_with_stale_ancestors)
+    #     return ret
 
-    def deep_mutate(self, deps: 'Set[DataCell]', aliases: 'Dict[int, Set[DataCell]]'):
+    def deep_mutate(self, deps: 'Set[DataCell]'):
         for child in self.child_clones:
-            child.deep_mutate(deps, aliases)
+            child.deep_mutate(deps)
         for dc in self._data_cell_by_name.values():
-            dc.update_deps(deps, set(), aliases, add=True, mutated=True)
+            dc.update_deps(deps, set(), add=True, mutated=True)
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref, self.safety)
@@ -338,16 +338,16 @@ class NamespaceScope(Scope):
         ret.update(self._data_cell_by_name)
         return ret
 
-    def propagate_max_defined_timestamp(self, ts):
-        if ts > self.max_defined_timestamp:
-            self.max_defined_timestamp = ts
-            namespace_parent = self.namespace_parent_scope
-            if namespace_parent is not None:
-                namespace_parent.propagate_max_defined_timestamp(ts)
-
-    def put(self, name: str, val: DataCell):
-        super().put(name, val)
-        self.propagate_max_defined_timestamp(val.defined_cell_num)
+    # def propagate_max_defined_timestamp(self, ts):
+    #     if ts > self.max_defined_timestamp:
+    #         self.max_defined_timestamp = ts
+    #         namespace_parent = self.namespace_parent_scope
+    #         if namespace_parent is not None:
+    #             namespace_parent.propagate_max_defined_timestamp(ts)
+    #
+    # def put(self, name: str, val: DataCell):
+    #     super().put(name, val)
+    #     self.propagate_max_defined_timestamp(val.defined_cell_num)
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

@@ -147,7 +147,7 @@ class TraceStatement(object):
                 mutated_dc.update_deps(mutation_arg_dcs, set(), add=True, mutated=True)
             mutated_scope = self.safety.namespaces.get(mutated_obj_id, None)
             if mutated_scope is not None:
-                mutated_scope.deep_mutate(mutation_arg_dcs, self.safety.aliases)
+                mutated_scope.deep_mutate(mutation_arg_dcs)
         if self.has_lval:
             self._make_lval_data_cells()
         else:

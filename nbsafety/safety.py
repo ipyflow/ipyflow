@@ -36,9 +36,9 @@ def _safety_warning(node: 'DataCell'):
     if node.has_stale_ancestor:
         required_cell_num = node.required_cell_num
         fresher_ancestors = node.fresher_ancestors
-    elif node.has_deep_stale_ancestor:
-        fresher_ancestors = node.deep_fresher_ancestors
-        required_cell_num = node.deep_required_cell_num
+    # elif node.has_deep_stale_ancestor:
+    #     fresher_ancestors = node.deep_fresher_ancestors
+    #     required_cell_num = node.deep_required_cell_num
     else:
         raise ValueError('Expected node with stale ancestor; got %s' % node)
     logger.warning(
@@ -70,7 +70,7 @@ class DependencySafety(object):
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
         self._cell_magic = self._make_cell_magic(cell_magic_name)
-        # Maybe switch update this too when you are implementing the usage of cell_magic_name?
+        # Maybe switch update this too when implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self._track_dependencies = True
@@ -163,18 +163,20 @@ class DependencySafety(object):
             for node, deep_ref in nodes:
                 if node is not None:
                     # print(node, deep_ref)
+                    # print('******************************')
+                    # print(node, deep_ref, node.has_stale_ancestor)
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
                     # if node.name == 'z':
                     #     print(node, deep_ref, node.has_stale_ancestor, node.has_deep_stale_ancestor, node.defined_cell_num,
                     #           node.required_cell_num, node.deep_required_cell_num, node.fresher_ancestors, node.deep_fresher_ancestors)
                     if node.has_stale_ancestor:
                         stale_nodes.add(node)
-                    if deep_ref:
-                        if node.obj_id in self.namespaces:
-                            namespace_scope = self.namespaces[node.obj_id]
-                            max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-                        if node.has_deep_stale_ancestor:
-                            stale_nodes.add(node)
+                    # if deep_ref:
+                    if node.obj_id in self.namespaces:
+                        namespace_scope = self.namespaces[node.obj_id]
+                        max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+                    #     if node.has_deep_stale_ancestor:
+                    #         stale_nodes.add(node)
         return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):

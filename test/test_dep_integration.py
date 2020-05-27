@@ -8,7 +8,16 @@ logging.basicConfig(level=logging.ERROR)
 
 
 # Reset dependency graph before each test
-_safety_fixture, _safety_state, run_cell = make_safety_fixture()
+_safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
+
+
+def run_cell(cell):
+    # print()
+    # print('*******************************************')
+    # print('running', cell)
+    # print('*******************************************')
+    # print()
+    run_cell_(cell)
 
 
 def stale_detected():

@@ -165,9 +165,10 @@ class DataCell(object):
                             dc.obj_id, id(obj), updated_dep, seen, parent_seen, child_seen, refresh=refresh
                         )
                     else:
-                        if not hasattr(obj, dc.name):
+                        dc_string_name = cast(str, dc.name)
+                        if not hasattr(obj, dc_string_name):
                             raise AttributeError()
-                        obj = getattr(obj, dc.name)
+                        obj = getattr(obj, dc_string_name)
                         dc._propagate_update_to_namespace_children(
                             dc.obj_id, id(obj), updated_dep, seen, parent_seen, child_seen, refresh=refresh
                         )

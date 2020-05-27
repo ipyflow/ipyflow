@@ -28,7 +28,7 @@ class Scope(object):
         self.safety = safety
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
-        self._data_cell_by_name: Dict[str, DataCell] = {}
+        self._data_cell_by_name: Dict[Union[str, int], DataCell] = {}
 
     def __hash__(self):
         return hash(self.full_path)
@@ -56,7 +56,7 @@ class Scope(object):
         else:
             return NamespaceScope(namespace_obj_ref, self.safety, scope_name, parent_scope=self)
 
-    def put(self, name: str, val: DataCell):
+    def put(self, name: 'Union[str, int]', val: DataCell):
         self._data_cell_by_name[name] = val
         val.containing_scope = self
 
@@ -302,7 +302,7 @@ class NamespaceScope(Scope):
         for child in self.child_clones:
             child.deep_mutate(deps)
         for dc in self._data_cell_by_name.values():
-            dc.update_deps(deps, set(), add=True, mutated=True)
+            dc.update_deps(deps, add=True, mutated=True)
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref, self.safety)

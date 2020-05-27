@@ -137,7 +137,7 @@ class Scope(object):
             dc.children = old_dc.children
             for child in dc.children:
                 child.parents.add(dc)
-        dc.update_deps(deps, add=False, mutated=(old_dc is None or old_id != dc.obj_id))
+        dc.update_deps(deps, overwrite=True)
         self.put(name, dc)
         return dc, old_dc, old_id
 
@@ -159,15 +159,16 @@ class Scope(object):
             obj: 'Any',
             deps: 'Set[DataCell]',
             is_subscript,
-            add=False,
+            overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
+            do_alias_mutate=True,
     ):
         dc, old_dc, old_id = self._upsert_data_cell_for_name_inner(
             name, obj, deps, is_subscript,
-            add=add, is_function_def=is_function_def, class_scope=class_scope
+            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
-        self._handle_aliases(old_id, old_dc, dc)
+        self._handle_aliases(old_id, old_dc, dc, do_mutate=do_alias_mutate)
 
     def _upsert_data_cell_for_name_inner(
             self,
@@ -175,17 +176,17 @@ class Scope(object):
             obj: 'Any',
             deps: 'Set[DataCell]',
             is_subscript,
-            add=False,
+            overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
     ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
-            assert not add
+            assert overwrite
             assert not is_subscript
             return self._upsert_function_data_cell_for_name(name, obj, deps)
         if class_scope is not None:
-            assert not add
+            assert overwrite
             assert not is_subscript
             return self._upsert_class_data_cell_for_name(name, obj, deps, class_scope)
         old_id = None
@@ -198,7 +199,7 @@ class Scope(object):
                 # TODO: handle case where new dc is of different type
                 if name in self._data_cell_by_name:
                     old_dc.update_obj_ref(obj)
-                    old_dc.update_deps(deps, add=add)
+                    old_dc.update_deps(deps, overwrite=overwrite)
                     return old_dc, old_dc, old_id
                 else:
                     # in this case, we are copying from a class and should add the dc from which we are copying
@@ -207,7 +208,7 @@ class Scope(object):
         dc = DataCell(name, obj, self, self.safety, set(), is_subscript=is_subscript)
         self.put(name, dc)
         dc.update_deps(
-            deps, add=False, propagate_to_children=self.is_globally_accessible
+            deps, overwrite=True, propagate_to_children=self.is_globally_accessible
         )
         return dc, old_dc, old_id
 
@@ -215,7 +216,8 @@ class Scope(object):
             self,
             old_id: 'Optional[int]',
             old_dc: 'Optional[DataCell]',
-            dc: 'Optional[DataCell]'
+            dc: 'Optional[DataCell]',
+            do_mutate=True
     ):
         old_alias_dcs = self.safety.aliases[old_id]
         new_alias_dcs = self.safety.aliases[dc.obj_id]
@@ -224,6 +226,8 @@ class Scope(object):
         if dc is not None and dc.obj_id is not None:
             new_alias_dcs.add(dc)
         try:
+            if not do_mutate:
+                return
             old_alias_dcs_copy = list(old_alias_dcs)
             for alias_dc in old_alias_dcs_copy:
                 if alias_dc.obj_id == dc.obj_id:
@@ -302,7 +306,7 @@ class NamespaceScope(Scope):
         for child in self.child_clones:
             child.deep_mutate(deps)
         for dc in self._data_cell_by_name.values():
-            dc.update_deps(deps, add=True, mutated=True)
+            dc.update_deps(deps, overwrite=False)
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref, self.safety)

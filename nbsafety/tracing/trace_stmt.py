@@ -36,7 +36,7 @@ class TraceStatement(object):
 
     def compute_rval_dependencies(self, rval_symbols=None):
         if rval_symbols is None:
-            _, rval_symbols, _, _ = get_statement_lval_and_rval_symbols(self.stmt_node)
+            _, rval_symbols, _ = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_data_cells = set()
         for name in rval_symbols:
             maybe_rval_dc = self.scope.lookup_data_cell_by_name(name)
@@ -66,8 +66,7 @@ class TraceStatement(object):
 
     def _make_lval_data_cells(self):
         (
-            lval_symbols, rval_symbols,
-            _, should_add
+            lval_symbols, rval_symbols, should_overwrite
         ) = get_statement_lval_and_rval_symbols(self.stmt_node)
         rval_deps = self.compute_rval_dependencies(rval_symbols=rval_symbols - lval_symbols)
         rval_deps |= self._gather_deep_ref_rval_dcs()
@@ -77,7 +76,7 @@ class TraceStatement(object):
             assert len(lval_symbols) == 1
             assert not lval_symbols.issubset(rval_symbols)
         for name in lval_symbols:
-            should_add_for_name = should_add or name in rval_symbols
+            should_overwrite_for_name = should_overwrite and name not in rval_symbols
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
@@ -90,7 +89,8 @@ class TraceStatement(object):
                 obj = self.frame.f_locals[name]
                 self.scope.upsert_data_cell_for_name(
                     name, obj, rval_deps, False,
-                    add=should_add_for_name, is_function_def=is_function_def, class_scope=self.class_scope
+                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
+                    do_alias_mutate=not isinstance(self.stmt_node, ast.Assign)
                 )
             except KeyError:
                 pass
@@ -103,10 +103,10 @@ class TraceStatement(object):
                     obj = getattr(obj, attr_or_sub)
             except (AttributeError, KeyError, IndexError):
                 continue
-            should_add = isinstance(self.stmt_node, ast.AugAssign)
+            should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
             scope.upsert_data_cell_for_name(
                 attr_or_sub, obj, rval_deps, is_subscript,
-                add=should_add, is_function_def=False, class_scope=None
+                overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
 
     def _gather_deep_ref_rval_dcs(self):
@@ -130,7 +130,7 @@ class TraceStatement(object):
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
             mutation_arg_dcs = set(self.scope.lookup_data_cell_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dcs, add=True, mutated=True)
+                mutated_dc.update_deps(mutation_arg_dcs, overwrite=False)
             mutated_scope = self.safety.namespaces.get(mutated_obj_id, None)
             if mutated_scope is not None:
                 mutated_scope.deep_mutate(mutation_arg_dcs)

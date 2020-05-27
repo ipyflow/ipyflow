@@ -85,20 +85,21 @@ class DataCell(object):
     def update_deps(
             self,
             new_deps: 'Set[DataCell]',
-            add=False,
+            overwrite=True,
             propagate_to_children=True,
-            mutated=False,
     ):
         self.fresher_ancestors = set()
         self.namespace_data_cells_with_stale = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
-        if not add:
+        if overwrite:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)
             self.parents = set()
 
         for new_parent in new_deps - self.parents:
+            if new_parent is None:
+                continue
             new_parent.children.add(self)
             self.parents.add(new_parent)
 
@@ -108,6 +109,30 @@ class DataCell(object):
             self._propagate_update(self, set(), set(), set())
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = type(self._get_obj())
+
+    def _propagate_update(
+            self,
+            updated_dep: 'DataCell',
+            seen,
+            parent_seen,
+            child_seen,
+            do_namespace_propagation=True
+    ):
+        if self in seen:
+            return
+        seen.add(self)
+        if updated_dep is not self:
+            self.fresher_ancestors.add(updated_dep)
+            self.required_cell_num = updated_dep.defined_cell_num
+            # print('mark', self, 'as stale due to', updated_dep)
+        for child in self.children:
+            child._propagate_update(updated_dep, seen, parent_seen, child_seen)
+        if do_namespace_propagation:
+            self._propagate_update_to_namespace_children(self.cached_obj_id, self.obj_id, updated_dep,
+                                                         seen, parent_seen, child_seen,
+                                                         toplevel=True, refresh=updated_dep is self)
+            self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, child_seen,
+                                                        refresh=updated_dep is self)
 
     def _propagate_update_to_namespace_children(
             self, old_id: int, new_id: 'Optional[int]', updated_dep: 'DataCell', seen, parent_seen, child_seen,
@@ -128,19 +153,20 @@ class DataCell(object):
             return
         child_seen.add(self)
         if not toplevel:
-            if not refresh:
-                self._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
-            if new_id is None or old_id != new_id:
-                self._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
+            if refresh:
                 for alias in self.safety.aliases[old_id]:
-                    alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
-            elif refresh:
-                for alias in self.safety.aliases[old_id]:
-                    if alias.defined_cell_num < alias.required_cell_num:
+                    if alias.defined_cell_num < alias.required_cell_num < cell_counter():
                         logger.warning('possible stale usage of namespace descendent %s' % alias)
                     alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
                     alias.defined_cell_num = alias.required_cell_num
                     # print('mark', alias, 'as fresh')
+            else:
+                self._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
+                if new_id is None or old_id != new_id:
+                    for alias in self.safety.aliases[old_id]:
+                        alias._propagate_update(
+                            updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False
+                        )
             if old_id == new_id:
                 self.cached_obj_id = old_id
                 self.cached_obj_type = type(self._get_obj())
@@ -187,31 +213,7 @@ class DataCell(object):
                 self.namespace_data_cells_with_stale.discard(dc)
 
     def mark_mutated(self, propagate_to_children=True):
-        self.update_deps(set(), add=True, propagate_to_children=propagate_to_children, mutated=True)
-
-    def _propagate_update(
-            self,
-            updated_dep: 'DataCell',
-            seen,
-            parent_seen,
-            child_seen,
-            do_namespace_propagation=True
-    ):
-        if self in seen:
-            return
-        seen.add(self)
-        if updated_dep is not self:
-            self.fresher_ancestors.add(updated_dep)
-            self.required_cell_num = updated_dep.defined_cell_num
-            # print('mark', self, 'as stale due to', updated_dep)
-        for child in self.children:
-            child._propagate_update(updated_dep, seen, parent_seen, child_seen)
-        if do_namespace_propagation:
-            self._propagate_update_to_namespace_children(self.cached_obj_id, self.obj_id, updated_dep,
-                                                         seen, parent_seen, child_seen,
-                                                         toplevel=True, refresh=updated_dep is self)
-            self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, child_seen,
-                                                        refresh=updated_dep is self)
+        self.update_deps(set(), overwrite=False, propagate_to_children=propagate_to_children)
 
     def _propagate_update_to_namespace_parents(self, updated_dep, seen, parent_seen, child_seen, refresh):
         if not self.containing_scope.is_namespace_scope:

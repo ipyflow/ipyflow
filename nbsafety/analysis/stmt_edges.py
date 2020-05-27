@@ -8,26 +8,26 @@ if TYPE_CHECKING:
     from typing import List, Set, Union
 
 
-class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: current complete bipartite subgraph will add unncessary edges
         # TODO: this is actually pretty important to handle things like a.b.c properly,
         # we should switch to generating a sequence of (lvals, rvals, etc.)
-        self.lval_symbol_set: Set[str] = set()
-        self.rval_symbol_set: Set[Union[str, int]] = set()
+        self.lval_symbol_ref_set: Set[str] = set()
+        self.rval_symbol_ref_set: Set[Union[str, int]] = set()
         self.should_overwrite = True
         self.gather_rvals = True
 
     def __call__(self, node):
         self.visit(node)
-        return self.lval_symbol_set, self.rval_symbol_set, self.should_overwrite
+        return self.lval_symbol_ref_set, self.rval_symbol_ref_set, self.should_overwrite
 
     @property
     def to_add_set(self):
         if self.gather_rvals:
-            return self.rval_symbol_set
+            return self.rval_symbol_ref_set
         else:
-            return self.lval_symbol_set
+            return self.lval_symbol_ref_set
 
     def gather_lvals_context(self):
         return self.push_attributes(gather_rvals=False)
@@ -80,12 +80,12 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
             self.visit(node.iter)
 
     def visit_FunctionDef(self, node):
-        self.lval_symbol_set.add(node.name)
+        self.lval_symbol_ref_set.add(node.name)
         with self.gather_rvals_context():
             self.visit(node.args)
 
     def visit_ClassDef(self, node):
-        self.lval_symbol_set.add(node.name)
+        self.lval_symbol_ref_set.add(node.name)
         with self.gather_rvals_context():
             self.visit(node.bases)
             self.visit(node.decorator_list)
@@ -104,14 +104,14 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         # remove node.arguments
         self.visit(node.body)
         self.visit(node.args)
-        with self.push_attributes(rval_symbol_set=set()):
+        with self.push_attributes(rval_symbol_ref_set=set()):
             self.visit(node.args.args)
             self.visit(node.args.vararg)
             self.visit(node.args.kwonlyargs)
             self.visit(node.args.kwarg)
-            discard_set = self.rval_symbol_set
+            discard_set = self.rval_symbol_ref_set
         # throw away anything appearing in lambda body that isn't bound
-        self.rval_symbol_set -= discard_set
+        self.rval_symbol_ref_set -= discard_set
 
     def visit_With(self, node):
         # skip body
@@ -127,5 +127,5 @@ class GetStatementLvalRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, 
         self.to_add_set.add(node.arg)
 
 
-def get_statement_lval_and_rval_symbols(node: ast.AST):
-    return GetStatementLvalRvalSymbols()(node)
+def get_statement_lval_and_rval_symbol_refs(node: ast.AST):
+    return GetStatementLvalRvalSymbolRefs()(node)

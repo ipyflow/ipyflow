@@ -18,12 +18,12 @@ from .ipython_utils import (
 )
 from . import line_magics
 from .scope import Scope, NamespaceScope
-from .tracing import AttributeTracingManager, make_tracer, TraceState
+from .tracing import AttrSubTracingManager, make_tracer, TraceState
 
 if TYPE_CHECKING:
     from typing import Dict, List, Set, Optional, Tuple, Union
     from .analysis import SymbolRef
-    from .data_cell import DataCell
+    from .data_symbol import DataSymbol
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -32,7 +32,7 @@ _MAX_WARNINGS = 10
 _SAFETY_LINE_MAGIC = 'safety'
 
 
-def _safety_warning(node: 'DataCell'):
+def _safety_warning(node: 'DataSymbol'):
     if node.has_stale_ancestor:
         required_cell_num = node.required_cell_num
         fresher_ancestors = node.fresher_ancestors
@@ -52,13 +52,13 @@ class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, **kwargs):
         self.namespaces: Dict[int, NamespaceScope] = {}
-        self.aliases: Dict[int, Set[DataCell]] = defaultdict(set)
+        self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope = Scope(self)
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)
-        self.attr_trace_manager: AttributeTracingManager = AttributeTracingManager(
+        self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(
             self, self.global_scope, self.trace_event_counter
         )
         self.store_history = kwargs.pop('store_history', True)
@@ -76,7 +76,7 @@ class DependencySafety(object):
         self._track_dependencies = True
 
         self._disable_level = 0
-        self._prev_cell_nodes_with_stale_deps: Set[DataCell] = set()
+        self._prev_cell_nodes_with_stale_deps: Set[DataSymbol] = set()
 
         if self.use_comm:
             get_ipython().kernel.comm_manager.register_target('nbsafety', self._comm_target)
@@ -151,12 +151,12 @@ class DependencySafety(object):
         max_defined_cell_num = -1
         for symbol_ref in self.compute_reachable_symbol_refs(cell):
             if isinstance(symbol_ref.symbol, str):
-                nodes: List[Tuple[DataCell, bool]] = [(
-                    self.global_scope.lookup_data_cell_by_name_this_indentation(symbol_ref.symbol),
+                nodes: List[Tuple[DataSymbol, bool]] = [(
+                    self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol),
                     symbol_ref.deep
                 )]
             elif isinstance(symbol_ref.symbol, AttrSubSymbolChain):
-                nodes = self.global_scope.gen_data_cells_for_attr_symbol_chain(symbol_ref, self.namespaces)
+                nodes = self.global_scope.gen_data_symbols_for_attr_symbol_chain(symbol_ref, self.namespaces)
             else:
                 logger.warning('invalid type for ref %s', symbol_ref)
                 continue

@@ -54,7 +54,7 @@ def show_graph(safety: 'DependencySafety'):
     nx.draw_networkx(
         graph,
         node_color=[
-            "#ff0000" if safety.global_scope.lookup_data_cell_by_name(name).has_stale_ancestor
+            "#ff0000" if safety.global_scope.lookup_data_symbol_by_name(name).has_stale_ancestor
             else "#cccccc"
             for name in graph.nodes()
         ],
@@ -69,25 +69,25 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) == 1:
         print("Usage: %safety show_dependency <variable_name> <variable_name2> ...")
         return
-    for data_cell_name in line[1:]:
-        data_cell = safety.global_scope.lookup_data_cell_by_name(data_cell_name)
-        if data_cell:
-            print("DataCell {} is dependent on {}".format(data_cell_name, [str(n) for n in data_cell.parents] if data_cell.parents else "Nothing"))
+    for data_sym_name in line[1:]:
+        data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
+        if data_sym:
+            print("DataSymbol {} is dependent on {}".format(data_sym_name, [str(n) for n in data_sym.parents] if data_sym.parents else "Nothing"))
         else:
-            print("Cannot find DataCell", data_cell_name)
+            print("Cannot find DataSymbol", data_sym_name)
 
 
 def show_stale(safety: 'DependencySafety'):
     stale_set = set()
-    for data_cell in safety.global_scope.all_data_cells_this_indentation().values():
-        if data_cell.has_stale_ancestor:
-            stale_set.add(data_cell)
+    for data_sym in safety.global_scope.all_data_symbols_this_indentation().values():
+        if data_sym.has_stale_ancestor:
+            stale_set.add(data_sym)
     if not stale_set:
-        print("No DataCell has stale dependency for now!")
+        print("No DataSymbol has stale dependency for now!")
     elif len(stale_set) == 1:
-        print("The only DataCell with stale dependencies is:", str(stale_set.pop()))
+        print("The only DataSymbol with stale dependencies is:", str(stale_set.pop()))
     else:
-        print("DataCells with stale dependencies are:", [str(n) for n in stale_set])
+        print("DataSymbols with stale dependencies are:", [str(n) for n in stale_set])
 
 
 def set_disable_level(safety: 'DependencySafety', line: 'List[str]'):
@@ -112,61 +112,61 @@ def remove_dep(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 3:
         print("Usage: %safety remove_dependency <parent_name> <child_name>")
         return
-    parent_data_cell = safety.global_scope.lookup_data_cell_by_name(line[1])
-    if not parent_data_cell:
-        print("Cannot find DataCell", line[1])
+    parent_data_sym = safety.global_scope.lookup_data_symbol_by_name(line[1])
+    if not parent_data_sym:
+        print("Cannot find DataSymbol", line[1])
         return
-    child_data_cell = safety.global_scope.lookup_data_cell_by_name(line[2])
-    if not child_data_cell:
-        print("Cannot find DataCell", line[2])
+    child_data_sym = safety.global_scope.lookup_data_symbol_by_name(line[2])
+    if not child_data_sym:
+        print("Cannot find DataSymbol", line[2])
         return
-    if child_data_cell not in parent_data_cell.children or parent_data_cell not in child_data_cell.parents:
-        print("Two DataCells do not have a dependency relation")
+    if child_data_sym not in parent_data_sym.children or parent_data_sym not in child_data_sym.parents:
+        print("Two DataSymbols do not have a dependency relation")
         return
-    parent_data_cell.children.remove(child_data_cell)
-    child_data_cell.parents.remove(parent_data_cell)
+    parent_data_sym.children.remove(child_data_sym)
+    child_data_sym.parents.remove(parent_data_sym)
 
 
 def add_dep(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 3:
         print("Usage: %safety add_dependency <parent_name> <child_name>")
         return
-    parent_data_cell = safety.global_scope.lookup_data_cell_by_name(line[1])
-    if not parent_data_cell:
-        print("Cannot find DataCell", line[1])
+    parent_data_sym = safety.global_scope.lookup_data_symbol_by_name(line[1])
+    if not parent_data_sym:
+        print("Cannot find DataSymbol", line[1])
         return
-    child_data_cell = safety.global_scope.lookup_data_cell_by_name(line[2])
-    if not child_data_cell:
-        print("Cannot find DataCell", line[2])
+    child_data_sym = safety.global_scope.lookup_data_symbol_by_name(line[2])
+    if not child_data_sym:
+        print("Cannot find DataSymbol", line[2])
         return
-    if child_data_cell in parent_data_cell.children and parent_data_cell in child_data_cell.parents:
-        print("Two DataCells already have a dependency relation")
+    if child_data_sym in parent_data_sym.children and parent_data_sym in child_data_sym.parents:
+        print("Two DataSymbols already have a dependency relation")
         return
-    parent_data_cell.children.add(child_data_cell)
-    child_data_cell.parents.add(parent_data_cell)
+    parent_data_sym.children.add(child_data_sym)
+    child_data_sym.parents.add(parent_data_sym)
 
 
 def turn_off_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) <= 1:
         print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
         return
-    for data_cell_name in line[1:]:
-        data_cell = safety.global_scope.lookup_data_cell_by_name(data_cell_name)
-        if data_cell:
-            data_cell.no_warning = True
-            print("Warnings are turned off for", data_cell_name)
+    for data_sym_name in line[1:]:
+        data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
+        if data_sym:
+            data_sym.no_warning = True
+            print("Warnings are turned off for", data_sym_name)
         else:
-            print("Cannot find DataCell", data_cell_name)
+            print("Cannot find DataSymbol", data_sym_name)
 
 
 def turn_on_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) <= 1:
         print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
         return
-    for data_cell_name in line[1:]:
-        data_cell = safety.global_scope.lookup_data_cell_by_name(data_cell_name)
-        if data_cell:
-            data_cell.no_warning = False
-            print("Warnings are turned on for", data_cell_name)
+    for data_sym_name in line[1:]:
+        data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
+        if data_sym:
+            data_sym.no_warning = False
+            print("Warnings are turned on for", data_sym_name)
         else:
-            print("Cannot find DataCell", data_cell_name)
+            print("Cannot find DataSymbol", data_sym_name)

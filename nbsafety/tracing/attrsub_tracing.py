@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import logging
 from typing import cast, TYPE_CHECKING
 
-from ..data_cell import DataCell
+from ..data_symbol import DataSymbol
 from ..scope import NamespaceScope
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AttributeTracingManager(object):
+class AttrSubTracingManager(object):
     def __init__(self, safety: 'DependencySafety',
                  active_scope: 'Scope', trace_event_counter: 'List[int]'):
         self.safety = safety
@@ -36,7 +36,7 @@ class AttributeTracingManager(object):
         self.ast_transformer = AttrSubTracingNodeTransformer(
             self.start_tracer_name, self.end_tracer_name, self.arg_recorder_name
         )
-        self.loaded_data_cells: Set[DataCell] = set()
+        self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
         self.mutations: Set[Mutation] = set()
         self.deep_refs: Set[DeepRef] = set()
@@ -99,7 +99,7 @@ class AttributeTracingManager(object):
         if scope is None:
             class_scope = self.safety.namespaces.get(id(obj.__class__), None)
             if class_scope is not None and not is_subscript:
-                # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_cells_this_indentation().keys()))
+                # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_syms_this_indentation().keys()))
                 scope = class_scope.clone(obj_id)
                 self.safety.namespaces[obj_id] = scope
             else:
@@ -124,23 +124,23 @@ class AttributeTracingManager(object):
                 self.deep_ref_candidate = (self.trace_event_counter[0], obj_id, obj_name)
             else:
                 self.deep_ref_candidate = None
-                data_cell = scope.lookup_data_cell_by_name_this_indentation(attr_or_subscript)
-                if data_cell is None:
+                data_sym = scope.lookup_data_symbol_by_name_this_indentation(attr_or_subscript)
+                if data_sym is None:
                     try:
                         if is_subscript:
                             obj_attr_or_sub = obj[attr_or_subscript]
                         else:
                             obj_attr_or_sub = getattr(obj, attr_or_subscript)
-                        data_cell = DataCell(attr_or_subscript, obj_attr_or_sub, scope,
-                                             self.safety, is_subscript=is_subscript)
+                        data_sym = DataSymbol(attr_or_subscript, obj_attr_or_sub, scope,
+                                               self.safety, is_subscript=is_subscript)
                         # this is to prevent refs to the scope object from being considered as stale if we just load it
-                        data_cell.defined_cell_num = data_cell.required_cell_num = scope.max_defined_timestamp
-                        scope.put(attr_or_subscript, data_cell)
-                        # FIXME: DataCells should probably register themselves with the alias manager at creation
-                        self.safety.aliases[id(obj_attr_or_sub)].add(data_cell)
+                        data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
+                        scope.put(attr_or_subscript, data_sym)
+                        # FIXME: DataSymbols should probably register themselves with the alias manager at creation
+                        self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
                     except AttributeError:
                         pass
-                self.loaded_data_cells.add(data_cell)
+                self.loaded_data_symbols.add(data_sym)
         if ctx in ('Store', 'AugStore'):
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
         return obj
@@ -164,7 +164,7 @@ class AttributeTracingManager(object):
         return obj
 
     def reset(self):
-        self.loaded_data_cells = set()
+        self.loaded_data_symbols = set()
         self.saved_store_data = []
         self.deep_refs = set()
         self.mutations = set()

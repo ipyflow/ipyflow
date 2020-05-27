@@ -13,14 +13,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class DataCell(object):
+class DataSymbol(object):
     def __init__(
             self,
             name: 'Union[str, int]',
             obj: 'Any',
             containing_scope: 'Scope',
             safety: 'DependencySafety',
-            parents: 'Optional[Set[DataCell]]' = None,
+            parents: 'Optional[Set[DataSymbol]]' = None,
             is_subscript: bool = False
     ):
         self.name = name
@@ -36,8 +36,8 @@ class DataCell(object):
         self.safety = safety
         if parents is None:
             parents = set()
-        self.parents: Set[DataCell] = parents
-        self.children: Set[DataCell] = set()
+        self.parents: Set[DataSymbol] = parents
+        self.children: Set[DataSymbol] = set()
         self.is_subscript = is_subscript
         self.readable_name = containing_scope.make_namespace_qualified_name(self)
 
@@ -46,8 +46,8 @@ class DataCell(object):
         # The notebook cell number this is required to have to not be considered stale
         self.required_cell_num = self.defined_cell_num
 
-        self.fresher_ancestors: Set[DataCell] = set()
-        self.namespace_data_cells_with_stale: Set[DataCell] = set()
+        self.fresher_ancestors: Set[DataSymbol] = set()
+        self.namespace_data_syms_with_stale: Set[DataSymbol] = set()
 
         #Will never be stale if no_warning is True
         self.no_warning = False
@@ -84,12 +84,12 @@ class DataCell(object):
 
     def update_deps(
             self,
-            new_deps: 'Set[DataCell]',
+            new_deps: 'Set[DataSymbol]',
             overwrite=True,
             propagate_to_children=True,
     ):
         self.fresher_ancestors = set()
-        self.namespace_data_cells_with_stale = set()
+        self.namespace_data_syms_with_stale = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
         if overwrite:
@@ -104,7 +104,7 @@ class DataCell(object):
             self.parents.add(new_parent)
 
         self.defined_cell_num = cell_counter()
-        self.namespace_data_cells_with_stale.discard(self)
+        self.namespace_data_syms_with_stale.discard(self)
         if propagate_to_children:
             self._propagate_update(self, set(), set(), set())
         self.cached_obj_id = self.obj_id
@@ -112,7 +112,7 @@ class DataCell(object):
 
     def _propagate_update(
             self,
-            updated_dep: 'DataCell',
+            updated_dep: 'DataSymbol',
             seen,
             parent_seen,
             child_seen,
@@ -135,7 +135,7 @@ class DataCell(object):
                                                         refresh=updated_dep is self)
 
     def _propagate_update_to_namespace_children(
-            self, old_id: int, new_id: 'Optional[int]', updated_dep: 'DataCell', seen, parent_seen, child_seen,
+            self, old_id: int, new_id: 'Optional[int]', updated_dep: 'DataSymbol', seen, parent_seen, child_seen,
             toplevel=False, refresh=False
     ):
         # look at old obj_id and cur obj_id
@@ -143,7 +143,7 @@ class DataCell(object):
         # a few cases to consider:
         # 1. mismatched obj ids or unavailable from new hierarchy:
         #    mark old dc as mutated AND stale, and propagate to old dc children
-        # 2. new / old DataCells have same obj ids:
+        # 2. new / old DataSymbols have same obj ids:
         #    mark old dc as mutated, but NOT stale, and propagate to children
         #    Q: should old dc additionally be refreshed?
         #    Technically it should already be fresh, since if it's still a descendent of this namespace, we probably
@@ -174,7 +174,7 @@ class DataCell(object):
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None:
             return
-        for dc in namespace._data_cell_by_name.values():
+        for dc in namespace._data_symbol_by_name.values():
             if new_id is None:
                 dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen, parent_seen, child_seen,
                                                            refresh=refresh)
@@ -205,13 +205,13 @@ class DataCell(object):
                             self.safety.namespaces[new_id] = new_namespace
                         # TODO: handle class data cells properly;
                         #  in fact; we still need to handle aliases of class data cells
-                        if dc.name not in new_namespace._data_cell_by_name:
+                        if dc.name not in new_namespace._data_symbol_by_name:
                             new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
                 except:
                     dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen,
                                                                parent_seen, child_seen, refresh=refresh)
             if not dc.has_stale_ancestor:
-                self.namespace_data_cells_with_stale.discard(dc)
+                self.namespace_data_syms_with_stale.discard(dc)
 
     def mark_mutated(self, propagate_to_children=True):
         self.update_deps(set(), overwrite=False, propagate_to_children=propagate_to_children)
@@ -228,7 +228,7 @@ class DataCell(object):
         namespace_obj_ref = containing_scope.namespace_obj_ref
         for alias in self.safety.aliases[namespace_obj_ref]:
             if refresh and not self.has_stale_ancestor:
-                alias.namespace_data_cells_with_stale.discard(self)
+                alias.namespace_data_syms_with_stale.discard(self)
                 if not alias.has_stale_ancestor:
                     alias.fresher_ancestors = set()
             if refresh:
@@ -237,7 +237,7 @@ class DataCell(object):
                     if alias_child.obj_id != namespace_obj_ref:
                         alias_child._propagate_update(updated_dep, seen, parent_seen, child_seen)
             else:
-                alias.namespace_data_cells_with_stale.add(self)
+                alias.namespace_data_syms_with_stale.add(self)
                 old_required_cell_num = alias.required_cell_num
                 alias._propagate_update(updated_dep, seen, parent_seen, child_seen)
                 alias.required_cell_num = old_required_cell_num
@@ -246,16 +246,16 @@ class DataCell(object):
     def has_stale_ancestor(self):
         if self.no_warning:
             return False
-        return self.defined_cell_num < self.required_cell_num or len(self.namespace_data_cells_with_stale) > 0
+        return self.defined_cell_num < self.required_cell_num or len(self.namespace_data_syms_with_stale) > 0
 
 
-class FunctionDataCell(DataCell):
+class FunctionDataSymbol(DataSymbol):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.scope = self.containing_scope.make_child_scope(self.name)
 
 
-class ClassDataCell(DataCell):
+class ClassDataSymbol(DataSymbol):
     def __init__(self, *args, **kwargs):
         class_scope = kwargs.pop('class_scope')
         super().__init__(*args, **kwargs)

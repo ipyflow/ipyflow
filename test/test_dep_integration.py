@@ -759,7 +759,7 @@ class Foo(object):
     run_cell('Foo.shared = y + 42')
     run_cell('y = 12')
     run_cell('logging.info(foo.shared)')
-    assert_detected('`foo.shared` should point to same DataCell as `Foo.shared` and thus also has stale dep')
+    assert_detected('`foo.shared` should point to same DataSymbol as `Foo.shared` and thus also has stale dep')
     run_cell('foo.shared = 89')
     run_cell('logging.info(Foo.shared)')
     assert_detected('Even though we refreshed `foo.shared`, this '
@@ -894,7 +894,7 @@ def test_single_line_dictionary_literal_fix_stale_deps():
     run_cell('d[foo] = bar')
     run_cell('logging.info(d)')
     assert_false_positive('`d`s stale dep fixed, but this is hard to detect '
-                          'since we did not yet have a DataCell for `d[foo]` when staleness introduced')
+                          'since we did not yet have a DataSymbol for `d[foo]` when staleness introduced')
     run_cell('foo = 8')
     run_cell('logging.info(d)')
     assert_detected('`d` depends on stale `foo`')

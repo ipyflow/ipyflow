@@ -9,7 +9,7 @@ except ImportError:
     pandas = None
 
 from .analysis import AttrSubSymbolChain, CallPoint, SymbolRef
-from .data_cell import ClassDataCell, DataCell, FunctionDataCell
+from .data_symbol import ClassDataSymbol, DataSymbol, FunctionDataSymbol
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -28,7 +28,7 @@ class Scope(object):
         self.safety = safety
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
-        self._data_cell_by_name: Dict[Union[str, int], DataCell] = {}
+        self._data_symbol_by_name: Dict[Union[str, int], DataSymbol] = {}
 
     def __hash__(self):
         return hash(self.full_path)
@@ -56,25 +56,25 @@ class Scope(object):
         else:
             return NamespaceScope(namespace_obj_ref, self.safety, scope_name, parent_scope=self)
 
-    def put(self, name: 'Union[str, int]', val: DataCell):
-        self._data_cell_by_name[name] = val
+    def put(self, name: 'Union[str, int]', val: DataSymbol):
+        self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
-    def lookup_data_cell_by_name_this_indentation(self, name) -> 'Optional[DataCell]':
-        return self._data_cell_by_name.get(name, None)
+    def lookup_data_symbol_by_name_this_indentation(self, name) -> 'Optional[DataSymbol]':
+        return self._data_symbol_by_name.get(name, None)
 
-    def all_data_cells_this_indentation(self):
-        return self._data_cell_by_name
+    def all_data_symbols_this_indentation(self):
+        return self._data_symbol_by_name
 
-    def lookup_data_cell_by_name(self, name):
-        ret = self.lookup_data_cell_by_name_this_indentation(name)
+    def lookup_data_symbol_by_name(self, name):
+        ret = self.lookup_data_symbol_by_name_this_indentation(name)
         if ret is None and self.non_namespace_parent_scope is not None:
-            ret = self.non_namespace_parent_scope.lookup_data_cell_by_name(name)
+            ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name)
         return ret
 
-    def gen_data_cells_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
+    def gen_data_symbols_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
         """
-        Yield DataCells in the chain as well as whether they are deep references
+        Yield DataSymbols in the chain as well as whether they are deep references
         """
         assert isinstance(chain.symbol, AttrSubSymbolChain)
         cur_scope = self
@@ -84,10 +84,10 @@ class Scope(object):
         for name in chain.symbol.symbols:
             if isinstance(name, CallPoint):
                 yield dc, True
-                # dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
+                # dc = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
                 # yield dc, False
                 return
-            dc = cur_scope.lookup_data_cell_by_name_this_indentation(name)
+            dc = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
             if dc is not None:
                 # if to_yield is not None:
                 #     # we only yield the last symbol in the chain as a potentially deep ref
@@ -118,14 +118,14 @@ class Scope(object):
         if to_yield is not None:
             yield dc, chain.deep
 
-    def _upsert_and_mark_children_if_same_data_cell_type(
-            self, dc: 'Union[ClassDataCell, FunctionDataCell]', name: str, deps: 'Set[DataCell]',
-    ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
+    def _upsert_and_mark_children_if_same_data_symbol_type(
+            self, dc: 'Union[ClassDataSymbol, FunctionDataSymbol]', name: str, deps: 'Set[DataSymbol]',
+    ) -> 'Tuple[DataSymbol, DataSymbol, Optional[int]]':
         old_id = None
         old_dc = None
         should_propagate = False
         if self.is_globally_accessible:
-            old_dc = self.lookup_data_cell_by_name_this_indentation(name)
+            old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
             if old_dc is not None:
                 for child in old_dc.children:
                     child.parents.discard(old_dc)
@@ -141,63 +141,63 @@ class Scope(object):
         self.put(name, dc)
         return dc, old_dc, old_id
 
-    def _upsert_function_data_cell_for_name(
-            self, name: str, obj: 'Any', deps: 'Set[DataCell]',
+    def _upsert_function_data_symbol_for_name(
+            self, name: str, obj: 'Any', deps: 'Set[DataSymbol]',
     ):
-        dc = FunctionDataCell(name, obj, self, self.safety)
-        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
+        dc = FunctionDataSymbol(name, obj, self, self.safety)
+        return self._upsert_and_mark_children_if_same_data_symbol_type(dc, name, deps)
 
-    def _upsert_class_data_cell_for_name(
-            self, name: str, obj: 'Any', deps: 'Set[DataCell]', class_scope: 'Scope'
+    def _upsert_class_data_symbol_for_name(
+            self, name: str, obj: 'Any', deps: 'Set[DataSymbol]', class_scope: 'Scope'
     ):
-        dc = ClassDataCell(name, obj, self, self.safety, class_scope=class_scope)
-        return self._upsert_and_mark_children_if_same_data_cell_type(dc, name, deps)
+        dc = ClassDataSymbol(name, obj, self, self.safety, class_scope=class_scope)
+        return self._upsert_and_mark_children_if_same_data_symbol_type(dc, name, deps)
 
-    def upsert_data_cell_for_name(
+    def upsert_data_symbol_for_name(
             self,
             name: str,
             obj: 'Any',
-            deps: 'Set[DataCell]',
+            deps: 'Set[DataSymbol]',
             is_subscript,
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
             do_alias_mutate=True,
     ):
-        dc, old_dc, old_id = self._upsert_data_cell_for_name_inner(
+        dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
         self._handle_aliases(old_id, old_dc, dc, do_mutate=do_alias_mutate)
 
-    def _upsert_data_cell_for_name_inner(
+    def _upsert_data_symbol_for_name_inner(
             self,
             name: str,
             obj: 'Any',
-            deps: 'Set[DataCell]',
+            deps: 'Set[DataSymbol]',
             is_subscript,
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-    ) -> 'Tuple[DataCell, DataCell, Optional[int]]':
+    ) -> 'Tuple[DataSymbol, DataSymbol, Optional[int]]':
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert overwrite
             assert not is_subscript
-            return self._upsert_function_data_cell_for_name(name, obj, deps)
+            return self._upsert_function_data_symbol_for_name(name, obj, deps)
         if class_scope is not None:
             assert overwrite
             assert not is_subscript
-            return self._upsert_class_data_cell_for_name(name, obj, deps, class_scope)
+            return self._upsert_class_data_symbol_for_name(name, obj, deps, class_scope)
         old_id = None
         old_dc = None
         if self.is_globally_accessible:
-            old_dc = self.lookup_data_cell_by_name_this_indentation(name)
+            old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
             if old_dc is not None:
                 old_id = old_dc.cached_obj_id
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
-                if name in self._data_cell_by_name:
+                if name in self._data_symbol_by_name:
                     old_dc.update_obj_ref(obj)
                     old_dc.update_deps(deps, overwrite=overwrite)
                     return old_dc, old_dc, old_id
@@ -205,7 +205,7 @@ class Scope(object):
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataCell(name, obj, self, self.safety, set(), is_subscript=is_subscript)
+        dc = DataSymbol(name, obj, self, self.safety, set(), is_subscript=is_subscript)
         self.put(name, dc)
         dc.update_deps(
             deps, overwrite=True, propagate_to_children=self.is_globally_accessible
@@ -215,8 +215,8 @@ class Scope(object):
     def _handle_aliases(
             self,
             old_id: 'Optional[int]',
-            old_dc: 'Optional[DataCell]',
-            dc: 'Optional[DataCell]',
+            old_dc: 'Optional[DataSymbol]',
+            dc: 'Optional[DataSymbol]',
             do_mutate=True
     ):
         old_alias_dcs = self.safety.aliases[old_id]
@@ -238,7 +238,7 @@ class Scope(object):
             if len(old_alias_dcs) == 0:
                 del self.safety.aliases[old_id]
 
-    def _handle_namespace(self, dc: 'Optional[DataCell]'):
+    def _handle_namespace(self, dc: 'Optional[DataSymbol]'):
         if dc is None:
             return
         namespace = self.safety.namespaces.get(dc.obj_id, None)
@@ -282,7 +282,7 @@ class Scope(object):
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, dc: 'DataCell'):
+    def make_namespace_qualified_name(self, dc: 'DataSymbol'):
         return dc.name
 
 
@@ -293,19 +293,11 @@ class NamespaceScope(Scope):
         self.child_clones: List[NamespaceScope] = []
         self.namespace_obj_ref = namespace_obj_ref
         self.max_defined_timestamp = 0
-        # self._data_cells_with_stale_ancestors: Set[DataCell] = set()
-        # self._cloned_scopes_with_data_cells_with_stale_ancestors: Set[NamespaceScope] = set()
 
-    # @property
-    # def has_data_cells_with_stale_ancestors(self):
-    #     ret = len(self._data_cells_with_stale_ancestors) > 0
-    #     ret = ret or (self.cloned_from is not None and self.cloned_from.has_data_cells_with_stale_ancestors)
-    #     return ret
-
-    def deep_mutate(self, deps: 'Set[DataCell]'):
+    def deep_mutate(self, deps: 'Set[DataSymbol]'):
         for child in self.child_clones:
             child.deep_mutate(deps)
-        for dc in self._data_cell_by_name.values():
+        for dc in self._data_symbol_by_name.values():
             dc.update_deps(deps, overwrite=False)
 
     def clone(self, namespace_obj_ref: int):
@@ -313,7 +305,7 @@ class NamespaceScope(Scope):
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
         cloned.namespace_obj_ref = namespace_obj_ref
-        cloned._data_cell_by_name = {}
+        cloned._data_symbol_by_name = {}
         self.child_clones.append(cloned)
         return cloned
 
@@ -323,7 +315,7 @@ class NamespaceScope(Scope):
         cloned.parent_scope = self.parent_scope
         return cloned
 
-    def make_namespace_qualified_name(self, dc: 'DataCell'):
+    def make_namespace_qualified_name(self, dc: 'DataSymbol'):
         path = self.full_namespace_path
         if path:
             if dc.is_subscript:
@@ -333,29 +325,18 @@ class NamespaceScope(Scope):
         else:
             return dc.name
 
-    def lookup_data_cell_by_name_this_indentation(self, name):
-        ret = self._data_cell_by_name.get(name, None)
+    def lookup_data_symbol_by_name_this_indentation(self, name):
+        ret = self._data_symbol_by_name.get(name, None)
         if ret is None and self.cloned_from is not None:
-            ret = self.cloned_from.lookup_data_cell_by_name_this_indentation(name)
+            ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
 
-    def all_data_cells_this_indentation(self):
+    def all_data_symbols_this_indentation(self):
         if self.cloned_from is None:
-            return dict(self._data_cell_by_name)
-        ret = self.cloned_from.all_data_cells_this_indentation()
-        ret.update(self._data_cell_by_name)
+            return dict(self._data_symbol_by_name)
+        ret = self.cloned_from.all_data_symbols_this_indentation()
+        ret.update(self._data_symbol_by_name)
         return ret
-
-    # def propagate_max_defined_timestamp(self, ts):
-    #     if ts > self.max_defined_timestamp:
-    #         self.max_defined_timestamp = ts
-    #         namespace_parent = self.namespace_parent_scope
-    #         if namespace_parent is not None:
-    #             namespace_parent.propagate_max_defined_timestamp(ts)
-    #
-    # def put(self, name: str, val: DataCell):
-    #     super().put(name, val)
-    #     self.propagate_max_defined_timestamp(val.defined_cell_num)
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

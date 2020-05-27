@@ -205,7 +205,8 @@ class DataCell(object):
                             self.safety.namespaces[new_id] = new_namespace
                         # TODO: handle class data cells properly;
                         #  in fact; we still need to handle aliases of class data cells
-                        new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
+                        if dc.name not in new_namespace._data_cell_by_name:
+                            new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
                 except:
                     dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen,
                                                                parent_seen, child_seen, refresh=refresh)

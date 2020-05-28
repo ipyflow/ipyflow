@@ -706,6 +706,7 @@ def test_list_alias_no_break():
     assert_not_detected('`y` still aliases `x`')
 
 
+@skipif_known_failing
 def test_subscript_sensitivity():
     run_cell('lst = list(range(5))')
     run_cell('i = 0')

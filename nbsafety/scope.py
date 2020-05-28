@@ -228,7 +228,7 @@ class Scope(object):
         try:
             if not do_mutate:
                 return
-            if issubclass(type(dc._get_obj()), int):
+            if isinstance(dc._obj, int):
                 return
             old_alias_dcs_copy = list(old_alias_dcs)
             for alias_dc in old_alias_dcs_copy:

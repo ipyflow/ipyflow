@@ -132,7 +132,7 @@ class AttrSubTracingManager(object):
                         else:
                             obj_attr_or_sub = getattr(obj, attr_or_subscript)
                         data_sym = DataSymbol(attr_or_subscript, obj_attr_or_sub, scope,
-                                               self.safety, is_subscript=is_subscript)
+                                              self.safety, is_subscript=is_subscript)
                         # this is to prevent refs to the scope object from being considered as stale if we just load it
                         data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
                         scope.put(attr_or_subscript, data_sym)

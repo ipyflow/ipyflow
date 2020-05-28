@@ -12,6 +12,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+NOT_FOUND = object()
+
 
 class DataSymbol(object):
     def __init__(
@@ -25,13 +27,15 @@ class DataSymbol(object):
     ):
         self.name = name
         self._has_weakref = True
-        try:
-            self.obj_ref = weakref.ref(obj)
-        except TypeError:
-            self._has_weakref = False
-            self.obj_ref = obj
-        self.cached_obj_id = self.obj_id
-        self.cached_obj_type = type(self._get_obj())
+        # try:
+        #     self.obj_ref = weakref.ref(obj)
+        # except TypeError:
+        #     self._has_weakref = False
+        #     self.obj_ref = obj
+        # self.cached_obj_ref = self.obj_ref
+        # self._cached_has_weakref = self._has_weakref
+        self._obj = obj
+        self._cached_obj = obj
         self.containing_scope = containing_scope
         self.safety = safety
         if parents is None:
@@ -58,29 +62,49 @@ class DataSymbol(object):
     def __str__(self):
         return self.readable_name
 
-    def _get_obj(self):
-        if self._has_weakref:
-            return self.obj_ref()
-        else:
-            return self.obj_ref
+    # def _get_obj(self):
+    #     if self._has_weakref:
+    #         return self.obj_ref()
+    #     else:
+    #         return self.obj_ref
+    #
+    # def _get_cached_obj(self):
+    #     if self._cached_has_weakref:
+    #         return self.cached_obj_ref()
+    #     else:
+    #         return self.cached_obj_ref
 
     def shallow_clone(self, new_obj, new_containing_scope, **extra_kwargs):
         return self.__class__(self.name, new_obj, new_containing_scope, self.safety, **extra_kwargs)
 
     @property
     def obj_id(self):
-        if self._has_weakref:
-            return id(self.obj_ref())
-        else:
-            return id(self.obj_ref)
+        return id(self._obj)
+        # return id(self._get_obj())
+
+    @property
+    def cached_obj_id(self):
+        return id(self._cached_obj)
+        # return id(self._get_cached_obj())
+
+    @property
+    def obj_type(self):
+        return type(self._obj)
+        # return type(self._get_obj())
+
+    @property
+    def cached_obj_type(self):
+        return type(self._cached_obj)
+        # return type(self._get_cached_obj())
 
     def update_obj_ref(self, obj):
-        try:
-            self.obj_ref = weakref.ref(obj)
-            self._has_weakref = True
-        except TypeError:
-            self.obj_ref = obj
-            self._has_weakref = False
+        self._obj = obj
+        # try:
+        #     self.obj_ref = weakref.ref(obj)
+        #     self._has_weakref = True
+        # except TypeError:
+        #     self.obj_ref = obj
+        #     self._has_weakref = False
 
     def update_deps(
             self,
@@ -107,8 +131,9 @@ class DataSymbol(object):
         self.namespace_data_syms_with_stale.discard(self)
         if propagate_to_children:
             self._propagate_update(self, set(), set(), set())
-        self.cached_obj_id = self.obj_id
-        self.cached_obj_type = type(self._get_obj())
+        self._cached_obj = self._obj
+        # self.cached_obj_ref = self.obj_ref
+        # self._cached_has_weakref = self._has_weakref
 
     def _propagate_update(
             self,
@@ -128,14 +153,15 @@ class DataSymbol(object):
         for child in self.children:
             child._propagate_update(updated_dep, seen, parent_seen, child_seen)
         if do_namespace_propagation:
-            self._propagate_update_to_namespace_children(self.cached_obj_id, self.obj_id, updated_dep,
+            self._propagate_update_to_namespace_children(self._cached_obj, self._obj, updated_dep,
                                                          seen, parent_seen, child_seen,
                                                          toplevel=True, refresh=updated_dep is self)
             self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, child_seen,
                                                         refresh=updated_dep is self)
 
     def _propagate_update_to_namespace_children(
-            self, old_id: int, new_id: 'Optional[int]', updated_dep: 'DataSymbol', seen, parent_seen, child_seen,
+            self, old_parent_obj: 'Any', new_parent_obj: 'Any',
+            updated_dep: 'DataSymbol', seen, parent_seen, child_seen,
             toplevel=False, refresh=False
     ):
         # look at old obj_id and cur obj_id
@@ -151,37 +177,42 @@ class DataSymbol(object):
         #    some other stale ancestor. If not fresh, let's mark it so and log a warning about a potentially stale usage
         if self in child_seen:
             return
+        old_id = id(old_parent_obj)
+        if new_parent_obj is NOT_FOUND:
+            new_id = None
+        else:
+            new_id = id(new_parent_obj)
         child_seen.add(self)
         if not toplevel:
             if refresh:
                 for alias in self.safety.aliases[old_id]:
                     if alias.defined_cell_num < alias.required_cell_num < cell_counter():
                         logger.warning('possible stale usage of namespace descendent %s' % alias)
-                    if new_id != old_id:
-                        alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
+                    if new_parent_obj is not old_parent_obj:
+                        alias._propagate_update(
+                            updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False
+                        )
                     alias.defined_cell_num = alias.required_cell_num
                     # print('mark', alias, 'as fresh')
             else:
                 self._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
-                if new_id is None or old_id != new_id:
+                if new_parent_obj is NOT_FOUND or old_parent_obj is not new_parent_obj:
                     for alias in self.safety.aliases[old_id]:
                         alias._propagate_update(
                             updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False
                         )
-            if old_id == new_id:
-                self.cached_obj_id = old_id
-                self.cached_obj_type = type(self._get_obj())
 
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None:
             return
         for dc in namespace._data_symbol_by_name.values():
-            if new_id is None:
-                dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen, parent_seen, child_seen,
-                                                           refresh=refresh)
+            if new_parent_obj is NOT_FOUND:
+                dc._propagate_update_to_namespace_children(
+                    dc._obj, NOT_FOUND, updated_dep, seen, parent_seen, child_seen, refresh=refresh
+                )
             else:
                 try:
-                    obj = self._get_obj()
+                    obj = self._obj
                     if dc.is_subscript:
                         # TODO: more complete list of things that are checkable
                         #  or could cause side effects upon subscripting
@@ -189,7 +220,7 @@ class DataSymbol(object):
                             raise KeyError()
                         obj = obj[dc.name]
                         dc._propagate_update_to_namespace_children(
-                            dc.obj_id, id(obj), updated_dep, seen, parent_seen, child_seen, refresh=refresh
+                            dc._obj, obj, updated_dep, seen, parent_seen, child_seen, refresh=refresh
                         )
                     else:
                         dc_string_name = cast(str, dc.name)
@@ -197,9 +228,9 @@ class DataSymbol(object):
                             raise AttributeError()
                         obj = getattr(obj, dc_string_name)
                         dc._propagate_update_to_namespace_children(
-                            dc.obj_id, id(obj), updated_dep, seen, parent_seen, child_seen, refresh=refresh
+                            dc._obj, obj, updated_dep, seen, parent_seen, child_seen, refresh=refresh
                         )
-                    if new_id != old_id:
+                    if new_parent_obj is not old_parent_obj and new_id is not None:
                         new_namespace = self.safety.namespaces.get(new_id, None)
                         if new_namespace is None:
                             new_namespace = namespace.shallow_clone(new_id)
@@ -209,7 +240,7 @@ class DataSymbol(object):
                         if dc.name not in new_namespace._data_symbol_by_name:
                             new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
                 except:
-                    dc._propagate_update_to_namespace_children(dc.obj_id, None, updated_dep, seen,
+                    dc._propagate_update_to_namespace_children(dc._obj, NOT_FOUND, updated_dep, seen,
                                                                parent_seen, child_seen, refresh=refresh)
             if not dc.has_stale_ancestor:
                 self.namespace_data_syms_with_stale.discard(dc)

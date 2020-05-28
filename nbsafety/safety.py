@@ -166,17 +166,11 @@ class DependencySafety(object):
                     # print('******************************')
                     # print(node, deep_ref, node.has_stale_ancestor)
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
-                    # if node.name == 'z':
-                    #     print(node, deep_ref, node.has_stale_ancestor, node.has_deep_stale_ancestor, node.defined_cell_num,
-                    #           node.required_cell_num, node.deep_required_cell_num, node.fresher_ancestors, node.deep_fresher_ancestors)
                     if node.has_stale_ancestor:
                         stale_nodes.add(node)
-                    # if deep_ref:
                     if node.obj_id in self.namespaces:
                         namespace_scope = self.namespaces[node.obj_id]
                         max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-                    #     if node.has_deep_stale_ancestor:
-                    #         stale_nodes.add(node)
         return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):
@@ -210,6 +204,7 @@ class DependencySafety(object):
             # with stale deps to their required cell numbers
             for node in self._prev_cell_nodes_with_stale_deps:
                 node.defined_cell_num = node.required_cell_num
+                node.namespace_data_syms_with_stale = set()
                 node.fresher_ancestors = set()
             self._prev_cell_nodes_with_stale_deps.clear()
 

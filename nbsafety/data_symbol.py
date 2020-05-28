@@ -157,7 +157,8 @@ class DataSymbol(object):
                 for alias in self.safety.aliases[old_id]:
                     if alias.defined_cell_num < alias.required_cell_num < cell_counter():
                         logger.warning('possible stale usage of namespace descendent %s' % alias)
-                    alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
+                    if new_id != old_id:
+                        alias._propagate_update(updated_dep, seen, parent_seen, child_seen, do_namespace_propagation=False)
                     alias.defined_cell_num = alias.required_cell_num
                     # print('mark', alias, 'as fresh')
             else:
@@ -214,6 +215,7 @@ class DataSymbol(object):
                 self.namespace_data_syms_with_stale.discard(dc)
 
     def mark_mutated(self, propagate_to_children=True):
+        # print(self, 'mark mutated')
         self.update_deps(set(), overwrite=False, propagate_to_children=propagate_to_children)
 
     def _propagate_update_to_namespace_parents(self, updated_dep, seen, parent_seen, child_seen, refresh):

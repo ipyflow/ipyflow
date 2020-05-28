@@ -44,9 +44,12 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
 
     def visit_Subscript(self, node: ast.Subscript):
         # everything but the name inside the slice is handled by the attrsub tracer
-        if not self.gather_rvals and isinstance(node.slice, ast.Index) and isinstance(node.slice.value, ast.Name):
-            with self.gather_rvals_context():
-                self.visit(node.slice.value)
+        # if not self.gather_rvals and isinstance(node.slice, ast.Index) and isinstance(node.slice.value, ast.Name):
+        #     with self.gather_rvals_context():
+        #         self.visit(node.slice.value)
+        # TODO: the ast.Name slice dependency turns out to be super hard to refresh, so until we
+        #  figure out how to do it in a principled way, we'll just accept potential false negatives
+        return
 
     def visit_Assign(self, node):
         with self.gather_lvals_context():

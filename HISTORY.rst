@@ -108,3 +108,7 @@ History
 0.0.32 (2020-05-27)
 ------------------
 * Bugfixes; improve propagation of updated dependencies along namespace hierarchies;
+
+0.0.33 (2020-05-27)
+------------------
+* Minor usability improvements;

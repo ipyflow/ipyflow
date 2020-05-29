@@ -65,9 +65,7 @@ class TraceStatement(object):
         return func_cell.scope
 
     def _make_lval_data_symbols(self):
-        (
-            lval_symbol_refs, rval_symbol_refs, should_overwrite
-        ) = get_statement_lval_and_rval_symbol_refs(self.stmt_node)
+        lval_symbol_refs, rval_symbol_refs, should_overwrite = get_statement_lval_and_rval_symbol_refs(self.stmt_node)
         rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_symbol_refs - lval_symbol_refs)
         rval_deps |= self._gather_deep_ref_rval_dsyms()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -90,7 +88,6 @@ class TraceStatement(object):
                 self.scope.upsert_data_symbol_for_name(
                     name, obj, rval_deps, False,
                     overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
-                    do_alias_mutate=not isinstance(self.stmt_node, ast.Assign)
                 )
             except KeyError:
                 pass
@@ -98,14 +95,16 @@ class TraceStatement(object):
             # print(scope, obj, attr_or_sub, is_subscript)
             try:
                 if is_subscript:
-                    obj = obj[attr_or_sub]
+                    attr_or_sub_obj = obj[attr_or_sub]
                 else:
-                    obj = getattr(obj, attr_or_sub)
+                    attr_or_sub_obj = getattr(obj, attr_or_sub)
             except (AttributeError, KeyError, IndexError):
                 continue
             should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
+            # TODO: walk up the namespace hierarchy and check for a namespace scope w/ id of attr_or_sub_obj
+            #  if we find it, use the containing scope instead of this scope to avoid cyclic namespaces
             scope.upsert_data_symbol_for_name(
-                attr_or_sub, obj, rval_deps, is_subscript,
+                attr_or_sub, attr_or_sub_obj, rval_deps, is_subscript,
                 overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
 

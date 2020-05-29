@@ -45,9 +45,9 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
 
 def show_graph(safety: 'DependencySafety'):
     graph = nx.DiGraph()
-    for name in safety.global_scope.all_data_symbols_this_indentation().values():
+    for name in safety.global_scope.all_data_symbols_this_indentation():
         graph.add_node(name)
-    for node in safety.global_scope.all_data_symbols_this_indentation().values():
+    for node in safety.global_scope.all_data_symbols_this_indentation():
         name = node.name
         for child_node in node.children:
             graph.add_edge(name, child_node.name)
@@ -84,7 +84,7 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
 
 def show_stale(safety: 'DependencySafety'):
     stale_set = set()
-    for data_sym in safety.global_scope.all_data_symbols_this_indentation().values():
+    for data_sym in safety.global_scope.all_data_symbols_this_indentation():
         if data_sym.has_stale_ancestor:
             stale_set.add(data_sym)
     if not stale_set:

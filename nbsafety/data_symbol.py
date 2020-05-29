@@ -181,7 +181,7 @@ class DataSymbol(object):
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None:
             self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
-        for dc in [] if namespace is None else namespace._data_symbol_by_name.values():
+        for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation():
             dc_in_self_namespace = False
             if new_parent_obj is NOT_FOUND:
                 dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
@@ -210,7 +210,7 @@ class DataSymbol(object):
                             self.safety.namespaces[new_id] = new_namespace
                         # TODO: handle class data cells properly;
                         #  in fact; we still need to handle aliases of class data cells
-                        if dc.name not in new_namespace._data_symbol_by_name:
+                        if dc.name not in new_namespace.data_symbol_by_name(dc.is_subscript):
                             new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
                 except:
                     dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)

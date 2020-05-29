@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import inspect
+import itertools
 from typing import TYPE_CHECKING
 
 from IPython import get_ipython
@@ -36,6 +37,11 @@ class Scope(object):
     def __str__(self):
         return str(self.full_path)
 
+    def data_symbol_by_name(self, is_subscript=False):
+        if is_subscript:
+            raise ValueError('Only namespace scopes carry subscripts')
+        return self._data_symbol_by_name
+
     @property
     def is_namespace_scope(self):
         return isinstance(self, NamespaceScope)
@@ -64,7 +70,7 @@ class Scope(object):
         return self._data_symbol_by_name.get(name, None)
 
     def all_data_symbols_this_indentation(self):
-        return self._data_symbol_by_name
+        return self._data_symbol_by_name.values()
 
     def lookup_data_symbol_by_name(self, name):
         ret = self.lookup_data_symbol_by_name_this_indentation(name)
@@ -162,13 +168,12 @@ class Scope(object):
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-            do_alias_mutate=True,
     ):
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
-        self._handle_aliases(old_id, old_dc, dc, do_mutate=do_alias_mutate)
+        self._handle_aliases(old_id, old_dc, dc)
 
     def _upsert_data_symbol_for_name_inner(
             self,
@@ -197,7 +202,7 @@ class Scope(object):
                 old_id = old_dc.cached_obj_id
                 # TODO: garbage collect old names
                 # TODO: handle case where new dc is of different type
-                if name in self._data_symbol_by_name:
+                if name in self.data_symbol_by_name(old_dc.is_subscript):
                     old_dc.update_obj_ref(obj)
                     old_dc.update_deps(deps, overwrite=overwrite)
                     return old_dc, old_dc, old_id
@@ -214,38 +219,16 @@ class Scope(object):
             self,
             old_id: 'Optional[int]',
             old_dc: 'Optional[DataSymbol]',
-            dc: 'Optional[DataSymbol]',
-            do_mutate=True
+            dc: 'DataSymbol',
     ):
-        old_alias_dcs = self.safety.aliases[old_id]
-        new_alias_dcs = self.safety.aliases[dc.obj_id]
+        if old_id == dc.obj_id and old_dc is dc:
+            return
         if old_id is not None and old_dc is not None:
+            old_alias_dcs = self.safety.aliases[old_id]
             old_alias_dcs.discard(old_dc)
-        if dc is not None and dc.obj_id is not None:
-            new_alias_dcs.add(dc)
-        try:
-            if not do_mutate:
-                return
-            if issubclass(dc.obj_type, int):
-                return
-            old_alias_dcs_copy = list(old_alias_dcs)
-            for alias_dc in old_alias_dcs_copy:
-                if alias_dc.obj_id == dc.obj_id:
-                    alias_dc.mark_mutated()
-                    old_alias_dcs.discard(alias_dc)
-                    new_alias_dcs.add(alias_dc)
-        finally:
             if len(old_alias_dcs) == 0:
                 del self.safety.aliases[old_id]
-
-    def _handle_namespace(self, dc: 'Optional[DataSymbol]'):
-        if dc is None:
-            return
-        namespace = self.safety.namespaces.get(dc.obj_id, None)
-        if namespace is None:
-            return
-        # TODO: walk all objects and mark them as not stale if they are reachable
-        #  from here and were not previously stale
+        self.safety.aliases[dc.obj_id].add(dc)
 
     @property
     def is_global(self):
@@ -287,12 +270,21 @@ class Scope(object):
 
 
 class NamespaceScope(Scope):
+    # TODO: support (multiple) inheritance by allowing
+    #  NamespaceScopes from classes to clone their parent class's NamespaceScopes
     def __init__(self, namespace_obj_ref: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
         self.namespace_obj_ref = namespace_obj_ref
         self.max_defined_timestamp = 0
+        self._subscript_data_symbol_by_name: Dict[Union[int, str], DataSymbol] = {}
+
+    def data_symbol_by_name(self, is_subscript=False):
+        if is_subscript:
+            return self._subscript_data_symbol_by_name
+        else:
+            return self._data_symbol_by_name
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref, self.safety)
@@ -300,6 +292,7 @@ class NamespaceScope(Scope):
         cloned.cloned_from = self
         cloned.namespace_obj_ref = namespace_obj_ref
         cloned._data_symbol_by_name = {}
+        cloned._subscript_data_symbol_by_name = {}
         self.child_clones.append(cloned)
         return cloned
 
@@ -320,17 +313,26 @@ class NamespaceScope(Scope):
             return dc.name
 
     def lookup_data_symbol_by_name_this_indentation(self, name):
+        # TODO: specify in arguments whether `name` refers to a subscript
         ret = self._data_symbol_by_name.get(name, None)
+        if ret is None:
+            ret = self._subscript_data_symbol_by_name.get(name, None)
         if ret is None and self.cloned_from is not None:
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
 
     def all_data_symbols_this_indentation(self):
-        if self.cloned_from is None:
-            return dict(self._data_symbol_by_name)
-        ret = self.cloned_from.all_data_symbols_this_indentation()
-        ret.update(self._data_symbol_by_name)
-        return ret
+        dsym_collections_to_chain = [self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()]
+        if self.cloned_from is not None:
+            dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
+        return itertools.chain(*dsym_collections_to_chain)
+
+    def put(self, name: 'Union[str, int]', val: DataSymbol):
+        if val.is_subscript:
+            self._subscript_data_symbol_by_name[name] = val
+        else:
+            self._data_symbol_by_name[name] = val
+        val.containing_scope = self
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

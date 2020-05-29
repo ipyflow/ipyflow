@@ -501,10 +501,28 @@ def test_branching_2():
 if False:
     b = 5
 else:
-    y = 7
+    y = 9
 """)
     run_cell('logging.info(x)')
     assert_detected('x depends on stale y')
+
+
+def test_identity_checking():
+    run_cell('y = 7')
+    run_cell('x = y + 3')
+    run_cell('y = 7')
+    run_cell('logging.info(x)')
+    assert_not_detected('`y` was not mutated')
+
+
+@skipif_known_failing
+def test_identity_checking_obj():
+    # To get this working properly, we need to create datasyms for all of the values in the literal
+    run_cell('y = [7]')
+    run_cell('x = y + [3]')
+    run_cell('y[0] = 7')
+    run_cell('logging.info(x)')
+    assert_not_detected('`y` was not mutated')
 
 
 def test_attributes():

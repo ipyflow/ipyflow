@@ -275,7 +275,7 @@ class DependencySafety(object):
                 return
             if line[0] == "show_graph":
                 return line_magics.show_graph(self)
-            elif line[0] == "show_dependency":
+            elif line[0] in ("show_deps", "show_dependency", "show_dependencies"):
                 return line_magics.show_deps(self, line)
             elif line[0] == "show_stale":
                 return line_magics.show_stale(self)

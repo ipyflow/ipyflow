@@ -45,9 +45,9 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
 
 def show_graph(safety: 'DependencySafety'):
     graph = nx.DiGraph()
-    for name in safety.global_scope.get_scope_dictionary():
+    for name in safety.global_scope.all_data_symbols_this_indentation().values():
         graph.add_node(name)
-    for node in safety.global_scope.get_scope_dictionary().values():
+    for node in safety.global_scope.all_data_symbols_this_indentation().values():
         name = node.name
         for child_node in node.children:
             graph.add_edge(name, child_node.name)
@@ -72,7 +72,12 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
     for data_sym_name in line[1:]:
         data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
         if data_sym:
-            print("DataSymbol {} is dependent on {}".format(data_sym_name, [str(n) for n in data_sym.parents] if data_sym.parents else "Nothing"))
+            print("DataSymbol {} (defined {}; required {}) is dependent on {}".format(
+                data_sym.readable_name,
+                data_sym.defined_cell_num,
+                data_sym.required_cell_num,
+                [str(n) for n in data_sym.parents] if data_sym.parents else "Nothing"
+            ))
         else:
             print("Cannot find DataSymbol", data_sym_name)
 

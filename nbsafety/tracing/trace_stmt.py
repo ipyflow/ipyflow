@@ -130,10 +130,7 @@ class TraceStatement(object):
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
             mutation_arg_dsyms = set(self.scope.lookup_data_symbol_by_name(arg) for arg in mutation_args) - {None}
             for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dsyms, overwrite=False)
-            mutated_scope = self.safety.namespaces.get(mutated_obj_id, None)
-            if mutated_scope is not None:
-                mutated_scope.deep_mutate(mutation_arg_dsyms)
+                mutated_dc.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self.has_lval:
             self._make_lval_data_symbols()
         else:

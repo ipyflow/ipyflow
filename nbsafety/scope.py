@@ -205,11 +205,9 @@ class Scope(object):
                     # in this case, we are copying from a class and should add the dc from which we are copying
                     # as an additional dependency
                     deps.add(old_dc)
-        dc = DataSymbol(name, obj, self, self.safety, set(), is_subscript=is_subscript)
+        dc = DataSymbol(name, obj, self, self.safety, parents=deps, is_subscript=is_subscript)
         self.put(name, dc)
-        dc.update_deps(
-            deps, overwrite=True, propagate_to_children=self.is_globally_accessible
-        )
+        dc.update_deps(deps, overwrite=True)
         return dc, old_dc, old_id
 
     def _handle_aliases(
@@ -228,7 +226,7 @@ class Scope(object):
         try:
             if not do_mutate:
                 return
-            if isinstance(dc._obj, int):
+            if issubclass(dc.obj_type, int):
                 return
             old_alias_dcs_copy = list(old_alias_dcs)
             for alias_dc in old_alias_dcs_copy:
@@ -295,12 +293,6 @@ class NamespaceScope(Scope):
         self.child_clones: List[NamespaceScope] = []
         self.namespace_obj_ref = namespace_obj_ref
         self.max_defined_timestamp = 0
-
-    def deep_mutate(self, deps: 'Set[DataSymbol]'):
-        for child in self.child_clones:
-            child.deep_mutate(deps)
-        for dc in self._data_symbol_by_name.values():
-            dc.update_deps(deps, overwrite=False)
 
     def clone(self, namespace_obj_ref: int):
         cloned = NamespaceScope(namespace_obj_ref, self.safety)

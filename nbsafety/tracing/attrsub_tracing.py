@@ -254,6 +254,21 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                 with self.attrsub_load_context(False):
                     replacement_args.append(self.visit(arg))
         node.args = replacement_args
+        replacement_kwargs = []
+        for kwarg in node.keywords:
+            if isinstance(kwarg.value, ast.Name):
+                new_kwarg_value = cast(ast.expr, ast.Call(
+                    func=ast.Name(self.arg_recorder, ctx=ast.Load()),
+                    args=[kwarg.value, ast.Str(kwarg.value.id)],
+                    keywords=[]
+                ))
+                ast.copy_location(new_kwarg_value, kwarg.value)
+                kwarg.value = new_kwarg_value
+                replacement_kwargs.append(kwarg)
+            else:
+                with self.attrsub_load_context(False):
+                    replacement_kwargs.append(self.visit(kwarg))
+        node.keywords = replacement_kwargs
         if self.inside_attrsub_load_chain:
             return node
         replacement_node = ast.Call(

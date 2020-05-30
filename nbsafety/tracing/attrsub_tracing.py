@@ -101,6 +101,8 @@ class AttrSubTracingManager(object):
             if class_scope is not None and not is_subscript:
                 # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_syms_this_indentation().keys()))
                 scope = class_scope.clone(obj_id)
+                if obj_name is not None:
+                    scope.scope_name = obj_name
                 self.safety.namespaces[obj_id] = scope
             else:
                 # print('no scope for class', obj.__class__)

@@ -184,7 +184,7 @@ class Scope(object):
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-    ) -> 'Tuple[DataSymbol, DataSymbol, Optional[int]]':
+    ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
         assert not (class_scope is not None and is_function_def)
         if is_function_def:
             assert overwrite
@@ -195,21 +195,35 @@ class Scope(object):
             assert not is_subscript
             return self._upsert_class_data_symbol_for_name(name, obj, deps, class_scope)
         old_id = None
-        old_dc = None
-        if self.is_globally_accessible:
-            old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
-            if old_dc is not None:
-                old_id = old_dc.cached_obj_id
-                # TODO: garbage collect old names
-                # TODO: handle case where new dc is of different type
-                if name in self.data_symbol_by_name(old_dc.is_subscript):
-                    old_dc.update_obj_ref(obj)
-                    old_dc.update_deps(deps, overwrite=overwrite)
-                    return old_dc, old_dc, old_id
-                else:
-                    # in this case, we are copying from a class and should add the dc from which we are copying
-                    # as an additional dependency
-                    deps.add(old_dc)
+        old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
+        if old_dc is not None and self.is_globally_accessible:
+            old_id = old_dc.cached_obj_id
+            # TODO: garbage collect old names
+            # TODO: handle case where new dc is of different type
+            if name in self.data_symbol_by_name(old_dc.is_subscript):
+                old_dc.update_obj_ref(obj)
+                old_dc.update_deps(deps, overwrite=overwrite)
+                return old_dc, old_dc, old_id
+            else:
+                # In this case, we are copying from a class and we need the dsym from which we are copying
+                # as able to propagate to the new dsym.
+                # Example:
+                # class Foo:
+                #     shared = 99
+                # foo = Foo()
+                # foo.shared = 42  # old_dc refers to Foo.shared here
+                # Earlier, we were explicitly adding Foo.shared as a dependency of foo.shared as follows:
+                # deps.add(old_dc)
+                # But it turns out not to be necessary because foo depends on Foo, and changing Foo.shared will
+                # propagate up the namespace hierarchy to Foo, which propagates to foo, which then propagates to
+                # all of foo's namespace children (e.g. foo.shared).
+                # This raises the question of whether we should draw the foo <-> Foo edge, since irrelevant namespace
+                # children could then also be affected (e.g. some instance variable foo.x).
+                # Perhaps a better strategy is to prevent propagation along this edge unless class Foo is redeclared.
+                # If we do this, then we should go back to explicitly adding the dep as follows:
+                # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
+                # it is important to explicitly add this dep.
+                deps.add(old_dc)
         dc = DataSymbol(name, obj, self, self.safety, parents=deps, is_subscript=is_subscript)
         self.put(name, dc)
         dc.update_deps(deps, overwrite=True)
@@ -326,9 +340,9 @@ class NamespaceScope(Scope):
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
 
-    def all_data_symbols_this_indentation(self):
+    def all_data_symbols_this_indentation(self, exclude_class=False):
         dsym_collections_to_chain = [self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()]
-        if self.cloned_from is not None:
+        if self.cloned_from is not None and not exclude_class:
             dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
         return itertools.chain(*dsym_collections_to_chain)
 

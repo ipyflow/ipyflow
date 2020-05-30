@@ -80,6 +80,10 @@ class DataSymbol(object):
     def obj_type(self):
         return type(self._get_obj())
 
+    @property
+    def namespace(self):
+        return self.safety.namespaces.get(self.obj_id, None)
+
     def update_obj_ref(self, obj):
         try:
             self.obj_ref = weakref.ref(obj)
@@ -189,7 +193,7 @@ class DataSymbol(object):
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None:
             self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
-        for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation():
+        for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation(exclude_class=True):
             dc_in_self_namespace = False
             if new_parent_obj is NOT_FOUND:
                 dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
@@ -246,8 +250,16 @@ class DataSymbol(object):
             if refresh:
                 alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
                 for alias_child in alias.children:
-                    if alias_child.obj_id != namespace_obj_ref:
-                        alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
+                    if alias_child.obj_id == namespace_obj_ref:
+                        continue
+                    # Next, complicated check to avoid propagating along a class -> instance edge.
+                    # The only time this is OK is when we changed the class, which will not be the case here.
+                    alias_child_namespace = alias_child.namespace
+                    if alias_child_namespace is not None:
+                        if alias_child_namespace.cloned_from is containing_scope:
+                            if updated_dep.namespace is not containing_scope:
+                                continue
+                    alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
             else:
                 alias.namespace_data_syms_with_stale.add(self)
                 old_required_cell_num = alias.required_cell_num

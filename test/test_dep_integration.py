@@ -804,6 +804,36 @@ class Foo(object):
                     'has no bearing on the original class member `Foo.shared`')
 
 
+def test_new_scope_val_depends_on_old():
+    run_cell("""
+class Foo(object):
+    shared = 99
+""")
+    run_cell('foo = Foo()')
+    run_cell('foo.shared = 11')
+    run_cell('foo_shared_alias = foo.shared')
+    run_cell('Foo.shared = 12')
+    run_cell('logging.info(foo_shared_alias)')
+    assert_detected()
+    run_cell('logging.info(foo.shared)')
+    assert_detected()
+    run_cell('logging.info(foo)')
+    assert_detected()
+
+
+def test_class_member_mutation_does_not_affect_instance_members():
+    run_cell("""
+class Foo(object):
+    shared = 99
+    def __init__(self):
+        self.x = 42
+""")
+    run_cell('foo = Foo()')
+    run_cell('Foo.shared = 12')
+    run_cell('logging.info(foo.x)')
+    assert_not_detected()
+
+
 def test_numpy_subscripting_fp():
     run_cell('import numpy as np')
     run_cell('x = np.zeros(5)')

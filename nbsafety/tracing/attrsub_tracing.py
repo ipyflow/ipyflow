@@ -223,7 +223,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
 
         with self.attrsub_load_context(override_active_scope):
             replacement_value = ast.Call(
-                func=ast.Name(self.start_tracer, ctx=ast.Load()),
+                func=ast.Name(self.start_tracer, ast.Load()),
                 args=[
                     self.visit(node.value),
                     attr_or_sub,
@@ -239,7 +239,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         new_node: Union[ast.Attribute, ast.Subscript, ast.Call] = node
         if not self.inside_attrsub_load_chain and override_active_scope:
             new_node = ast.Call(
-                func=ast.Name(self.end_tracer, ctx=ast.Load()),
+                func=ast.Name(self.end_tracer, ast.Load()),
                 args=[node],
                 keywords=[]
             )
@@ -255,7 +255,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         for arg in node.args:
             if isinstance(arg, ast.Name):
                 replacement_args.append(cast(ast.expr, ast.Call(
-                    func=ast.Name(self.arg_recorder, ctx=ast.Load()),
+                    func=ast.Name(self.arg_recorder, ast.Load()),
                     args=[arg, ast.Str(arg.id)],
                     keywords=[]
                 )))
@@ -268,7 +268,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         for kwarg in node.keywords:
             if isinstance(kwarg.value, ast.Name):
                 new_kwarg_value = cast(ast.expr, ast.Call(
-                    func=ast.Name(self.arg_recorder, ctx=ast.Load()),
+                    func=ast.Name(self.arg_recorder, ast.Load()),
                     args=[kwarg.value, ast.Str(kwarg.value.id)],
                     keywords=[]
                 ))
@@ -282,7 +282,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         if self.inside_attrsub_load_chain:
             return node
         replacement_node = ast.Call(
-            func=ast.Name(self.end_tracer, ctx=ast.Load()),
+            func=ast.Name(self.end_tracer, ast.Load()),
             args=[node],
             keywords=[]
         )

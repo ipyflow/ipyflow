@@ -105,7 +105,7 @@ class AttrSubTracingManager(object):
             else:
                 # print('no scope for class', obj.__class__)
                 try:
-                    scope_name = next(iter(self.safety.aliases[obj_id])).name
+                    scope_name = next(iter(self.safety.aliases[obj_id])).name if obj_name is None else obj_name
                 except StopIteration:
                     scope_name = '<unknown namespace>'
                 scope = NamespaceScope(obj_id, self.safety, scope_name, parent_scope=self.active_scope)
@@ -124,7 +124,9 @@ class AttrSubTracingManager(object):
                 self.deep_ref_candidate = (self.trace_event_counter[0], obj_id, obj_name)
             else:
                 self.deep_ref_candidate = None
-                data_sym = scope.lookup_data_symbol_by_name_this_indentation(attr_or_subscript)
+                data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+                    attr_or_subscript, is_subscript=is_subscript
+                )
                 if data_sym is None:
                     try:
                         if is_subscript:
@@ -212,6 +214,11 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         else:
             attr_node = cast(ast.Attribute, node)
             attr_or_sub = ast.Str(attr_node.attr)
+
+        extra_args = []
+        if isinstance(node.value, ast.Name):
+            extra_args = [ast.Str(node.value.id)]
+
         with self.attrsub_load_context(override_active_scope):
             replacement_value = ast.Call(
                 func=ast.Name(self.start_tracer, ctx=ast.Load()),
@@ -222,7 +229,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                     ast.Str(node.ctx.__class__.__name__),
                     ast.NameConstant(call_context),
                     override_active_scope_arg
-                ],
+                ] + extra_args,
                 keywords=[]
             )
         ast.copy_location(replacement_value, node.value)

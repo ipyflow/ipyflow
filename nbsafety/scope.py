@@ -312,11 +312,16 @@ class NamespaceScope(Scope):
         else:
             return dc.name
 
-    def lookup_data_symbol_by_name_this_indentation(self, name):
+    def lookup_data_symbol_by_name_this_indentation(self, name, is_subscript=None):
         # TODO: specify in arguments whether `name` refers to a subscript
-        ret = self._data_symbol_by_name.get(name, None)
-        if ret is None:
+        if is_subscript is None:
+            ret = self._data_symbol_by_name.get(name, None)
+            if ret is None:
+                ret = self._subscript_data_symbol_by_name.get(name, None)
+        elif is_subscript:
             ret = self._subscript_data_symbol_by_name.get(name, None)
+        else:
+            ret = self._data_symbol_by_name.get(name, None)
         if ret is None and self.cloned_from is not None:
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret

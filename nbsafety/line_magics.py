@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 import networkx as nx
 
 if TYPE_CHECKING:
-    from typing import List
+    from typing import Any, List
     from .safety import DependencySafety
 
 
@@ -84,7 +84,7 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
 
 def show_stale(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) < 2 or line[1] == 'global':
-        dsym_sets = [safety.global_scope.all_data_symbols_this_indentation()]
+        dsym_sets: Any = [safety.global_scope.all_data_symbols_this_indentation()]
     elif line[1] == 'all':
         dsym_sets = safety.aliases.values()
     else:

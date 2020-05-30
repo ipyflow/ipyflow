@@ -19,3 +19,6 @@ class SymbolRef(CommonEqualityMixin):
             return f'<Deep ref of {self.symbol}>'
         else:
             return str(self.symbol)
+
+    def __repr__(self):
+        return str(self)

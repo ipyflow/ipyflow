@@ -154,6 +154,7 @@ class AttrSubTracingManager(object):
                 if obj is None:
                     self.mutations.add((obj_id, tuple(self.recorded_args)))
                 else:
+                    # TODO: add obj_name here and only use relevant DataSymbol later on?
                     self.deep_refs.add((obj_id, None, tuple(self.recorded_args)))
         self.active_scope = self.original_active_scope
         self.recorded_args = set()

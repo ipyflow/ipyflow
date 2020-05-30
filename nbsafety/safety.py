@@ -268,7 +268,8 @@ class DependencySafety(object):
         def _safety(line_: str):
             line = line_.split()
             if not line or line[0] not in [
-                "show_graph", "show_dependency", "show_stale", "set_disable_level", "trace_messages",
+                "show_graph", "show_deps", "show_dependency", "show_dependencies",
+                "show_stale", "set_disable_level", "trace_messages",
                 "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for",
             ]:
                 print(line_magics.USAGE)
@@ -278,7 +279,7 @@ class DependencySafety(object):
             elif line[0] in ("show_deps", "show_dependency", "show_dependencies"):
                 return line_magics.show_deps(self, line)
             elif line[0] == "show_stale":
-                return line_magics.show_stale(self)
+                return line_magics.show_stale(self, line)
             elif line[0] == "set_disable_level":
                 return line_magics.set_disable_level(self, line)
             elif line[0] == "trace_messages":

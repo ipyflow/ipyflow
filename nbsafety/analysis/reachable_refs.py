@@ -41,6 +41,8 @@ class ComputeReachableSymbolRefs(ast.NodeVisitor):
                     if isinstance(leading_symbol, str) and leading_symbol in self.safe_set:
                         continue
                 check_set.add(ref)
+        # print(self.safe_set)
+        # print(check_set)
         return check_set
 
     # In case of assignment, we put the new assigned variable into a safe_set

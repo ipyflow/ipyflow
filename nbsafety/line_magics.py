@@ -82,11 +82,19 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
             print("Cannot find DataSymbol", data_sym_name)
 
 
-def show_stale(safety: 'DependencySafety'):
+def show_stale(safety: 'DependencySafety', line: 'List[str]'):
+    if len(line) < 2 or line[1] == 'global':
+        dsym_sets = [safety.global_scope.all_data_symbols_this_indentation()]
+    elif line[1] == 'all':
+        dsym_sets = safety.aliases.values()
+    else:
+        print("TODO: show usage statement")
+        return
     stale_set = set()
-    for data_sym in safety.global_scope.all_data_symbols_this_indentation():
-        if data_sym.has_stale_ancestor:
-            stale_set.add(data_sym)
+    for dsym_set in dsym_sets:
+        for data_sym in dsym_set:
+            if data_sym.has_stale_ancestor:
+                stale_set.add(data_sym)
     if not stale_set:
         print("No DataSymbol has stale dependency for now!")
     elif len(stale_set) == 1:

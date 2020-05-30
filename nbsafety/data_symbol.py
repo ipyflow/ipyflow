@@ -100,9 +100,10 @@ class DataSymbol(object):
             overwrite=True,
             mutated=False,
     ):
-        self.fresher_ancestors = set()
-        self.defined_cell_num = cell_counter()
-        self.required_cell_num = self.defined_cell_num
+
+        # quick last fix to avoid ovewriting if we appear inside the set of deps to add
+        overwrite = overwrite and self not in new_deps
+        new_deps.discard(self)
         if overwrite:
             for parent in self.parents - new_deps:
                 parent.children.discard(self)
@@ -114,7 +115,11 @@ class DataSymbol(object):
             new_parent.children.add(self)
             self.parents.add(new_parent)
 
+        self.required_cell_num = -1
         self._propagate_update(self._get_obj(), self, set(), set(), refresh=True, mutated=mutated)
+        self.fresher_ancestors = set()
+        self.defined_cell_num = cell_counter()
+        self.required_cell_num = self.defined_cell_num
         self.namespace_data_syms_with_stale = set()
         self._refresh_cached_obj()
 
@@ -126,8 +131,10 @@ class DataSymbol(object):
     ):
         if updated_dep is not self:
             self.fresher_ancestors.add(updated_dep)
-            self.required_cell_num = updated_dep.defined_cell_num
+            self.required_cell_num = cell_counter()
         for child in self.children:
+            # if updated_dep is self and updated_dep.defined_cell_num == child.defined_cell_num:
+            #     continue
             child._propagate_update(child._get_obj(), updated_dep, seen, parent_seen)
 
     def _propagate_update(
@@ -228,8 +235,7 @@ class DataSymbol(object):
             return
         parent_seen.add(self)
         containing_scope = cast('NamespaceScope', self.containing_scope)
-        containing_scope.max_defined_timestamp = max(
-            updated_dep.defined_cell_num, containing_scope.max_defined_timestamp)
+        containing_scope.max_defined_timestamp = cell_counter()
         namespace_obj_ref = containing_scope.namespace_obj_ref
         for alias in self.safety.aliases[namespace_obj_ref]:
             if refresh and not self.has_stale_ancestor:

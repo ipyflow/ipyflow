@@ -9,11 +9,17 @@ if TYPE_CHECKING:
 
 
 class CallPoint(CommonEqualityMixin):
-    def __init__(self, symbol: 'Union[str, int]'):
+    def __init__(self, symbol: str):
         self.symbol = symbol
 
     def __hash__(self):
         return hash(self.symbol)
+
+    def __repr__(self):
+        return repr(str(self))
+
+    def __str__(self):
+        return self.symbol + '(...)'
 
 
 class AttrSubSymbolChain(CommonEqualityMixin):

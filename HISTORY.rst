@@ -112,3 +112,8 @@ History
 0.0.33 (2020-05-27)
 ------------------
 * Minor usability improvements;
+
+0.0.34 (2020-05-30)
+------------------
+* Major bugfixes and improvements to dependency tracking;
+* Fix bug that prevented attribute / subscript tracing on Python 3.6.

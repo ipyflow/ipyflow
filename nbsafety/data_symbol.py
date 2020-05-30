@@ -133,8 +133,9 @@ class DataSymbol(object):
             self.fresher_ancestors.add(updated_dep)
             self.required_cell_num = cell_counter()
         for child in self.children:
-            # if updated_dep is self and updated_dep.defined_cell_num == child.defined_cell_num:
-            #     continue
+            if self.safety.only_propagate_updates_past_cell_boundaries:
+                if updated_dep is self and updated_dep.defined_cell_num == child.defined_cell_num:
+                    continue
             child._propagate_update(child._get_obj(), updated_dep, seen, parent_seen)
 
     def _propagate_update(

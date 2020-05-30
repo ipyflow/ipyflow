@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 
+import pytest
+
 from .utils import make_safety_fixture, skipif_known_failing
 
 
@@ -30,6 +32,13 @@ def assert_bool(val, msg=''):
 
 def assert_detected(msg=''):
     assert_bool(stale_detected(), msg=msg)
+
+
+def assert_detected_if_full_propagation(msg=''):
+    if _safety_state[0].only_propagate_updates_past_cell_boundaries:
+        assert_not_detected(msg=msg)
+    else:
+        assert_detected(msg=msg)
 
 
 def assert_false_positive(msg=''):
@@ -229,7 +238,9 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
-def test_for_loop_with_map():
+@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+def test_for_loop_with_map(propagate_past_cell_bounds):
+    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
 accum = 0
 foo = [1, 2, 3, 4, 5]
@@ -240,7 +251,7 @@ logging.info(accum)
     assert_not_detected('no stale dep foo -> accum')
     run_cell('foo = [0]')
     run_cell('logging.info(accum)')
-    assert_detected('did not detect stale dep foo -> accum')
+    assert_detected_if_full_propagation('should detect stale dep foo -> accum unless only propagating past cell bounds')
 
 
 def test_redefined_function_over_list_comp():
@@ -344,7 +355,9 @@ def test_variable_scope_2():
     assert_not_detected("Updating y should solve the problem")
 
 
-def test_default_args():
+@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+def test_default_args(propagate_past_cell_bounds):
+    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
 x = 7
 def foo(y=x):
@@ -355,7 +368,7 @@ def foo(y=x):
     run_cell('x = 10')
     assert_not_detected()
     run_cell('b = foo()')
-    assert_detected("Should have detected stale dependency of fn foo() on x")
+    assert_detected_if_full_propagation("Should have detected stale dependency of fn foo() on x")
 
 
 def test_same_pointer():
@@ -407,7 +420,9 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-def test_func_assign_ints():
+@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+def test_func_assign_ints(propagate_past_cell_bounds):
+    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
 a = 1
 b = 1
@@ -421,7 +436,7 @@ def func(x, y=a):
     run_cell('z = func(c)')
     run_cell('a = 4')
     run_cell('logging.info(z)')
-    assert_detected("Should have detected stale dependency of fn func on a")
+    assert_detected_if_full_propagation("Should have detected stale dependency of fn func on a")
     run_cell("""
 def func(x, y=a):
     logging.info(b)
@@ -443,7 +458,9 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-def test_func_assign_helper_func():
+@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+def test_func_assign_helper_func(propagate_past_cell_bounds):
+    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
 x = 3
 a = 4
@@ -456,7 +473,7 @@ y = f()
 """)
     run_cell('x = 4')
     run_cell('logging.info(y)')
-    assert_detected("Should have detected stale dependency of y on x")
+    assert_detected_if_full_propagation("Should have detected stale dependency of y on x")
     run_cell('y = f()')
     run_cell('logging.info(y)')
     assert_not_detected()
@@ -465,7 +482,9 @@ y = f()
     assert_not_detected("Changing a should not affect y")
 
 
-def test_func_assign_helper_func_2():
+@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+def test_func_assign_helper_func_2(propagate_past_cell_bounds):
+    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
 x = 3
 a = 4
@@ -478,7 +497,7 @@ y = f()()
 """)
     run_cell('x = 4')
     run_cell('logging.info(y)')
-    assert_detected("Should have detected stale dependency of y on x")
+    assert_detected_if_full_propagation("Should have detected stale dependency of y on x")
 
 
 def test_branching():
@@ -1192,7 +1211,9 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
-def test_attr_dep_with_top_level_overwrite():
+@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+def test_attr_dep_with_top_level_overwrite(propagate_past_cell_bounds):
+    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
 class Foo:
     def __init__(self):
@@ -1203,7 +1224,7 @@ foo.y = x + 7
 """)
     run_cell('x = 43')
     run_cell('logging.info(foo)')  # this should be a 'deep' usage of foo
-    assert_detected('logging.info could display `foo.y` which depends on x')
+    assert_detected_if_full_propagation('logging.info could display `foo.y` which depends on x')
     run_cell('foo.y = 70')
     assert_not_detected('we just fixed stale dep of `foo.y` by changing its deps')
     run_cell('x = foo.y + 7')

@@ -73,6 +73,7 @@ class DependencySafety(object):
         # Maybe switch update this too when implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
+        self.only_propagate_updates_past_cell_boundaries = True
         self._track_dependencies = True
 
         self._disable_level = 0
@@ -269,7 +270,8 @@ class DependencySafety(object):
             line = line_.split()
             if not line or line[0] not in [
                 "show_graph", "show_deps", "show_dependency", "show_dependencies",
-                "show_stale", "set_disable_level", "trace_messages",
+                "show_stale", "set_disable_level", "set_propagation",
+                "trace_messages",
                 "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for",
             ]:
                 print(line_magics.USAGE)
@@ -282,6 +284,8 @@ class DependencySafety(object):
                 return line_magics.show_stale(self, line)
             elif line[0] == "set_disable_level":
                 return line_magics.set_disable_level(self, line)
+            elif line[0] == "set_propagation":
+                return line_magics.set_propagation(self, line)
             elif line[0] == "trace_messages":
                 return line_magics.configure_trace_messages(self, line)
             elif line[0] == "remove_dependency":

@@ -114,6 +114,14 @@ def set_disable_level(safety: 'DependencySafety', line: 'List[str]'):
     safety._disable_level = int(line[1])
 
 
+def set_propagation(safety: 'DependencySafety', line: 'List[str]'):
+    if len(line) != 2 or line[1] not in ['cells', 'always']:
+        print('Usage: %safety set_propagation [cells | always]')
+        # TODO: complete explanation
+        return
+    safety.only_propagate_updates_past_cell_boundaries = (line[1] == 'cells')
+
+
 def configure_trace_messages(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")

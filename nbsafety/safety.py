@@ -54,6 +54,8 @@ class DependencySafety(object):
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope = Scope(self)
+        self.updated_symbols: Set[DataSymbol] = set()
+        self.updated_scopes: Set[NamespaceScope] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
@@ -73,7 +75,7 @@ class DependencySafety(object):
         # Maybe switch update this too when implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
-        self.only_propagate_updates_past_cell_boundaries = False
+        self.only_propagate_updates_past_cell_boundaries = True
         self._track_dependencies = True
 
         self._disable_level = 0
@@ -254,6 +256,13 @@ class DependencySafety(object):
                     untraced_backup()
             else:
                 self._reset_trace_state_hook()
+            self._gc()
+            for updated_symbol in self.updated_symbols:
+                updated_symbol.refresh()
+            for updated_scope in self.updated_scopes:
+                updated_scope.refresh()
+            self.updated_symbols.clear()
+            self.updated_scopes.clear()
 
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
@@ -311,7 +320,20 @@ class DependencySafety(object):
     def line_magic_name(self):
         return self._line_magic.__name__
 
+    def all_data_symbols(self):
+        for alias_set in self.aliases.values():
+            for alias in alias_set:
+                yield alias
+
     def test_and_clear_detected_flag(self):
         ret = self.stale_dependency_detected
         self.stale_dependency_detected = False
         return ret
+
+    def _gc(self):
+        for dsym in self.all_data_symbols():
+            if dsym.is_garbage:
+                for parent in dsym.parents:
+                    parent.children.discard(dsym)
+                for child in dsym.children:
+                    child.parents.discard(dsym)

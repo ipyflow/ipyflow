@@ -37,8 +37,10 @@ class AttrSubTracingManager(object):
         setattr(builtins, self.end_tracer_name, self.expr_tracer)
         setattr(builtins, self.arg_recorder_name, self.arg_recorder)
         setattr(builtins, self.scope_pusher_name, self.scope_pusher)
+        setattr(builtins, self.scope_popper_name, self.scope_popper)
         self.ast_transformer = AttrSubTracingNodeTransformer(
-            self.start_tracer_name, self.end_tracer_name, self.arg_recorder_name, self.scope_pusher_name,
+            self.start_tracer_name, self.end_tracer_name, self.arg_recorder_name,
+            self.scope_pusher_name, self.scope_popper_name,
         )
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
@@ -67,6 +69,8 @@ class AttrSubTracingManager(object):
             delattr(builtins, self.arg_recorder_name)
         if hasattr(builtins, self.scope_pusher_name):
             delattr(builtins, self.scope_pusher_name)
+        if hasattr(builtins, self.scope_popper_name):
+            delattr(builtins, self.scope_popper_name)
 
     def push_stack(self, new_scope: 'Scope'):
         self.stack.append((
@@ -98,8 +102,6 @@ class AttrSubTracingManager(object):
             self.original_active_scope,
             self.active_scope_stack,
         ) = self.stack.pop()
-        if len(self.active_scope_stack) > 0:
-            self.active_scope = self.active_scope_stack.pop()
 
     @staticmethod
     def debug_attribute_tracer(obj, attr, ctx):
@@ -131,7 +133,10 @@ class AttrSubTracingManager(object):
                     scope_name = '<unknown namespace>'
 
                 # FIXME: brittle strategy for determining parent scope of obj
-                if obj_name is not None and obj_name not in locals() and obj_name in globals():
+                if (
+                    obj_name is not None and
+                    obj_name not in self.safety.trace_state.prev_trace_stmt_in_cur_frame.frame.f_locals
+                ):
                     parent_scope = self.safety.global_scope
                 else:
                     parent_scope = self.active_scope
@@ -194,6 +199,10 @@ class AttrSubTracingManager(object):
         self.active_scope = self.original_active_scope
         return obj
 
+    def scope_popper(self, obj):
+        self.active_scope = self.active_scope_stack.pop()
+        return obj
+
     def reset(self):
         self.loaded_data_symbols = set()
         self.saved_store_data = []
@@ -206,11 +215,12 @@ class AttrSubTracingManager(object):
 
 
 class AttrSubTracingNodeTransformer(ast.NodeTransformer):
-    def __init__(self, start_tracer: str, end_tracer: str, arg_recorder: str, scope_pusher: str):
+    def __init__(self, start_tracer: str, end_tracer: str, arg_recorder: str, scope_pusher: str, scope_popper: str):
         self.start_tracer = start_tracer
         self.end_tracer = end_tracer
         self.arg_recorder = arg_recorder
         self.scope_pusher = scope_pusher
+        self.scope_popper = scope_popper
         self.inside_attrsub_load_chain = False
 
     @contextmanager
@@ -275,13 +285,17 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         return new_node
 
     def visit_Call(self, node: ast.Call):
-        if isinstance(node.func, ast.Attribute):
-            assert isinstance(node.func.ctx, ast.Load)
-            with self.attrsub_load_context():
-                node.func = self.visit_Attribute(node.func, call_context=True)
+        # if isinstance(node.func, ast.Attribute):
+        #     assert isinstance(node.func.ctx, ast.Load)
+        #     with self.attrsub_load_context():
+        #         node.func = self.visit_Attribute(node.func, call_context=True)
 
         if not isinstance(node.func, ast.Attribute):
             return node
+
+        assert isinstance(node.func.ctx, ast.Load)
+        with self.attrsub_load_context():
+            node.func = self.visit_Attribute(node.func, call_context=True)
 
         replacement_args = []
         for arg in node.args:
@@ -321,8 +335,15 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             keywords=[],
         )
 
+        node = ast.Call(
+            func=ast.Name(self.scope_popper, ast.Load()),
+            args=[node],
+            keywords=[]
+        )
+
         if self.inside_attrsub_load_chain:
             return node
+
         replacement_node = ast.Call(
             func=ast.Name(self.end_tracer, ast.Load()),
             args=[node],

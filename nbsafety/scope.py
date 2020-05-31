@@ -10,7 +10,8 @@ except ImportError:
     pandas = None
 
 from .analysis import AttrSubSymbolChain, CallPoint, SymbolRef
-from .data_symbol import ClassDataSymbol, DataSymbol, FunctionDataSymbol
+from .data_symbol import DataSymbol, DataSymbolType
+from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
@@ -147,18 +148,6 @@ class Scope(object):
         self.put(name, dc)
         return dc, old_dc, old_id
 
-    def _upsert_function_data_symbol_for_name(
-            self, name: str, obj: 'Any', deps: 'Set[DataSymbol]',
-    ):
-        dc = FunctionDataSymbol(name, obj, self, self.safety)
-        return self._upsert_and_mark_children_if_same_data_symbol_type(dc, name, deps)
-
-    def _upsert_class_data_symbol_for_name(
-            self, name: str, obj: 'Any', deps: 'Set[DataSymbol]', class_scope: 'Scope'
-    ):
-        dc = ClassDataSymbol(name, obj, self, self.safety, class_scope=class_scope)
-        return self._upsert_and_mark_children_if_same_data_symbol_type(dc, name, deps)
-
     def upsert_data_symbol_for_name(
             self,
             name: str,
@@ -186,14 +175,19 @@ class Scope(object):
             class_scope: 'Optional[Scope]' = None,
     ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
         assert not (class_scope is not None and is_function_def)
+        symbol_type = DataSymbolType.DEFAULT
         if is_function_def:
             assert overwrite
             assert not is_subscript
-            return self._upsert_function_data_symbol_for_name(name, obj, deps)
-        if class_scope is not None:
+            symbol_type = DataSymbolType.FUNCTION
+            # return self._upsert_function_data_symbol_for_name(name, obj, deps)
+        elif class_scope is not None:
             assert overwrite
             assert not is_subscript
-            return self._upsert_class_data_symbol_for_name(name, obj, deps, class_scope)
+            symbol_type = DataSymbolType.CLASS
+            # return self._upsert_class_data_symbol_for_name(name, obj, deps, class_scope)
+        elif is_subscript:
+            symbol_type = DataSymbolType.SUBSCRIPT
         old_id = None
         old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
         if old_dc is not None and self.is_globally_accessible:
@@ -202,6 +196,7 @@ class Scope(object):
             # TODO: handle case where new dc is of different type
             if name in self.data_symbol_by_name(old_dc.is_subscript):
                 old_dc.update_obj_ref(obj)
+                old_dc.update_type(symbol_type)
                 old_dc.update_deps(deps, overwrite=overwrite)
                 return old_dc, old_dc, old_id
             else:
@@ -224,7 +219,7 @@ class Scope(object):
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
                 deps.add(old_dc)
-        dc = DataSymbol(name, obj, self, self.safety, parents=deps, is_subscript=is_subscript)
+        dc = DataSymbol(name, obj, self, self.safety, parents=deps, is_subscript=is_subscript, symbol_type=symbol_type)
         self.put(name, dc)
         dc.update_deps(deps, overwrite=True)
         return dc, old_dc, old_id
@@ -352,6 +347,9 @@ class NamespaceScope(Scope):
         else:
             self._data_symbol_by_name[name] = val
         val.containing_scope = self
+
+    def refresh(self):
+        self.max_defined_timestamp = cell_counter()
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

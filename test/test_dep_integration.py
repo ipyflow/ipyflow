@@ -238,7 +238,7 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
 def test_for_loop_with_map(propagate_past_cell_bounds):
     _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
@@ -355,7 +355,7 @@ def test_variable_scope_2():
     assert_not_detected("Updating y should solve the problem")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
 def test_default_args(propagate_past_cell_bounds):
     _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
@@ -420,9 +420,7 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
-def test_func_assign_ints(propagate_past_cell_bounds):
-    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
+def test_func_assign_ints():
     run_cell("""
 a = 1
 b = 1
@@ -436,7 +434,7 @@ def func(x, y=a):
     run_cell('z = func(c)')
     run_cell('a = 4')
     run_cell('logging.info(z)')
-    assert_detected_if_full_propagation("Should have detected stale dependency of fn func on a")
+    assert_detected("Should have detected stale dependency of fn func on a")
     run_cell("""
 def func(x, y=a):
     logging.info(b)
@@ -458,7 +456,7 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
 def test_func_assign_helper_func(propagate_past_cell_bounds):
     _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
@@ -482,7 +480,7 @@ y = f()
     assert_not_detected("Changing a should not affect y")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
 def test_func_assign_helper_func_2(propagate_past_cell_bounds):
     _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""
@@ -565,6 +563,8 @@ class Foo(object):
 """)
     run_cell('x = Foo(5)')
     run_cell('y = x.x + 5')
+    run_cell('%safety show_deps x')
+    run_cell('%safety show_deps y')
     run_cell('x = 8')
     run_cell('logging.info(y)')
     assert_detected('y depends on stale x')
@@ -1255,7 +1255,7 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [(True,), (False,)])
+@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
 def test_attr_dep_with_top_level_overwrite(propagate_past_cell_bounds):
     _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
     run_cell("""

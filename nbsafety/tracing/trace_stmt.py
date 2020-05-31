@@ -5,7 +5,6 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..analysis import get_statement_lval_and_rval_symbol_refs
-from ..data_symbol import FunctionDataSymbol
 from ..utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
@@ -61,9 +60,9 @@ class TraceStatement(object):
         if func_cell is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
-        if not isinstance(func_cell, FunctionDataSymbol):
+        if not func_cell.is_function:
             raise TypeError('got non-function data cell %s for name %s' % (func_cell, func_name))
-        return func_cell.scope
+        return func_cell.call_scope
 
     def _make_lval_data_symbols(self):
         lval_symbol_refs, rval_symbol_refs, should_overwrite = get_statement_lval_and_rval_symbol_refs(self.stmt_node)

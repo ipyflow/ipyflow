@@ -117,3 +117,8 @@ History
 ------------------
 * Major bugfixes and improvements to dependency tracking;
 * Fix bug that prevented attribute / subscript tracing on Python 3.6.
+
+0.0.35 (2020-05-31)
+------------------
+* Major bugfixes and improvements to the attribute / subscript tracer;
+* Improvements to the logic for only propagating staleness past cell boundaries;

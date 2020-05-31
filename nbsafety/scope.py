@@ -125,29 +125,6 @@ class Scope(object):
         if to_yield is not None:
             yield dc, chain.deep
 
-    def _upsert_and_mark_children_if_same_data_symbol_type(
-            self, dc: 'Union[ClassDataSymbol, FunctionDataSymbol]', name: str, deps: 'Set[DataSymbol]',
-    ) -> 'Tuple[DataSymbol, DataSymbol, Optional[int]]':
-        old_id = None
-        old_dc = None
-        should_propagate = False
-        if self.is_globally_accessible:
-            old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
-            if old_dc is not None:
-                for child in old_dc.children:
-                    child.parents.discard(old_dc)
-                    child.fresher_ancestors.discard(old_dc)
-                old_id = old_dc.cached_obj_id
-                # don't mark children as having stale dep unless old dep was of same type
-                should_propagate = isinstance(old_dc, type(dc))
-        if should_propagate and old_dc is not None:
-            dc.children = old_dc.children
-            for child in dc.children:
-                child.parents.add(dc)
-        dc.update_deps(deps, overwrite=True)
-        self.put(name, dc)
-        return dc, old_dc, old_id
-
     def upsert_data_symbol_for_name(
             self,
             name: str,

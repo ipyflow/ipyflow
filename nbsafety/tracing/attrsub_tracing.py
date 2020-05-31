@@ -51,7 +51,7 @@ class AttrSubTracingManager(object):
             Tuple[List[SavedStoreData], Set[DeepRef], Set[Mutation], RefCandidate, Set[str], Scope, Scope, List[Scope]]
         ] = []
         self.deep_ref_candidate: RefCandidate = None
-        self.active_scope_stack = []
+        self.active_scope_stack: List[Scope] = []
         self._waiting_for_call = False
 
     def get_and_clear_active_scope_for_call(self):

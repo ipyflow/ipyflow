@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from ..analysis import get_statement_lval_and_rval_symbol_refs
 from ..data_symbol import FunctionDataSymbol
+from ..utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -94,10 +95,7 @@ class TraceStatement(object):
         for scope, obj, attr_or_sub, is_subscript in self.safety.attr_trace_manager.saved_store_data:
             # print(scope, obj, attr_or_sub, is_subscript)
             try:
-                if is_subscript:
-                    attr_or_sub_obj = obj[attr_or_sub]
-                else:
-                    attr_or_sub_obj = getattr(obj, attr_or_sub)
+                attr_or_sub_obj = retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
             except (AttributeError, KeyError, IndexError):
                 continue
             should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)

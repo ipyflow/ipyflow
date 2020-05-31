@@ -605,7 +605,7 @@ def test_attr_manager_active_scope_resets():
 y = 10
 class Foo(object):
     def f(self):
-        y = 10
+        y = 11
         return y
 def f():
     return y
@@ -614,6 +614,20 @@ def f():
     # if the active scope doesn't reset after done with foo.f(),
     # it will think the `y` referred to by f() is the one in Foo.f's scope.
     run_cell('x = foo.f() + f()')
+    run_cell('y = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on stale `y`')
+
+
+def test_attribute_call_point():
+    run_cell("""
+y = 10
+class Foo(object):
+    def f(self):
+        return y
+""")
+    run_cell('foo = Foo()')
+    run_cell('x = foo.f()')
     run_cell('y = 42')
     run_cell('logging.info(x)')
     assert_detected('`x` depends on stale `y`')

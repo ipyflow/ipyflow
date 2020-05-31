@@ -76,7 +76,7 @@ class TraceState(object):
         if event == TraceEvent.call:
             self.stack.append(self.prev_trace_stmt_in_cur_frame)
             # print('scope', trace_stmt.scope)
-            with trace_stmt.replace_active_scope(self.safety.attr_trace_manager.active_scope):
+            with trace_stmt.replace_active_scope(self.safety.attr_trace_manager.get_and_clear_active_scope_for_call()):
                 # print('active scope', trace_stmt.scope)
                 # TODO: race condition with attr tracer here -- might not have finished tracing the Attribute ast node!
                 # To fix, we should set the scope for the Call event *after* it is done processing
@@ -98,8 +98,9 @@ class TraceState(object):
                     return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
             # reset for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt
-            self.cur_frame_scope = return_to_stmt.scope
+            # self.cur_frame_scope = return_to_stmt.scope
             self.safety.attr_trace_manager.pop_stack()
+            self.cur_frame_scope = self.safety.attr_trace_manager.active_scope
             logger.debug('entering scope %s', self.cur_frame_scope)
         self.prev_event = event
 

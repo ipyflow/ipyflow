@@ -4,6 +4,7 @@ from typing import cast, TYPE_CHECKING
 import weakref
 
 from .ipython_utils import cell_counter
+from .utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
@@ -16,6 +17,7 @@ NOT_FOUND = object()
 
 
 class DataSymbol(object):
+    # TODO: make the is_subscript arg of datasym constructor required
     def __init__(
             self,
             name: 'Union[str, int]',
@@ -52,7 +54,7 @@ class DataSymbol(object):
         self.no_warning = False
 
     def __repr__(self):
-        return f'<{self.__class__.__name__} for variable {self.readable_name}>'
+        return f'<{self.readable_name}>'
 
     def __str__(self):
         return self.readable_name
@@ -200,21 +202,11 @@ class DataSymbol(object):
             else:
                 try:
                     obj = self._get_obj()
-                    if dc.is_subscript:
-                        # TODO: more complete list of things that are checkable
-                        #  or could cause side effects upon subscripting
-                        if isinstance(obj, dict) and dc.name not in obj:
-                            raise KeyError()
-                        obj = obj[dc.name]
-                        dc._propagate_update(obj, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
-                        dc_in_self_namespace = True
-                    else:
-                        dc_string_name = cast(str, dc.name)
-                        if not hasattr(obj, dc_string_name):
-                            raise AttributeError()
-                        obj = getattr(obj, dc_string_name)
-                        dc._propagate_update(obj, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
-                        dc_in_self_namespace = True
+                    obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, dc.name, dc.is_subscript)
+                    dc._propagate_update(
+                        obj_attr_or_sub, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated
+                    )
+                    dc_in_self_namespace = True
                     if new_parent_obj is not old_parent_obj and new_id is not None:
                         new_namespace = self.safety.namespaces.get(new_id, None)
                         if new_namespace is None:
@@ -223,8 +215,9 @@ class DataSymbol(object):
                         # TODO: handle class data cells properly;
                         #  in fact; we still need to handle aliases of class data cells
                         if dc.name not in new_namespace.data_symbol_by_name(dc.is_subscript):
-                            new_namespace.put(dc.name, dc.shallow_clone(obj, new_namespace))
-                except:
+                            new_namespace.put(dc.name, dc.shallow_clone(
+                                obj_attr_or_sub, new_namespace, is_subscript=dc.is_subscript))
+                except (KeyError, IndexError, AttributeError):
                     dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
             if dc_in_self_namespace and dc.has_stale_ancestor:
                 self.namespace_data_syms_with_stale.add(dc)

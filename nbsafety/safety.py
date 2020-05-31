@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import AttrSubSymbolChain, ComputeReachableSymbolRefs, compute_lineno_to_stmt_mapping
+from .analysis import AttrSubSymbolChain, ComputeLiveSymbolRefs, compute_lineno_to_stmt_mapping
 from .ipython_utils import (
     ast_transformer_context,
     cell_counter,
@@ -73,7 +73,7 @@ class DependencySafety(object):
         # Maybe switch update this too when implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
-        self.only_propagate_updates_past_cell_boundaries = True
+        self.only_propagate_updates_past_cell_boundaries = False
         self._track_dependencies = True
 
         self._disable_level = 0
@@ -140,17 +140,17 @@ class DependencySafety(object):
             )
         ]))
 
-    def compute_reachable_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
+    def compute_live_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
         if isinstance(code, str):
             code = ast.parse(code)
-        return ComputeReachableSymbolRefs(self)(code)
+        return ComputeLiveSymbolRefs(self)(code)
 
     def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         stale_nodes = set()
         max_defined_cell_num = -1
-        for symbol_ref in self.compute_reachable_symbol_refs(cell):
+        for symbol_ref in self.compute_live_symbol_refs(cell):
             if isinstance(symbol_ref.symbol, str):
                 nodes: List[Tuple[DataSymbol, bool]] = [(
                     self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol),
@@ -163,8 +163,6 @@ class DependencySafety(object):
                 continue
             for node, deep_ref in nodes:
                 if node is not None:
-                    # print(node, deep_ref)
-                    # print('******************************')
                     # print(node, deep_ref, node.has_stale_ancestor)
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
                     if node.has_stale_ancestor:

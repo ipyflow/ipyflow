@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: have the logger warnings additionally raise exceptions for tests
-class ComputeReachableSymbolRefs(ast.NodeVisitor):
+class ComputeLiveSymbolRefs(ast.NodeVisitor):
 
     def __init__(self, safety: 'DependencySafety'):
         self.safety = safety
-        self.safe_set: Set[Union[str, AttrSubSymbolChain]] = set()
+        self.killed: Set[Union[str, AttrSubSymbolChain]] = set()
 
     def __call__(self, module_node: ast.Module):
         """
@@ -33,12 +33,12 @@ class ComputeReachableSymbolRefs(ast.NodeVisitor):
         for node in module_node.body:
             self.visit(node)
             for ref in _get_all_symbol_refs(node):
-                if ref.symbol in self.safe_set:
+                if ref.symbol in self.killed:
                     continue
                 # TODO: check for all subchains in the safe set, not just the first symbol
                 if isinstance(ref.symbol, AttrSubSymbolChain):
                     leading_symbol = ref.symbol.symbols[0]
-                    if isinstance(leading_symbol, str) and leading_symbol in self.safe_set:
+                    if isinstance(leading_symbol, str) and leading_symbol in self.killed:
                         continue
                 check_set.add(ref)
         # print(self.safe_set)
@@ -56,7 +56,7 @@ class ComputeReachableSymbolRefs(ast.NodeVisitor):
             if isinstance(target_node, ast.Tuple):
                 for element_node in target_node.elts:
                     if isinstance(element_node, ast.Name):
-                        self.safe_set.add(element_node.id)
+                        self.killed.add(element_node.id)
             else:
                 self.visit_Assign_or_AugAssign_target(target_node)
 
@@ -68,27 +68,27 @@ class ComputeReachableSymbolRefs(ast.NodeVisitor):
 
     def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.expr]'):
         if isinstance(target_node, ast.Name):
-            self.safe_set.add(target_node.id)
+            self.killed.add(target_node.id)
         elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
-            self.safe_set.add(get_attrsub_symbol_chain(target_node))
+            self.killed.add(get_attrsub_symbol_chain(target_node))
         else:
             logger.warning('unsupported type for node %s' % target_node)
 
     # We also put the name of new functions in the safe_set
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.safe_set.add(node.name)
+        self.killed.add(node.name)
 
     def visit_For(self, node: ast.For):
         # Case "for a,b in something: "
         if isinstance(node.target, ast.Tuple):
             for name_node in node.target.elts:
                 if isinstance(name_node, ast.Name):
-                    self.safe_set.add(name_node.id)
+                    self.killed.add(name_node.id)
                 else:
                     logger.warning('unsupported type for node %s' % name_node)
         # case "for a in something"
         elif isinstance(node.target, ast.Name):
-            self.safe_set.add(node.target.id)
+            self.killed.add(node.target.id)
         else:
             logger.warning('unsupported type for node %s' % node.target)
 

@@ -198,7 +198,7 @@ class Scope(object):
         old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
         if old_dc is not None and self.is_globally_accessible:
             old_id = old_dc.cached_obj_id
-            # TODO: garbage collect old names
+            # TODO: garbage collect old names (EDIT: does this happen automatically thanks to the handle_aliases logic?)
             # TODO: handle case where new dc is of different type
             if name in self.data_symbol_by_name(old_dc.is_subscript):
                 old_dc.update_obj_ref(obj)

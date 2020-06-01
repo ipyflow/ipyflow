@@ -56,6 +56,7 @@ class DependencySafety(object):
         self.global_scope = Scope(self)
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_scopes: Set[NamespaceScope] = set()
+        self.garbage_namespace_obj_ids: Set[int] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
@@ -330,10 +331,12 @@ class DependencySafety(object):
         self.stale_dependency_detected = False
         return ret
 
+    def namespace_gc(self):
+        for obj_id in self.garbage_namespace_obj_ids:
+            self.namespaces.pop(obj_id, None)
+        self.garbage_namespace_obj_ids.clear()
+
     def _gc(self):
-        for dsym in self.all_data_symbols():
+        for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
-                for parent in dsym.parents:
-                    parent.children.discard(dsym)
-                for child in dsym.children:
-                    child.parents.discard(dsym)
+                dsym.collect_self_garbage()

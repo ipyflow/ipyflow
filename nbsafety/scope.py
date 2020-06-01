@@ -2,6 +2,7 @@
 import inspect
 import itertools
 from typing import TYPE_CHECKING
+import weakref
 
 from IPython import get_ipython
 try:
@@ -258,13 +259,25 @@ class Scope(object):
 class NamespaceScope(Scope):
     # TODO: support (multiple) inheritance by allowing
     #  NamespaceScopes from classes to clone their parent class's NamespaceScopes
-    def __init__(self, namespace_obj_ref: int, *args, **kwargs):
+    def __init__(self, obj: 'Any', *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
-        self.namespace_obj_ref = namespace_obj_ref
+        self.update_obj_ref(obj)
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[Union[int, str], DataSymbol] = {}
+
+    def update_obj_ref(self, obj):
+        self.tombstone = False
+        try:
+            self.obj_ref = weakref.ref(obj, self._reference_expired_callback)
+        except TypeError:
+            pass
+        self.namespace_obj_ref = id(obj)
+
+    def _reference_expired_callback(self, *_):
+        self.tombstone = True
+        self.safety.garbage_namespace_obj_ids.add(self.namespace_obj_ref)
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
@@ -272,18 +285,18 @@ class NamespaceScope(Scope):
         else:
             return self._data_symbol_by_name
 
-    def clone(self, namespace_obj_ref: int):
-        cloned = NamespaceScope(namespace_obj_ref, self.safety)
+    def clone(self, obj: 'Any'):
+        cloned = NamespaceScope(obj, self.safety)
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
-        cloned.namespace_obj_ref = namespace_obj_ref
+        cloned.update_obj_ref(obj)
         cloned._data_symbol_by_name = {}
         cloned._subscript_data_symbol_by_name = {}
         self.child_clones.append(cloned)
         return cloned
 
-    def shallow_clone(self, namespace_obj_ref: int):
-        cloned = NamespaceScope(namespace_obj_ref, self.safety)
+    def shallow_clone(self, obj: 'Any'):
+        cloned = NamespaceScope(obj, self.safety)
         cloned.scope_name = self.scope_name
         cloned.parent_scope = self.parent_scope
         return cloned

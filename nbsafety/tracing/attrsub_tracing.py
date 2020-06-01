@@ -120,11 +120,13 @@ class AttrSubTracingManager(object):
         if scope is None:
             class_scope = self.safety.namespaces.get(id(obj.__class__), None)
             if class_scope is not None and not is_subscript:
-                # print('found class scope %s containing %s' % (class_scope, class_scope.all_data_syms_this_indentation().keys()))
-                scope = class_scope.clone(obj_id)
+                # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
+                scope = class_scope.clone(obj)
                 if obj_name is not None:
                     scope.scope_name = obj_name
                 self.safety.namespaces[obj_id] = scope
+                # if scope.full_path == ('<module>', 'self'):
+                #     print('register', scope, 'for obj', obj, attr_or_subscript)
             else:
                 # print('no scope for class', obj.__class__)
                 try:
@@ -140,7 +142,7 @@ class AttrSubTracingManager(object):
                     parent_scope = self.safety.global_scope
                 else:
                     parent_scope = self.active_scope
-                scope = NamespaceScope(obj_id, self.safety, scope_name, parent_scope=parent_scope)
+                scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
                 self.safety.namespaces[obj_id] = scope
         # print('new active scope', scope)
         if override_active_scope:

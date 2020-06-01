@@ -118,7 +118,26 @@ class DataSymbol(object):
 
     @property
     def is_garbage(self):
-        return not self.containing_scope.is_globally_accessible or (self._has_weakref and self._get_obj() is None)
+        return (
+            self.tombstone
+            or not self.containing_scope.is_globally_accessible
+            or (self._has_weakref and self._get_obj() is None)
+        )
+
+    def _reference_expired_callback(self, *_):
+        self.tombstone = True
+
+    def collect_self_garbage(self):
+        for parent in self.parents:
+            parent.children.discard(self)
+        for child in self.children:
+            child.parents.discard(self)
+        self_aliases = self.safety.aliases.get(self.cached_obj_id, None)
+        if self_aliases is not None:
+            self_aliases.discard(self)
+            if len(self_aliases) == 0:
+                self.safety.aliases.pop(self.cached_obj_id, None)
+                self.safety.namespaces.pop(self.cached_obj_id, None)
 
     def update_type(self, new_type):
         self.symbol_type = new_type
@@ -128,8 +147,9 @@ class DataSymbol(object):
             self.call_scope = None
 
     def update_obj_ref(self, obj):
+        self.tombstone = False
         try:
-            self.obj_ref = weakref.ref(obj)
+            self.obj_ref = weakref.ref(obj, self._reference_expired_callback)
             self._has_weakref = True
         except TypeError:
             self.obj_ref = obj
@@ -233,7 +253,7 @@ class DataSymbol(object):
                     if new_parent_obj is not old_parent_obj and new_id is not None:
                         new_namespace = self.safety.namespaces.get(new_id, None)
                         if new_namespace is None:
-                            new_namespace = namespace.shallow_clone(new_id)
+                            new_namespace = namespace.shallow_clone(new_parent_obj)
                             self.safety.namespaces[new_id] = new_namespace
                         # TODO: handle class data cells properly;
                         #  in fact; we still need to handle aliases of class data cells

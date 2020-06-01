@@ -692,6 +692,10 @@ class Foo(object):
     run_cell('logging.info(bar.a)')
     assert_not_detected()
     run_cell('Foo.Bar(9, 10).foo().shared = 100')
+    run_cell("""
+for _ in range(10**2):
+    Foo.Bar(9, 10).foo().shared = 100
+""")
     run_cell('logging.info(foo.y)')
     assert_not_detected('we mutated `shared` on obj and not on `Foo` (the one on which `foo.y` depends)')
     run_cell('Foo.Bar(9, 10).bar().shared = 100')

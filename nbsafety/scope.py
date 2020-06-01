@@ -15,7 +15,7 @@ from .data_symbol import DataSymbol, DataSymbolType
 from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
     from .safety import DependencySafety
 
 
@@ -58,11 +58,11 @@ class Scope(object):
             return self.parent_scope.non_namespace_parent_scope
         return self.parent_scope
 
-    def make_child_scope(self, scope_name, namespace_obj_ref=None):
-        if namespace_obj_ref is None:
+    def make_child_scope(self, scope_name, obj_id=None):
+        if obj_id is None:
             return Scope(self.safety, scope_name, parent_scope=self)
         else:
-            return NamespaceScope(namespace_obj_ref, self.safety, scope_name, parent_scope=self)
+            return NamespaceScope(obj_id, self.safety, scope_name, parent_scope=self)
 
     def put(self, name: 'Union[str, int]', val: DataSymbol):
         self._data_symbol_by_name[name] = val
@@ -197,7 +197,7 @@ class Scope(object):
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
                 deps.add(old_dc)
-        dc = DataSymbol(name, obj, self, self.safety, parents=deps, is_subscript=is_subscript, symbol_type=symbol_type)
+        dc = DataSymbol(name, symbol_type, obj, self, self.safety, parents=deps)
         self.put(name, dc)
         dc.update_deps(deps, overwrite=True)
         return dc, old_dc, old_id
@@ -263,21 +263,31 @@ class NamespaceScope(Scope):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
-        self.update_obj_ref(obj)
+        tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)
+        self._tombstone = tombstone
+        self._obj_ref = obj_ref
+        self.obj_id = obj_id
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[Union[int, str], DataSymbol] = {}
 
     def update_obj_ref(self, obj):
-        self.tombstone = False
-        try:
-            self.obj_ref = weakref.ref(obj, self._reference_expired_callback)
-        except TypeError:
-            pass
-        self.namespace_obj_ref = id(obj)
+        tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)
+        self._tombstone = tombstone
+        self._obj_ref = obj_ref
+        self.obj_id = obj_id
 
-    def _reference_expired_callback(self, *_):
-        self.tombstone = True
-        self.safety.garbage_namespace_obj_ids.add(self.namespace_obj_ref)
+    def _update_obj_ref_inner(self, obj):
+        tombstone = False
+        try:
+            obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
+        except TypeError:
+            obj_ref = None
+        obj_id = id(obj)
+        return tombstone, obj_ref, obj_id
+
+    def _obj_reference_expired_callback(self, *_):
+        self._tombstone = True
+        self.safety.garbage_namespace_obj_ids.add(self.obj_id)
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
@@ -325,8 +335,10 @@ class NamespaceScope(Scope):
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
 
-    def all_data_symbols_this_indentation(self, exclude_class=False):
-        dsym_collections_to_chain = [self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()]
+    def all_data_symbols_this_indentation(self, exclude_class=False) -> 'Iterable[DataSymbol]':
+        dsym_collections_to_chain: List[Iterable] = [
+            self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()
+        ]
         if self.cloned_from is not None and not exclude_class:
             dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
         return itertools.chain(*dsym_collections_to_chain)

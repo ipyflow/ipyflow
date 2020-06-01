@@ -10,7 +10,7 @@ from .utils import retrieve_namespace_attr_or_sub
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
     from .safety import DependencySafety
-    from .scope import Scope
+    from .scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
 
@@ -25,24 +25,22 @@ class DataSymbolType(Enum):
 
 
 class DataSymbol(object):
-    # TODO: make the symbol type arg required and get rid of redundant is_subscript kwarg
     def __init__(
             self,
             name: 'Union[str, int]',
+            symbol_type: 'DataSymbolType',
             obj: 'Any',
             containing_scope: 'Scope',
             safety: 'DependencySafety',
             parents: 'Optional[Set[DataSymbol]]' = None,
-            symbol_type: 'DataSymbolType' = DataSymbolType.DEFAULT,
-            is_subscript: bool = False
     ):
         # print(containing_scope, name, obj, is_subscript)
-        if is_subscript:
-            assert symbol_type in (DataSymbolType.DEFAULT, DataSymbolType.SUBSCRIPT)
-            symbol_type = DataSymbolType.SUBSCRIPT
-        self.symbol_type = symbol_type
         self.name = name
-        self.update_obj_ref(obj)
+        self.symbol_type = symbol_type
+        tombstone, obj_ref, has_weakref = self._update_obj_ref_inner(obj)
+        self._tombstone = tombstone
+        self._obj_ref = obj_ref
+        self._has_weakref = has_weakref
         self.cached_obj_ref = None
         self._cached_has_weakref = None
         self.cached_obj_id = None
@@ -91,9 +89,9 @@ class DataSymbol(object):
 
     def _get_obj(self) -> 'Any':
         if self._has_weakref:
-            return self.obj_ref()
+            return self._obj_ref()
         else:
-            return self.obj_ref
+            return self._obj_ref
 
     def _get_cached_obj(self) -> 'Any':
         if self._cached_has_weakref:
@@ -101,8 +99,8 @@ class DataSymbol(object):
         else:
             return self.cached_obj_ref
 
-    def shallow_clone(self, new_obj, new_containing_scope, **extra_kwargs):
-        return self.__class__(self.name, new_obj, new_containing_scope, self.safety, **extra_kwargs)
+    def shallow_clone(self, new_obj, new_containing_scope, symbol_type):
+        return self.__class__(self.name, symbol_type, new_obj, new_containing_scope, self.safety)
 
     @property
     def obj_id(self):
@@ -119,13 +117,15 @@ class DataSymbol(object):
     @property
     def is_garbage(self):
         return (
-            self.tombstone
+            self._tombstone
             or not self.containing_scope.is_globally_accessible
             or (self._has_weakref and self._get_obj() is None)
         )
 
-    def _reference_expired_callback(self, *_):
-        self.tombstone = True
+    def _obj_reference_expired_callback(self, *_):
+        # just write a tombstone here; we'll do a batch collect after the main part of the cell is done running
+        # can potentially support GC in the background further down the line
+        self._tombstone = True
 
     def collect_self_garbage(self):
         for parent in self.parents:
@@ -136,8 +136,9 @@ class DataSymbol(object):
         if self_aliases is not None:
             self_aliases.discard(self)
             if len(self_aliases) == 0:
+                # kill the alias but leave the namespace
+                # namespace needs to stick around to properly handle the staleness propagation protocol
                 self.safety.aliases.pop(self.cached_obj_id, None)
-                self.safety.namespaces.pop(self.cached_obj_id, None)
 
     def update_type(self, new_type):
         self.symbol_type = new_type
@@ -147,16 +148,23 @@ class DataSymbol(object):
             self.call_scope = None
 
     def update_obj_ref(self, obj):
-        self.tombstone = False
+        tombstone, obj_ref, has_weakref = self._update_obj_ref_inner(obj)
+        self._tombstone = tombstone
+        self._obj_ref = obj_ref
+        self._has_weakref = has_weakref
+
+    def _update_obj_ref_inner(self, obj):
+        tombstone = False
         try:
-            self.obj_ref = weakref.ref(obj, self._reference_expired_callback)
-            self._has_weakref = True
+            obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
+            has_weakref = True
         except TypeError:
-            self.obj_ref = obj
-            self._has_weakref = False
+            obj_ref = obj
+            has_weakref = False
+        return tombstone, obj_ref, has_weakref
 
     def _refresh_cached_obj(self):
-        self.cached_obj_ref = self.obj_ref
+        self.cached_obj_ref = self._obj_ref
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
         self._cached_has_weakref = self._has_weakref
@@ -222,7 +230,7 @@ class DataSymbol(object):
         #    Technically it should already be fresh, since if it's still a descendent of this namespace, we probably
         #    had to ref the namespace ancestor, which should have been caught by the checker if the descendent has
         #    some other stale ancestor. If not fresh, let's mark it so and log a warning about a potentially stale usage
-        if self in seen:
+        if self._tombstone or self in seen:
             return
         seen.add(self)
 
@@ -258,7 +266,7 @@ class DataSymbol(object):
                         # TODO: handle class data cells properly;
                         #  in fact; we still need to handle aliases of class data cells
                         if dc.name not in new_namespace.data_symbol_by_name(dc.is_subscript):
-                            new_dc = dc.shallow_clone(obj_attr_or_sub, new_namespace, is_subscript=dc.is_subscript)
+                            new_dc = dc.shallow_clone(obj_attr_or_sub, new_namespace, dc.symbol_type)
                             new_namespace.put(dc.name, new_dc)
                             self.safety.updated_symbols.add(new_dc)
                 except (KeyError, IndexError, AttributeError):
@@ -306,12 +314,12 @@ class DataSymbol(object):
         if not self.containing_scope.is_namespace_scope or self in seen:
             return
         seen.add(self)
-        containing_scope = cast('NamespaceScope', self.containing_scope)
+        containing_scope: 'NamespaceScope' = cast('NamespaceScope', self.containing_scope)
         if containing_scope.max_defined_timestamp == cell_counter():
             return
         containing_scope.max_defined_timestamp = cell_counter()
-        namespace_obj_ref = containing_scope.namespace_obj_ref
-        for alias in self.safety.aliases[namespace_obj_ref]:
+        containing_namespace_obj_id = containing_scope.obj_id
+        for alias in self.safety.aliases[containing_namespace_obj_id]:
             alias.namespace_data_syms_with_stale.discard(self)
             if not alias.has_stale_ancestor:
                 alias.fresher_ancestors = set()
@@ -322,8 +330,8 @@ class DataSymbol(object):
             return
         parent_seen.add(self)
         containing_scope = cast('NamespaceScope', self.containing_scope)
-        namespace_obj_ref = containing_scope.namespace_obj_ref
-        for alias in self.safety.aliases[namespace_obj_ref]:
+        containing_namespace_obj_id = containing_scope.obj_id
+        for alias in self.safety.aliases[containing_namespace_obj_id]:
             if refresh and not self.has_stale_ancestor:
                 alias.namespace_data_syms_with_stale.discard(self)
                 if not alias.has_stale_ancestor:
@@ -333,7 +341,7 @@ class DataSymbol(object):
                 self.safety.updated_scopes.add(containing_scope)
                 alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
                 for alias_child in alias.children:
-                    if alias_child.obj_id == namespace_obj_ref:
+                    if alias_child.obj_id == containing_namespace_obj_id:
                         continue
                     # Next, complicated check to avoid propagating along a class -> instance edge.
                     # The only time this is OK is when we changed the class, which will not be the case here.

@@ -21,5 +21,6 @@ if __name__ == '__main__':
                 setattr(builtins, '__exit_zero', False)
     # Totally bizarre; we lose all our variables
     # Extreme hack to keep the zero exit status around
+    import sys
     import builtins
     sys.exit(0) if getattr(builtins, '__exit_zero') else sys.exit(1)

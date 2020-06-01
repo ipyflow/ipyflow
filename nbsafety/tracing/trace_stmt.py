@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from typing import List, Optional, Set
     from ..data_symbol import DataSymbol
     from ..safety import DependencySafety
-    from ..scope import Scope
+    from ..scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class TraceStatement(object):
         self.frame = frame
         self.stmt_node = stmt_node
         self.scope = scope
-        self.class_scope: Optional[Scope] = None
+        self.class_scope: Optional[NamespaceScope] = None
         self.call_point_deps: List[Set[DataSymbol]] = []
         self.marked_finished = False
 
@@ -48,7 +48,7 @@ class TraceStatement(object):
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return self.scope.make_child_scope(self.stmt_node.name, namespace_obj_ref=-1)
+            return self.scope.make_child_scope(self.stmt_node.name, obj_id=-1)
 
         if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
@@ -79,9 +79,8 @@ class TraceStatement(object):
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
                 class_obj_id = id(class_ref)
-                self.class_scope.namespace_obj_ref = class_obj_id
+                self.class_scope.obj_id = class_obj_id
                 self.safety.namespaces[class_obj_id] = self.class_scope
-                print('register', self.class_scope, 'for obj', class_ref)
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             try:

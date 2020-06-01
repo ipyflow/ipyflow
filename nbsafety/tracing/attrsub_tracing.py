@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import logging
 from typing import cast, TYPE_CHECKING
 
-from ..data_symbol import DataSymbol
+from ..data_symbol import DataSymbol, DataSymbolType
 from ..scope import NamespaceScope
 from ..utils import retrieve_namespace_attr_or_sub
 
@@ -164,8 +164,8 @@ class AttrSubTracingManager(object):
                 if data_sym is None:
                     try:
                         obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
-                        data_sym = DataSymbol(attr_or_subscript, obj_attr_or_sub, scope,
-                                              self.safety, is_subscript=is_subscript)
+                        symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
+                        data_sym = DataSymbol(attr_or_subscript, symbol_type, obj_attr_or_sub, scope, self.safety)
                         # this is to prevent refs to the scope object from being considered as stale if we just load it
                         data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
                         scope.put(attr_or_subscript, data_sym)

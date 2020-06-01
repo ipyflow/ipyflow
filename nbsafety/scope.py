@@ -80,6 +80,23 @@ class Scope(object):
             ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name)
         return ret
 
+    @staticmethod
+    def _get_name_to_obj_mapping(obj, dc) -> 'Dict[str, Any]':
+        if obj is None:
+            return get_ipython().ns_table['user_global']
+        elif dc is not None and dc.is_subscript:
+            return obj
+        else:
+            try:
+                name_to_obj = obj.__dict__
+                if (pandas is not None) and isinstance(obj, pandas.DataFrame):
+                    # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
+                    name_to_obj = dict(name_to_obj)
+                    name_to_obj.update(obj.to_dict())
+            except:  # noqa
+                return dict(inspect.getmembers(obj))
+        return name_to_obj
+
     def gen_data_symbols_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
         """
         Yield DataSymbols in the chain as well as whether they are deep references
@@ -88,6 +105,7 @@ class Scope(object):
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
         dc = None
+        obj = None
         to_yield = None
         for name in chain.symbol.symbols:
             if isinstance(name, CallPoint):
@@ -105,24 +123,13 @@ class Scope(object):
             if name_to_obj is None:
                 break
             try:
-                obj = name_to_obj[name]
+                obj = Scope._get_name_to_obj_mapping(obj, dc)[name]
             except (KeyError, IndexError, Exception):
                 break
             cur_scope = namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
 
-            try:
-                name_to_obj = obj.__dict__
-                if (pandas is not None) and isinstance(obj, pandas.DataFrame):
-                    # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
-                    name_to_obj = dict(name_to_obj)
-                    name_to_obj.update(obj.to_dict())
-            except:  # noqa
-                try:
-                    name_to_obj = inspect.getmembers(obj)
-                except:  # noqa
-                    name_to_obj = None
         if to_yield is not None:
             yield dc, chain.deep
 

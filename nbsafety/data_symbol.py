@@ -370,6 +370,6 @@ class DataSymbol(object):
             return False
         if updated_dep is self:
             return False
-        should_mark_stale = not self.safety.only_propagate_updates_past_cell_boundaries
+        should_mark_stale = not self.safety.no_stale_propagation_for_same_cell_definition
         should_mark_stale = should_mark_stale or updated_dep.defined_cell_num != self.defined_cell_num
         return should_mark_stale

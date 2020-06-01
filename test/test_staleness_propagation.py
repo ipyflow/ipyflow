@@ -35,7 +35,7 @@ def assert_detected(msg=''):
 
 
 def assert_detected_if_full_propagation(msg=''):
-    if _safety_state[0].only_propagate_updates_past_cell_boundaries:
+    if _safety_state[0].no_stale_propagation_for_same_cell_definition:
         assert_not_detected(msg=msg)
     else:
         assert_detected(msg=msg)
@@ -238,9 +238,9 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
-def test_for_loop_with_map(propagate_past_cell_bounds):
-    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
+@pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
+def test_for_loop_with_map(no_stale_propagation_for_same_cell_definition):
+    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 accum = 0
 foo = [1, 2, 3, 4, 5]
@@ -355,9 +355,9 @@ def test_variable_scope_2():
     assert_not_detected("Updating y should solve the problem")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
-def test_default_args(propagate_past_cell_bounds):
-    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
+@pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
+def test_default_args(no_stale_propagation_for_same_cell_definition):
+    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 x = 7
 def foo(y=x):
@@ -456,9 +456,9 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
-def test_func_assign_helper_func(propagate_past_cell_bounds):
-    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
+@pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
+def test_func_assign_helper_func(no_stale_propagation_for_same_cell_definition):
+    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 x = 3
 a = 4
@@ -480,9 +480,9 @@ y = f()
     assert_not_detected("Changing a should not affect y")
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
-def test_func_assign_helper_func_2(propagate_past_cell_bounds):
-    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
+@pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
+def test_func_assign_helper_func_2(no_stale_propagation_for_same_cell_definition):
+    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 x = 3
 a = 4
@@ -1259,9 +1259,9 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
-@pytest.mark.parametrize("propagate_past_cell_bounds", [True, False])
-def test_attr_dep_with_top_level_overwrite(propagate_past_cell_bounds):
-    _safety_state[0].only_propagate_updates_past_cell_boundaries = propagate_past_cell_bounds
+@pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
+def test_attr_dep_with_top_level_overwrite(no_stale_propagation_for_same_cell_definition):
+    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 class Foo:
     def __init__(self):

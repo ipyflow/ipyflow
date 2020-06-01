@@ -119,7 +119,7 @@ def set_propagation(safety: 'DependencySafety', line: 'List[str]'):
         print('Usage: %safety set_propagation [cells | always]')
         # TODO: complete explanation
         return
-    safety.only_propagate_updates_past_cell_boundaries = (line[1] == 'cells')
+    safety.no_stale_propagation_for_same_cell_definition = (line[1] == 'cells')
 
 
 def configure_trace_messages(safety: 'DependencySafety', line: 'List[str]'):

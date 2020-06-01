@@ -76,7 +76,7 @@ class DependencySafety(object):
         # Maybe switch update this too when implementing the usage of cell_magic_name?
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
-        self.only_propagate_updates_past_cell_boundaries = True
+        self.no_stale_propagation_for_same_cell_definition = True
         self._track_dependencies = True
 
         self._disable_level = 0

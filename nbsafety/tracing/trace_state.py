@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 from .trace_events import TraceEvent
 
 if TYPE_CHECKING:
     from typing import Dict, List, Optional
     from types import FrameType
-    from ..safety import DependencySafety
     from .trace_stmt import TraceStatement
+    from ..safety import DependencySafety
+    from ..scope import NamespaceScope
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +95,7 @@ class TraceState(object):
                 # exception events are followed by return events until we hit an except clause
                 # no need to track dependencies in this case
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
-                    return_to_stmt.class_scope = self.cur_frame_scope
+                    return_to_stmt.class_scope = cast('NamespaceScope', self.cur_frame_scope)
                 else:
                     return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
             # reset for the previous frame, so that we push it again if it has another funcall

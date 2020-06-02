@@ -97,7 +97,7 @@ class Scope(object):
                 return dict(inspect.getmembers(obj))
         return name_to_obj
 
-    def gen_data_symbols_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
+    def gen_data_symbols_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, NamespaceScope]'):
         """
         Yield DataSymbol for the whole chain (stops at first CallPoint)
         """

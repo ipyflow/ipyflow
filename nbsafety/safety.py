@@ -48,20 +48,21 @@ def _safety_warning(node: 'DataSymbol'):
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
+        # Note: explicitly adding the types helps PyCharms code inspection
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        self.global_scope = Scope(self)
+        self.global_scope: Scope = Scope(self)
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
-        self.trace_event_counter = [0]
+        self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
-        self.trace_state = TraceState(self)
-        self.attr_trace_manager = AttrSubTracingManager(self, self.global_scope, self.trace_event_counter)
-        self.store_history = kwargs.pop('store_history', True)
-        self.use_comm = use_comm
-        self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
+        self.trace_state: TraceState = TraceState(self)
+        self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(self, self.global_scope, self.trace_event_counter)
+        self.store_history: bool = kwargs.pop('store_history', True)
+        self.use_comm: bool = use_comm
+        self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)
         self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[str, int] = {}
         self._save_prev_trace_state_for_tests: bool = kwargs.pop('save_prev_trace_state_for_tests', False)

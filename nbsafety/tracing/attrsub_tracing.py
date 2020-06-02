@@ -11,12 +11,18 @@ from ..utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from ..safety import DependencySafety
+    from ..scope import Scope
     DeepRef = Tuple[int, Optional[str], Tuple[str, ...]]
     Mutation = Tuple[int, Tuple[str, ...]]
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     SavedStoreData = Tuple[NamespaceScope, Any, str, bool]
-    from ..safety import DependencySafety
-    from ..scope import Scope
+    TextualCallNestingStackFrame = Tuple[Scope, bool]
+    TextualCallNestingStack = List[TextualCallNestingStackFrame]
+    AttrSubStackFrame = Tuple[
+        List[SavedStoreData], Set[DeepRef], Set[Mutation], RefCandidate, Set[str], Scope, Scope, TextualCallNestingStack
+    ]
+    AttrSubStack = List[AttrSubStackFrame]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -45,22 +51,19 @@ class AttrSubTracingManager(object):
         )
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
-        self.mutations: Set[Mutation] = set()
-        self.deep_refs: Set[DeepRef] = set()
-        self.recorded_args: Set[str] = set()
-        self.stack: List[
-            Tuple[List[SavedStoreData], Set[DeepRef], Set[Mutation],
-                  RefCandidate, Set[str], Scope, Scope, List[Tuple[Scope, bool]]]
-        ] = []
         self.deep_ref_candidate: RefCandidate = None
-        self.active_scope_stack: List[Tuple[Scope, bool]] = []
+        self.deep_refs: Set[DeepRef] = set()
+        self.mutations: Set[Mutation] = set()
+        self.recorded_args: Set[str] = set()
+        self.nested_call_stack: TextualCallNestingStack = []
+        self.stack: AttrSubStack = []
         self._waiting_for_call = False
 
     @property
     def active_scope_for_call(self) -> 'Scope':
         if self._waiting_for_call:
             logger.warning('we was waitin')
-            return self.active_scope_stack[-1][0]
+            return self.nested_call_stack[-1][0]
         logger.warning('we wasnt waitin')
         return self.active_scope
 
@@ -85,7 +88,7 @@ class AttrSubTracingManager(object):
             self.recorded_args,
             self.active_scope,
             self.original_active_scope,
-            self.active_scope_stack,
+            self.nested_call_stack,
         ))
         self.saved_store_data = []
         self.deep_refs = set()
@@ -93,7 +96,7 @@ class AttrSubTracingManager(object):
         self.recorded_args = set()
         self.original_active_scope = new_scope
         self.active_scope = new_scope
-        self.active_scope_stack = []
+        self.nested_call_stack = []
 
     def pop_stack(self):
         (
@@ -104,7 +107,7 @@ class AttrSubTracingManager(object):
             self.recorded_args,
             self.active_scope,
             self.original_active_scope,
-            self.active_scope_stack,
+            self.nested_call_stack,
         ) = self.stack.pop()
 
     @staticmethod
@@ -200,13 +203,13 @@ class AttrSubTracingManager(object):
         return obj
 
     def scope_pusher(self, obj):
-        self.active_scope_stack.append((self.active_scope, self._waiting_for_call))
+        self.nested_call_stack.append((self.active_scope, self._waiting_for_call))
         self._waiting_for_call = True
         self.active_scope = self.original_active_scope
         return obj
 
     def scope_popper(self, obj):
-        self.active_scope, self._waiting_for_call = self.active_scope_stack.pop()
+        self.active_scope, self._waiting_for_call = self.nested_call_stack.pop()
         return obj
 
     def stmt_transition_hook(self):
@@ -219,7 +222,7 @@ class AttrSubTracingManager(object):
         self.mutations = set()
         self.deep_ref_candidate = None
         self.active_scope = self.original_active_scope
-        self.active_scope_stack = []
+        self.nested_call_stack = []
         self.stmt_transition_hook()
 
 

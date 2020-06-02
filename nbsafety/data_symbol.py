@@ -115,6 +115,14 @@ class DataSymbol(object):
         return self.safety.namespaces.get(self.obj_id, None)
 
     @property
+    def full_path(self):
+        return self.containing_scope.full_path + (self.name,)
+
+    @property
+    def full_namespace_path(self):
+        return self.containing_scope.make_namespace_qualified_name(self)
+
+    @property
     def is_garbage(self):
         return (
             self._tombstone

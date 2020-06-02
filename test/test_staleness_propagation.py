@@ -1320,7 +1320,24 @@ def test_pandas():
     assert_detected('`df.dropna(inplace=True)` mutated `df`')
 
 
-@skipif_known_failing
-def test_chain_with_toplevel_assignment():
-    # TODO:
-    pass
+def test_deeply_nested_arg_and_kwarg_refs_with_attr_calls():
+    run_cell("""
+class Foo:
+    def foo(self, x, y=0):
+        return x + y
+""")
+    run_cell('x = 1')
+    run_cell('y = 2')
+    run_cell('foo = Foo()')
+    run_cell('z = foo.foo(foo.foo(foo.foo(x, y=y), y=7), y=foo.foo(123))')
+    run_cell('logging.info(z)')
+    assert_not_detected()
+    run_cell('x = 101')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on stale `x`')
+    run_cell('z = foo.foo(foo.foo(foo.foo(x, y=y), y=foo.foo(200)), y=99)')
+    run_cell('logging.info(z)')
+    assert_not_detected()
+    run_cell('y = 102')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on stale `y`')

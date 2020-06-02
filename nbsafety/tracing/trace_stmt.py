@@ -61,7 +61,7 @@ class TraceStatement(object):
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
         if not func_cell.is_function:
-            raise TypeError('got non-function symbol %s for name %s' % (func_cell, func_name))
+            raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
         return func_cell.call_scope
 
     def _make_lval_data_symbols(self):

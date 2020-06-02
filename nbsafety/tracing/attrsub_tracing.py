@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from ..scope import Scope
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class AttrSubTracingManager(object):
@@ -48,16 +49,19 @@ class AttrSubTracingManager(object):
         self.deep_refs: Set[DeepRef] = set()
         self.recorded_args: Set[str] = set()
         self.stack: List[
-            Tuple[List[SavedStoreData], Set[DeepRef], Set[Mutation], RefCandidate, Set[str], Scope, Scope, List[Scope]]
+            Tuple[List[SavedStoreData], Set[DeepRef], Set[Mutation],
+                  RefCandidate, Set[str], Scope, Scope, List[Tuple[Scope, bool]]]
         ] = []
         self.deep_ref_candidate: RefCandidate = None
-        self.active_scope_stack: List[Scope] = []
+        self.active_scope_stack: List[Tuple[Scope, bool]] = []
         self._waiting_for_call = False
 
     @property
-    def active_scope_for_call(self):
+    def active_scope_for_call(self) -> 'Scope':
         if self._waiting_for_call:
-            return self.active_scope_stack[-1]
+            logger.warning('we was waitin')
+            return self.active_scope_stack[-1][0]
+        logger.warning('we wasnt waitin')
         return self.active_scope
 
     def __del__(self):
@@ -196,13 +200,13 @@ class AttrSubTracingManager(object):
         return obj
 
     def scope_pusher(self, obj):
+        self.active_scope_stack.append((self.active_scope, self._waiting_for_call))
         self._waiting_for_call = True
-        self.active_scope_stack.append(self.active_scope)
         self.active_scope = self.original_active_scope
         return obj
 
     def scope_popper(self, obj):
-        self.active_scope = self.active_scope_stack.pop()
+        self.active_scope, self._waiting_for_call = self.active_scope_stack.pop()
         return obj
 
     def stmt_transition_hook(self):

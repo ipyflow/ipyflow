@@ -342,10 +342,15 @@ class NamespaceScope(Scope):
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
 
-    def all_data_symbols_this_indentation(self, exclude_class=False) -> 'Iterable[DataSymbol]':
-        dsym_collections_to_chain: List[Iterable] = [
-            self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()
-        ]
+    def all_data_symbols_this_indentation(self, exclude_class=False, is_subscript=None) -> 'Iterable[DataSymbol]':
+        if is_subscript is None:
+            dsym_collections_to_chain: List[Iterable] = [
+                self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()
+            ]
+        elif is_subscript:
+            dsym_collections_to_chain = [self._subscript_data_symbol_by_name.values()]
+        else:
+            dsym_collections_to_chain = [self._data_symbol_by_name.values()]
         if self.cloned_from is not None and not exclude_class:
             dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
         return itertools.chain(*dsym_collections_to_chain)
@@ -359,6 +364,19 @@ class NamespaceScope(Scope):
 
     def refresh(self):
         self.max_defined_timestamp = cell_counter()
+
+    def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> 'Optional[NamespaceScope]':
+        # TODO: test this properly
+        ret = None
+        if self.namespace_parent_scope is not None:
+            ret = self.namespace_parent_scope.get_earliest_ancestor_containing(obj_id, is_subscript)
+        if ret is not None:
+            return ret
+        set_to_check = map(lambda dsym: dsym.obj_id, self.all_data_symbols_this_indentation(is_subscript=is_subscript))
+        if obj_id in set_to_check:
+            return self
+        else:
+            return None
 
     @property
     def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':

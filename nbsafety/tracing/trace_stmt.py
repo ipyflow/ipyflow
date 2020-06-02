@@ -100,7 +100,10 @@ class TraceStatement(object):
             should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
             # TODO: walk up the namespace hierarchy and check for a namespace scope w/ id of attr_or_sub_obj
             #  if we find it, use the containing scope instead of this scope to avoid cyclic namespaces
-            scope.upsert_data_symbol_for_name(
+            scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
+            if scope_to_use is None:
+                scope_to_use = scope
+            scope_to_use.upsert_data_symbol_for_name(
                 attr_or_sub, attr_or_sub_obj, rval_deps, is_subscript,
                 overwrite=should_overwrite, is_function_def=False, class_scope=None
             )

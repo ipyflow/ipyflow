@@ -62,9 +62,7 @@ class AttrSubTracingManager(object):
     @property
     def active_scope_for_call(self) -> 'Scope':
         if self._waiting_for_call:
-            logger.warning('we was waitin')
             return self.nested_call_stack[-1][0]
-        logger.warning('we wasnt waitin')
         return self.active_scope
 
     def __del__(self):

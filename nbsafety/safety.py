@@ -245,7 +245,7 @@ class DependencySafety(object):
         def _dependency_safety(_, cell: str):
             self.safe_execute(cell, _run_cell_func)
 
-        # TODO (smacke): probably not a great idea to rely on this
+        # FIXME (smacke): probably not a great idea to rely on this
         _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
@@ -308,7 +308,7 @@ class DependencySafety(object):
             elif line[0] == "turn_on_warnings_for":
                 return line_magics.turn_on_warnings_for(self, line)
 
-        # TODO (smacke): probably not a great idea to rely on this
+        # FIXME (smacke): probably not a great idea to rely on this
         _safety.__name__ = _SAFETY_LINE_MAGIC
         return register_line_magic(_safety)
 

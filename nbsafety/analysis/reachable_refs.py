@@ -102,17 +102,22 @@ class ComputeLiveSymbolRefs(ast.NodeVisitor):
 class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         self.ref_set: Set[SymbolRef] = set()
-        self.deep = False
+        self.inside_attribute = False
+        self.skip_simple_names = False
 
     def __call__(self, node: ast.AST):
         self.visit(node)
         return self.ref_set
 
-    def deep_context(self, deep_override=True):
-        return self.push_attributes(deep=deep_override)
+    def attr_context(self):
+        return self.push_attributes(inside_attribute=True, skip_simple_names=True)
+
+    def args_context(self):
+        return self.push_attributes(skip_simple_names=False)
 
     def visit_Name(self, node: ast.Name):
-        self.ref_set.add(SymbolRef(node.id, deep=self.deep))
+        if not self.skip_simple_names:
+            self.ref_set.add(SymbolRef(node.id))
 
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
     def visit_FunctionDef(self, node: ast.FunctionDef):
@@ -123,21 +128,25 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
         self.generic_visit(node.decorator_list)
 
     def visit_Call(self, node: ast.Call):
-        with self.deep_context():
+        with self.args_context():
             self.generic_visit(node.args)
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
-        with self.deep_context(False):
-            if isinstance(node.func, ast.Attribute):
-                self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node), deep=self.deep))
-            else:
+        if isinstance(node.func, ast.Attribute):
+            self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+            with self.attr_context():
                 self.visit(node.func)
+        else:
+            self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute):
-        self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node), deep=self.deep))
+        if not self.inside_attribute:
+            self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+        with self.attr_context():
+            self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript):
-        self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node), deep=self.deep))
+        self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
 
 
 def _get_all_symbol_refs(node: ast.AST):

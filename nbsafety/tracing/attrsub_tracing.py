@@ -54,9 +54,9 @@ class AttrSubTracingManager(object):
         self.active_scope_stack: List[Scope] = []
         self._waiting_for_call = False
 
-    def get_and_clear_active_scope_for_call(self):
+    @property
+    def active_scope_for_call(self):
         if self._waiting_for_call:
-            self._waiting_for_call = False
             return self.active_scope_stack[-1]
         return self.active_scope
 
@@ -205,6 +205,9 @@ class AttrSubTracingManager(object):
         self.active_scope = self.active_scope_stack.pop()
         return obj
 
+    def stmt_transition_hook(self):
+        self._waiting_for_call = False
+
     def reset(self):
         self.loaded_data_symbols = set()
         self.saved_store_data = []
@@ -213,7 +216,7 @@ class AttrSubTracingManager(object):
         self.deep_ref_candidate = None
         self.active_scope = self.original_active_scope
         self.active_scope_stack = []
-        self._waiting_for_call = False
+        self.stmt_transition_hook()
 
 
 class AttrSubTracingNodeTransformer(ast.NodeTransformer):

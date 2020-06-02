@@ -39,6 +39,9 @@ class TraceState(object):
         prev_this_frame = self.prev_trace_stmt_in_cur_frame
         prev_overall = self.prev_trace_stmt
 
+        if prev_overall != trace_stmt:
+            self.safety.attr_trace_manager.stmt_transition_hook()
+
         if event == TraceEvent.return_:
             if prev_overall is not None and prev_overall is not self.stack[-1]:
                 prev_overall.finished_execution_hook()
@@ -76,10 +79,8 @@ class TraceState(object):
         if event == TraceEvent.call:
             self.stack.append(self.prev_trace_stmt_in_cur_frame)
             # print('scope', trace_stmt.scope)
-            with trace_stmt.replace_active_scope(self.safety.attr_trace_manager.get_and_clear_active_scope_for_call()):
+            with trace_stmt.replace_active_scope(self.safety.attr_trace_manager.active_scope_for_call):
                 # print('active scope', trace_stmt.scope)
-                # TODO: race condition with attr tracer here -- might not have finished tracing the Attribute ast node!
-                # To fix, we should set the scope for the Call event *after* it is done processing
                 self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
                 # print('post call scope', self.cur_frame_scope)
             logger.debug('entering scope %s', self.cur_frame_scope)

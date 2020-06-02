@@ -7,18 +7,14 @@ if TYPE_CHECKING:
 
 
 class SymbolRef(CommonEqualityMixin):
-    def __init__(self, ref: 'Union[str, AttrSubSymbolChain]', deep=False):
+    def __init__(self, ref: 'Union[str, AttrSubSymbolChain]'):
         self.symbol = ref
-        self.deep = deep
 
     def __hash__(self):
-        return hash((self.symbol, self.deep))
+        return hash((self.symbol))
 
     def __str__(self):
-        if self.deep:
-            return f'<Deep ref of {self.symbol}>'
-        else:
-            return str(self.symbol)
+        return str(self.symbol)
 
     def __repr__(self):
         return str(self)

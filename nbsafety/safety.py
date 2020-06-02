@@ -36,9 +36,6 @@ def _safety_warning(node: 'DataSymbol'):
     if node.has_stale_ancestor:
         required_cell_num = node.required_cell_num
         fresher_ancestors = node.fresher_ancestors
-    # elif node.has_deep_stale_ancestor:
-    #     fresher_ancestors = node.deep_fresher_ancestors
-    #     required_cell_num = node.deep_required_cell_num
     else:
         raise ValueError('Expected node with stale ancestor; got %s' % node)
     logger.warning(
@@ -155,16 +152,13 @@ class DependencySafety(object):
         max_defined_cell_num = -1
         for symbol_ref in self.compute_live_symbol_refs(cell):
             if isinstance(symbol_ref.symbol, str):
-                nodes: List[Tuple[DataSymbol, bool]] = [(
-                    self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol),
-                    symbol_ref.deep
-                )]
+                nodes = [self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol)]
             elif isinstance(symbol_ref.symbol, AttrSubSymbolChain):
                 nodes = self.global_scope.gen_data_symbols_for_attr_symbol_chain(symbol_ref, self.namespaces)
             else:
                 logger.warning('invalid type for ref %s', symbol_ref)
                 continue
-            for node, deep_ref in nodes:
+            for node in nodes:
                 if node is not None:
                     # print(node, deep_ref, node.has_stale_ancestor)
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)

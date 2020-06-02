@@ -99,7 +99,7 @@ class Scope(object):
 
     def gen_data_symbols_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, Scope]'):
         """
-        Yield DataSymbols in the chain as well as whether they are deep references
+        Yield DataSymbol for the whole chain (stops at first CallPoint)
         """
         assert isinstance(chain.symbol, AttrSubSymbolChain)
         cur_scope = self
@@ -109,7 +109,7 @@ class Scope(object):
         to_yield = None
         for name in chain.symbol.symbols:
             if isinstance(name, CallPoint):
-                yield dc, True
+                yield dc
                 # dc = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
                 # yield dc, False
                 return
@@ -131,7 +131,7 @@ class Scope(object):
                 break
 
         if to_yield is not None:
-            yield dc, chain.deep
+            yield dc
 
     def upsert_data_symbol_for_name(
             self,

@@ -34,7 +34,7 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[DependencySafety]
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        safety_state[0] = DependencySafety(**kwargs)
+        safety_state[0] = DependencySafety(cell_magic_name='_SAFETY_CELL_MAGIC', **kwargs)
         run_cell('import logging')
         yield  # yield to execution of the actual test
         get_ipython().reset()  # reset ipython state

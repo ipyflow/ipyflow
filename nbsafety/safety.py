@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from .data_symbol import DataSymbol
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.WARNING)
 
 _MAX_WARNINGS = 10
 _SAFETY_LINE_MAGIC = 'safety'
@@ -47,7 +47,7 @@ def _safety_warning(node: 'DataSymbol'):
 
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
-    def __init__(self, cell_magic_name=None, **kwargs):
+    def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope = Scope(self)
@@ -57,20 +57,20 @@ class DependencySafety(object):
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
         self.trace_event_counter = [0]
         self.stale_dependency_detected = False
-        self.trace_state: TraceState = TraceState(self)
-        self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(
-            self, self.global_scope, self.trace_event_counter
-        )
+        self.trace_state = TraceState(self)
+        self.attr_trace_manager = AttrSubTracingManager(self, self.global_scope, self.trace_event_counter)
         self.store_history = kwargs.pop('store_history', True)
-        self.use_comm = kwargs.pop('use_comm', False)
+        self.use_comm = use_comm
         self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False)
-        self._last_execution_counter: int = 0
+        self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[str, int] = {}
-        self._save_prev_trace_state_for_tests = kwargs.pop('save_prev_trace_state_for_tests', False)
+        self._save_prev_trace_state_for_tests: bool = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
-        self._cell_magic = self._make_cell_magic(cell_magic_name)
-        # Maybe switch update this too when implementing the usage of cell_magic_name?
+        if cell_magic_name is None:
+            self._cell_magic = None
+        else:
+            self._cell_magic = self._make_cell_magic(cell_magic_name)
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self.no_stale_propagation_for_same_cell_definition = True
@@ -123,10 +123,6 @@ class DependencySafety(object):
 
         comm.send({'type': 'establish'})
 
-    def _logging_inited(self):
-        self.store_history = True
-        logger.setLevel(logging.WARNING)
-
     @staticmethod
     def _get_cell_ast(cell):
         lines = []
@@ -167,7 +163,7 @@ class DependencySafety(object):
                 continue
             for node in nodes:
                 if node is not None:
-                    # print(node, deep_ref, node.has_stale_ancestor)
+                    # print(node, node.has_stale_ancestor)
                     max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
                     if node.has_stale_ancestor:
                         stale_nodes.add(node)
@@ -214,38 +210,46 @@ class DependencySafety(object):
         self._last_refused_code = None
         return False
 
+    def safe_execute(self, cell: str, run_cell_func):
+        if self._disable_level == 3:
+            return run_cell_func(cell)
+
+        with save_number_of_currently_executing_cell():
+            self._last_execution_counter = cell_counter()
+            # Stage 1: Precheck.
+            if self._precheck_for_stale(cell):
+                # FIXME: hack to increase cell number
+                #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
+                return run_cell_func('None')
+
+            def _backup():
+                # something went wrong silently (e.g. due to line magic); fall back to just executing the code
+                logger.warning('Something failed while attempting traced execution; '
+                               'falling back to uninstrumented execution.')
+                return run_cell_func(cell)
+
+            # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
+            try:
+                with self._tracing_context():
+                    ret = run_cell_func(cell)
+            finally:
+                if self.trace_state.error_occurred:
+                    ret = _backup()
+                return ret
+
     def _make_cell_magic(self, cell_magic_name):
+        def _run_cell_func(cell):
+            run_cell(cell, store_history=self.store_history)
+
         def _dependency_safety(_, cell: str):
-            if self._disable_level == 3:
-                run_cell(cell)
-                return
+            self.safe_execute(cell, _run_cell_func)
 
-            with save_number_of_currently_executing_cell():
-                self._last_execution_counter = cell_counter()
-                # Stage 1: Precheck.
-                if self._precheck_for_stale(cell):
-                    # FIXME: hack to increase cell number
-                    # ideally we won't show a cell number at all if we fail precheck since nothing executed
-                    run_cell('None', store_history=self.store_history)
-                    return
-
-                def _backup():
-                    # something went wrong silently (e.g. due to line magic); fall back to just executing the code
-                    logger.warning('Something failed while attempting traced execution; '
-                                   'falling back to uninstrumented execution.')
-                    run_cell(cell, store_history=self.store_history)
-
-                # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-                with self._tracing_context(untraced_backup=_backup):
-                    run_cell(cell, store_history=self.store_history)
-
-        if cell_magic_name is not None:
-            # TODO (smacke): probably not a great idea to rely on this
-            _dependency_safety.__name__ = cell_magic_name
+        # TODO (smacke): probably not a great idea to rely on this
+        _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
     @contextmanager
-    def _tracing_context(self, untraced_backup=None):
+    def _tracing_context(self):
         sys.settrace(make_tracer(self))
         try:
             with ast_transformer_context(self.attr_trace_manager.ast_transformer):
@@ -253,12 +257,8 @@ class DependencySafety(object):
         finally:
             sys.settrace(None)
             # TODO: actually handle errors that occurred in our code while tracing
-            if self.trace_state.error_occurred:
-                if untraced_backup is not None:
-                    untraced_backup()
-            else:
+            if not self.trace_state.error_occurred:
                 self._reset_trace_state_hook()
-            self._gc()
             for updated_symbol in self.updated_symbols:
                 updated_symbol.refresh()
             for updated_scope in self.updated_scopes:
@@ -273,6 +273,7 @@ class DependencySafety(object):
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state
         self.trace_state = TraceState(self)
+        self._gc()
 
     def _make_line_magic(self):
         def _safety(line_: str):

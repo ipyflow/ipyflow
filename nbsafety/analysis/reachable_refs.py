@@ -102,15 +102,15 @@ class ComputeLiveSymbolRefs(ast.NodeVisitor):
 class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         self.ref_set: Set[SymbolRef] = set()
-        self.inside_attribute = False
+        self.inside_attrsub = False
         self.skip_simple_names = False
 
     def __call__(self, node: ast.AST):
         self.visit(node)
         return self.ref_set
 
-    def attr_context(self):
-        return self.push_attributes(inside_attribute=True, skip_simple_names=True)
+    def attrsub_context(self, inside=True):
+        return self.push_attributes(inside_attrsub=inside, skip_simple_names=inside)
 
     def args_context(self):
         return self.push_attributes(skip_simple_names=False)
@@ -132,21 +132,26 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
             self.generic_visit(node.args)
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
-        if isinstance(node.func, ast.Attribute):
+        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
-            with self.attr_context():
+            with self.attrsub_context():
                 self.visit(node.func)
         else:
             self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute):
-        if not self.inside_attribute:
+        if not self.inside_attrsub:
             self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
-        with self.attr_context():
+        with self.attrsub_context():
             self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript):
-        self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+        if not self.inside_attrsub:
+            self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+        with self.attrsub_context():
+            self.visit(node.value)
+        with self.attrsub_context(inside=False):
+            self.visit(node.slice)
 
 
 def _get_all_symbol_refs(node: ast.AST):

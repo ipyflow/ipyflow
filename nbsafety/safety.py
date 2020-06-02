@@ -129,16 +129,23 @@ class DependencySafety(object):
 
     @staticmethod
     def _get_cell_ast(cell):
-        return ast.parse('\n'.join([
-            line for line in cell.strip().split('\n')
-            if (
-                    # TODO: figure out more robust strategy to strip these out
-                    not line.startswith('%')
-                    and not line.startswith('!')
-                    and not line.startswith('cd')
-                    and not line.endswith('?')
-            )
-        ]))
+        lines = []
+        for line in cell.strip().split('\n'):
+            # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
+            # normally filter line magic, with exception of %time; actually parse the thing being timed in this case
+            if line.startswith('%'):
+                if line.startswith('%time '):
+                    lines.append(line[len('%time '):].strip())
+                else:
+                    continue
+            elif line.startswith('!'):
+                continue
+            elif line.startswith('cd'):
+                continue
+            elif line.endswith('?'):
+                continue
+            lines.append(line)
+        return ast.parse('\n'.join(lines))
 
     def compute_live_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
         if isinstance(code, str):

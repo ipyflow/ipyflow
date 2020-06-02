@@ -122,3 +122,8 @@ History
 ------------------
 * Major bugfixes and improvements to the attribute / subscript tracer;
 * Improvements to the logic for only propagating staleness past cell boundaries;
+
+0.0.36 (2020-06-01)
+------------------
+* Code quality improvements;
+* Fixes to properly reference live args and kwargs inside of calls involving attributes and subscripts;

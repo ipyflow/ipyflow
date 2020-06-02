@@ -1289,6 +1289,23 @@ def test_typed_assignment():
     assert_detected('`b` has stale dep on `a`')
 
 
+@skipif_known_failing
+def test_time_line_magic():
+    run_cell('a = 0')
+    run_cell('b = a + 1')
+    run_cell('%time a = 42')
+    run_cell('logging.info(b)')
+    assert_detected('`b` has stale dep on `a`')
+
+
+def test_cell_magic():
+    run_cell('a = 0')
+    run_cell('b = a + 1')
+    run_cell('%%time\na = 42')
+    run_cell('logging.info(b)')
+    assert_detected('`b` has stale dep on `a`')
+
+
 def test_pandas():
     run_cell('import numpy as np')
     run_cell('import pandas as pd')
@@ -1306,10 +1323,4 @@ def test_pandas():
 @skipif_known_failing
 def test_chain_with_toplevel_assignment():
     # TODO:
-    pass
-
-
-@skipif_known_failing
-def test_cell_magic():
-    # TODO: write this
     pass

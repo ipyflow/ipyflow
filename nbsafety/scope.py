@@ -97,41 +97,30 @@ class Scope(object):
                 return dict(inspect.getmembers(obj))
         return name_to_obj
 
-    def gen_data_symbols_for_attr_symbol_chain(self, chain: SymbolRef, namespaces: 'Dict[int, NamespaceScope]'):
+    def get_most_specific_data_symbol_for_attrsub_chain(
+            self, chain: AttrSubSymbolChain, namespaces: 'Dict[int, NamespaceScope]'
+    ):
         """
-        Yield DataSymbol for the whole chain (stops at first CallPoint)
+        Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
-        assert isinstance(chain.symbol, AttrSubSymbolChain)
         cur_scope = self
         name_to_obj = get_ipython().ns_table['user_global']
-        dc = None
+        dsym = None
         obj = None
-        to_yield = None
-        for name in chain.symbol.symbols:
+        for name in chain.symbols:
             if isinstance(name, CallPoint):
-                yield dc
-                # dc = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
-                # yield dc, False
-                return
-            dc = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
-            if dc is not None:
-                # if to_yield is not None:
-                #     # we only yield the last symbol in the chain as a potentially deep ref
-                #     yield to_yield, False
-                # save off current part of chain
-                to_yield = dc
+                return dsym
+            dsym = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
             if name_to_obj is None:
                 break
             try:
-                obj = Scope._get_name_to_obj_mapping(obj, dc)[name]
+                obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
             except (KeyError, IndexError, Exception):
                 break
             cur_scope = namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
-
-        if to_yield is not None:
-            yield dc
+        return dsym
 
     def upsert_data_symbol_for_name(
             self,

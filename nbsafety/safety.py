@@ -156,21 +156,23 @@ class DependencySafety(object):
         max_defined_cell_num = -1
         for symbol_ref in self.compute_live_symbol_refs(cell):
             if isinstance(symbol_ref.symbol, str):
-                nodes = [self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol)]
+                node = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol)
             elif isinstance(symbol_ref.symbol, AttrSubSymbolChain):
-                nodes = self.global_scope.gen_data_symbols_for_attr_symbol_chain(symbol_ref, self.namespaces)
+                node = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(
+                    symbol_ref.symbol, self.namespaces
+                )
             else:
                 logger.warning('invalid type for ref %s', symbol_ref)
                 continue
-            for node in nodes:
-                if node is not None:
-                    # print(node, node.has_stale_ancestor)
-                    max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
-                    if node.has_stale_ancestor:
-                        stale_nodes.add(node)
-                    if node.obj_id in self.namespaces:
-                        namespace_scope = self.namespaces[node.obj_id]
-                        max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+            if node is None:
+                continue
+            # print(node, node.has_stale_ancestor)
+            max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
+            if node.has_stale_ancestor:
+                stale_nodes.add(node)
+            if node.obj_id in self.namespaces:
+                namespace_scope = self.namespaces[node.obj_id]
+                max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
         return stale_nodes, max_defined_cell_num
 
     def _precheck_simple(self, cell):

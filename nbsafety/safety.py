@@ -64,7 +64,7 @@ class DependencySafety(object):
         self.use_comm: bool = use_comm
         self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)
         self._last_execution_counter = 0
-        self._counters_by_cell_id: Dict[str, int] = {}
+        self._counters_by_cell_id: Dict[Union[str, int], int] = {}
         self._save_prev_trace_state_for_tests: bool = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None

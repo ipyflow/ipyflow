@@ -5,9 +5,7 @@ import pytest
 
 from .utils import make_safety_fixture, skipif_known_failing
 
-
 logging.basicConfig(level=logging.ERROR)
-
 
 # Reset dependency graph before each test
 _safety_fixture, _safety_state, run_cell_ = make_safety_fixture()

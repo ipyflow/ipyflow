@@ -21,7 +21,7 @@ from .scope import Scope, NamespaceScope
 from .tracing import AttrSubTracingManager, make_tracer, TraceState
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Set, Optional, Tuple, Union
+    from typing import Any, Dict, List, Set, Optional, Tuple, Union
     from .analysis import SymbolRef
     from .data_symbol import DataSymbol
 
@@ -48,7 +48,7 @@ def _safety_warning(node: 'DataSymbol'):
 class DependencySafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
-        # Note: explicitly adding the types helps PyCharms code inspection
+        # Note: explicitly adding the types helps PyCharm's built-in code inspection
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope(self)
@@ -81,55 +81,60 @@ class DependencySafety(object):
         self._prev_cell_nodes_with_stale_deps: Set[DataSymbol] = set()
 
         if self.use_comm:
-            get_ipython().kernel.comm_manager.register_target('nbsafety', self._comm_target)
+            get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
     def _comm_target(self, comm, open_msg):
         @comm.on_msg
         def _responder(msg):
             cell_id = msg['content']['data']['executed_cell_id']
             self._counters_by_cell_id[cell_id] = self._last_execution_counter
-            tasks = msg['content']['data']['content_by_cell_id']
-            stale_input_cells = []
-            stale_output_cells = []
-            fresh_cells = []
-            for cell_id, cell_content in tasks.items():
-                try:
-                    stale_nodes, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
-                    if len(stale_nodes) > 0:
-                        stale_input_cells.append(cell_id)
-                    elif max_defined_cell_num > self._counters_by_cell_id.get(cell_id, float('inf')):
-                        stale_output_cells.append(cell_id)
-                    else:
-                        fresh_cells.append(cell_id)
-                except SyntaxError:
-                    continue
-            stale_links = defaultdict(list)
-            refresher_links = defaultdict(list)
-            for candidate_refresher_cell_id in fresh_cells + stale_output_cells:
-                candidate_refresher_cell = tasks[candidate_refresher_cell_id]
-                for stale_cell_id in stale_input_cells:
-                    try:
-                        if not self._precheck_simple(f'{candidate_refresher_cell}\n{tasks[stale_cell_id]}'):
-                            stale_links[stale_cell_id].append(candidate_refresher_cell_id)
-                            refresher_links[candidate_refresher_cell_id].append(stale_cell_id)
-                    except SyntaxError:
-                        continue
-            comm.send({
-                'type': 'cell_freshness',
-                'stale_input_cells': stale_input_cells,
-                'stale_output_cells': stale_output_cells,
-                'stale_links': stale_links,
-                'refresher_links': refresher_links,
-            })
+            cells_by_id = msg['content']['data']['content_by_cell_id']
+            response = self.multicell_precheck(cells_by_id)
+            response['type'] = 'cell_freshness'
+            comm.send(response)
 
         comm.send({'type': 'establish'})
+
+    def multicell_precheck(self, cells_by_id: 'Dict[Union[int, str], str]') -> 'Dict[str, Any]':
+        stale_input_cells = []
+        stale_output_cells = []
+        fresh_cells = []
+        for cell_id, cell_content in cells_by_id.items():
+            try:
+                stale_nodes, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
+                if len(stale_nodes) > 0:
+                    stale_input_cells.append(cell_id)
+                elif max_defined_cell_num > self._counters_by_cell_id.get(cell_id, float('inf')):
+                    stale_output_cells.append(cell_id)
+                else:
+                    fresh_cells.append(cell_id)
+            except SyntaxError:
+                continue
+        stale_links = defaultdict(list)
+        refresher_links = defaultdict(list)
+        for candidate_refresher_cell_id in fresh_cells + stale_output_cells:
+            candidate_refresher_cell = cells_by_id[candidate_refresher_cell_id]
+            for stale_cell_id in stale_input_cells:
+                try:
+                    if not self._precheck_simple(f'{candidate_refresher_cell}\n{cells_by_id[stale_cell_id]}'):
+                        stale_links[stale_cell_id].append(candidate_refresher_cell_id)
+                        refresher_links[candidate_refresher_cell_id].append(stale_cell_id)
+                except SyntaxError:
+                    continue
+        return {
+            'stale_input_cells': stale_input_cells,
+            'stale_output_cells': stale_output_cells,
+            'stale_links': stale_links,
+            'refresher_links': refresher_links,
+        }
 
     @staticmethod
     def _get_cell_ast(cell):
         lines = []
         for line in cell.strip().split('\n'):
             # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
-            # normally filter line magic, with exception of %time; actually parse the thing being timed in this case
+            # normally filter line magic, but for %time, try to actually trace the statement being timed
+            # TODO: how to do this?
             if line.startswith('%'):
                 if line.startswith('%time '):
                     lines.append(line[len('%time '):].strip())
@@ -192,8 +197,8 @@ class DependencySafety(object):
                 warning_counter = 0
                 for node in self._prev_cell_nodes_with_stale_deps:
                     if warning_counter >= _MAX_WARNINGS:
-                        logger.warning(str(len(self._prev_cell_nodes_with_stale_deps) - warning_counter) +
-                                       " more nodes with stale dependencies skipped...")
+                        logger.warning(f'{len(self._prev_cell_nodes_with_stale_deps) - warning_counter}'
+                                       ' more nodes with stale dependencies skipped...')
                         break
                     _safety_warning(node)
                     warning_counter += 1

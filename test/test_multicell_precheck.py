@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from .utils import make_safety_fixture
+from .utils import make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -37,3 +37,17 @@ def test_simple():
     assert response['stale_output_cells'] == []
     assert response['stale_links'] == {3: [1]}
     assert response['refresher_links'] == {1: [3]}
+
+
+@skipif_known_failing
+def test_refresh_after_exception_fixed():
+    cells = {
+        0: 'x = 0',
+        1: 'y = x + 1',
+        2: 'logging.info(y)',
+    }
+    run_cell(cells[0])
+    run_cell(cells[2])
+    run_cell(cells[1])
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_output_cells'] == [2]

@@ -96,7 +96,7 @@ class TraceState(object):
                 # no need to track dependencies in this case
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
                     return_to_stmt.class_scope = cast('NamespaceScope', self.cur_frame_scope)
-                else:
+                elif isinstance(trace_stmt.stmt_node, ast.Return):
                     return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
             # reset for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt

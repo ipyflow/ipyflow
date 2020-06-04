@@ -216,6 +216,7 @@ class DataSymbol(object):
             seen: 'Set[DataSymbol]',
             parent_seen: 'Set[DataSymbol]',
     ):
+        # print(self, 'propagate to child deps', self.children)
         if self.should_mark_stale(updated_dep):
             self.fresher_ancestors.add(updated_dep)
             self.required_cell_num = cell_counter()
@@ -241,6 +242,7 @@ class DataSymbol(object):
         if self._tombstone or self in seen:
             return
         seen.add(self)
+        # print('propagate update from', self)
 
         new_id = None if new_parent_obj is NOT_FOUND else id(new_parent_obj)
 
@@ -340,32 +342,29 @@ class DataSymbol(object):
         containing_scope = cast('NamespaceScope', self.containing_scope)
         containing_namespace_obj_id = containing_scope.obj_id
         for alias in self.safety.aliases[containing_namespace_obj_id]:
+            # print('propagate from ns parent', alias, 'with refresh=', refresh)
             if refresh and not self.has_stale_ancestor:
                 alias.namespace_data_syms_with_stale.discard(self)
                 if not alias.has_stale_ancestor:
                     alias.fresher_ancestors = set()
+            alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
+            for alias_child in alias.children:
+                if alias_child.obj_id == containing_namespace_obj_id:
+                    continue
+                # Next, complicated check to avoid propagating along a class -> instance edge.
+                # The only time this is OK is when we changed the class, which will not be the case here.
+                alias_child_namespace = alias_child.namespace
+                if alias_child_namespace is not None:
+                    if alias_child_namespace.cloned_from is containing_scope:
+                        if updated_dep.namespace is not containing_scope:
+                            continue
+                alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
             if refresh:
                 # containing_scope.max_defined_timestamp = cell_counter()
                 self.safety.updated_scopes.add(containing_scope)
-                alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
-                for alias_child in alias.children:
-                    if alias_child.obj_id == containing_namespace_obj_id:
-                        continue
-                    # Next, complicated check to avoid propagating along a class -> instance edge.
-                    # The only time this is OK is when we changed the class, which will not be the case here.
-                    alias_child_namespace = alias_child.namespace
-                    if alias_child_namespace is not None:
-                        if alias_child_namespace.cloned_from is containing_scope:
-                            if updated_dep.namespace is not containing_scope:
-                                continue
-                    alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
             else:
-                if self.should_mark_stale(updated_dep) and alias.should_mark_stale(updated_dep):
-                    if containing_scope.max_defined_timestamp != updated_dep.defined_cell_num:
-                        alias.namespace_data_syms_with_stale.add(self)
-                old_required_cell_num = alias.required_cell_num
-                alias._propagate_update(alias._get_obj(), updated_dep, seen, parent_seen)
-                alias.required_cell_num = old_required_cell_num
+                if self.should_mark_stale(updated_dep):
+                    alias.namespace_data_syms_with_stale.add(self)
 
     @property
     def has_stale_ancestor(self):

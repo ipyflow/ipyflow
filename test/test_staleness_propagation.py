@@ -1338,3 +1338,18 @@ class Foo:
     run_cell('y = 102')
     run_cell('logging.info(z)')
     assert_detected('`z` depends on stale `y`')
+
+
+def test_class_member_granularity():
+    run_cell("""
+y = 77
+class Foo:
+    def __init__(self):
+        self.x = 10
+        self.y = y
+""")
+    run_cell('foo = Foo()')
+    run_cell('z = foo.x + 7')
+    run_cell('y = 42')
+    run_cell('logging.info(z)')
+    assert_not_detected('`z` independent of stale `y`')

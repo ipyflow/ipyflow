@@ -294,9 +294,9 @@ class DataSymbol(object):
         if refresh:
             for alias in self.safety.aliases[old_id]:
                 if alias.defined_cell_num < alias.required_cell_num < cell_counter():
-                    logger.warning('possible stale usage of namespace descendent %s' % alias)
+                    logger.debug('possible stale usage of namespace descendent %s' % alias)
                 if len(alias.namespace_data_syms_with_stale) > 0:
-                    logger.warning('unexpected stale namespace symbols for symbol %s: %s' % (alias, alias.namespace_data_syms_with_stale))
+                    logger.debug('unexpected stale namespace symbols for symbol %s: %s' % (alias, alias.namespace_data_syms_with_stale))
                     alias.namespace_data_syms_with_stale.clear()
                 if old_id != new_id or mutated:
                     # TODO: better equality testing

@@ -70,7 +70,13 @@ with open(fname) as f:
     assert lvals == {'f'}
     assert rvals == {'fname', 'open'}
     lvals, rvals = get_statement_lval_and_rval_symbols(mapping[3])
-    print(lvals, rvals)
     assert lvals == {'contents'}
     # attributes should be skipped
     assert rvals == set()
+
+
+def test_deeply_nested_arguments():
+    mapping = compute_lineno_to_stmt_mapping('x = f(f(f(f(y, z=7), z=9), z=w), 10)')
+    lvals, rvals = get_statement_lval_and_rval_symbols(mapping[1])
+    assert lvals == {'x'}
+    assert rvals == {'f', 'y', 'w'}

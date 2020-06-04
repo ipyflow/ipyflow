@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 
 class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
+        # TODO: figure out how to give these type annotations
         self.lval_symbols = []
         self.rval_symbols = []
         self.gather_rvals = True

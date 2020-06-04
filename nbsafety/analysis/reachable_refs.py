@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(ast.NodeVisitor):
-
     def __init__(self, safety: 'DependencySafety'):
         self.safety = safety
         self.killed: Set[Union[str, AttrSubSymbolChain]] = set()

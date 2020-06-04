@@ -163,9 +163,7 @@ class DependencySafety(object):
             if isinstance(symbol_ref, str):
                 node = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
             elif isinstance(symbol_ref, AttrSubSymbolChain):
-                node = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(
-                    symbol_ref, self.namespaces
-                )
+                node = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref, self.namespaces)
             else:
                 logger.warning('invalid type for ref %s', symbol_ref)
                 continue

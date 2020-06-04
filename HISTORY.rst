@@ -18,112 +18,117 @@ History
 * Misc bug fixes;
 
 0.0.10 (2020-05-08)
-------------------
+-------------------
 * Rename kernel from `python3-nbsafety` to `nbsafety`;
 
 0.0.11 (2020-05-08)
-------------------
+-------------------
 * Readme formatting for PyPI;
 
 0.0.12 (2020-05-08)
-------------------
+-------------------
 * Readme formatting for PyPI;
 
 0.0.13 (2020-05-08)
-------------------
+-------------------
 * Refresh nodes w/ stale deps upon user override to avoid multiple of same warning;
 
 0.0.14 (2020-05-08)
-------------------
+-------------------
 * Fix cornercase bug for objects without __dict__ attribute (such as dictionaries);
 
 0.0.15 (2020-05-11)
-------------------
+-------------------
 * Fix bugs related to attr resolution for class attributes and add functionality to handle basic aliasing / mutation;
 
 0.0.16 (2020-05-12)
-------------------
+-------------------
 * Handle simple mutation deps for method calls (simple ast.Name args are added as deps);
 
 0.0.17 (2020-05-12)
-------------------
+-------------------
 * Add workaround for weird pandas attributes;
 
 0.0.18 (2020-05-12)
-------------------
+-------------------
 * Fix issue detecting completion of statement with calls inside of comprehensions;
 
 0.0.19 (2020-05-12)
-------------------
+-------------------
 * Don't require pandas;
 
 0.0.20 (2020-05-12)
-------------------
+-------------------
 * Minor stability fix;
 
 0.0.21 (2020-05-12)
-------------------
+-------------------
 * Increment cell numbers properly with %safety magic; other minor bugfixes;
 
 0.0.22 (2020-05-12)
-------------------
+-------------------
 * Increment cell number if precheck failed;
 
 0.0.23 (2020-05-13)
-------------------
+-------------------
 * Support AnnAssign (i.e. assignment with type annotations);
 
 0.0.24 (2020-05-13)
-------------------
+-------------------
 * Add logo;
 
 0.0.25 (2020-05-13)
-------------------
+-------------------
 * Hack to try and install kernel spec as post install script;
 
 0.0.26 (2020-05-13)
-------------------
+-------------------
 * More hacks to try and install kernel spec as post install script (switch to egg + use manifest);
 
 0.0.27 (2020-05-13)
-------------------
+-------------------
 * Give up on bdist_egg;
 
 0.0.28 (2020-05-13)
-------------------
+-------------------
 * Resort to hacky `atexit` command register call to facilitate post install script for kernel;
 
 0.0.29 (2020-05-13)
-------------------
+-------------------
 * Give up on post installation of kernel spec and try to include resources dir in package;
 
 0.0.30 (2020-05-16)
-------------------
+-------------------
 * Add front-end labextension to highlight stale and refresher cells;
 
 0.0.31 (2020-05-18)
-------------------
+-------------------
 * Bugfixes; version npm package and PyPI package in lockstep;
 
 0.0.32 (2020-05-27)
-------------------
+-------------------
 * Bugfixes; improve propagation of updated dependencies along namespace hierarchies;
 
 0.0.33 (2020-05-27)
-------------------
+-------------------
 * Minor usability improvements;
 
 0.0.34 (2020-05-30)
-------------------
+-------------------
 * Major bugfixes and improvements to dependency tracking;
 * Fix bug that prevented attribute / subscript tracing on Python 3.6.
 
 0.0.35 (2020-05-31)
-------------------
+-------------------
 * Major bugfixes and improvements to the attribute / subscript tracer;
 * Improvements to the logic for only propagating staleness past cell boundaries;
 
 0.0.36 (2020-06-01)
-------------------
+-------------------
 * Code quality improvements;
 * Fixes to properly reference live args and kwargs inside of calls involving attributes and subscripts;
+
+0.0.37 (2020-06-04)
+-------------------
+* Support fine-grained dependency edges for tuple unpacking for simple (non attribute / subscript) symbols;
+* Bugfixes for args inside of nested function calls as well as for multiple inline function calls (eg f()());

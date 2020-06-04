@@ -481,6 +481,7 @@ y = f()
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_func_assign_helper_func_2(no_stale_propagation_for_same_cell_definition):
     _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
+    run_cell('%safety trace_messages enable')
     run_cell("""
 x = 3
 a = 4

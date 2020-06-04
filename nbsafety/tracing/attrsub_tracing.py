@@ -130,8 +130,6 @@ class AttrSubTracingManager(object):
                 if obj_name is not None:
                     scope.scope_name = obj_name
                 self.safety.namespaces[obj_id] = scope
-                # if scope.full_path == ('<module>', 'self'):
-                #     print('register', scope, 'for obj', obj, attr_or_subscript)
             else:
                 # print('no scope for class', obj.__class__)
                 try:
@@ -149,7 +147,7 @@ class AttrSubTracingManager(object):
                     parent_scope = self.active_scope
                 scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
                 self.safety.namespaces[obj_id] = scope
-        # print('new active scope', scope)
+        # print('override:', override_active_scope, 'and new active scope:', scope)
         if override_active_scope:
             self.active_scope = scope
         if scope is None:
@@ -159,25 +157,27 @@ class AttrSubTracingManager(object):
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
             # TODO: this strategy won't work if the arguments themselves lead to traced function calls
+            # print('looking for', attr_or_subscript)
+            data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+                attr_or_subscript, is_subscript=is_subscript
+            )
+            if data_sym is None:
+                try:
+                    obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
+                    symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
+                    data_sym = DataSymbol(attr_or_subscript, symbol_type, obj_attr_or_sub, scope, self.safety)
+                    # this is to prevent refs to the scope object from being considered as stale if we just load it
+                    data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
+                    scope.put(attr_or_subscript, data_sym)
+                    # print('put', data_sym, 'in', scope.full_namespace_path)
+                    # FIXME: DataSymbols should probably register themselves with the alias manager at creation
+                    self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
+                except (AttributeError, KeyError, IndexError):
+                    pass
+            self.deep_ref_candidate = None
             if call_context:
                 self.deep_ref_candidate = (self.trace_event_counter[0], obj_id, obj_name)
-            else:
-                self.deep_ref_candidate = None
-                data_sym = scope.lookup_data_symbol_by_name_this_indentation(
-                    attr_or_subscript, is_subscript=is_subscript
-                )
-                if data_sym is None:
-                    try:
-                        obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
-                        symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-                        data_sym = DataSymbol(attr_or_subscript, symbol_type, obj_attr_or_sub, scope, self.safety)
-                        # this is to prevent refs to the scope object from being considered as stale if we just load it
-                        data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
-                        scope.put(attr_or_subscript, data_sym)
-                        # FIXME: DataSymbols should probably register themselves with the alias manager at creation
-                        self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
-                    except (AttributeError, KeyError, IndexError):
-                        pass
+            elif data_sym is not None:
                 self.loaded_data_symbols.add(data_sym)
         if ctx in ('Store', 'AugStore'):
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
@@ -295,17 +295,9 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         return new_node
 
     def visit_Call(self, node: ast.Call):
-        # if isinstance(node.func, ast.Attribute):
-        #     assert isinstance(node.func.ctx, ast.Load)
-        #     with self.attrsub_load_context():
-        #         node.func = self.visit_Attribute(node.func, call_context=True)
-
-        if not isinstance(node.func, ast.Attribute):
-            return node
-
-        assert isinstance(node.func.ctx, ast.Load)
-        with self.attrsub_load_context():
-            node.func = self.visit_Attribute(node.func, call_context=True)
+        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
+            with self.attrsub_load_context():
+                node.func = self.visit_Attribute_or_Subscript(node.func, call_context=True)
 
         replacement_args = []
         for arg in node.args:

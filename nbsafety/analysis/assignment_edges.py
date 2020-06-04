@@ -2,10 +2,11 @@
 import ast
 from typing import cast, TYPE_CHECKING
 
+from .attr_symbols import get_attrsub_symbol_chain
 from .mixins import SaveOffAttributesMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import Union
+    from typing import Sequence, Union
 
 
 class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
@@ -40,6 +41,15 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
     def visit_Name(self, node):
         self.to_add_set.append(node.id)
 
+    def visit_Num(self, node):
+        self.to_add_set.append(None)
+
+    def visit_Str(self, node):
+        self.to_add_set.append(None)
+
+    def visit_NameConstant(self, node):
+        self.to_add_set.append(None)
+
     def visit_Tuple(self, node):
         self.visit_List_or_Tuple(node)
 
@@ -59,6 +69,21 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
             self.visit(node.elts)
         self.to_add_set.append(inner_symbols)
 
+    def visit_expr(self, node):
+        assert self.gather_rvals
+        inner_symbols = []
+        with self.push_attributes(to_add_set=inner_symbols):
+            # call super generic_visit since self generic_visit calls visit_expr
+            super().generic_visit(node)
+        self.to_add_set.append(inner_symbols)
+
+    def generic_visit(self, node: 'Union[ast.AST, Sequence[ast.AST]]'):
+        # The purpose of this is to make sure we call our visit_expr method if we see an expr
+        if isinstance(node, ast.expr):
+            self.visit_expr(node)
+        else:
+            super().generic_visit(node)
+
     def visit_Assign(self, node):
         with self.gather_lvals_context():
             for target in node.targets:
@@ -68,6 +93,44 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
                 self.lval_symbols.append(target_lval_symbols)
         with self.gather_rvals_context():
             self.visit(node.value)
+
+    def visit_Call(self, node):
+        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
+            self.to_add_set.append(get_attrsub_symbol_chain(node))
+        else:
+            self.generic_visit(node)
+
+    def visit_Attribute_or_Subscript(self, node):
+        self.to_add_set.append(get_attrsub_symbol_chain(node))
+
+    def visit_Attribute(self, node):
+        self.visit_Attribute_or_Subscript(node)
+
+    def visit_Subscript(self, node):
+        self.visit_Attribute_or_Subscript(node)
+
+    def visit_Keyword(self, node):
+        self.visit(node.value)
+
+    def visit_Starred(self, node):
+        self.visit(node.value)
+
+    def visit_Lambda(self, node):
+        assert self.gather_rvals
+        # remove node.arguments
+        self.visit(node.body)
+        self.visit(node.args)
+        with self.push_attributes(rval_symbols=[]):
+            self.visit(node.args.args)
+            self.visit(node.args.vararg)
+            self.visit(node.args.kwonlyargs)
+            self.visit(node.args.kwarg)
+            discard_set = set(self.rval_symbols)
+        # throw away anything appearing in lambda body that isn't bound
+        self.rval_symbols = list(set(self.rval_symbols) - discard_set)
+
+    def visit_arg(self, node):
+        self.to_add_set.append(node.arg)
 
 
 def _flatten(vals):
@@ -83,20 +146,20 @@ def _edges(lvals, rvals):
         yield from _edges_from_lists(lvals, rvals)
     elif isinstance(lvals, list):
         # TODO: yield edges with subscript symbols
-        for l in _flatten(lvals):
-            yield l, rvals
+        for left in _flatten(lvals):
+            yield left, rvals
     elif isinstance(rvals, list):
         # TODO: yield edges with subscript symbols
-        for r in _flatten(rvals):
-            yield lvals, r
+        for right in _flatten(rvals):
+            yield lvals, right
     else:
         yield lvals, rvals
 
 
 def _edges_from_lists(lvals, rvals):
     if len(lvals) == len(rvals):
-        for l, r in zip(lvals, rvals):
-            yield from _edges(l, r)
+        for left, right in zip(lvals, rvals):
+            yield from _edges(left, right)
     elif len(lvals) == 1:
         yield from _edges(lvals[0], rvals)
     elif len(rvals) == 1:

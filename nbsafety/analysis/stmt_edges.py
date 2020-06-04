@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
 import ast
+from collections import defaultdict
+import logging
 from typing import TYPE_CHECKING
 
+from .attr_symbols import AttrSubSymbolChain
+from .assignment_edges import get_assignment_lval_and_rval_symbol_refs
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import List, Set, Union
+    from typing import List, Set, Tuple, Union
+
+logger = logging.getLogger(__name__)
 
 
 class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
@@ -13,6 +19,7 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         # TODO: current complete bipartite subgraph will add unncessary edges
         # TODO: this is actually pretty important to handle things like a.b.c properly,
         # we should switch to generating a sequence of (lvals, rvals, etc.)
+        self.assignment_edges: List[Tuple[Union[str, AttrSubSymbolChain], Union[str, AttrSubSymbolChain]]] = []
         self.lval_symbol_ref_set: Set[str] = set()
         self.rval_symbol_ref_set: Set[Union[str, int]] = set()
         self.should_overwrite = True
@@ -20,7 +27,23 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
 
     def __call__(self, node):
         self.visit(node)
-        return self.lval_symbol_ref_set, self.rval_symbol_ref_set, self.should_overwrite
+        edges = defaultdict(set)
+        if len(self.lval_symbol_ref_set) == 0 and len(self.assignment_edges) == 0:
+            edges[None] = self.rval_symbol_ref_set
+            return edges, self.should_overwrite
+        for symbol in self.lval_symbol_ref_set:
+            edges[symbol] = set(self.rval_symbol_ref_set)
+        for edge in self.assignment_edges:
+            # FIXME: figure out how to handle attributes in a principled manner here
+            if isinstance(edge[0], AttrSubSymbolChain):
+                edges[None].add(edge[1])
+            elif isinstance(edge[1], AttrSubSymbolChain) or edge[1] is None:
+                # just get the lval in the keys
+                edges[edge[0]].add(None)
+                edges[edge[0]].discard(None)
+            else:
+                edges[edge[0]].add(edge[1])
+        return edges, self.should_overwrite
 
     @property
     def to_add_set(self):
@@ -52,11 +75,16 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         return
 
     def visit_Assign(self, node):
-        with self.gather_lvals_context():
-            for target in node.targets:
-                self.visit(target)
-        with self.gather_rvals_context():
-            self.visit(node.value)
+        try:
+            self.assignment_edges.extend(get_assignment_lval_and_rval_symbol_refs(node))
+        except Exception as e:
+            logger.warning('Exception while trying to do new-style edge computation for assignment: %s' % e)
+            logger.warning('Falling back to old method...')
+            with self.gather_lvals_context():
+                for target in node.targets:
+                    self.visit(target)
+            with self.gather_rvals_context():
+                self.visit(node.value)
 
     def visit_AnnAssign(self, node):
         with self.gather_lvals_context():
@@ -130,5 +158,5 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         self.to_add_set.add(node.arg)
 
 
-def get_statement_lval_and_rval_symbol_refs(node: ast.AST):
+def get_statement_symbol_edges(node: ast.AST):
     return GetStatementLvalRvalSymbolRefs()(node)

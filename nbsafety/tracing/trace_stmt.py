@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
-from ..analysis import get_statement_lval_and_rval_symbol_refs
+from ..analysis import get_statement_symbol_edges
 from ..utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
@@ -36,9 +36,15 @@ class TraceStatement(object):
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
-            _, rval_symbol_refs, _ = get_statement_lval_and_rval_symbol_refs(self.stmt_node)
+            symbol_edges, _ = get_statement_symbol_edges(self.stmt_node)
+            if len(symbol_edges) == 0:
+                rval_symbol_refs = set()
+            else:
+                rval_symbol_refs = set.union(*symbol_edges.values()) - {None}
         rval_data_symbols = set()
         for name in rval_symbol_refs:
+            if name is None:
+                continue
             maybe_rval_dsym = self.scope.lookup_data_symbol_by_name(name)
             if maybe_rval_dsym is not None:
                 rval_data_symbols.add(maybe_rval_dsym)
@@ -65,16 +71,18 @@ class TraceStatement(object):
         return func_cell.call_scope
 
     def _make_lval_data_symbols(self):
-        lval_symbol_refs, rval_symbol_refs, should_overwrite = get_statement_lval_and_rval_symbol_refs(self.stmt_node)
-        rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_symbol_refs - lval_symbol_refs)
-        rval_deps |= self._gather_deep_ref_rval_dsyms()
+        symbol_edges, should_overwrite = get_statement_symbol_edges(self.stmt_node)
+        deep_rval_deps = self._gather_deep_ref_rval_dsyms()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         if is_function_def or is_class_def:
-            assert len(lval_symbol_refs) == 1
-            assert not lval_symbol_refs.issubset(rval_symbol_refs)
-        for name in lval_symbol_refs:
-            should_overwrite_for_name = should_overwrite and name not in rval_symbol_refs
+            assert len(symbol_edges) == 1
+            # assert not lval_symbol_refs.issubset(rval_symbol_refs)
+        for lval_name, rval_names in symbol_edges.items():
+            if lval_name is None:
+                continue
+            should_overwrite_for_name = should_overwrite and lval_name not in rval_names
+            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name}) | deep_rval_deps
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
@@ -84,13 +92,19 @@ class TraceStatement(object):
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             try:
-                obj = self.frame.f_locals[name]
+                obj = self.frame.f_locals[lval_name]
                 self.scope.upsert_data_symbol_for_name(
-                    name, obj, rval_deps, False,
+                    lval_name, obj, rval_deps, False,
                     overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
                 )
             except KeyError:
                 pass
+        if len(symbol_edges) == 0:
+            rval_deps = deep_rval_deps
+        else:
+            rval_deps = self.compute_rval_dependencies(
+                rval_symbol_refs=set.union(*symbol_edges.values()) - {None}
+            ) | deep_rval_deps
         for scope, obj, attr_or_sub, is_subscript in self.safety.attr_trace_manager.saved_store_data:
             # print(scope, obj, attr_or_sub, is_subscript)
             try:

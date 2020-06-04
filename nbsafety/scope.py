@@ -10,7 +10,7 @@ try:
 except ImportError:
     pandas = None
 
-from .analysis import AttrSubSymbolChain, CallPoint, SymbolRef
+from .analysis import AttrSubSymbolChain, CallPoint
 from .data_symbol import DataSymbol, DataSymbolType
 from .ipython_utils import cell_counter
 
@@ -136,6 +136,7 @@ class Scope(object):
             name, obj, deps, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
+        # print('upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
 
     def _upsert_data_symbol_for_name_inner(

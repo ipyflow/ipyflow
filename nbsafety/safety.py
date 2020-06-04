@@ -160,11 +160,11 @@ class DependencySafety(object):
         stale_nodes = set()
         max_defined_cell_num = -1
         for symbol_ref in self.compute_live_symbol_refs(cell):
-            if isinstance(symbol_ref.symbol, str):
-                node = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref.symbol)
-            elif isinstance(symbol_ref.symbol, AttrSubSymbolChain):
+            if isinstance(symbol_ref, str):
+                node = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
+            elif isinstance(symbol_ref, AttrSubSymbolChain):
                 node = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(
-                    symbol_ref.symbol, self.namespaces
+                    symbol_ref, self.namespaces
                 )
             else:
                 logger.warning('invalid type for ref %s', symbol_ref)

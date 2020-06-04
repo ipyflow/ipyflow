@@ -35,14 +35,15 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
             edges[symbol] = set(self.rval_symbol_ref_set)
         for edge in self.assignment_edges:
             # FIXME: figure out how to handle attributes in a principled manner here
-            if isinstance(edge[0], AttrSubSymbolChain):
-                edges[None].add(edge[1])
-            elif isinstance(edge[1], AttrSubSymbolChain) or edge[1] is None:
+            left, right = edge
+            if isinstance(left, AttrSubSymbolChain):
+                edges[None].add(right)
+            elif isinstance(right, AttrSubSymbolChain) or right is None:
                 # just get the lval in the keys
-                edges[edge[0]].add(None)
-                edges[edge[0]].discard(None)
+                edges[left].add(None)
+                edges[left].discard(None)
             else:
-                edges[edge[0]].add(edge[1])
+                edges[left].add(right)
         return edges, self.should_overwrite
 
     @property
@@ -60,6 +61,7 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
 
     def visit_Attribute(self, node):
         # everything here is handled by the attrsub tracer
+        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h
         return
 
     def visit_Name(self, node):
@@ -72,6 +74,7 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         #         self.visit(node.slice.value)
         # TODO: the ast.Name slice dependency turns out to be super hard to refresh, so until we
         #  figure out how to do it in a principled way, we'll just accept potential false negatives
+        # TODO: we'll ignore args inside of inner calls, e.g. f[g](x, y)[h]
         return
 
     def visit_Assign(self, node):

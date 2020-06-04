@@ -5,11 +5,11 @@ from typing import TYPE_CHECKING
 
 from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
-from .symbol_ref import SymbolRef
 
 if TYPE_CHECKING:
     from typing import List, Set, Union
     from ..safety import DependencySafety
+    from ..types import SymbolRef
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +33,11 @@ class ComputeLiveSymbolRefs(ast.NodeVisitor):
         for node in module_node.body:
             self.visit(node)
             for ref in _get_all_symbol_refs(node):
-                if ref.symbol in self.killed:
+                if ref in self.killed:
                     continue
                 # TODO: check for all subchains in the safe set, not just the first symbol
-                if isinstance(ref.symbol, AttrSubSymbolChain):
-                    leading_symbol = ref.symbol.symbols[0]
+                if isinstance(ref, AttrSubSymbolChain):
+                    leading_symbol = ref.symbols[0]
                     if isinstance(leading_symbol, str) and leading_symbol in self.killed:
                         continue
                 check_set.add(ref)
@@ -117,7 +117,7 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
 
     def visit_Name(self, node: ast.Name):
         if not self.skip_simple_names:
-            self.ref_set.add(SymbolRef(node.id))
+            self.ref_set.add(node.id)
 
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
     def visit_FunctionDef(self, node: ast.FunctionDef):
@@ -133,7 +133,7 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+            self.ref_set.add(get_attrsub_symbol_chain(node))
             with self.attrsub_context():
                 self.visit(node.func)
         else:
@@ -141,13 +141,13 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
 
     def visit_Attribute(self, node: ast.Attribute):
         if not self.inside_attrsub:
-            self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+            self.ref_set.add(get_attrsub_symbol_chain(node))
         with self.attrsub_context():
             self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript):
         if not self.inside_attrsub:
-            self.ref_set.add(SymbolRef(get_attrsub_symbol_chain(node)))
+            self.ref_set.add(get_attrsub_symbol_chain(node))
         with self.attrsub_context():
             self.visit(node.value)
         with self.attrsub_context(inside=False):

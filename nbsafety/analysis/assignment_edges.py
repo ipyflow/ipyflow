@@ -101,6 +101,7 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
             self.generic_visit(node)
 
     def visit_Attribute_or_Subscript(self, node):
+        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h
         self.to_add_set.append(get_attrsub_symbol_chain(node))
 
     def visit_Attribute(self, node):

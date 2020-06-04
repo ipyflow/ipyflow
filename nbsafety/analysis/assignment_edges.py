@@ -46,6 +46,13 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
     def visit_List(self, node):
         self.visit_List_or_Tuple(node)
 
+    def visit_Dict(self, node):
+        inner_symbols = []
+        with self.push_attributes(to_add_set=inner_symbols):
+            self.visit(node.keys)
+            self.visit(node.values)
+        self.to_add_set.append(inner_symbols)
+
     def visit_List_or_Tuple(self, node):
         inner_symbols = []
         with self.push_attributes(to_add_set=inner_symbols):

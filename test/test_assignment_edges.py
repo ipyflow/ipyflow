@@ -26,6 +26,11 @@ def test_multiple_tuple_assignment():
     assert edges == [('a', 'd'), ('b', 'e'), ('c', 'd'), ('c', 'e')]
 
 
+def test_tuple_assignment_with_dict():
+    edges = list(get_assignment_lval_and_rval_symbol_refs('a, b = (d, e), {f: 5, g: h}'))
+    assert edges == [('a', 'd'), ('a', 'e'), ('b', 'f'), ('b', 'g'), ('b', 'h')]
+
+
 def test_nested_assignment():
     edges = list(get_assignment_lval_and_rval_symbol_refs('a, (b, [c, d]) = (d, e), [(f, g), h]'))
     assert edges == [

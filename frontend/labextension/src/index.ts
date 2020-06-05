@@ -169,6 +169,19 @@ const connectToComm = (
   notebook: Notebook
 ) => {
   const comm = kernel.createComm('nbsafety');
+
+  const onActiveCellChange = (thisNotebook: Notebook, cell: Cell) => {
+    if (notebook !== thisNotebook) {
+      return;
+    }
+    const payload = {
+      type: 'change_active_cell',
+      active_cell_id: cell.model.id,
+    };
+    comm.send(payload);
+  };
+  notebook.activeCellChanged.connect(onActiveCellChange, notebook.activeCellChanged);
+
   const onExecution = (_: any, args: { notebook: Notebook; cell: Cell }) => {
     if (notebook !== args.notebook) {
       return;
@@ -179,10 +192,12 @@ const connectToComm = (
     notebook.widgets.forEach((cell, idx) => {
       content_by_cell_id[cell.model.id] = cell.model.value.text;
     });
-    comm.send({
+    const payload = {
+      type: 'cell_freshness',
       executed_cell_id: args.cell.model.id,
       content_by_cell_id: content_by_cell_id
-    });
+    };
+    comm.send(payload);
   };
   comm.onMsg = (msg) => {
     if (msg.content.data['type'] === 'establish') {

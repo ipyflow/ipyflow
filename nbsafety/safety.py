@@ -65,6 +65,7 @@ class DependencySafety(object):
         self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)
         self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[Union[str, int], int] = {}
+        self._active_cell_id: Optional[str] = None
         self._save_prev_trace_state_for_tests: bool = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state: Optional[TraceState] = None
@@ -86,12 +87,17 @@ class DependencySafety(object):
     def _comm_target(self, comm, open_msg):
         @comm.on_msg
         def _responder(msg):
-            cell_id = msg['content']['data']['executed_cell_id']
-            self._counters_by_cell_id[cell_id] = self._last_execution_counter
-            cells_by_id = msg['content']['data']['content_by_cell_id']
-            response = self.multicell_precheck(cells_by_id)
-            response['type'] = 'cell_freshness'
-            comm.send(response)
+            request = msg['content']['data']
+            if request['type'] == 'cell_freshness':
+                cell_id = request['executed_cell_id']
+                self._counters_by_cell_id[cell_id] = self._last_execution_counter
+                cells_by_id = request['content_by_cell_id']
+                response = self.multicell_precheck(cells_by_id)
+                response['type'] = 'cell_freshness'
+                comm.send(response)
+            elif request['type'] == 'change_active_cell':
+                cell_id = request['active_cell_id']
+                self._active_cell_id = cell_id
 
         comm.send({'type': 'establish'})
 
@@ -222,6 +228,9 @@ class DependencySafety(object):
 
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
+            if self._active_cell_id is not None:
+                self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
+                self._active_cell_id = None
             # Stage 1: Precheck.
             if self._precheck_for_stale(cell):
                 # FIXME: hack to increase cell number

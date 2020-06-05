@@ -306,6 +306,16 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
+def test_lambda_capture():
+    run_cell('x = 42')
+    run_cell('lst = []')
+    run_cell('lst.append(lambda elt: elt + x)')
+    run_cell('y = lst[0](7)')
+    run_cell('x = 43')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on stale `x`')
+
+
 # Tests about variables that have same name but in different scope.
 # There shouldn't be any extra dependency because of the name.
 def test_variable_scope():

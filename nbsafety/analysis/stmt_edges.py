@@ -134,6 +134,8 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         self.visit_FunctionDef(node)
 
     def visit_Lambda(self, node):
+        # TODO: we could have lambdas defined nested inside of a lambda, in which case we also need to put the
+        #  outer args in a discard set as well
         assert self.gather_rvals
         # remove node.arguments
         self.visit(node.body)

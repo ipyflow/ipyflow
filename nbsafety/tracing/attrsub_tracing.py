@@ -178,6 +178,7 @@ class AttrSubTracingManager(object):
             if call_context:
                 self.deep_ref_candidate = (self.trace_event_counter[0], obj_id, obj_name)
             elif data_sym is not None:
+                # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
                 self.loaded_data_symbols.add(data_sym)
         if ctx in ('Store', 'AugStore'):
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))

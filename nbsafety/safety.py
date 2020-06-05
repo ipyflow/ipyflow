@@ -88,18 +88,24 @@ class DependencySafety(object):
         @comm.on_msg
         def _responder(msg):
             request = msg['content']['data']
-            if request['type'] == 'cell_freshness':
-                cell_id = request['executed_cell_id']
-                self._counters_by_cell_id[cell_id] = self._last_execution_counter
-                cells_by_id = request['content_by_cell_id']
-                response = self.multicell_precheck(cells_by_id)
-                response['type'] = 'cell_freshness'
-                comm.send(response)
-            elif request['type'] == 'change_active_cell':
-                cell_id = request['active_cell_id']
-                self._active_cell_id = cell_id
+            self.handle(request, comm=comm)
 
         comm.send({'type': 'establish'})
+
+    def handle(self, request, comm=None):
+        if request['type'] == 'change_active_cell':
+            cell_id = request['active_cell_id']
+            self._active_cell_id = cell_id
+        elif request['type'] == 'cell_freshness':
+            cell_id = request['executed_cell_id']
+            self._counters_by_cell_id[cell_id] = self._last_execution_counter
+            cells_by_id = request['content_by_cell_id']
+            response = self.multicell_precheck(cells_by_id)
+            response['type'] = 'cell_freshness'
+            if comm is not None:
+                comm.send(response)
+        else:
+            logger.error('Unsupported request type for request %s' % request)
 
     def multicell_precheck(self, cells_by_id: 'Dict[Union[int, str], str]') -> 'Dict[str, Any]':
         stale_input_cells = []

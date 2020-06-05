@@ -45,14 +45,13 @@ Running
 Because `nbsafety` is implemented as a custom Jupyter kernel, it works for
 both Jupyter notebooks and JupyterLab (but JupyterLab with the additional labextension is recommended).
 To run an `nbsafety` kernel, select "Python 3 (nbsafety)" from the list
-of notebook types in Jupyter's "New" dropdown dialogue:
-
-![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/nbsafety-notebook.png)
-
+of notebook types in Jupyter's "New" dropdown dialogue.
 For JupyterLab, similarly select "Python 3 (nbsafety)" from the list
-of available kernels in the Launcher tab:
+of available kernels in the Launcher tab.
 
-![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/nbsafety-lab.png)
+Jupyter Notebook Entrypoint:     |  Jupyter Lab Entrypoint:
+:-------------------------------:|:-------------------------:
+![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/nbsafety-notebook.png) | ![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/nbsafety-lab.png)
 
 Uninstall
 ---------

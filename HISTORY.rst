@@ -132,3 +132,9 @@ History
 -------------------
 * Support fine-grained dependency edges for tuple unpacking for simple (non attribute / subscript) symbols;
 * Bugfixes for args inside of nested function calls as well as for multiple inline function calls (eg f()());
+
+0.0.38 (2020-06-05)
+-------------------
+* Bugfix: if returning from function, only pass up rvals if the ast statement is ast.Return;
+* Handle dependencies from  one level of lambda capture properly;
+* Fix not-displayed visual refresh cue for cells that threw exceptions to be refreshed if input contains an updated symbol;

@@ -113,8 +113,7 @@ class AttrSubTracingManager(object):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx,
-                       call_context, override_active_scope, obj_name=None):
+    def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
         if obj is None:
             return None
         if not isinstance(attr_or_subscript, (str, int)):
@@ -147,9 +146,7 @@ class AttrSubTracingManager(object):
                     parent_scope = self.active_scope
                 scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
                 self.safety.namespaces[obj_id] = scope
-        # print('override:', override_active_scope, 'and new active scope:', scope)
-        if override_active_scope:
-            self.active_scope = scope
+        self.active_scope = scope
         if scope is None:
             return obj
         if ctx == 'Load':
@@ -182,9 +179,11 @@ class AttrSubTracingManager(object):
                 self.loaded_data_symbols.add(data_sym)
         if ctx in ('Store', 'AugStore'):
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
+            # reset active scope here
+            self.active_scope = self.original_active_scope
         return obj
 
-    def expr_tracer(self, obj):
+    def expr_tracer(self, obj, reset_active_scope):
         if self.deep_ref_candidate is not None:
             evt_counter, obj_id, obj_name = self.deep_ref_candidate
             self.deep_ref_candidate = None
@@ -193,7 +192,9 @@ class AttrSubTracingManager(object):
                     self.mutations.add((obj_id, tuple(self.recorded_args)))
                 else:
                     self.deep_refs.add((obj_id, obj_name, tuple(self.recorded_args)))
-        self.active_scope = self.original_active_scope
+        if reset_active_scope:
+            # print('reset active scope from', self.active_scope, 'to', self.original_active_scope)
+            self.active_scope = self.original_active_scope
         self.recorded_args = set()
         return obj
 
@@ -248,9 +249,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         return self.visit_Attribute_or_Subscript(node, call_context)
 
     def visit_Attribute_or_Subscript(self, node: 'Union[ast.Attribute, ast.Subscript]', call_context=False):
-        override_active_scope = isinstance(node.ctx, ast.Load) or self.inside_attrsub_load_chain
-        override_active_scope_arg = ast.Constant(override_active_scope)
-        ast.copy_location(override_active_scope_arg, node)
+        is_load = isinstance(node.ctx, ast.Load)
         is_subscript = isinstance(node, ast.Subscript)
         # TODO: expand beyond simple slices
         if is_subscript:
@@ -271,7 +270,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         if isinstance(node.value, ast.Name):
             extra_args = [ast.Str(node.value.id)]
 
-        with self.attrsub_load_context(override_active_scope):
+        with self.attrsub_load_context():
             replacement_value = ast.Call(
                 func=ast.Name(self.start_tracer, ast.Load()),
                 args=[
@@ -280,17 +279,16 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                     ast.NameConstant(is_subscript),
                     ast.Str(node.ctx.__class__.__name__),
                     ast.NameConstant(call_context),
-                    override_active_scope_arg
                 ] + extra_args,
                 keywords=[]
             )
         ast.copy_location(replacement_value, node.value)
         node.value = replacement_value
         new_node: Union[ast.Attribute, ast.Subscript, ast.Call] = node
-        if not self.inside_attrsub_load_chain and override_active_scope:
+        if not self.inside_attrsub_load_chain and is_load:
             new_node = ast.Call(
                 func=ast.Name(self.end_tracer, ast.Load()),
-                args=[node],
+                args=[node, ast.NameConstant(is_load)],
                 keywords=[]
             )
         return new_node
@@ -349,7 +347,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
 
         replacement_node = ast.Call(
             func=ast.Name(self.end_tracer, ast.Load()),
-            args=[node],
+            args=[node, ast.NameConstant(True)],
             keywords=[]
         )
         ast.copy_location(replacement_node, node)

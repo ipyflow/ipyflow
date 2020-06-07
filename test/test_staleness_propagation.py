@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from .utils import make_safety_fixture, skipif_known_failing
+from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -22,10 +22,6 @@ def run_cell(cell):
 
 def stale_detected():
     return _safety_state[0].test_and_clear_detected_flag()
-
-
-def assert_bool(val, msg=''):
-    assert val, str(msg)
 
 
 def assert_detected(msg=''):
@@ -1184,9 +1180,7 @@ except:
 
 
 def test_attr_dep_from_somewhere_else():
-    run_cell('import sys')
-    run_cell('sys.path.append("./test")')
-    run_cell('import fake')
+    run_cell('import fakelib as fake')
     run_cell('fake.y = 7')
     run_cell('x = fake.y + 1')
     run_cell('fake.y = 42')
@@ -1195,9 +1189,7 @@ def test_attr_dep_from_somewhere_else():
 
 
 def test_attr_use_from_somewhere_else():
-    run_cell('import sys')
-    run_cell('sys.path.append("./test")')
-    run_cell('import fake')
+    run_cell('import fakelib as fake')
     run_cell('x = 7')
     run_cell('fake.y = x + 1')
     run_cell('x = 42')

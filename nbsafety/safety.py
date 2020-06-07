@@ -363,12 +363,3 @@ class DependencySafety(object):
         for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
                 dsym.collect_self_garbage()
-
-    def lookup_symbol_for(self, val: 'Any'):
-        val_id = id(val)
-        if val_id not in self.aliases:
-            return None
-        alias_set = self.aliases[val_id]
-        if len(alias_set) == 0:
-            return None
-        return next(iter(alias_set))

@@ -23,7 +23,14 @@ def assert_not_detected(msg=''):
 
 
 def lookup_symbol(val):
-    return _safety_state[0].lookup_symbol_for(val)
+    safety = _safety_state[0]
+    val_id = id(val)
+    if val_id not in safety.aliases:
+        return None
+    alias_set = safety.aliases[val_id]
+    if len(alias_set) == 0:
+        return None
+    return next(iter(alias_set))
 
 
 def test_basic():

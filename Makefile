@@ -1,20 +1,21 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean dist deploy check test tests deps devdeps typecheck checkall testall
+.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall
 
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/
 
-dist: clean
-	python setup.py sdist bdist_wheel --universal
+build: clean
+	./scripts/build.sh
 
-deploy: dist
-	twine upload dist/*
+# TODO: check for dirty tree here
+deploy: build
+	./scripts/deploy.sh
 
 check:
-	./runtests.sh
+	./scripts/runtests.sh
 
 checkall:
-	SHOULD_SKIP_KNOWN_FAILING=0 ./runtests.sh
+	SHOULD_SKIP_KNOWN_FAILING=0 ./scripts/runtests.sh
 
 test: check
 tests: check

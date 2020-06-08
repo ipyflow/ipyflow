@@ -138,3 +138,12 @@ History
 * Bugfix: if returning from function, only pass up rvals if the ast statement is ast.Return;
 * Handle dependencies from  one level of lambda capture properly;
 * Fix not-displayed visual refresh cue for cells that threw exceptions to be refreshed if input contains an updated symbol;
+
+0.0.39 (2020-06-08)
+-------------------
+* Bugfix for setting active scope correctly during ast.Store / AugStore context;
+* Use versioneer to manage versioning and add bump_version.sh script;
+
+0.0.40 (2020-06-08)
+-------------------
+* Accidental version release while automating build process;

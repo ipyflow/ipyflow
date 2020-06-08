@@ -1,2 +1,4 @@
 include README.md HISTORY.rst requirements.txt
 include nbsafety/resources/*
+include versioneer.py
+include nbsafety/_version.py

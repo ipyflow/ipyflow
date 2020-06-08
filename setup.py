@@ -4,8 +4,10 @@
 import atexit
 import platform
 import os
-from setuptools import setup, find_packages
 from subprocess import check_call
+
+from setuptools import setup, find_packages
+import versioneer
 
 pkg_name = 'nbsafety'
 
@@ -27,11 +29,11 @@ def read_file(fname):
 
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
-exec(read_file(os.path.join(pkg_name, 'version.py')))
 setup(
     name=pkg_name,
-    version=__version__,  # noqa
-    author='Stephen Macke, Ray Gong',
+    version=versioneer.get_version(),
+    cmdclass=versioneer.get_cmdclass(),
+    author='Stephen Macke',
     author_email='stephen.macke@gmail.com',
     description='Fearless interactivity for Jupyter notebooks.',
     long_description=read_file('README.md'),

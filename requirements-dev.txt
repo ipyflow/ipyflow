@@ -6,3 +6,4 @@ pandas
 py
 pytest
 twine
+versioneer

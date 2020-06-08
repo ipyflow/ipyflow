@@ -32,4 +32,4 @@ kernel:
 	python -m nbsafety.install
 
 typecheck:
-	find nbsafety -iname '*.py' -print0 | xargs -0 mypy --no-strict-optional --ignore-missing-import
+	find nbsafety -iname '*.py' ! -name *_version.py -print0 | xargs -0 mypy

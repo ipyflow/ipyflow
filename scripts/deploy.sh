@@ -48,3 +48,5 @@ EOF
 pushd ./frontend/labextension
 npm publish
 popd
+
+git push --tags

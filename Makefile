@@ -1,13 +1,18 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall
+.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall version bump
 
 clean:
-	rm -rf build/ dist/ nbsafety.egg-info/
+	rm -rf build/ dist/ nbsafety.egg-info/ frontend/labextension/package.json
 
-build: clean
+build: clean version
 	./scripts/build.sh
 
-# TODO: check for dirty tree here
+version:
+	./scripts/build-version.py
+
+bump:
+	./scripts/build-version.py --bump --tag
+
 deploy: build
 	./scripts/deploy.sh
 

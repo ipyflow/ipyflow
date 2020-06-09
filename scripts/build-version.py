@@ -1,20 +1,19 @@
 #!/usr/bin/env python
+import argparse
 import json
 import subprocess
 import sys
 
-import versioneer
 from nbsafety.version import make_version_tuple
 
 
-def main():
+def main(args):
     components = list(make_version_tuple())
-    components[-1] += 1
+    if args.bump:
+        components[-1] += 1
     version = '.'.join(str(c) for c in components)
-    if len(sys.argv) == 2 and sys.argv[1] == '--tag':
+    if args.tag:
         subprocess.check_output(['git', 'tag', version])
-    else:
-        print(f"skipping 'git tag {version}'")
     with open('./frontend/labextension/package.in.json', 'r') as f:
         package_json = json.loads(f.read())
     package_json['version'] = version
@@ -24,4 +23,10 @@ def main():
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    parser = argparse.ArgumentParser(
+        description='Create and synchronize version tags across packages.'
+    )
+    parser.add_argument('--bump', action='store_true', help='Whether to increment the version.')
+    parser.add_argument('--tag', action='store_true', help='Whether to increment the version.')
+    args = parser.parse_args()
+    sys.exit(main(args))

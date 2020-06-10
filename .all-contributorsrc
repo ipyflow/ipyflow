@@ -1,0 +1,26 @@
+{
+  "files": [
+    "README.md"
+  ],
+  "imageSize": 100,
+  "commit": false,
+  "contributors": [
+    {
+      "login": "smacke",
+      "name": "Stephen Macke",
+      "avatar_url": "https://avatars3.githubusercontent.com/u/325653?v=4",
+      "profile": "https://smacke.net",
+      "contributions": [
+        "infra",
+        "test",
+        "code"
+      ]
+    }
+  ],
+  "contributorsPerLine": 7,
+  "projectName": "nbsafety",
+  "projectOwner": "nbsafety-project",
+  "repoType": "github",
+  "repoHost": "https://github.com",
+  "skipCi": true
+}

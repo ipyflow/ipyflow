@@ -1,5 +1,7 @@
-<!-- ⚠️ This README has been generated from the file(s) "markdown-blueprints/README.md" ⚠️-->nbsafety
-========
+<!-- ⚠️ This README has been generated from the file(s) "markdown-blueprints/README.md" ⚠️-->
+[![-----------------------------------------------------](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/colored.png)](#nbsafety)
+
+# ➤ nbsafety
 
 [![](https://github.com/nbsafety-project/nbsafety/workflows/master/badge.svg)](https://github.com/nbsafety-project/nbsafety/actions)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)

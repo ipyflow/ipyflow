@@ -1,5 +1,4 @@
-nbsafety
-========
+# nbsafety
 
 [![](https://github.com/nbsafety-project/nbsafety/workflows/master/badge.svg)](https://github.com/nbsafety-project/nbsafety/actions)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)

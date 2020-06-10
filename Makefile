@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall version bump
+.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall version bump markdown
 
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/ frontend/labextension/package.json
@@ -12,6 +12,11 @@ version:
 
 bump:
 	./scripts/build-version.py --bump --tag
+
+markdown:
+	# ref: https://github.com/andreasbm/readme
+	npx @appnest/readme generate -i markdown-blueprints/README.md -o README.md
+	npx @appnest/readme generate -i markdown-blueprints/CONTRIBUTORS.md -o CONTRIBUTORS.md
 
 deploy: build
 	./scripts/deploy.sh

@@ -1060,7 +1060,6 @@ a = 42
     assert_not_detected('`b` should not be considered as having stale dependency since `a` changed in same cell as `b`')
 
 
-@skipif_known_failing
 def test_multiple_stmts_in_one_line():
     run_cell('a = 1; b = 2')
     run_cell('x = a + b')

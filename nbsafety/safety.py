@@ -6,6 +6,7 @@ import logging
 import sys
 from typing import TYPE_CHECKING
 
+import black
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
@@ -229,6 +230,10 @@ class DependencySafety(object):
         return False
 
     def safe_execute(self, cell: str, run_cell_func):
+        try:
+            cell = black.format_file_contents(cell, fast=False, mode=black.FileMode())
+        except:  # noqa
+            pass
         if self._disable_level == 3:
             return run_cell_func(cell)
 

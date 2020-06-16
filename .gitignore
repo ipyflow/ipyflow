@@ -13,6 +13,6 @@ dist/
 *.egg-info
 *.pyc
 *.ipynb
-!notebooks/*.ipynb
+!**/notebooks/*.ipynb
 **/[uU]ntitled*
 MANIFEST

@@ -2,7 +2,7 @@
 .PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall version bump markdown
 
 clean:
-	rm -rf build/ dist/ nbsafety.egg-info/ frontend/labextension/package.json
+	rm -rf build/ dist/ nbsafety.egg-info/
 
 build: clean version
 	./scripts/build.sh

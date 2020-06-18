@@ -6,7 +6,6 @@
 *.tsbuildinfo
 frontend/**/lib/
 frontend/**/node_modules/
-frontend/labextension/package.json
 frontend/labextension/package-lock.json
 build/
 dist/

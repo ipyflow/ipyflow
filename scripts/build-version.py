@@ -14,11 +14,12 @@ def main(args):
     version = '.'.join(str(c) for c in components)
     if args.tag:
         subprocess.check_output(['git', 'tag', version])
-    with open('./frontend/labextension/package.in.json', 'r') as f:
+    with open('./frontend/labextension/package.json', 'r') as f:
         package_json = json.loads(f.read())
-    package_json['version'] = version
-    with open('./frontend/labextension/package.json', 'w') as f:
-        f.write(json.dumps(package_json, indent=2))
+    if package_json.get('version', None) != version:
+        package_json['version'] = version
+        with open('./frontend/labextension/package.json', 'w') as f:
+            f.write(json.dumps(package_json, indent=2))
     return 0
 
 

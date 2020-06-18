@@ -147,3 +147,8 @@ History
 0.0.40 (2020-06-08)
 -------------------
 * Accidental version release while automating build process;
+
+0.0.41 (2020-06-18)
+-------------------
+* Fix bug where errors thrown when unimplemented ast.Slice or ast.ExtSlice encountered;
+* Fix bug where assignment with empty rval could lead to version not getting bumped in provenance graph;

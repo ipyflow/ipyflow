@@ -255,12 +255,15 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             sub_node = cast(ast.Subscript, node)
             if isinstance(sub_node.slice, ast.Index):
                 attr_or_sub = sub_node.slice.value
-            elif isinstance(sub_node.slice, ast.Slice):
-                raise ValueError('unimpled slice: %s' % sub_node.slice)
-            elif isinstance(sub_node.slice, ast.ExtSlice):
-                raise ValueError('unimpled slice: %s' % sub_node.slice)
             else:
-                raise ValueError('unexpected slice: %s' % sub_node.slice)
+                logger.debug('unimpled slice: %s', sub_node.slice)
+                return node
+            # elif isinstance(sub_node.slice, ast.Slice):
+            #     raise ValueError('unimpled slice: %s' % sub_node.slice)
+            # elif isinstance(sub_node.slice, ast.ExtSlice):
+            #     raise ValueError('unimpled slice: %s' % sub_node.slice)
+            # else:
+            #     raise ValueError('unexpected slice: %s' % sub_node.slice)
         else:
             attr_node = cast(ast.Attribute, node)
             attr_or_sub = ast.Str(attr_node.attr)

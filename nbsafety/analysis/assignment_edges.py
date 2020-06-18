@@ -177,4 +177,9 @@ def get_assignment_lval_and_rval_symbol_refs(node: 'Union[str, ast.Assign]'):
     visitor = GetAssignmentLvalRvalSymbolRefs()
     visitor(node)
     for lval_list in visitor.lval_symbols:
-        yield from _edges(lval_list, visitor.rval_symbols)
+        edges_for_lval = list(_edges(lval_list, visitor.rval_symbols))
+        if len(edges_for_lval) == 0:
+            for lval in lval_list:
+                yield lval, None
+        else:
+            yield from edges_for_lval

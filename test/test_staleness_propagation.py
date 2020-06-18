@@ -126,6 +126,19 @@ def test_basic_assignment():
     assert_not_detected("There should be no more dependency issue")
 
 
+def test_empty_list_assignment():
+    run_cell('a = [5]')
+    run_cell('b = a + [6]')
+    run_cell('logging.info(b)')
+    run_cell('a = [6]')
+    run_cell('logging.info(b)')
+    assert_detected('`b` depends on stale `a`')
+    run_cell('b = a + [7]')
+    run_cell('a = []')
+    run_cell('logging.info(b)')
+    assert_detected('`b` depends on stale `a`')
+
+
 # redefined function example from the project prompt
 def test_redefined_function_in_list():
     run_cell("""

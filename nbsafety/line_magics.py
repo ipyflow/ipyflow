@@ -1,18 +1,18 @@
 # -*- coding: utf-8 -*-
 from typing import TYPE_CHECKING
 
-import networkx as nx
-
 if TYPE_CHECKING:
     from typing import Any, List
     from .safety import DependencySafety
 
 
-USAGE = """Options:
+# USAGE = """Options:
+#
+# show_graph:
+#     - This will print out the dependency graph of global variables. Stale nodes are labeled red.
+#       Notice that user might need to call this twice to have it to work.
 
-show_graph: 
-    - This will print out the dependency graph of global variables. Stale nodes are labeled red.
-      Notice that user might need to call this twice to have it to work.
+USAGE = """Options:
 
 show_dependency <variable_name> <variable_name2> ...: 
     - This will print out the dependencies for given global variables.
@@ -41,28 +41,6 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
 turn_off_warnings_for  <variable_name> <variable_name2> ...: 
     - This will turn the warnings back on for given global variables. These variables could have
       stale dependencies now. Multiple variables should be separated with spaces."""
-
-
-def show_graph(safety: 'DependencySafety'):
-    graph = nx.DiGraph()
-    for name in safety.global_scope.all_data_symbols_this_indentation():
-        graph.add_node(name)
-    for node in safety.global_scope.all_data_symbols_this_indentation():
-        name = node.name
-        for child_node in node.children:
-            graph.add_edge(name, child_node.name)
-    nx.draw_networkx(
-        graph,
-        node_color=[
-            "#ff0000" if safety.global_scope.lookup_data_symbol_by_name(name).has_stale_ancestor
-            else "#cccccc"
-            for name in graph.nodes()
-        ],
-        arrowstyle='->',
-        arrowsize=30,
-        node_size=1000,
-        pos=nx.drawing.layout.planar_layout(graph)
-    )
 
 
 def show_deps(safety: 'DependencySafety', line: 'List[str]'):

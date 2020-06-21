@@ -2,6 +2,7 @@
 import ast
 from collections import defaultdict
 from contextlib import contextmanager
+import inspect
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -319,18 +320,13 @@ class DependencySafety(object):
         self._gc()
 
     def _make_line_magic(self):
+        line_magic_names = [f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])]
+
         def _safety(line_: str):
             line = line_.split()
-            if not line or line[0] not in [
-                "show_graph", "show_deps", "show_dependency", "show_dependencies",
-                "show_stale", "set_disable_level", "set_propagation",
-                "trace_messages",
-                "remove_dependency", "add_dependency", "turn_off_warnings_for", "turn_on_warnings_for",
-            ]:
+            if not line or line[0] not in line_magic_names:
                 print(line_magics.USAGE)
                 return
-            if line[0] == "show_graph":
-                return line_magics.show_graph(self)
             elif line[0] in ("show_deps", "show_dependency", "show_dependencies"):
                 return line_magics.show_deps(self, line)
             elif line[0] == "show_stale":

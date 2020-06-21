@@ -2,5 +2,3 @@ black<=19.10b0
 ipykernel
 ipython
 jupyter
-matplotlib
-networkx

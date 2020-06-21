@@ -33,6 +33,7 @@ class DataSymbol(object):
             containing_scope: 'Scope',
             safety: 'DependencySafety',
             parents: 'Optional[Set[DataSymbol]]' = None,
+            refresh_cached_obj=False,
     ):
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
@@ -45,6 +46,8 @@ class DataSymbol(object):
         self._cached_has_weakref = None
         self.cached_obj_id = None
         self.cached_obj_type = None
+        if refresh_cached_obj:
+            self._refresh_cached_obj()
         self.containing_scope = containing_scope
         self.safety = safety
         if parents is None:
@@ -126,6 +129,7 @@ class DataSymbol(object):
     def is_garbage(self):
         return (
             self._tombstone
+            or self.containing_scope.is_garbage
             or not self.containing_scope.is_globally_accessible
             or (self._has_weakref and self._get_obj() is None)
         )

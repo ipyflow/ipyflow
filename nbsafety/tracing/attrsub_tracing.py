@@ -131,9 +131,13 @@ class AttrSubTracingManager(object):
                 self.safety.namespaces[obj_id] = scope
             else:
                 # print('no scope for class', obj.__class__)
+                # if self.safety.trace_state.prev_trace_stmt.finished:
+                #     # avoid creating new scopes if we already did this computation
+                #     self.active_scope = None
+                #     return obj
                 try:
-                    scope_name = next(iter(self.safety.aliases[obj_id])).name if obj_name is None else obj_name
-                except StopIteration:
+                    scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
+                except (TypeError, StopIteration):
                     scope_name = '<unknown namespace>'
 
                 # FIXME: brittle strategy for determining parent scope of obj
@@ -147,7 +151,15 @@ class AttrSubTracingManager(object):
                 scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
                 self.safety.namespaces[obj_id] = scope
         self.active_scope = scope
-        if scope is None:
+        # if scope is None:  # or self.safety.trace_state.prev_trace_stmt.finished:
+        #     if ctx in ('Store', 'AugStore'):
+        #         self.active_scope = self.original_active_scope
+        #     return obj
+        if ctx in ('Store', 'AugStore') and scope is not None:
+            self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
+            # reset active scope here
+            self.active_scope = self.original_active_scope
+        elif scope is None or self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             return obj
         if ctx == 'Load':
             # save off event counter and obj_id
@@ -162,7 +174,7 @@ class AttrSubTracingManager(object):
                 try:
                     obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
                     symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-                    data_sym = DataSymbol(attr_or_subscript, symbol_type, obj_attr_or_sub, scope, self.safety)
+                    data_sym = DataSymbol(attr_or_subscript, symbol_type, obj_attr_or_sub, scope, self.safety, refresh_cached_obj=True)
                     # this is to prevent refs to the scope object from being considered as stale if we just load it
                     data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
                     scope.put(attr_or_subscript, data_sym)
@@ -177,13 +189,12 @@ class AttrSubTracingManager(object):
             elif data_sym is not None:
                 # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
                 self.loaded_data_symbols.add(data_sym)
-        if ctx in ('Store', 'AugStore'):
-            self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
-            # reset active scope here
-            self.active_scope = self.original_active_scope
         return obj
 
     def end_tracer(self, obj):
+        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+            self.active_scope = self.original_active_scope
+            return obj
         if self.deep_ref_candidate is not None:
             evt_counter, obj_id, obj_name = self.deep_ref_candidate
             self.deep_ref_candidate = None
@@ -198,16 +209,22 @@ class AttrSubTracingManager(object):
         return obj
 
     def arg_recorder(self, obj, name):
+        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+            return obj
         self.recorded_args.add(name)
         return obj
 
     def scope_pusher(self, obj):
+        # if self.safety.trace_state.prev_trace_stmt.finished:
+        #     return obj
         self.nested_call_stack.append((self.active_scope, self._waiting_for_call))
         self._waiting_for_call = True
         self.active_scope = self.original_active_scope
         return obj
 
     def scope_popper(self, obj):
+        # if self.safety.trace_state.prev_trace_stmt.finished:
+        #     return obj
         self.active_scope, self._waiting_for_call = self.nested_call_stack.pop()
         return obj
 

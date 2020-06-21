@@ -208,15 +208,20 @@ class Scope(object):
         if old_id == dc.obj_id and old_dc is dc:
             return
         if old_id is not None and old_dc is not None:
-            old_alias_dcs = self.safety.aliases[old_id]
-            old_alias_dcs.discard(old_dc)
-            if len(old_alias_dcs) == 0:
-                del self.safety.aliases[old_id]
+            old_alias_dcs = self.safety.aliases.get(old_id, None)
+            if old_alias_dcs is not None:
+                old_alias_dcs.discard(old_dc)
+                if len(old_alias_dcs) == 0:
+                    del self.safety.aliases[old_id]
         self.safety.aliases[dc.obj_id].add(dc)
 
     @property
     def is_global(self):
         return self.parent_scope is None
+
+    @property
+    def is_garbage(self):
+        return False
 
     @property
     def is_globally_accessible(self):
@@ -266,6 +271,10 @@ class NamespaceScope(Scope):
         self.obj_id = obj_id
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[Union[int, str], DataSymbol] = {}
+
+    @property
+    def is_garbage(self):
+        return self._tombstone or self.obj_id not in self.safety.aliases or self.obj_id not in self.safety.namespaces
 
     def update_obj_ref(self, obj):
         tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)

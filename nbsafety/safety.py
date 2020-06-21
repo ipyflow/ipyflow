@@ -155,7 +155,7 @@ class DependencySafety(object):
                     continue
             elif line.startswith('!'):
                 continue
-            elif line.startswith('cd'):
+            elif line.startswith('cd '):
                 continue
             elif line.endswith('?'):
                 continue
@@ -234,11 +234,28 @@ class DependencySafety(object):
             cell = black.format_file_contents(cell, fast=False, mode=black.FileMode())
         except:  # noqa
             pass
-        if self._disable_level == 3:
-            return run_cell_func(cell)
 
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
+
+            if self._disable_level == 3:
+                return run_cell_func(cell)
+
+            for line in cell.strip().split('\n'):
+                # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
+                # normally filter line magic, but for %time, try to actually trace the statement being timed
+                # TODO: how to do this?
+                if not line.startswith('%'):
+                    break
+                elif line.startswith('!'):
+                    break
+                elif line.startswith('cd '):
+                    break
+                elif line.endswith('?'):
+                    break
+            else:
+                return run_cell_func(cell)
+
             if self._active_cell_id is not None:
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
@@ -359,10 +376,19 @@ class DependencySafety(object):
         self.stale_dependency_detected = False
         return ret
 
-    def namespace_gc(self):
+    def _namespace_gc(self):
         for obj_id in self.garbage_namespace_obj_ids:
             self.namespaces.pop(obj_id, None)
         self.garbage_namespace_obj_ids.clear()
+        # while True:
+        #     for obj_id in self.garbage_namespace_obj_ids:
+        #         self.namespaces.pop(obj_id, None)
+        #     self.garbage_namespace_obj_ids.clear()
+        #     for obj_id, namespace in self.namespaces.items():
+        #         if namespace.is_garbage:
+        #             self.garbage_namespace_obj_ids.add(namespace.obj_id)
+        #     if len(self.garbage_namespace_obj_ids) == 0:
+        #         break
 
     def _gc(self):
         for dsym in list(self.all_data_symbols()):

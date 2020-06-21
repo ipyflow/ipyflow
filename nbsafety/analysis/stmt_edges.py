@@ -96,11 +96,11 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
             self.visit(node.value)
 
     def visit_AugAssign(self, node):
-        with self.push_attributes(should_overwrite=False):
-            with self.gather_lvals_context():
-                self.visit(node.target)
-            with self.gather_rvals_context():
-                self.visit(node.value)
+        self.should_overwrite = False
+        with self.gather_lvals_context():
+            self.visit(node.target)
+        with self.gather_rvals_context():
+            self.visit(node.value)
 
     def visit_Call(self, node):
         with self.gather_rvals_context():

@@ -29,5 +29,7 @@ def retrieve_namespace_attr_or_sub(obj: 'Any', attr_or_sub: 'Union[str, int]', i
     #     print(obj, attr_or_sub, is_subscript)
     #     raise e
     except Exception as e:
-        logger.warning('unexpected exception: %s' % e)
+        logger.warning('unexpected exception: %s', e)
+        logger.warning('object: %s', obj)
+        logger.warning('attr / subscript: %s', attr_or_sub)
         raise e

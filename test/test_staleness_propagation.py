@@ -820,6 +820,19 @@ def test_list_mutation_2():
     assert_detected('`x` depends on stale `lst`')
 
 
+@skipif_known_failing
+def test_list_mutation_from_attr():
+    run_cell('s = "hello X world X how X are X you X today?"')
+    run_cell('lst = []')
+    run_cell("""
+for word in s.split('X'):
+    lst.append(word.strip())
+""")
+    run_cell('s = "foobar"')
+    run_cell('logging.info(lst)')
+    assert_detected('`lst` depends on stale `s`')
+
+
 def test_lazy_class_scope_resolution():
     run_cell("""
 class Foo(object):
@@ -1061,6 +1074,22 @@ for i in [a, b, c]:
     run_cell('a = 3')
     run_cell('logging.info(i)')
     assert_not_detected('`i` should not depend on `a` at end of for loop')
+
+
+@skipif_known_failing
+def test_for_loop_partial_dep():
+    run_cell('lst = list(range(10))')
+    run_cell('s = 0')
+    run_cell("""
+for i in range(5):
+    s += lst[i]
+""")
+    run_cell('lst[-1] = 42')
+    run_cell('logging.info(s)')
+    assert_not_detected('`s` does not depend on last entry of `lst`')
+    run_cell('lst[1] = 22')
+    run_cell('logging.info(s)')
+    assert_detected('`s` does depend on second entry of `lst`')
 
 
 def test_same_cell_redefine():

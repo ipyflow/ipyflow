@@ -25,7 +25,7 @@ class TraceStatement(object):
         self.scope = scope
         self.class_scope: Optional[NamespaceScope] = None
         self.call_point_deps: List[Set[DataSymbol]] = []
-        self.marked_finished = False
+        self._marked_finished = False
 
     @contextmanager
     def replace_active_scope(self, new_active_scope):
@@ -33,6 +33,11 @@ class TraceStatement(object):
         self.scope = new_active_scope
         yield
         self.scope = old_scope
+
+    @property
+    def finished(self):
+        return self._marked_finished
+        # return self.marked_finished and isinstance(self.stmt_node, (ast.For, ast.Lambda))
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
@@ -83,6 +88,7 @@ class TraceStatement(object):
                 continue
             should_overwrite_for_name = should_overwrite and lval_name not in rval_names
             rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name}) | deep_rval_deps
+            # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
@@ -151,13 +157,14 @@ class TraceStatement(object):
             assert len(self.safety.attr_trace_manager.saved_store_data) == 0
 
     def finished_execution_hook(self):
-        if self.marked_finished:
+        if self.finished:
             return
         # print('finishing stmt', self.stmt_node)
-        self.marked_finished = True
+        self._marked_finished = True
         self.handle_dependencies()
         self.safety.attr_trace_manager.reset()
-        self.safety.namespace_gc()
+        self.safety._namespace_gc()
+        # self.safety._gc()
 
     @property
     def has_lval(self):

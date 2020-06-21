@@ -55,7 +55,7 @@ class TraceState(object):
                     prev_this_frame.finished_execution_hook()
             return
 
-        if prev_this_frame is None or prev_this_frame.marked_finished:
+        if prev_this_frame is None or prev_this_frame.finished:
             return
 
         finished = prev_this_frame is not trace_stmt

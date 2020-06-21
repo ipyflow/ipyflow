@@ -62,13 +62,13 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
         with self.push_attributes(to_add_set=inner_symbols):
             self.visit(node.keys)
             self.visit(node.values)
-        self.to_add_set.append(inner_symbols)
+        self.to_add_set.append(tuple(inner_symbols))
 
     def visit_List_or_Tuple(self, node):
         inner_symbols = []
         with self.push_attributes(to_add_set=inner_symbols):
             self.visit(node.elts)
-        self.to_add_set.append(inner_symbols)
+        self.to_add_set.append(tuple(inner_symbols))
 
     def visit_expr(self, node):
         assert self.gather_rvals
@@ -76,7 +76,7 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
         with self.push_attributes(to_add_set=inner_symbols):
             # call super generic_visit since self generic_visit calls visit_expr
             super().generic_visit(node)
-        self.to_add_set.append(inner_symbols)
+        self.to_add_set.append(tuple(inner_symbols))
 
     def generic_visit(self, node: 'Union[ast.AST, Sequence[ast.AST]]'):
         # The purpose of this is to make sure we call our visit_expr method if we see an expr
@@ -91,7 +91,7 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
                 target_lval_symbols = []
                 with self.push_attributes(lval_symbols=target_lval_symbols):
                     self.visit(target)
-                self.lval_symbols.append(target_lval_symbols)
+                self.lval_symbols.append(tuple(target_lval_symbols))
         with self.gather_rvals_context():
             self.visit(node.value)
 
@@ -137,20 +137,20 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
 
 def _flatten(vals):
     for v in vals:
-        if isinstance(v, list):
+        if isinstance(v, tuple):
             yield from _flatten(v)
         else:
             yield v
 
 
 def _edges(lvals, rvals):
-    if isinstance(lvals, list) and isinstance(rvals, list):
-        yield from _edges_from_lists(lvals, rvals)
-    elif isinstance(lvals, list):
+    if isinstance(lvals, tuple) and isinstance(rvals, tuple):
+        yield from _edges_from_tuples(lvals, rvals)
+    elif isinstance(lvals, tuple):
         # TODO: yield edges with subscript symbols
         for left in _flatten(lvals):
             yield left, rvals
-    elif isinstance(rvals, list):
+    elif isinstance(rvals, tuple):
         # TODO: yield edges with subscript symbols
         for right in _flatten(rvals):
             yield lvals, right
@@ -158,7 +158,7 @@ def _edges(lvals, rvals):
         yield lvals, rvals
 
 
-def _edges_from_lists(lvals, rvals):
+def _edges_from_tuples(lvals, rvals):
     if len(lvals) == len(rvals):
         for left, right in zip(lvals, rvals):
             yield from _edges(left, right)
@@ -177,7 +177,7 @@ def get_assignment_lval_and_rval_symbol_refs(node: 'Union[str, ast.Assign]'):
     visitor = GetAssignmentLvalRvalSymbolRefs()
     visitor(node)
     for lval_list in visitor.lval_symbols:
-        edges_for_lval = list(_edges(lval_list, visitor.rval_symbols))
+        edges_for_lval = list(_edges(lval_list, tuple(visitor.rval_symbols)))
         if len(edges_for_lval) == 0:
             for lval in lval_list:
                 yield lval, None

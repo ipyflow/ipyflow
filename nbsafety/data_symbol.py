@@ -78,6 +78,9 @@ class DataSymbol(object):
     def __str__(self):
         return self.readable_name
 
+    def __hash__(self):
+        return hash((self.full_path, self.is_subscript))
+
     @property
     def is_subscript(self):
         return self.symbol_type == DataSymbolType.SUBSCRIPT
@@ -182,10 +185,10 @@ class DataSymbol(object):
         self._cached_has_weakref = self._has_weakref
 
     def update_deps(
-            self,
-            new_deps: 'Set[DataSymbol]',
-            overwrite=True,
-            mutated=False,
+        self,
+        new_deps: 'Set[DataSymbol]',
+        overwrite=True,
+        mutated=False,
     ):
 
         # quick last fix to avoid ovewriting if we appear inside the set of deps to add

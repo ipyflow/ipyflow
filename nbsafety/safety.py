@@ -22,11 +22,13 @@ from .ipython_utils import (
 from . import line_magics
 from .scope import Scope, NamespaceScope
 from .tracing import AttrSubTracingManager, make_tracer, TraceState
+from .tracing.dep_update import NoUpdateYet
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
     from .analysis import SymbolRef
     from .data_symbol import DataSymbol
+    from .tracing.dep_update import DependencyUpdate
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -61,6 +63,7 @@ class DependencySafety(object):
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
+        self.dep_updates: Dict[Union[DataSymbol, int], Union[DependencyUpdate, NoUpdateYet]] = defaultdict(NoUpdateYet)
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)
@@ -302,6 +305,7 @@ class DependencySafety(object):
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state
         self.trace_state = TraceState(self)
+        self.handle_recorded_upserts()
         self._gc()
 
     def _make_line_magic(self):
@@ -371,7 +375,17 @@ class DependencySafety(object):
         #     if len(self.garbage_namespace_obj_ids) == 0:
         #         break
 
+    def handle_recorded_upserts(self):
+        for dsym, dep_update in self.dep_updates.items():
+            if isinstance(dsym, int):
+                for alias in self.aliases[dsym]:
+                    alias.update_deps(dep_update.deps, dep_update.overwrite, mutated=dep_update.mutate)
+            else:
+                dsym.update_deps(dep_update.deps, dep_update.overwrite, mutated=dep_update.mutate)
+        self.dep_updates.clear()
+
     def _gc(self):
+        self._namespace_gc()
         for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
                 dsym.collect_self_garbage()

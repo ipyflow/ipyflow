@@ -6,12 +6,12 @@ if TYPE_CHECKING:
 
 
 class NoUpdateYet(object):
-    def update(self, upsert: 'DependencyUpdate') -> 'DependencyUpdate':
-        return upsert
+    def update(self, dep_update: 'DependencyUpdate') -> 'DependencyUpdate':
+        return dep_update
 
 
 class DependencyUpdate(object):
-    """Just records the metadata needed to upsert a future DataSymbol."""
+    """Just records the metadata needed to update deps for a DataSymbol."""
     def __init__(
         self,
         deps: 'Set[DataSymbol]',

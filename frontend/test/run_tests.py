@@ -22,12 +22,18 @@ import sys
 import subprocess
 import signal
 
+PORT = 9999
 
-def kill_processes(name):
+
+def kill_processes(name, port=None):
     try:
         pidlist = map(int, subprocess.check_output(['pgrep', '-f', name]).split())
     except subprocess.CalledProcessError:
         pidlist = []
+    if port is not None:
+        # filter on port to avoid killing other instances of jupyter server
+        listening_on_port = map(int, subprocess.check_output(['lsof', '-ti', f'tcp:{PORT}']).split())
+        pidlist = set(pidlist) & set(listening_on_port)
     for pid in pidlist:
         os.kill(pid, signal.SIGKILL)
 
@@ -36,8 +42,8 @@ def kill_processes(name):
 def make_signal_handler(nbsafety):
     def _signal_handler(sgnl, frame):
         os.killpg(os.getpgid(nbsafety.pid), signal.SIGKILL)
-        kill_processes('jupyter')
         kill_processes('webdriver')
+        kill_processes('jupyter', port=PORT)
         sys.exit(20)
     return _signal_handler
 
@@ -47,7 +53,10 @@ def main():
     subprocess.call('yarn install', shell=True)
 
     # start jupyter notebook
-    nb_command = f'jupyter lab --no-browser --notebook-dir="{os.path.abspath("..")}" --NotebookApp.token="" --port 9999'
+    nb_command = (
+        f'jupyter lab --no-browser --notebook-dir="{os.path.abspath("..")}" '
+        f'--NotebookApp.token="" --port {PORT}'
+    )
     nbsafety = subprocess.Popen(
         nb_command,
         shell=True,

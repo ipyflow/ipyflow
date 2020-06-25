@@ -100,7 +100,7 @@ def set_propagation(safety: 'DependencySafety', line: 'List[str]'):
     safety.no_stale_propagation_for_same_cell_definition = (line[1] == 'cells')
 
 
-def configure_trace_messages(safety: 'DependencySafety', line: 'List[str]'):
+def trace_messages(safety: 'DependencySafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")
         return

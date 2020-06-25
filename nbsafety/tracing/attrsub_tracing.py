@@ -155,12 +155,12 @@ class AttrSubTracingManager(object):
         #     if ctx in ('Store', 'AugStore'):
         #         self.active_scope = self.original_active_scope
         #     return obj
-        if ctx in ('Store', 'AugStore') and scope is not None:
+        if scope is None or self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+            return obj
+        elif ctx in ('Store', 'AugStore') and scope is not None:
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
             # reset active scope here
             self.active_scope = self.original_active_scope
-        elif scope is None or self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
-            return obj
         if ctx == 'Load':
             # save off event counter and obj_id
             # if event counter didn't change when we process the Call retval, and if the

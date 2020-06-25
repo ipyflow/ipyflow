@@ -301,8 +301,8 @@ class DependencySafety(object):
         finally:
             sys.settrace(None)
             # TODO: actually handle errors that occurred in our code while tracing
-            if not self.trace_state.error_occurred:
-                self._reset_trace_state_hook()
+            # if not self.trace_state.error_occurred:
+            self._reset_trace_state_hook()
             for updated_symbol in self.updated_symbols:
                 updated_symbol.refresh()
             for updated_scope in self.updated_scopes:
@@ -313,6 +313,7 @@ class DependencySafety(object):
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
             self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
+        assert len(self.attr_trace_manager.stack) == 0
         self.attr_trace_manager.reset()  # should happen on finish_execution_hook, but since its idempotent do it again
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state
@@ -336,10 +337,10 @@ class DependencySafety(object):
             elif line[0] == "set_propagation":
                 return line_magics.set_propagation(self, line)
             elif line[0] == "trace_messages":
-                return line_magics.configure_trace_messages(self, line)
+                return line_magics.trace_messages(self, line)
             elif line[0] == "remove_dependency":
                 return line_magics.remove_dep(self, line)
-            elif line[0] == "add_dependency":
+            elif line[0] in ("add_dependency", "add_dep"):
                 return line_magics.add_dep(self, line)
             elif line[0] == "turn_off_warnings_for":
                 return line_magics.turn_off_warnings_for(self, line)

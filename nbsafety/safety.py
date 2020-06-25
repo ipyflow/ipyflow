@@ -4,6 +4,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import inspect
 import logging
+import re
 import sys
 from typing import TYPE_CHECKING
 
@@ -32,6 +33,8 @@ logger.setLevel(logging.WARNING)
 
 _MAX_WARNINGS = 10
 _SAFETY_LINE_MAGIC = 'safety'
+
+_NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
 
 
 def _safety_warning(node: 'DataSymbol'):
@@ -147,20 +150,10 @@ class DependencySafety(object):
         lines = []
         for line in cell.strip().split('\n'):
             # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
-            # normally filter line magic, but for %time, try to actually trace the statement being timed
+            # we filter line magics, but for %time, we would ideally like to trace the statement being timed
             # TODO: how to do this?
-            if line.startswith('%'):
-                if line.startswith('%time '):
-                    lines.append(line[len('%time '):].strip())
-                else:
-                    continue
-            elif line.startswith('!'):
-                continue
-            elif line.startswith('cd '):
-                continue
-            elif line.endswith('?'):
-                continue
-            lines.append(line)
+            if _NB_MAGIC_PATTERN.search(line) is None:
+                lines.append(line)
         return ast.parse('\n'.join(lines))
 
     def compute_live_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
@@ -243,16 +236,7 @@ class DependencySafety(object):
                 return run_cell_func(cell)
 
             for line in cell.strip().split('\n'):
-                # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
-                # normally filter line magic, but for %time, try to actually trace the statement being timed
-                # TODO: how to do this?
-                if not line.startswith('%'):
-                    break
-                elif line.startswith('!'):
-                    break
-                elif line.startswith('cd '):
-                    break
-                elif line.endswith('?'):
+                if _NB_MAGIC_PATTERN.search(line) is None:
                     break
             else:
                 return run_cell_func(cell)

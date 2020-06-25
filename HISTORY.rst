@@ -152,3 +152,8 @@ History
 -------------------
 * Fix bug where errors thrown when unimplemented ast.Slice or ast.ExtSlice encountered;
 * Fix bug where assignment with empty rval could lead to version not getting bumped in provenance graph;
+
+0.0.42 (2020-06-24)
+-------------------
+* Bugfixes;
+* Efficiency compromise: don't trace multiple executions of same ast statement (e.g. if inside for loop);

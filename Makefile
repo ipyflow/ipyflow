@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall version bump markdown
+.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall uitest version bump markdown
 
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/
@@ -24,10 +24,13 @@ deploy: build
 check:
 	./scripts/runtests.sh
 
-checkall:
-	SHOULD_SKIP_KNOWN_FAILING=0 ./scripts/runtests.sh
+uicheck:
+	./scripts/runtests.sh ui
+
+checkall: check uicheck
 
 test: check
+uitest: uicheck
 tests: check
 testall: checkall
 

@@ -47,7 +47,7 @@ def main():
     subprocess.call('yarn install', shell=True)
 
     # start jupyter notebook
-    nb_command = f'jupyter lab --no-browser --notebook-dir="{os.path.abspath("..")}" --NotebookApp.token=""'
+    nb_command = f'jupyter lab --no-browser --notebook-dir="{os.path.abspath("..")}" --NotebookApp.token="" --port 9999'
     nbsafety = subprocess.Popen(
         nb_command,
         shell=True,
@@ -66,7 +66,7 @@ def main():
             break
 
     signal.signal(signal.SIGINT, make_signal_handler(nbsafety))
-    #start webdriverio
+    # start webdriverio
     result = subprocess.call('yarn run test', shell=True)
 
     # Send the signal to all the process groups

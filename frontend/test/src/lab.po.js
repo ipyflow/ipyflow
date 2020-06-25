@@ -23,7 +23,7 @@ var LabPageObject = function () {
 
   this.runNotebookByUrl = function(url, shortName){
     console.log('jupyter lab application');
-    browser.url('http://127.0.0.1:8888/lab');
+    browser.url('http://127.0.0.1:9999/lab');
     browser.waitUntil(function(){
       return browser.$$('div.p-Widget.jp-BreadCrumbs.jp-FileBrowser-crumbs').length > 0;
     });

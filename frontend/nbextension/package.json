@@ -43,6 +43,7 @@
     "rimraf": "^2.6.1",
     "typescript": "~3.7.0",
     "css-loader": "^3.1.0",
+    "style-loader": "^1.0.0",
     "prettier": "^1.18.2",
     "ts-loader": "^6.0.4",
     "webpack": "^4.35.2",

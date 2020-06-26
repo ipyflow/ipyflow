@@ -22,7 +22,7 @@ module.exports = {
   entry: "./src/index.ts",
   output: {
     filename: "index.js",
-    path: path.resolve(__dirname, "../../nbsafety/resources"),
+    path: path.resolve(__dirname, "../../nbsafety/resources/nbextension"),
     libraryTarget: "amd",
     library: "nbextensions/nbsafety/index",
   }

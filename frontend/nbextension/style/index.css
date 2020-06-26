@@ -1,0 +1,19 @@
+
+.cell.code_cell.stale-cell::before {
+  border: 1px solid rgb(254,0,82);
+}
+
+.cell.code_cell.stale-cell.selected::before, .stale-cell.jupyter-soft-selected::before {
+  background: rgb(254,0,82);
+}
+
+.cell.code_cell.refresher-cell::before {
+  border: 1px solid rgb(0,197,158);
+}
+
+.cell.code_cell.refresher-cell.selected::before, .cell.code_cell.refresher-cell.jupyter-soft-selected::before {
+  background: rgb(0,197,158);
+}
+
+
+/* put input / output cells later since they should take precedence */

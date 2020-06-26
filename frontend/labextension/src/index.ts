@@ -186,7 +186,7 @@ const connectToComm = (
     if (notebook !== args.notebook) {
       return;
     }
-    const content_by_cell_id: any = {};
+    const content_by_cell_id: {[id: string]: string} = {};
     args.cell.node.classList.remove(staleOutputClass);
     args.cell.node.classList.remove(refresherInputClass);
     notebook.widgets.forEach((cell, idx) => {

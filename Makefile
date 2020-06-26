@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall uitest version bump markdown
+.PHONY: clean build deploy check test tests deps devdeps typecheck checkall testall uitest version bump markdown kernel nbext
 
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/
@@ -42,7 +42,10 @@ devdeps:
 	pip install -r requirements-dev.txt
 
 kernel:
-	python -m nbsafety.install
+	python -m nbsafety.install --sys-prefix
+
+nbext:
+	./scripts/nbext.sh --sys-prefix
 
 typecheck:
 	find nbsafety -iname '*.py' -print0 | xargs -0 mypy

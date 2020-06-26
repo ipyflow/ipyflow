@@ -3,7 +3,6 @@
 
 import atexit
 import platform
-import os
 from subprocess import check_call
 
 from setuptools import setup, find_packages
@@ -53,6 +52,16 @@ setup(
         'blueprint.json',
     ]),
     include_package_data=True,
+    # data_files=[
+    #     # like `jupyter nbextension install --sys-prefix`
+    #     ("share/jupyter/nbextensions/nbsafety", [
+    #         "nbsafety/resources/index.js",
+    #     ]),
+    #     # like `jupyter nbextension enable --sys-prefix`
+    #     ("etc/jupyter/nbconfig/notebook.d", [
+    #         "nbsafety/resources/nbsafety.json",
+    #     ])
+    # ],
     install_requires=requirements,
     license='BSD-3-Clause',
     zip_safe=False,

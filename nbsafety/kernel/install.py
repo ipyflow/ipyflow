@@ -27,13 +27,12 @@ def install_my_kernel_spec(user=True, prefix=None):
         if platform.system().lower().startswith('win'):
             cp = 'copy'
         import nbsafety
-        resources = os.path.join(os.path.dirname(os.path.abspath(nbsafety.__file__)), 'resources')
+        resources = os.path.join(os.path.dirname(os.path.abspath(nbsafety.__file__)), 'resources', 'img')
         logo32 = os.path.join(resources, 'logo-32x32.png')
         logo64 = os.path.join(resources, 'logo-64x64.png')
         os.system(f'{cp} {logo32} {logo64} {td}')
         with open(os.path.join(td, 'kernel.json'), 'w') as f:
             json.dump(kernel_json, f, sort_keys=True)
-        # TODO: Copy resources once they're specified
 
         print(f'Installing KernelSpec for {PACKAGE} kernel')
         KernelSpecManager().install_kernel_spec(td, kernel_name=f'{PACKAGE}', user=user, prefix=prefix)

@@ -1,0 +1,55 @@
+{
+  "name": "jupyterlab-nbsafety",
+  "version": "0.0.37",
+  "description": "JupyterLab extension for nbsafety user interface",
+  "keywords": [
+    "jupyter",
+    "nbextension"
+  ],
+  "homepage": "https://github.com/nbsafety-project/nbsafety",
+  "bugs": {
+    "url": "https://github.com/nbsafety-project/nbsafety/issues"
+  },
+  "license": "BSD-3-Clause",
+  "author": "Stephen Macke",
+  "files": [
+    "lib/**/*.{d.ts,eot,gif,html,jpg,js,js.map,json,png,svg,woff2,ttf}",
+    "style/**/*.{css,eot,gif,html,jpg,json,png,svg,woff2,ttf}"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "style": "style/index.css",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nbsafety-project/nbsafety.git"
+  },
+  "scripts": {
+    "build": "webpack --mode production",
+    "watch": "webpack --mode development --watch",
+    "clean": "rimraf lib tsconfig.tsbuildinfo",
+    "eslint": "eslint . --ext .ts,.tsx --fix",
+    "eslint:check": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write 'src/*.ts'",
+    "lint": "prettier --check 'src/*.ts'"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/webpack-env": "*",
+    "@typescript-eslint/eslint-plugin": "^2.25.0",
+    "@typescript-eslint/parser": "^2.25.0",
+    "eslint": "^6.8.0",
+    "eslint-config-prettier": "^6.10.1",
+    "eslint-plugin-prettier": "^3.1.2",
+    "rimraf": "^2.6.1",
+    "typescript": "~3.7.0",
+    "css-loader": "^3.1.0",
+    "prettier": "^1.18.2",
+    "ts-loader": "^6.0.4",
+    "webpack": "^4.35.2",
+    "webpack-cli": "^3.3.5"
+  },
+  "sideEffects": [
+    "style/*.css"
+  ],
+  "private": true
+}

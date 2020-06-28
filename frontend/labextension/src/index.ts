@@ -124,28 +124,25 @@ const addStaleOutputInteractions = (elem: HTMLElement) => {
 
 const clearCellState = (notebook: Notebook) => {
   notebook.widgets.forEach((cell, idx) => {
-    // clear any old event listeners
-    const inputCollapser = getJpInputCollapser(cell.node);
-    if (inputCollapser === null) {
-      return;
-    }
-    inputCollapser.firstElementChild.classList.remove(linkedStaleClass);
-    inputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
-    inputCollapser.dispatchEvent(cleanup);
-
-    const outputCollapser = getJpOutputCollapser(cell.node);
-    if (outputCollapser === null) {
-      return;
-    }
-    outputCollapser.firstElementChild.classList.remove(linkedStaleClass);
-    outputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
-    outputCollapser.dispatchEvent(cleanup);
-
     cell.node.classList.remove(staleClass);
     cell.node.classList.remove(refresherClass);
-
     cell.node.classList.remove(staleOutputClass);
     cell.node.classList.remove(refresherInputClass);
+
+    // clear any old event listeners
+    const inputCollapser = getJpInputCollapser(cell.node);
+    if (inputCollapser !== null) {
+      inputCollapser.firstElementChild.classList.remove(linkedStaleClass);
+      inputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+      inputCollapser.dispatchEvent(cleanup);
+    }
+
+    const outputCollapser = getJpOutputCollapser(cell.node);
+    if (outputCollapser !== null) {
+      outputCollapser.firstElementChild.classList.remove(linkedStaleClass);
+      outputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+      outputCollapser.dispatchEvent(cleanup);
+    }
   });
 };
 

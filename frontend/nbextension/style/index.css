@@ -30,6 +30,14 @@
   background-color: rgb(254,0,82);
 }
 
+.cell.code_cell.linked-stale-input .input_prompt::before {
+  background-color: rgb(254,0,82);
+}
+
+.cell.code_cell.linked-stale-output .out_prompt_overlay::before {
+  background-color: rgb(254,0,82);
+}
+
 .cell.code_cell.refresher-cell .input_prompt::before {
   border: 1px solid rgb(0,197,158);
 }
@@ -38,7 +46,11 @@
   background-color: rgb(0,197,158);
 }
 
-.cell.code_cell.refresher-cell .input_prompt:hover::before, .cell.code_cell.refresher-cell .input_prompt:hover::before {
+.cell.code_cell.refresher-cell .input_prompt:hover::before {
+  background-color: rgb(0,197,158);
+}
+
+.cell.code_cell.linked-refresher .input_prompt::before {
   background-color: rgb(0,197,158);
 }
 

@@ -1,19 +1,11 @@
 
 import '../style/index.css';
 // import "jqueryui";
-//
-// declare global {
-//   interface Window {
-//     midas: MidasContainer;
-//     selectionShelf: SelectionShelf;
-//     profilerShelf: ProfilerShelf;
-//   }
-// }
 
 const staleClass = 'stale-cell';
-// const staleOutputClass = 'stale-output-cell';
+const staleOutputClass = 'stale-output-cell';
 const refresherClass = 'refresher-cell';
-// const refresherInputClass = 'refresher-input-cell';
+const refresherInputClass = 'refresher-input-cell';
 // const linkedStaleClass = 'linked-stale';
 // const linkedRefresherClass = 'linked-refresher';
 
@@ -21,6 +13,8 @@ const clearCellState = (Jupyter: any) => {
     Jupyter.notebook.get_cells().forEach((cell: any, idx: any) => {
         cell.element[0].classList.remove(staleClass);
         cell.element[0].classList.remove(refresherClass);
+        cell.element[0].classList.remove(staleOutputClass);
+        cell.element[0].classList.remove(refresherInputClass);
     });
 };
 
@@ -67,12 +61,12 @@ const connectToComm = (Jupyter: any) => {
             for (const [id, elem] of Object.entries(cellsById)) {
                 if (staleInputCells.indexOf(id) > -1) {
                     elem.classList.add(staleClass);
-                    // elem.classList.add(staleOutputClass);
-                    // elem.classList.remove(refresherInputClass);
+                    elem.classList.add(staleOutputClass);
+                    elem.classList.remove(refresherInputClass);
                 } else if (staleOutputCells.indexOf(id) > -1) {
-                    // elem.classList.add(refresherInputClass);
-                    // elem.classList.add(staleOutputClass);
-                    //
+                    elem.classList.add(refresherInputClass);
+                    elem.classList.add(staleOutputClass);
+
                     // addStaleOutputInteractions(elem);
                 }
 
@@ -82,7 +76,7 @@ const connectToComm = (Jupyter: any) => {
 
                 if (refresherLinks.hasOwnProperty(id)) {
                     elem.classList.add(refresherClass);
-                    // elem.classList.add(staleOutputClass);
+                    elem.classList.add(staleOutputClass);
                     // TODO: add unsafe cell interactions
                 }
             }

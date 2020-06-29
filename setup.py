@@ -73,7 +73,7 @@ with TemporaryDirectory() as td:
             ]),
             # like `python -m nbsafety.install --sys-prefix`
             ("share/jupyter/kernels/nbsafety", [
-                kernel_json_file,
+                os.path.relpath(kernel_json_file, os.curdir),
             ]),
             ("share/jupyter/kernels/nbsafety", [
                 "nbsafety/resources/img/logo-32x32.png",

@@ -165,3 +165,7 @@ History
 0.0.44 (2020-06-28)
 -------------------
 * Debug absent kernel.json when installing with pip;
+
+0.0.45 (2020-06-28)
+-------------------
+* Explicitly add kernel.json to data_files in setup.py;

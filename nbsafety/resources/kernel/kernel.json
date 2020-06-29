@@ -1,0 +1,1 @@
+{"argv": ["python", "-m", "nbsafety.kernel", "-f", "{connection_file}"], "codemirror_mode": "shell", "display_name": "Python 3 (nbsafety)", "language": "python"}

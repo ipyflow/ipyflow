@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import contextlib
 import json
 import os
 import sys
@@ -30,11 +31,20 @@ def read_file(fname):
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
 
-with TemporaryDirectory() as td:
-    os.chmod(td, 0o755)  # Starts off as 700, not user readable
-    kernel_json_file = os.path.join(td, 'kernel.json')
-    with open(kernel_json_file, 'w') as f:
-        json.dump(KERNEL_JSON, f, sort_keys=True)
+if sys.argv[-1] == 'install':
+    should_dump_kernel_json = True
+    tempdir_or_nullcontext = TemporaryDirectory
+else:
+    should_dump_kernel_json = False
+    tempdir_or_nullcontext = contextlib.nullcontext
+with tempdir_or_nullcontext() as td:
+    extra_data_files = []
+    if should_dump_kernel_json:
+        os.chmod(td, 0o755)  # Starts off as 700, not user readable
+        kernel_json_file = os.path.join(td, 'kernel.json')
+        with open(kernel_json_file, 'w') as f:
+            json.dump(KERNEL_JSON, f, sort_keys=True)
+        extra_data_files.append(("share/jupyter/kernels/nbsafety", [os.path.relpath(kernel_json_file, os.curdir)]))
     setup(
         name=pkg_name,
         version=versioneer.get_version(),
@@ -73,15 +83,12 @@ with TemporaryDirectory() as td:
             ]),
             # like `python -m nbsafety.install --sys-prefix`
             ("share/jupyter/kernels/nbsafety", [
-                os.path.relpath(kernel_json_file, os.curdir),
-            ]),
-            ("share/jupyter/kernels/nbsafety", [
                 "nbsafety/resources/kernel/logo-32x32.png",
             ]),
             ("share/jupyter/kernels/nbsafety", [
                 "nbsafety/resources/kernel/logo-64x64.png",
             ]),
-        ],
+        ] + extra_data_files,
         install_requires=requirements,
         license='BSD-3-Clause',
         zip_safe=False,

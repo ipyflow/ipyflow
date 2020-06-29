@@ -31,12 +31,12 @@ def read_file(fname):
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
 
-if sys.argv[-1] == 'install':
-    should_dump_kernel_json = True
-    tempdir_or_nullcontext = TemporaryDirectory
-else:
+if sys.argv[1] == 'sdist':
     should_dump_kernel_json = False
     tempdir_or_nullcontext = contextlib.nullcontext
+else:
+    should_dump_kernel_json = True
+    tempdir_or_nullcontext = TemporaryDirectory
 with tempdir_or_nullcontext() as td:
     extra_data_files = []
     if should_dump_kernel_json:

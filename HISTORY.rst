@@ -161,3 +161,7 @@ History
 0.0.43 (2020-06-28)
 -------------------
 * Bundle nbextension and auto-install at setup (along with kernel);
+
+0.0.44 (2020-06-28)
+-------------------
+* Debug absent kernel.json when installing with pip;

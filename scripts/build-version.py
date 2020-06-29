@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import json
+import os
 import subprocess
 import sys
 
@@ -14,12 +15,14 @@ def main(args):
     version = '.'.join(str(c) for c in components)
     if args.tag:
         subprocess.check_output(['git', 'tag', version])
-    with open('./frontend/labextension/package.json', 'r') as f:
-        package_json = json.loads(f.read())
-    if package_json.get('version', None) != version:
-        package_json['version'] = version
-        with open('./frontend/labextension/package.json', 'w') as f:
-            f.write(json.dumps(package_json, indent=2))
+    for package_dot_json_loc in ['./frontend/labextension', './frontend/nbextension']:
+        package_dot_json = os.path.join(package_dot_json_loc, 'package.json')
+        with open(package_dot_json, 'r') as f:
+            package_json = json.loads(f.read())
+        if package_json.get('version', None) != version:
+            package_json['version'] = version
+            with open(package_dot_json, 'w') as f:
+                f.write(json.dumps(package_json, indent=2))
     return 0
 
 

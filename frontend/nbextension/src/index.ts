@@ -110,6 +110,17 @@ const clearCellState = (Jupyter: any) => {
     });
 };
 
+const gatherCellContentsById = (Jupyter: any) => {
+    const content_by_cell_id: {[id: string]: string} = {};
+    Jupyter.notebook.get_cells().forEach((cell: any) => {
+        if (cell.cell_type !== 'code') {
+            return;
+        }
+        content_by_cell_id[cell.cell_id] = cell.get_text();
+    });
+    return content_by_cell_id;
+}
+
 const connectToComm = (Jupyter: any) => {
     const comm = Jupyter.notebook.kernel.comm_manager.new_comm('nbsafety');
     const onExecution = (evt: any, data: {cell: any}) => {
@@ -117,22 +128,13 @@ const connectToComm = (Jupyter: any) => {
             return;
         }
         // console.log(data.cell);
-        const cells = Jupyter.notebook.get_cells();
-        const content_by_cell_id: {[id: string]: string} = {};
         data.cell.element[0].classList.remove(staleOutputClass);
         data.cell.element[0].classList.remove(refresherInputClass);
-        cells.forEach((cell: any, idx: any) => {
-            if (cell.cell_type !== 'code') {
-                return;
-            }
-            content_by_cell_id[cell.cell_id] = cell.get_text();
-        });
-        const payload = {
+        comm.send({
             type: 'cell_freshness',
             executed_cell_id: data.cell.cell_id,
-            content_by_cell_id: content_by_cell_id
-        };
-        comm.send(payload);
+            content_by_cell_id: gatherCellContentsById(Jupyter)
+        });
         // console.log(evt);
     };
     comm.on_msg((msg: any) => {
@@ -147,7 +149,7 @@ const connectToComm = (Jupyter: any) => {
             const staleLinks: any = msg.content.data['stale_links'];
             const refresherLinks: any = msg.content.data['refresher_links'];
             const cellsById: {[id: string]: HTMLElement} = {};
-            Jupyter.notebook.get_cells().forEach((cell: any, idx: any) => {
+            Jupyter.notebook.get_cells().forEach((cell: any) => {
                 cellsById[cell.cell_id] = cell.element[0];
             });
             for (const [id, elem] of Object.entries(cellsById)) {
@@ -210,6 +212,10 @@ const connectToComm = (Jupyter: any) => {
                 }
             }
         }
+    });
+    comm.send({
+        type: 'cell_freshness',
+        content_by_cell_id: gatherCellContentsById(Jupyter)
     });
     return () => {
         clearCellState(Jupyter);

@@ -105,8 +105,9 @@ class DependencySafety(object):
             cell_id = request['active_cell_id']
             self._active_cell_id = cell_id
         elif request['type'] == 'cell_freshness':
-            cell_id = request['executed_cell_id']
-            self._counters_by_cell_id[cell_id] = self._last_execution_counter
+            cell_id = request.get('executed_cell_id', None)
+            if cell_id is not None:
+                self._counters_by_cell_id[cell_id] = self._last_execution_counter
             cells_by_id = request['content_by_cell_id']
             response = self.multicell_precheck(cells_by_id)
             response['type'] = 'cell_freshness'

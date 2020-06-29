@@ -15,4 +15,5 @@ dist/
 !**/notebooks/*.ipynb
 **/[uU]ntitled*
 MANIFEST
-nbsafety/resources/nbextension/**
+nbsafety/resources/nbextension/index.js
+nbsafety/resources/nbextension/index.js.map

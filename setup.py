@@ -76,10 +76,10 @@ with TemporaryDirectory() as td:
                 os.path.relpath(kernel_json_file, os.curdir),
             ]),
             ("share/jupyter/kernels/nbsafety", [
-                "nbsafety/resources/img/logo-32x32.png",
+                "nbsafety/resources/kernel/logo-32x32.png",
             ]),
             ("share/jupyter/kernels/nbsafety", [
-                "nbsafety/resources/img/logo-64x64.png",
+                "nbsafety/resources/kernel/logo-64x64.png",
             ]),
         ],
         install_requires=requirements,

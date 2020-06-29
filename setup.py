@@ -55,7 +55,7 @@ setup(
     data_files=[
         # like `jupyter nbextension install --sys-prefix`
         ("share/jupyter/nbextensions/nbsafety", [
-            "nbsafety/resources/index.js",
+            "nbsafety/resources/nbextension/index.js",
         ]),
         # like `jupyter nbextension enable --sys-prefix`
         ("etc/jupyter/nbconfig/notebook.d", [

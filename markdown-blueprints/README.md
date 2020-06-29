@@ -28,7 +28,6 @@ issues for any bugs encountered!
 
 Install
 -------
-To install, grab the package and install the Jupyter kernel spec.
 ```bash
 pip install nbsafety
 ```

@@ -5,8 +5,8 @@ import json
 import os
 import sys
 from setuptools import setup, find_packages
+from tempfile import TemporaryDirectory
 
-from IPython.utils.tempdir import TemporaryDirectory
 import versioneer
 
 pkg_name = 'nbsafety'

@@ -41,27 +41,46 @@ To install, grab the package and install the Jupyter kernel spec.
 We also have an optional JupyterLab extension available with an improved interface:
 ```bash
 pip install nbsafety
-python -m nbsafety.install
 jupyter labextension install jupyterlab-nbsafety  # optional but highly recommended if using JupyterLab
 ```
-The optional JupyterLab extension shows cells with unsafe executions (due to
-uses of variables with stale dependencies) as having red collapsers, and
-recommends cells to run (in order to refresh variables with stale dependencies)
-by displaying them with green collapsers.
+
+If using JupyterLab, we highly recommend installing the companion extension:
+```bash
+jupyter labextension install jupyterlab-nbsafety  # optional but highly recommended if using JupyterLab
+```
+
+Interface
+---------
+The JupyterLab extension and bundled Jupyter notebook extension both show cells
+with unsafe executions (due to uses of variables with stale dependencies) as
+being annotated with red UI elements, and recommends cells to run (in order to
+refresh variables with stale dependencies) by displaying them with turquoise UI
+elements.
 
 Running
 -------
 
-Because `nbsafety` is implemented as a custom Jupyter kernel, it works for
-both Jupyter notebooks and JupyterLab (but JupyterLab with the additional labextension is recommended).
-To run an `nbsafety` kernel, select "Python 3 (nbsafety)" from the list
-of notebook types in Jupyter's "New" dropdown dialogue.
-For JupyterLab, similarly select "Python 3 (nbsafety)" from the list
+Because `nbsafety` is implemented as a custom Jupyter kernel, it works for both
+Jupyter notebooks and JupyterLab (if using JupyterLab, the additional
+labextension is recommended).  To run an `nbsafety` kernel, select "Python 3
+(nbsafety)" from the list of notebook types in Jupyter's "New" dropdown
+dialogue.  For JupyterLab, similarly select "Python 3 (nbsafety)" from the list
 of available kernels in the Launcher tab.
 
 Jupyter Notebook Entrypoint:     |  Jupyter Lab Entrypoint:
 :-------------------------------:|:-------------------------:
 ![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/nbsafety-notebook.png) | ![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/nbsafety-lab.png)
+
+Troubleshooting Install
+-----------------------
+The kernel and nbextension should be installed automatically, but in case
+the kernel is not available as an option or the UI elements are not showing
+up, try running the following:
+```bash
+python -m nbsafety.install
+jupyter nbextension install --py nbsafety --sys-prefix
+jupyter nbextension enbale --py nbsafety --sys-prefix
+```
 
 Uninstall
 ---------

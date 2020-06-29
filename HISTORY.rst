@@ -157,3 +157,7 @@ History
 -------------------
 * Bugfixes;
 * Efficiency compromise: don't trace multiple executions of same ast statement (e.g. if inside for loop);
+
+0.0.43 (2020-06-28)
+-------------------
+* Bundle nbextension and auto-install at setup (along with kernel);

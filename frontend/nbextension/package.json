@@ -1,6 +1,6 @@
 {
   "name": "jupyter-nbsafety",
-  "version": "0.0.42",
+  "version": "0.0.43",
   "description": "JupyterLab extension for nbsafety user interface",
   "keywords": [
     "jupyter",

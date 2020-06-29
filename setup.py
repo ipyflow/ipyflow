@@ -59,7 +59,7 @@ setup(
         ]),
         # like `jupyter nbextension enable --sys-prefix`
         ("etc/jupyter/nbconfig/notebook.d", [
-            "nbsafety/resources/nbsafety.json",
+            "nbsafety/resources/nbextension/nbsafety.json",
         ])
     ],
     install_requires=requirements,

@@ -126,33 +126,41 @@ class Scope(object):
             self,
             name: str,
             obj: 'Any',
+            deps: 'Set[DataSymbol]',
             is_subscript,
+            overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-    ) -> 'DataSymbol':
+    ):
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
-            name, obj, is_subscript, is_function_def=is_function_def, class_scope=class_scope
+            name, obj, deps, is_subscript,
+            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
         # print('upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
-        return dc
 
     def _upsert_data_symbol_for_name_inner(
             self,
             name: str,
             obj: 'Any',
+            deps: 'Set[DataSymbol]',
             is_subscript,
+            overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
     ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
         assert not (class_scope is not None and is_function_def)
         symbol_type = DataSymbolType.DEFAULT
         if is_function_def:
+            assert overwrite
             assert not is_subscript
             symbol_type = DataSymbolType.FUNCTION
+            # return self._upsert_function_data_symbol_for_name(name, obj, deps)
         elif class_scope is not None:
+            assert overwrite
             assert not is_subscript
             symbol_type = DataSymbolType.CLASS
+            # return self._upsert_class_data_symbol_for_name(name, obj, deps, class_scope)
         elif is_subscript:
             symbol_type = DataSymbolType.SUBSCRIPT
         old_id = None
@@ -160,12 +168,35 @@ class Scope(object):
         if old_dc is not None and self.is_globally_accessible:
             old_id = old_dc.cached_obj_id
             # TODO: garbage collect old names (EDIT: does this happen automatically thanks to the handle_aliases logic?)
+            # TODO: handle case where new dc is of different type
             if name in self.data_symbol_by_name(old_dc.is_subscript):
                 old_dc.update_obj_ref(obj)
                 old_dc.update_type(symbol_type)
+                old_dc.update_deps(deps, overwrite=overwrite)
                 return old_dc, old_dc, old_id
-        dc = DataSymbol(name, symbol_type, obj, self, self.safety)
+            else:
+                # In this case, we are copying from a class and we need the dsym from which we are copying
+                # as able to propagate to the new dsym.
+                # Example:
+                # class Foo:
+                #     shared = 99
+                # foo = Foo()
+                # foo.shared = 42  # old_dc refers to Foo.shared here
+                # Earlier, we were explicitly adding Foo.shared as a dependency of foo.shared as follows:
+                # deps.add(old_dc)
+                # But it turns out not to be necessary because foo depends on Foo, and changing Foo.shared will
+                # propagate up the namespace hierarchy to Foo, which propagates to foo, which then propagates to
+                # all of foo's namespace children (e.g. foo.shared).
+                # This raises the question of whether we should draw the foo <-> Foo edge, since irrelevant namespace
+                # children could then also be affected (e.g. some instance variable foo.x).
+                # Perhaps a better strategy is to prevent propagation along this edge unless class Foo is redeclared.
+                # If we do this, then we should go back to explicitly adding the dep as follows:
+                # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
+                # it is important to explicitly add this dep.
+                deps.add(old_dc)
+        dc = DataSymbol(name, symbol_type, obj, self, self.safety, parents=deps)
         self.put(name, dc)
+        dc.update_deps(deps, overwrite=True)
         return dc, old_dc, old_id
 
     def _handle_aliases(

@@ -4,7 +4,6 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
-from .dep_update import DependencyUpdate
 from ..analysis import get_statement_symbol_edges
 from ..utils import retrieve_namespace_attr_or_sub
 
@@ -76,7 +75,7 @@ class TraceStatement(object):
             raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
         return func_cell.call_scope
 
-    def _gather_lval_data_symbol_dep_updates(self):
+    def _make_lval_data_symbols(self):
         symbol_edges, should_overwrite = get_statement_symbol_edges(self.stmt_node)
         deep_rval_deps = self._gather_deep_ref_rval_dsyms()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -100,11 +99,10 @@ class TraceStatement(object):
             #     print('create function', name, 'in scope', self.scope)
             try:
                 obj = self.frame.f_locals[lval_name]
-                dep_update = DependencyUpdate(rval_deps, should_overwrite_for_name)
-                dsym = self.scope.upsert_data_symbol_for_name(
-                    lval_name, obj, False, is_function_def=is_function_def, class_scope=self.class_scope,
+                self.scope.upsert_data_symbol_for_name(
+                    lval_name, obj, rval_deps, False,
+                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
                 )
-                self.safety.dep_updates[dsym] = self.safety.dep_updates[dsym].update(dep_update)
             except KeyError:
                 pass
         if len(symbol_edges) == 0:
@@ -124,34 +122,10 @@ class TraceStatement(object):
             if scope_to_use is None:
                 # Nobody before `scope` has it, so we'll insert it at this level
                 scope_to_use = scope
-            old_dsym = scope_to_use.lookup_data_symbol_by_name_this_indentation(attr_or_sub)
-            if old_dsym is not None and scope_to_use.is_globally_accessible:
-                if attr_or_sub not in scope_to_use.data_symbol_by_name(is_subscript):
-                    # In this case, we are copying from a class and we need the dsym from which we are copying
-                    # as able to propagate to the new dsym.
-                    # Example:
-                    # class Foo:
-                    #     shared = 99
-                    # foo = Foo()
-                    # foo.shared = 42  # old_dc refers to Foo.shared here
-                    # Earlier, we were explicitly adding Foo.shared as a dependency of foo.shared as follows:
-                    # deps.add(old_dc)
-                    # But it turns out not to be necessary because foo depends on Foo, and changing Foo.shared will
-                    # propagate up the namespace hierarchy to Foo, which propagates to foo, which then propagates to
-                    # all of foo's namespace children (e.g. foo.shared).
-                    # This raises the question of whether we should draw the foo <-> Foo edge, since irrelevant namespace
-                    # children could then also be affected (e.g. some instance variable foo.x).
-                    # Perhaps a better strategy is to prevent propagation along this edge unless class Foo is redeclared.
-                    # If we do this, then we should go back to explicitly adding the dep as follows:
-                    # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
-                    # it is important to explicitly add this dep.
-                    # deps.add(old_dc)
-                    rval_deps.add(old_dsym)
-            dep_update = DependencyUpdate(rval_deps, should_overwrite)
-            dsym = scope_to_use.upsert_data_symbol_for_name(
-                attr_or_sub, attr_or_sub_obj, is_subscript, is_function_def=False, class_scope=None
+            scope_to_use.upsert_data_symbol_for_name(
+                attr_or_sub, attr_or_sub_obj, rval_deps, is_subscript,
+                overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
-            self.safety.dep_updates[dsym] = self.safety.dep_updates[dsym].update(dep_update)
 
     def _gather_deep_ref_rval_dsyms(self):
         deep_ref_rval_dsyms = set()
@@ -173,10 +147,10 @@ class TraceStatement(object):
             return
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
             mutation_arg_dsyms = set(self.scope.lookup_data_symbol_by_name(arg) for arg in mutation_args) - {None}
-            dep_update = DependencyUpdate(mutation_arg_dsyms, False, mutate=True)
-            self.safety.dep_updates[mutated_obj_id] = self.safety.dep_updates[mutated_obj_id].update(dep_update)
+            for mutated_dc in self.safety.aliases[mutated_obj_id]:
+                mutated_dc.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self.has_lval:
-            self._gather_lval_data_symbol_dep_updates()
+            self._make_lval_data_symbols()
         else:
             if len(self.safety.attr_trace_manager.saved_store_data) > 0:
                 logger.warning('saw unexpected state in saved_store_data: %s',
@@ -189,6 +163,8 @@ class TraceStatement(object):
         self._marked_finished = True
         self.handle_dependencies()
         self.safety.attr_trace_manager.reset()
+        self.safety._namespace_gc()
+        # self.safety._gc()
 
     @property
     def has_lval(self):

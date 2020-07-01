@@ -238,8 +238,8 @@ class AttrSubTracingManager(object):
         self.mutations = set()
         self.deep_ref_candidate = None
         self.active_scope = self.original_active_scope
-        self.nested_call_stack = []
-        self.stmt_transition_hook()
+        # self.nested_call_stack = []
+        # self.stmt_transition_hook()
 
 
 class AttrSubTracingNodeTransformer(ast.NodeTransformer):

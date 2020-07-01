@@ -58,25 +58,28 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
         self.visit_List_or_Tuple(node)
 
     def visit_Dict(self, node):
-        inner_symbols = []
-        with self.push_attributes(to_add_set=inner_symbols):
-            self.visit(node.keys)
-            self.visit(node.values)
-        self.to_add_set.append(tuple(inner_symbols))
+        temp = self.to_add_set
+        self.to_add_set = []
+        self.visit(node.keys)
+        self.visit(node.values)
+        self.to_add_set, temp = temp, self.to_add_set
+        self.to_add_set.append(tuple(temp))
 
     def visit_List_or_Tuple(self, node):
-        inner_symbols = []
-        with self.push_attributes(to_add_set=inner_symbols):
-            self.visit(node.elts)
-        self.to_add_set.append(tuple(inner_symbols))
+        temp = self.to_add_set
+        self.to_add_set = []
+        self.visit(node.elts)
+        self.to_add_set, temp = temp, self.to_add_set
+        self.to_add_set.append(tuple(temp))
 
     def visit_expr(self, node):
         assert self.gather_rvals
-        inner_symbols = []
-        with self.push_attributes(to_add_set=inner_symbols):
-            # call super generic_visit since self generic_visit calls visit_expr
-            super().generic_visit(node)
-        self.to_add_set.append(tuple(inner_symbols))
+        temp = self.to_add_set
+        self.to_add_set = []
+        # call super generic_visit since self generic_visit calls visit_expr
+        super().generic_visit(node)
+        self.to_add_set, temp = temp, self.to_add_set
+        self.to_add_set.append(tuple(temp))
 
     def generic_visit(self, node: 'Union[ast.AST, Sequence[ast.AST]]'):
         # The purpose of this is to make sure we call our visit_expr method if we see an expr
@@ -99,7 +102,12 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             self.to_add_set.append(get_attrsub_symbol_chain(node))
         else:
+            temp = self.to_add_set
+            self.to_add_set = []
             self.generic_visit(node)
+            self.to_add_set, temp = temp, self.to_add_set
+            temp = tuple(set(_flatten(temp)))
+            self.to_add_set.append(temp)
 
     def visit_Attribute_or_Subscript(self, node):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h

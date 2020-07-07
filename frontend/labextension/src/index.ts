@@ -1,20 +1,23 @@
 import {
+  IChangedArgs
+} from '@jupyterlab/coreutils/lib/interfaces';
+
+import {
   ILayoutRestorer,
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
 
-import { Kernel } from '@jupyterlab/services';
+import {
+  ICellModel
+} from '@jupyterlab/cells';
 
 import {
   INotebookTracker,
-  Notebook,
-  NotebookActions
+  Notebook
 } from '@jupyterlab/notebook';
 
-import {
-  Cell
-} from '@jupyterlab/cells';
+import { Kernel } from '@jupyterlab/services';
 
 /**
  * Initialization data for the jupyterlab-nbsafety extension.
@@ -162,43 +165,61 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: [string],
 };
 
 const connectToComm = (
-    kernel: Kernel.IKernelConnection,
+  kernel: Kernel.IKernelConnection,
   notebook: Notebook
 ) => {
   const comm = kernel.createComm('nbsafety');
+  let disconnected = false;
 
-  const onActiveCellChange = (thisNotebook: Notebook, cell: Cell) => {
-    if (notebook !== thisNotebook) {
+  const onExecution: any = (cell: ICellModel, args: IChangedArgs<any>) => {
+    if (disconnected) {
+      cell.stateChanged.disconnect(onExecution);
       return;
     }
-    const payload = {
-      type: 'change_active_cell',
-      active_cell_id: cell.model.id,
-    };
-    comm.send(payload);
-  };
-  notebook.activeCellChanged.connect(onActiveCellChange, notebook.activeCellChanged);
-
-  const onExecution = (_: any, args: { notebook: Notebook; cell: Cell }) => {
-    if (notebook !== args.notebook) {
+    if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
     const content_by_cell_id: {[id: string]: string} = {};
-    args.cell.node.classList.remove(staleOutputClass);
-    args.cell.node.classList.remove(refresherInputClass);
-    notebook.widgets.forEach((cell, idx) => {
-      content_by_cell_id[cell.model.id] = cell.model.value.text;
+    notebook.widgets.forEach((itercell, idx) => {
+      content_by_cell_id[itercell.model.id] = itercell.model.value.text;
+      if (itercell.model.id === cell.id) {
+        itercell.node.classList.remove(staleOutputClass);
+        itercell.node.classList.remove(refresherInputClass);
+      }
     });
     const payload = {
       type: 'cell_freshness',
-      executed_cell_id: args.cell.model.id,
+      executed_cell_id: cell.id,
       content_by_cell_id: content_by_cell_id
     };
     comm.send(payload);
   };
+
+  const onNotebookStateChange = (nb: Notebook, args: IChangedArgs<any>) => {
+    if (disconnected) {
+      nb.stateChanged.disconnect(onNotebookStateChange);
+      return;
+    }
+    if (args.name !== 'activeCellIndex' || nb !== notebook) {
+      return;
+    }
+    const oldActiveCell = nb.model.cells.get(args.oldValue);
+    if (oldActiveCell !== null) {
+      oldActiveCell.stateChanged.disconnect(onExecution, oldActiveCell.stateChanged);
+    }
+    const newActiveCell = nb.model.cells.get(args.newValue);
+    if (newActiveCell !== null) {
+      newActiveCell.stateChanged.connect(onExecution);
+    }
+  }
+  notebook.stateChanged.connect(onNotebookStateChange);
+
   comm.onMsg = (msg) => {
+    if (disconnected) {
+      return;
+    }
     if (msg.content.data['type'] === 'establish') {
-      NotebookActions.executed.connect(onExecution, NotebookActions.executed);
+      notebook.activeCell.model.stateChanged.connect(onExecution);
     } else if (msg.content.data['type'] === 'cell_freshness') {
       clearCellState(notebook);
       const staleInputCells: any = msg.content.data['stale_input_cells'];
@@ -272,7 +293,7 @@ const connectToComm = (
   comm.open({});
   // return a disconnection handle
   return () => {
-    NotebookActions.executed.disconnect(onExecution, NotebookActions.executed);
+    disconnected = true;
   };
 };
 

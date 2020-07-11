@@ -84,10 +84,14 @@ class DependencySafety(object):
         self._track_dependencies = True
 
         self._disable_level = 0
+        self._skip_unsafe_cells = kwargs.pop('skip_unsafe', True)
         self._prev_cell_nodes_with_stale_deps: Set[DataSymbol] = set()
 
         if self.use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
+
+    def set_active_cell(self, cell_id):
+        self._active_cell_id = cell_id
 
     def _comm_target(self, comm, open_msg):
         @comm.on_msg
@@ -99,8 +103,7 @@ class DependencySafety(object):
 
     def handle(self, request, comm=None):
         if request['type'] == 'change_active_cell':
-            cell_id = request['active_cell_id']
-            self._active_cell_id = cell_id
+            self.set_active_cell(request['active_cell_id'])
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
             if cell_id is not None:
@@ -246,7 +249,7 @@ class DependencySafety(object):
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell):
+            if self._precheck_for_stale(cell) and self._skip_unsafe_cells:
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')

@@ -9,6 +9,11 @@ if TYPE_CHECKING:
     from typing import Sequence, Union
 
 
+class TiedTuple(tuple):
+    """Just a marker class indicating that we should not unpack contents of this tuple"""
+    pass
+
+
 class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: figure out how to give these type annotations
@@ -94,8 +99,12 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
                 target_lval_symbols = []
                 with self.push_attributes(lval_symbols=target_lval_symbols):
                     self.visit(target)
-                if isinstance(target, (ast.Tuple, ast.List)):
-                    self.lval_symbols.extend(target_lval_symbols)
+                if isinstance(target, (ast.List, ast.Tuple)):
+                    # not strictly necessary since we are robust to this later,
+                    # but helps avoid unncessary double nesting, e.g., ((a, b, c),)
+                    assert len(target_lval_symbols) == 1
+                    assert isinstance(target_lval_symbols[0], tuple)
+                    self.lval_symbols.append(target_lval_symbols[0])
                 else:
                     self.lval_symbols.append(tuple(target_lval_symbols))
         with self.gather_rvals_context():
@@ -109,7 +118,7 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
             self.to_add_set = []
             self.generic_visit(node)
             self.to_add_set, temp = temp, self.to_add_set
-            temp = tuple(set(_flatten(temp)))
+            temp = TiedTuple(set(_flatten(temp)))
             self.to_add_set.append(temp)
 
     def visit_Attribute_or_Subscript(self, node):
@@ -154,9 +163,9 @@ def _flatten(vals):
             yield v
 
 
-def _edges(lvals, rvals, product_allowed=False):
+def _edges(lvals, rvals):
     if isinstance(lvals, tuple) and isinstance(rvals, tuple):
-        yield from _edges_from_tuples(lvals, rvals, product_allowed=product_allowed)
+        yield from _edges_from_tuples(lvals, rvals)
     elif isinstance(lvals, tuple):
         # TODO: yield edges with subscript symbols
         for left in _flatten(lvals):
@@ -169,17 +178,17 @@ def _edges(lvals, rvals, product_allowed=False):
         yield lvals, rvals
 
 
-def _edges_from_tuples(lvals, rvals, product_allowed=False):
-    if len(lvals) == len(rvals):
+def _edges_from_tuples(lvals, rvals):
+    if isinstance(rvals, TiedTuple):
+        for lval in lvals:
+            yield from _edges(lval, rvals)
+    elif len(lvals) == len(rvals):
         for left, right in zip(lvals, rvals):
             yield from _edges(left, right)
     elif len(lvals) == 1:
-        yield from _edges(lvals[0], rvals, product_allowed=True)
+        yield from _edges(lvals[0], rvals)
     elif len(rvals) == 1:
-        yield from _edges(lvals, rvals[0], product_allowed=True)
-    elif product_allowed:
-        for lval in lvals:
-            yield from _edges(lval, rvals, product_allowed=False)
+        yield from _edges(lvals, rvals[0])
     else:
         raise ValueError('Incompatible lists: %s, %s' % (lvals, rvals))
 

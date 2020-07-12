@@ -11,7 +11,7 @@ from ..utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
-    from ..safety import DependencySafety
+    from ..safety import NotebookSafety
     from ..scope import Scope
     DeepRef = Tuple[int, Optional[str], Tuple[str, ...]]
     Mutation = Tuple[int, Tuple[str, ...]]
@@ -29,7 +29,7 @@ logger.setLevel(logging.WARNING)
 
 
 class AttrSubTracingManager(object):
-    def __init__(self, safety: 'DependencySafety',
+    def __init__(self, safety: 'NotebookSafety',
                  active_scope: 'Scope', trace_event_counter: 'List[int]'):
         self.safety = safety
         self.original_active_scope = active_scope

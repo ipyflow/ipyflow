@@ -8,7 +8,7 @@ from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixi
 
 if TYPE_CHECKING:
     from typing import List, Set, Union
-    from ..safety import DependencySafety
+    from ..safety import NotebookSafety
     from ..types import SymbolRef
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(ast.NodeVisitor):
-    def __init__(self, safety: 'DependencySafety'):
+    def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.killed: Set[Union[str, AttrSubSymbolChain]] = set()
 

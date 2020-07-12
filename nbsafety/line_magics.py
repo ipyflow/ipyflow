@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any, List
-    from .safety import DependencySafety
+    from .safety import NotebookSafety
 
 
 # USAGE = """Options:
@@ -43,7 +43,7 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
       stale dependencies now. Multiple variables should be separated with spaces."""
 
 
-def show_deps(safety: 'DependencySafety', line: 'List[str]'):
+def show_deps(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) == 1:
         print("Usage: %safety show_dependency <variable_name> <variable_name2> ...")
         return
@@ -60,7 +60,7 @@ def show_deps(safety: 'DependencySafety', line: 'List[str]'):
             print("Cannot find DataSymbol", data_sym_name)
 
 
-def show_stale(safety: 'DependencySafety', line: 'List[str]'):
+def show_stale(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) < 2 or line[1] == 'global':
         dsym_sets: Any = [safety.global_scope.all_data_symbols_this_indentation()]
     elif line[1] == 'all':
@@ -81,7 +81,7 @@ def show_stale(safety: 'DependencySafety', line: 'List[str]'):
         print("DataSymbols with stale dependencies are:", [str(n) for n in stale_set])
 
 
-def set_disable_level(safety: 'DependencySafety', line: 'List[str]'):
+def set_disable_level(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 2 or line[1] not in ['0', '1', '2', '3']:
         print("""Usage: %safety set_disable_level <integer>
 -level 0: Warning,    Stop Code,   Record new dependencies, (Full functionality)
@@ -92,7 +92,7 @@ def set_disable_level(safety: 'DependencySafety', line: 'List[str]'):
     safety._disable_level = int(line[1])
 
 
-def set_propagation(safety: 'DependencySafety', line: 'List[str]'):
+def set_propagation(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 2 or line[1] not in ['cells', 'always']:
         print('Usage: %safety set_propagation [cells | always]')
         # TODO: complete explanation
@@ -100,14 +100,14 @@ def set_propagation(safety: 'DependencySafety', line: 'List[str]'):
     safety.no_stale_propagation_for_same_cell_definition = (line[1] == 'cells')
 
 
-def trace_messages(safety: 'DependencySafety', line: 'List[str]'):
+def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")
         return
     safety.trace_messages_enabled = (line[1].lower().startswith("enable"))
 
 
-def remove_dep(safety: 'DependencySafety', line: 'List[str]'):
+def remove_dep(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 3:
         print("Usage: %safety remove_dependency <parent_name> <child_name>")
         return
@@ -126,7 +126,7 @@ def remove_dep(safety: 'DependencySafety', line: 'List[str]'):
     child_data_sym.parents.remove(parent_data_sym)
 
 
-def add_dep(safety: 'DependencySafety', line: 'List[str]'):
+def add_dep(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 3:
         print("Usage: %safety add_dependency <parent_name> <child_name>")
         return
@@ -145,7 +145,7 @@ def add_dep(safety: 'DependencySafety', line: 'List[str]'):
     child_data_sym.parents.add(parent_data_sym)
 
 
-def turn_off_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
+def turn_off_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) <= 1:
         print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
         return
@@ -158,7 +158,7 @@ def turn_off_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
             print("Cannot find DataSymbol", data_sym_name)
 
 
-def turn_on_warnings_for(safety: 'DependencySafety', line: 'List[str]'):
+def turn_on_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) <= 1:
         print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
         return

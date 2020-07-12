@@ -9,14 +9,14 @@ if TYPE_CHECKING:
     from typing import Dict, List, Optional, Tuple
     from types import FrameType
     from .trace_stmt import TraceStatement
-    from ..safety import DependencySafety
+    from ..safety import NotebookSafety
     from ..scope import NamespaceScope
 
 logger = logging.getLogger(__name__)
 
 
 class TraceState(object):
-    def __init__(self, safety: 'DependencySafety'):
+    def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.cur_frame_scope = safety.global_scope
         self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None

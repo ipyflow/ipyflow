@@ -16,7 +16,7 @@ from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
-    from .safety import DependencySafety
+    from .safety import NotebookSafety
 
 
 class Scope(object):
@@ -24,7 +24,7 @@ class Scope(object):
 
     def __init__(
             self,
-            safety: 'DependencySafety',
+            safety: 'NotebookSafety',
             scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
     ):

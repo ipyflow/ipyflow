@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import itertools
 
 from nbsafety.analysis.stmt_edges import get_statement_symbol_edges
 from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
@@ -12,6 +13,17 @@ def get_statement_lval_and_rval_symbols(node):
     else:
         rvals = set.union(*edges.values())
     return lvals - {None}, rvals - {None}
+
+
+def get_directed_edge_list(node):
+    edges, _ = get_statement_symbol_edges(node)
+    edge_list = []
+    for k, v in edges.items():
+        if k is None:
+            continue
+        vset = set(v) - {None}
+        edge_list.extend((k, val) for val in vset)
+    return sorted(edge_list)
 
 
 def test_classes():
@@ -80,3 +92,10 @@ def test_deeply_nested_arguments():
     lvals, rvals = get_statement_lval_and_rval_symbols(mapping[1])
     assert lvals == {'x'}
     assert rvals == {'f', 'y', 'w'}
+
+
+def test_unpacked_from_function():
+    mapping = compute_lineno_to_stmt_mapping('x, y, z = f(a, b, c, d=e)')
+    edges = get_directed_edge_list(mapping[1])
+    print(edges)
+    assert sorted(edges) == sorted(itertools.product(['x', 'y', 'z'], ['a', 'b', 'c', 'e', 'f']))

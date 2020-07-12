@@ -10,12 +10,12 @@ from .trace_state import TraceState
 
 if TYPE_CHECKING:
     from types import FrameType
-    from ..safety import DependencySafety
+    from ..safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
 
 
-def make_tracer(safety: 'DependencySafety'):
+def make_tracer(safety: 'NotebookSafety'):
     if safety.trace_messages_enabled:
         logger.setLevel(logging.WARNING)
     else:

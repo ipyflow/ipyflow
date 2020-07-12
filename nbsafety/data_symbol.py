@@ -9,7 +9,7 @@ from .utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
-    from .safety import DependencySafety
+    from .safety import NotebookSafety
     from .scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ class DataSymbol(object):
             symbol_type: 'DataSymbolType',
             obj: 'Any',
             containing_scope: 'Scope',
-            safety: 'DependencySafety',
+            safety: 'NotebookSafety',
             parents: 'Optional[Set[DataSymbol]]' = None,
             refresh_cached_obj=False,
     ):

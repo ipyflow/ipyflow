@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ipykernel.ipkernel import IPythonKernel
 from ..version import __version__
-from ..safety import DependencySafety
+from ..safety import NotebookSafety
 # import warnings
 #Avoid networkx gives a FutureWarning
 # TODO (smacke): this disables all FutureWarnings; disable until we can figure out a better system
@@ -14,7 +14,7 @@ class SafeKernel(IPythonKernel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._safety = DependencySafety(use_comm=True)
+        self._safety = NotebookSafety(use_comm=True)
 
     def do_execute(self, code, silent, store_history=False, user_expressions=None, allow_stdin=False):
         super_ = super()

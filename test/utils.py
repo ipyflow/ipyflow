@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 import pytest
 
-from nbsafety.safety import DependencySafety
+from nbsafety.safety import NotebookSafety
 
 if TYPE_CHECKING:
     from typing import Any, List, Optional, Tuple
@@ -26,8 +26,8 @@ def assert_bool(val, msg=''):
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
-def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[DependencySafety]], Any]':
-    safety_state: List[Optional[DependencySafety]] = [None]
+def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]], Any]':
+    safety_state: List[Optional[NotebookSafety]] = [None]
 
     def run_cell(code):
         get_ipython().run_cell_magic(safety_state[0].cell_magic_name, None, code)
@@ -36,7 +36,7 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[DependencySafety]
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        safety_state[0] = DependencySafety(cell_magic_name='_SAFETY_CELL_MAGIC', **kwargs)
+        safety_state[0] = NotebookSafety(cell_magic_name='_SAFETY_CELL_MAGIC', **kwargs)
         run_cell('import sys')
         run_cell('sys.path.append("./test")')
         run_cell('import logging')

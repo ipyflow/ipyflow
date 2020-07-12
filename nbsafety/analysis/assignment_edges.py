@@ -94,7 +94,10 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
                 target_lval_symbols = []
                 with self.push_attributes(lval_symbols=target_lval_symbols):
                     self.visit(target)
-                self.lval_symbols.append(tuple(target_lval_symbols))
+                if isinstance(target, (ast.Tuple, ast.List)):
+                    self.lval_symbols.extend(target_lval_symbols)
+                else:
+                    self.lval_symbols.append(tuple(target_lval_symbols))
         with self.gather_rvals_context():
             self.visit(node.value)
 
@@ -151,9 +154,9 @@ def _flatten(vals):
             yield v
 
 
-def _edges(lvals, rvals):
+def _edges(lvals, rvals, product_allowed=False):
     if isinstance(lvals, tuple) and isinstance(rvals, tuple):
-        yield from _edges_from_tuples(lvals, rvals)
+        yield from _edges_from_tuples(lvals, rvals, product_allowed=product_allowed)
     elif isinstance(lvals, tuple):
         # TODO: yield edges with subscript symbols
         for left in _flatten(lvals):
@@ -166,14 +169,17 @@ def _edges(lvals, rvals):
         yield lvals, rvals
 
 
-def _edges_from_tuples(lvals, rvals):
+def _edges_from_tuples(lvals, rvals, product_allowed=False):
     if len(lvals) == len(rvals):
         for left, right in zip(lvals, rvals):
             yield from _edges(left, right)
     elif len(lvals) == 1:
-        yield from _edges(lvals[0], rvals)
+        yield from _edges(lvals[0], rvals, product_allowed=True)
     elif len(rvals) == 1:
-        yield from _edges(lvals, rvals[0])
+        yield from _edges(lvals, rvals[0], product_allowed=True)
+    elif product_allowed:
+        for lval in lvals:
+            yield from _edges(lval, rvals, product_allowed=False)
     else:
         raise ValueError('Incompatible lists: %s, %s' % (lvals, rvals))
 

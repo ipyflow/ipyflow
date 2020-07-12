@@ -50,7 +50,7 @@ def _safety_warning(node: 'DataSymbol'):
     )
 
 
-class DependencySafety(object):
+class NotebookSafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
         # Note: explicitly adding the types helps PyCharm's built-in code inspection

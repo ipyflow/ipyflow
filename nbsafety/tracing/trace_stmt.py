@@ -11,14 +11,14 @@ if TYPE_CHECKING:
     from types import FrameType
     from typing import List, Optional, Set
     from ..data_symbol import DataSymbol
-    from ..safety import DependencySafety
+    from ..safety import NotebookSafety
     from ..scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
 
 
 class TraceStatement(object):
-    def __init__(self, safety: 'DependencySafety', frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
+    def __init__(self, safety: 'NotebookSafety', frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
         self.safety = safety
         self.frame = frame
         self.stmt_node = stmt_node

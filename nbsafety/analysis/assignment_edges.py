@@ -111,15 +111,18 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
             self.visit(node.value)
 
     def visit_Call(self, node):
+        extra_to_add = []
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            self.to_add_set.append(get_attrsub_symbol_chain(node))
+            extra_to_add.append(get_attrsub_symbol_chain(node))
+            to_visit = [node.args, node.keywords]
         else:
-            temp = self.to_add_set
-            self.to_add_set = []
-            self.generic_visit(node)
-            self.to_add_set, temp = temp, self.to_add_set
-            temp = TiedTuple(set(_flatten(temp)))
-            self.to_add_set.append(temp)
+            to_visit = node
+        temp = self.to_add_set
+        self.to_add_set = []
+        self.generic_visit(to_visit)
+        self.to_add_set, temp = temp, self.to_add_set
+        temp = TiedTuple(set(_flatten(temp)) | set(_flatten(extra_to_add)))
+        self.to_add_set.append(temp)
 
     def visit_Attribute_or_Subscript(self, node):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h

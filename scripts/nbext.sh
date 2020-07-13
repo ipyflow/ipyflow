@@ -8,6 +8,7 @@ fi
 
 source "$HOME/.virtualenvs/nbsafety/bin/activate"
 pushd ./frontend/nbextension
+npm install
 npm run build
 popd
 jupyter nbextension install --py nbsafety "$prefix"

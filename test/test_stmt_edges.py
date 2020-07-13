@@ -97,5 +97,26 @@ def test_deeply_nested_arguments():
 def test_unpacked_from_function():
     mapping = compute_lineno_to_stmt_mapping('x, y, z = f(a, b, c, d=e)')
     edges = get_directed_edge_list(mapping[1])
-    print(edges)
     assert sorted(edges) == sorted(itertools.product(['x', 'y', 'z'], ['a', 'b', 'c', 'e', 'f']))
+
+
+def test_unpacking_attribution():
+    mapping = compute_lineno_to_stmt_mapping('x, y = a, (b, c)')
+    edges = get_directed_edge_list(mapping[1])
+    assert sorted(edges) == [('x', 'a'), ('y', 'b'), ('y', 'c')]
+    mapping = compute_lineno_to_stmt_mapping('x, (y, z) = a, (b, c)')
+    edges = get_directed_edge_list(mapping[1])
+    assert sorted(edges) == [('x', 'a'), ('y', 'b'), ('z', 'c')]
+    mapping = compute_lineno_to_stmt_mapping('(x1, x2), (y, z) = a, (b, c)')
+    edges = get_directed_edge_list(mapping[1])
+    assert sorted(edges) == [('x1', 'a'), ('x2', 'a'), ('y', 'b'), ('z', 'c')]
+
+
+def test_deeply_nested_unpacking_attribution():
+    mapping = compute_lineno_to_stmt_mapping('[x1, (x2, x3)], y = ([a11, (a12, a13)], ([a21, a22], a3)), (b, c)')
+    edges = get_directed_edge_list(mapping[1])
+    assert sorted(edges) == [
+        ('x1', 'a11'), ('x1', 'a12'), ('x1', 'a13'),
+        ('x2', 'a21'), ('x2', 'a22'), ('x3', 'a3'),
+        ('y', 'b'), ('y', 'c')
+    ]

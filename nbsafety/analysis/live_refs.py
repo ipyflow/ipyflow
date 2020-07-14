@@ -15,19 +15,23 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: have the logger warnings additionally raise exceptions for tests
-class ComputeLiveSymbolRefs(ast.NodeVisitor):
+class ComputeLiveSymbolRefs(SaveOffAttributesMixin, ast.NodeVisitor):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.killed: Set[Union[str, AttrSubSymbolChain]] = set()
+        self.in_kill_context = False
 
     def __call__(self, module_node: ast.Module):
         """
-        This function should be called when we want to precheck an ast.Module. For
-        each line/block of the cell we first run the check of new assignments, then
-        we obtain all the names. In these names, we put the ones that are user
-        defined and not in the safe_set into the return check_set for further
-        checks.
+        This function should be called when we want to do a liveness check on a
+        cell's corresponding ast.Module. For each line/block of the cell we
+        first run the check of new assignments, then we obtain all the names.
+        In these names, we put the ones that are user defined and not in the
+        killed set into the return check_set for further checks.
         """
+        # TODO: this will break if we ref a variable in a loop before killing it in the
+        #   same loop, since we will add everything on the LHS of an assignment to the killed
+        #   set before checking the loop body for live variables
         check_set = set()
         for node in module_node.body:
             self.visit(node)
@@ -43,6 +47,9 @@ class ComputeLiveSymbolRefs(ast.NodeVisitor):
         # print(self.safe_set)
         # print(check_set)
         return check_set
+
+    def kill_context(self):
+        return self.push_attributes(in_kill_context=True)
 
     # In case of assignment, we put the new assigned variable into a safe_set
     # to indicate that we know for sure it won't have stale dependency.  Note
@@ -77,19 +84,24 @@ class ComputeLiveSymbolRefs(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self.killed.add(node.name)
 
+    def visit_Name(self, node):
+        if self.in_kill_context:
+            self.killed.add(node.id)
+
+    def visit_Tuple_or_List(self, node):
+        for elt in node.elts:
+            self.visit(elt)
+
+    def visit_List(self, node):
+        self.visit_Tuple_or_List(node)
+
+    def visit_Tuple(self, node):
+        self.visit_Tuple_or_List(node)
+
     def visit_For(self, node: ast.For):
         # Case "for a,b in something: "
-        if isinstance(node.target, ast.Tuple):
-            for name_node in node.target.elts:
-                if isinstance(name_node, ast.Name):
-                    self.killed.add(name_node.id)
-                else:
-                    logger.warning('unsupported type for node %s' % name_node)
-        # case "for a in something"
-        elif isinstance(node.target, ast.Name):
-            self.killed.add(node.target.id)
-        else:
-            logger.warning('unsupported type for node %s' % node.target)
+        with self.kill_context():
+            self.visit(node.target)
 
         # Then we keep doing the visit for the body of the loop.
         for line in node.body:

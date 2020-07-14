@@ -85,6 +85,19 @@ def test_long_chain():
     assert_detected('f has stale dependency on old value of a')
 
 
+@skipif_known_failing
+def test_for_loop_liveness_check():
+    run_cell('x = 0')
+    run_cell('y = x + 1')
+    run_cell('x = 42')
+    run_cell("""
+for i in range(2):
+    logging.info(y)
+    y = 7
+""")
+    assert_detected('first use of `y` in loop has stale dependency on old value of `x`')
+
+
 def test_redef_after_stale_use():
     run_cell('a = 1')
     run_cell('b = a + 1')

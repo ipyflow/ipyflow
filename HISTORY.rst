@@ -169,3 +169,7 @@ History
 0.0.45 (2020-06-28)
 -------------------
 * Explicitly add kernel.json to data_files in setup.py;
+
+0.0.47 (2020-07-14)
+-------------------
+* Improve dependency tracking for tuple unpacking assignmengs;

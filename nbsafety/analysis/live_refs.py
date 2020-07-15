@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 # TODO: have the logger warnings additionally raise exceptions for tests
-class ComputeLiveSymbolRefs(SaveOffAttributesMixin, ast.NodeVisitor):
+class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.killed: Set[Union[str, AttrSubSymbolChain]] = set()
@@ -58,19 +58,17 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, ast.NodeVisitor):
     # `target` would be an ast.Tuple node in the case of "a,b = 3,4". Thus
     # we need to break the tuple in that case.
     def visit_Assign(self, node: ast.Assign):
-        for target_node in node.targets:
-            if isinstance(target_node, ast.Tuple):
-                for element_node in target_node.elts:
-                    if isinstance(element_node, ast.Name):
-                        self.killed.add(element_node.id)
-            else:
-                self.visit_Assign_or_AugAssign_target(target_node)
+        with self.kill_context():
+            self.visit(node.targets)
+        self.visit(node.value)
 
     def visit_AnnAssign(self, node: ast.AnnAssign):
         self.visit_Assign_or_AugAssign_target(node.target)
+        self.visit(node.value)
 
     def visit_AugAssign(self, node: ast.AugAssign):
         self.visit_Assign_or_AugAssign_target(node.target)
+        self.visit(node.value)
 
     def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.expr]'):
         if isinstance(target_node, ast.Name):
@@ -106,6 +104,18 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, ast.NodeVisitor):
         # Then we keep doing the visit for the body of the loop.
         for line in node.body:
             self.visit(line)
+
+    def visit_GeneratorExp(self, node):
+        self.visit_GeneratorExp_or_ListComp(node)
+
+    def visit_ListComp(self, node):
+        self.visit_GeneratorExp_or_ListComp(node)
+
+    def visit_GeneratorExp_or_ListComp(self, node):
+        # TODO: as w/ for loop, this will have false positives on later live references
+        with self.kill_context():
+            for gen in node.generators:
+                self.visit(gen.target)
 
 
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.

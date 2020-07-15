@@ -109,6 +109,19 @@ b = 7
     assert_detected('b has stale dependency on old value of a')
 
 
+def test_class_redef():
+    classdef = """
+class Foo:
+    def __init__(self, x):
+        self.x = x"""
+    run_cell(classdef)
+    run_cell('x = 5')
+    run_cell('foo = Foo(x)')
+    run_cell(classdef)
+    run_cell('logging.info(x)')
+    assert_not_detected('`x` independent of class `Foo`')
+
+
 def test_subscript_dependency_fp():
     run_cell('lst = [0, 1, 2]')
     run_cell('x = 5')
@@ -116,6 +129,14 @@ def test_subscript_dependency_fp():
     run_cell('lst[1] = 10')
     run_cell('logging.info(y)')
     assert_not_detected('y depends only on unchanged lst[0] and not on changed lst[1]')
+
+
+def test_comprehension_generator_vars_not_live():
+    run_cell('x = 0')
+    run_cell('y = x + 6')
+    run_cell('x = 42')
+    run_cell('lst = [y for y in range(1) for j in range(1)]')
+    assert_not_detected('`y` is not live in the list comprehension')
 
 
 # simple test about the basic assignment

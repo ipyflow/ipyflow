@@ -112,7 +112,6 @@ class TraceStatement(object):
                 rval_symbol_refs=set.union(*symbol_edges.values()) - {None}
             ) | deep_rval_deps
         for scope, obj, attr_or_sub, is_subscript in self.safety.attr_trace_manager.saved_store_data:
-            # print(scope, obj, attr_or_sub, is_subscript)
             try:
                 attr_or_sub_obj = retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
             except (AttributeError, KeyError, IndexError):

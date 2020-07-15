@@ -314,9 +314,12 @@ class DataSymbol(object):
                 #  namespace parents. Need a mechanism to mark for refresh without parent propagation.
                 self.safety.updated_symbols.add(alias)
         else:
-            for alias in self.safety.aliases[old_id]:
-                # print('propagate', updated_dep, 'to', alias, 'via', self, updated_dep.defined_cell_num, alias.defined_cell_num, self.defined_cell_num)
-                alias._propagate_update_to_deps(updated_dep, seen, parent_seen)
+            # propagating to all aliases was causing problems
+            # see test `test_class_redef`
+            self._propagate_update_to_deps(updated_dep, seen, parent_seen)
+            # for alias in self.safety.aliases[old_id]:
+            #     # print('propagate', updated_dep, 'to', alias, 'via', self, updated_dep.defined_cell_num, alias.defined_cell_num, self.defined_cell_num)
+            #     alias._propagate_update_to_deps(updated_dep, seen, parent_seen)
             if namespace is None and self.should_mark_stale(updated_dep):  # if we are at a leaf
                 self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
 

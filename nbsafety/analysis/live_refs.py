@@ -59,7 +59,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
     # we need to break the tuple in that case.
     def visit_Assign(self, node: ast.Assign):
         with self.kill_context():
-            self.visit(node.targets)
+            self.generic_visit(node.targets)
         self.visit(node.value)
 
     def visit_AnnAssign(self, node: ast.AnnAssign):

@@ -139,6 +139,24 @@ def test_comprehension_generator_vars_not_live():
     assert_not_detected('`y` is not live in the list comprehension')
 
 
+def test_lambda_params_not_live():
+    run_cell('x = 0')
+    run_cell('y = x + 6')
+    run_cell('x = 42')
+    run_cell('f = lambda y: y * 2')
+    assert_not_detected('`y` is not live in the lambda expr')
+
+
+def test_fundef_params_not_live():
+    run_cell('x = 0')
+    run_cell('y = x + 6')
+    run_cell('x = 42')
+    run_cell("""
+def f(y):
+    return y + 9""")
+    assert_not_detected('`y` is not live in the function')
+
+
 # simple test about the basic assignment
 def test_basic_assignment():
     run_cell('a = 1')

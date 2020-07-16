@@ -151,7 +151,7 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
 
     # We overwrite FunctionDef because we don't need to check names in the body of the definition.
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.visit(node.args.defaults)
+        self.generic_visit(node.args.defaults)
 
     def visit_ClassDef(self, node: ast.ClassDef):
         self.generic_visit(node.bases)

@@ -822,6 +822,26 @@ def test_pandas_attr_mutation_with_alias():
                     'which in general could be dangerous')
 
 
+def test_stale_detection_works_when_namespace_available_but_stale_symbol_unavailable():
+    run_cell('import pandas as pd')
+    run_cell('data = {"a": list(range(5)), "b": list(range(1, 6))}')
+    run_cell('df = pd.DataFrame(data)')
+    run_cell('df.b')  # force creation of a namespace for df
+    run_cell('data = {"a": list(range(4)), "b": list(range(1, 5))}')
+    run_cell('logging.info(df.a)')
+    assert_detected('`df.a` depends on stale `data` dictionary')
+
+
+def test_stale_detection_works_when_namespace_available_but_stale_symbol_unavailable_2():
+    run_cell('import pandas as pd')
+    run_cell('data = {"a": list(range(5)), "b": list(range(1, 6))}')
+    run_cell('df = pd.DataFrame(data)')
+    run_cell('df.b')  # force creation of a namespace for df
+    run_cell('data["b"] = 42')
+    run_cell('logging.info(df.a)')
+    assert_false_positive('`df.a` independent of entry `data["b"]`')
+
+
 def test_list_alias_breaking():
     run_cell('x = [0]')
     run_cell('y = x')

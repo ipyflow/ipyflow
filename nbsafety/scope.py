@@ -110,7 +110,11 @@ class Scope(object):
         for name in chain.symbols:
             if isinstance(name, CallPoint):
                 return dsym
-            dsym = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
+            next_dsym = cur_scope.lookup_data_symbol_by_name_this_indentation(name)
+            # HUGE HACK: prevents us from checking namespace symbols unless entire namespace is stale
+            # TODO: get rid of the cell number check once namespace symbols created for dictionary literals
+            if next_dsym is not None or dsym is None or dsym.defined_cell_num >= dsym.required_cell_num:
+                dsym = next_dsym
             if name_to_obj is None:
                 break
             try:

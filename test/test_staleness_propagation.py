@@ -157,6 +157,14 @@ def f(y):
     assert_not_detected('`y` is not live in the function')
 
 
+def test_no_edge_for_comprehension_variable():
+    run_cell('i = 0')
+    run_cell('x = [i for i in range(10)]')
+    run_cell('i = 1')
+    run_cell('logging.info(x)')
+    assert_not_detected('`x` does not depend on `i`')
+
+
 # simple test about the basic assignment
 def test_basic_assignment():
     run_cell('a = 1')

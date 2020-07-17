@@ -154,6 +154,25 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
         # throw away anything appearing in lambda body that isn't bound
         self.rval_symbols = list(set(self.rval_symbols) - discard_set)
 
+    def visit_GeneratorExp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_DictComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_ListComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_SetComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
+        assert self.gather_rvals
+        with self.push_attributes(rval_symbols=[]):
+            self.visit(node.generators)
+            discard_set = set(self.rval_symbols)
+        self.rval_symbols = list(set(self.rval_symbols) - discard_set)
+
     def visit_arg(self, node):
         self.to_add_set.append(node.arg)
 

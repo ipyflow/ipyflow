@@ -149,6 +149,25 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         # throw away anything appearing in lambda body that isn't bound
         self.rval_symbol_ref_set -= discard_set
 
+    def visit_GeneratorExp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_DictComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_ListComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_SetComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
+        assert self.gather_rvals
+        with self.push_attributes(rval_symbol_ref_set=set()):
+            self.visit(node.generators)
+            discard_set = self.rval_symbol_ref_set
+        self.rval_symbol_ref_set -= discard_set
+
     def visit_With(self, node):
         # skip body
         self.visit(node.items)

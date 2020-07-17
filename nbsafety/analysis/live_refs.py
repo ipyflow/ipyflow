@@ -40,6 +40,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
                     continue
                 # TODO: check for all subchains in the safe set, not just the first symbol
                 if isinstance(ref, AttrSubSymbolChain):
+                    if len(ref.symbols) == 0:
+                        # can happen if user made syntax error like [1, 2, 3][4, 5, 6] (e.g. forgot comma)
+                        continue
                     leading_symbol = ref.symbols[0]
                     if isinstance(leading_symbol, str) and leading_symbol in self.killed:
                         continue
@@ -108,12 +111,18 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
             self.visit(line)
 
     def visit_GeneratorExp(self, node):
-        self.visit_GeneratorExp_or_ListComp(node)
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_DictComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
     def visit_ListComp(self, node):
-        self.visit_GeneratorExp_or_ListComp(node)
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
-    def visit_GeneratorExp_or_ListComp(self, node):
+    def visit_SetComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
         # TODO: as w/ for loop, this will have false positives on later live references
         with self.kill_context():
             self.visit(node.generators)

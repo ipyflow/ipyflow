@@ -4,6 +4,8 @@ import itertools
 from nbsafety.analysis.stmt_edges import get_statement_symbol_edges
 from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
 
+from .utils import skipif_known_failing
+
 
 def get_statement_lval_and_rval_symbols(node):
     edges, _ = get_statement_symbol_edges(node)
@@ -85,6 +87,25 @@ with open(fname) as f:
     assert lvals == {'contents'}
     # attributes should be skipped
     assert rvals == set()
+
+
+@skipif_known_failing
+def test_list_comp():
+    code = 'x = iter([tuple(islice(itr,i,i+n,1)) for i in range(len(itr)-n+1)])'
+    mapping = compute_lineno_to_stmt_mapping(code)
+    lvals, rvals = get_statement_lval_and_rval_symbols(mapping[1])
+    assert lvals == {'x'}
+    assert rvals == {'tuple', 'islice', 'itr', 'n'}
+    code = 'x = [i for i in range(10)]'
+    mapping = compute_lineno_to_stmt_mapping(code)
+    lvals, rvals = get_statement_lval_and_rval_symbols(mapping[1])
+    assert lvals == {'x'}
+    assert rvals == {'range'}
+    code = 'x = [i for j in range(10)]'
+    mapping = compute_lineno_to_stmt_mapping(code)
+    lvals, rvals = get_statement_lval_and_rval_symbols(mapping[1])
+    assert lvals == {'x'}
+    assert rvals == {'i', 'range'}
 
 
 def test_deeply_nested_arguments():

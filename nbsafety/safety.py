@@ -6,7 +6,7 @@ import inspect
 import logging
 import re
 import sys
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 import black
 from IPython import get_ipython
@@ -120,28 +120,31 @@ class NotebookSafety(object):
         stale_input_cells = []
         stale_output_cells = []
         fresh_cells = []
+        stale_symbols_by_cell_id: 'Dict[Union[int, str], Set[DataSymbol]]' = {}
+        killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[Union[int, str]]]' = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
             try:
-                stale_nodes, dead_symbols, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
-                if len(stale_nodes) > 0:
+                stale_symbols, dead_symbols, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
+                if len(stale_symbols) > 0:
+                    stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_input_cells.append(cell_id)
-                elif max_defined_cell_num > self._counters_by_cell_id.get(cell_id, float('inf')):
-                    stale_output_cells.append(cell_id)
                 else:
-                    fresh_cells.append(cell_id)
+                    for dead_sym in dead_symbols:
+                        killing_cell_ids_for_symbol[dead_sym].add(cell_id)
+                    if max_defined_cell_num > self._counters_by_cell_id.get(cell_id, cast(int, float('inf'))):
+                        stale_output_cells.append(cell_id)
+                    else:
+                        fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
         stale_links = defaultdict(list)
         refresher_links = defaultdict(list)
-        for candidate_refresher_cell_id in fresh_cells + stale_output_cells:
-            candidate_refresher_cell = cells_by_id[candidate_refresher_cell_id]
-            for stale_cell_id in stale_input_cells:
-                try:
-                    if not self._precheck_simple(f'{candidate_refresher_cell}\n{cells_by_id[stale_cell_id]}'):
-                        stale_links[stale_cell_id].append(candidate_refresher_cell_id)
-                        refresher_links[candidate_refresher_cell_id].append(stale_cell_id)
-                except SyntaxError:
-                    continue
+        for stale_cell_id in stale_input_cells:
+            stale_syms = stale_symbols_by_cell_id[stale_cell_id]
+            refresher_cell_ids = list(set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)))
+            stale_links[stale_cell_id] = refresher_cell_ids
+            for refresher_cell_id in refresher_cell_ids:
+                refresher_links[refresher_cell_id].append(stale_cell_id)
         return {
             'stale_input_cells': stale_input_cells,
             'stale_output_cells': stale_output_cells,
@@ -165,13 +168,13 @@ class NotebookSafety(object):
             code = ast.parse(code)
         return ComputeLiveSymbolRefs(self)(code)
 
-    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
+    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]') -> 'Tuple[Set[DataSymbol], Set[DataSymbol], int]':
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         stale_symbols = set()
         max_defined_cell_num = -1
-        live_symbols, dead_symbols = self.compute_live_dead_symbol_refs(cell)
-        for symbol_ref in live_symbols:
+        live_symbol_refs, dead_symbol_refs = self.compute_live_dead_symbol_refs(cell)
+        for symbol_ref in live_symbol_refs:
             if isinstance(symbol_ref, str):
                 dsym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
             elif isinstance(symbol_ref, AttrSubSymbolChain):
@@ -188,6 +191,17 @@ class NotebookSafety(object):
             if dsym.obj_id in self.namespaces:
                 namespace_scope = self.namespaces[dsym.obj_id]
                 max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+        dead_symbols = set()
+        for symbol_ref in dead_symbol_refs:
+            if isinstance(symbol_ref, str):
+                dsym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
+            elif isinstance(symbol_ref, AttrSubSymbolChain):
+                dsym = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref, self.namespaces)
+            else:
+                logger.warning('invalid type for ref %s', symbol_ref)
+                continue
+            if dsym is not None:
+                dead_symbols.add(dsym)
         return stale_symbols, dead_symbols, max_defined_cell_num
 
     def _precheck_simple(self, cell):

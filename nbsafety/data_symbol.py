@@ -78,6 +78,9 @@ class DataSymbol(object):
     def __str__(self):
         return self.readable_name
 
+    def __hash__(self):
+        return hash(self.full_path)
+
     @property
     def is_subscript(self):
         return self.symbol_type == DataSymbolType.SUBSCRIPT

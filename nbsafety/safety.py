@@ -160,7 +160,7 @@ class NotebookSafety(object):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def compute_live_dead_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
+    def compute_live_dead_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Tuple[Set[SymbolRef], Set[SymbolRef]]':
         if isinstance(code, str):
             code = ast.parse(code)
         return ComputeLiveSymbolRefs(self)(code)

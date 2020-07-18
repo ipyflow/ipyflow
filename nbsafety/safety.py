@@ -122,7 +122,7 @@ class NotebookSafety(object):
         fresh_cells = []
         for cell_id, cell_content in cells_by_id.items():
             try:
-                stale_nodes, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
+                stale_nodes, dead_symbols, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
                 if len(stale_nodes) > 0:
                     stale_input_cells.append(cell_id)
                 elif max_defined_cell_num > self._counters_by_cell_id.get(cell_id, float('inf')):
@@ -160,7 +160,7 @@ class NotebookSafety(object):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def compute_live_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
+    def compute_live_dead_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Set[SymbolRef]':
         if isinstance(code, str):
             code = ast.parse(code)
         return ComputeLiveSymbolRefs(self)(code)
@@ -168,26 +168,27 @@ class NotebookSafety(object):
     def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]'):
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
-        stale_nodes = set()
+        stale_symbols = set()
         max_defined_cell_num = -1
-        for symbol_ref in self.compute_live_symbol_refs(cell):
+        live_symbols, dead_symbols = self.compute_live_dead_symbol_refs(cell)
+        for symbol_ref in live_symbols:
             if isinstance(symbol_ref, str):
-                node = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
+                dsym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
             elif isinstance(symbol_ref, AttrSubSymbolChain):
-                node = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref, self.namespaces)
+                dsym = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref, self.namespaces)
             else:
                 logger.warning('invalid type for ref %s', symbol_ref)
                 continue
-            if node is None:
+            if dsym is None:
                 continue
             # print(node, node.has_stale_ancestor)
-            max_defined_cell_num = max(max_defined_cell_num, node.defined_cell_num)
-            if node.has_stale_ancestor:
-                stale_nodes.add(node)
-            if node.obj_id in self.namespaces:
-                namespace_scope = self.namespaces[node.obj_id]
+            max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
+            if dsym.has_stale_ancestor:
+                stale_symbols.add(dsym)
+            if dsym.obj_id in self.namespaces:
+                namespace_scope = self.namespaces[dsym.obj_id]
                 max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-        return stale_nodes, max_defined_cell_num
+        return stale_symbols, dead_symbols, max_defined_cell_num
 
     def _precheck_simple(self, cell):
         return len(self._precheck_stale_nodes(cell)[0]) > 0
@@ -201,7 +202,7 @@ class NotebookSafety(object):
             return False
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_nodes_with_stale_deps, _ = self._precheck_stale_nodes(cell_ast)
+            self._prev_cell_nodes_with_stale_deps = self._precheck_stale_nodes(cell_ast)[0]
             if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_nodes_with_stale_deps:

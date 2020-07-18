@@ -172,6 +172,8 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
             self.visit(node.generators)
             discard_set = set(self.rval_symbols)
         self.rval_symbols = list(set(self.rval_symbols) - discard_set)
+        # TODO: actually append the symbols that appear in the comprehension
+        self.rval_symbols.append(TiedTuple())
 
     def visit_arg(self, node):
         self.to_add_set.append(node.arg)

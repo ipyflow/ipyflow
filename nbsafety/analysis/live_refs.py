@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
-        self.killed: Set[Union[str, AttrSubSymbolChain]] = set()
+        self.dead: Set[Union[str, AttrSubSymbolChain]] = set()
         self.in_kill_context = False
 
     def __call__(self, module_node: ast.Module):
@@ -32,11 +32,11 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
         # TODO: this will break if we ref a variable in a loop before killing it in the
         #   same loop, since we will add everything on the LHS of an assignment to the killed
         #   set before checking the loop body for live variables
-        check_set = set()
+        live = set()
         for node in module_node.body:
             self.visit(node)
             for ref in _get_all_symbol_refs(node):
-                if ref in self.killed:
+                if ref in self.dead:
                     continue
                 # TODO: check for all subchains in the safe set, not just the first symbol
                 if isinstance(ref, AttrSubSymbolChain):
@@ -44,12 +44,12 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
                         # can happen if user made syntax error like [1, 2, 3][4, 5, 6] (e.g. forgot comma)
                         continue
                     leading_symbol = ref.symbols[0]
-                    if isinstance(leading_symbol, str) and leading_symbol in self.killed:
+                    if isinstance(leading_symbol, str) and leading_symbol in self.dead:
                         continue
-                check_set.add(ref)
+                live.add(ref)
         # print(self.safe_set)
         # print(check_set)
-        return check_set
+        return live, self.dead
 
     def kill_context(self):
         return self.push_attributes(in_kill_context=True)
@@ -75,21 +75,21 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
 
     def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.expr]'):
         if isinstance(target_node, ast.Name):
-            self.killed.add(target_node.id)
+            self.dead.add(target_node.id)
         elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
-            self.killed.add(get_attrsub_symbol_chain(target_node))
+            self.dead.add(get_attrsub_symbol_chain(target_node))
         else:
             logger.warning('unsupported type for node %s' % target_node)
 
     # We also put the name of new functions in the safe_set
     def visit_FunctionDef(self, node: ast.FunctionDef):
-        self.killed.add(node.name)
+        self.dead.add(node.name)
         # with self.kill_context():
         #     self.visit(node.args)
 
     def visit_Name(self, node):
         if self.in_kill_context:
-            self.killed.add(node.id)
+            self.dead.add(node.id)
 
     def visit_Tuple_or_List(self, node):
         for elt in node.elts:
@@ -133,7 +133,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
 
     def visit_arg(self, node):
         if self.in_kill_context:
-            self.killed.add(node.arg)
+            self.dead.add(node.arg)
 
 
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.

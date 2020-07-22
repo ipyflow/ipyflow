@@ -25,6 +25,7 @@ class TraceStatement(object):
         self.scope = scope
         self.class_scope: Optional[NamespaceScope] = None
         self.call_point_deps: List[Set[DataSymbol]] = []
+        self.lambda_call_point_deps_done_once = False
         self._marked_finished = False
 
     @contextmanager

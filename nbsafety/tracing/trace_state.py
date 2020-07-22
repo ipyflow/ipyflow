@@ -105,7 +105,9 @@ class TraceState(object):
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
                     return_to_stmt.class_scope = cast('NamespaceScope', self.cur_frame_scope)
                 elif isinstance(trace_stmt.stmt_node, ast.Return) or self.inside_lambda:
-                    return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
+                    if not trace_stmt.lambda_call_point_deps_done_once:
+                        trace_stmt.lambda_call_point_deps_done_once = True
+                        return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
             self.inside_lambda = return_to_inside_lambda
             # reset for the previous frame, so that we push it again if it has another funcall
             self.prev_trace_stmt_in_cur_frame = return_to_stmt

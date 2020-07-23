@@ -173,3 +173,9 @@ History
 0.0.47 (2020-07-14)
 -------------------
 * Improve dependency tracking for tuple unpacking assignmengs;
+
+0.0.48 (2020-07-22)
+-------------------
+* Only trace lambda call the first time during a map for performance;
+* Faster computation of refresher cells by creating "inverted index" based on reaching defs;
+* Reduce false positives in liveness checker;

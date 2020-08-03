@@ -1,3 +1,8 @@
+:root {
+  --stale-color: rgb(254,0,82);
+  --refresher-color: rgb(0,197,158);
+}
+
 .cell.code_cell .out_prompt_overlay::before {
   position: absolute;
   display: block;
@@ -19,63 +24,63 @@
 }
 
 .cell.code_cell.stale-cell .input_prompt::before {
-  border: 1px solid rgb(254,0,82);
+  border: 1px solid var(--stale-color);
 }
 
 .cell.code_cell.stale-cell.selected .input_prompt::before, .stale-cell.jupyter-soft-selected .input_prompt::before {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .cell.code_cell.stale-cell .input_prompt:hover::before {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .cell.code_cell.linked-stale-input .input_prompt::before {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .cell.code_cell.linked-stale-output .out_prompt_overlay::before {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .cell.code_cell.refresher-cell .input_prompt::before {
-  border: 1px solid rgb(0,197,158);
+  border: 1px solid var(--refresher-color);
 }
 
 .cell.code_cell.refresher-cell.selected .input_prompt::before, .cell.code_cell.refresher-cell.jupyter-soft-selected .input_prompt::before {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 .cell.code_cell.refresher-cell .input_prompt:hover::before {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 .cell.code_cell.linked-refresher .input_prompt::before {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 /* put input / output cells later since they should take precedence */
 
 .cell.code_cell.stale-output-cell .out_prompt_overlay::before {
-  border: 1px solid rgb(254,0,82);
+  border: 1px solid var(--stale-color);
 }
 
 .cell.code_cell.stale-output-cell.selected .out_prompt_overlay::before, .cell.code_cell.stale-output-cell.jupyter-soft-selected .out_prompt_overlay::before {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .cell.code_cell.stale-output-cell .out_prompt_overlay:hover::before {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .cell.code_cell.refresher-input-cell .input_prompt::before {
-  border: 1px solid rgb(0,197,158);
+  border: 1px solid var(--refresher-color);
 }
 
 .cell.code_cell.refresher-input-cell.selected .input_prompt::before, .cell.code_cell.refresher-input-cell.jupyter-soft-selected .input_prompt::before {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 .cell.code_cell.refresher-input-cell .input_prompt:hover::before {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }

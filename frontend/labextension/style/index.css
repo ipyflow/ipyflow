@@ -1,60 +1,64 @@
+:root {
+  --stale-color: rgb(254,0,82);
+  --refresher-color: rgb(0,197,158);
+}
 
 .stale-cell .jp-InputCollapser {
-  border: 1px solid rgb(254,0,82);
+  border: 1px solid var(--stale-color);
 }
 
 .stale-cell.jp-mod-selected .jp-Collapser-child {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .stale-cell .jp-Collapser:hover > .jp-Collapser-child {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .jp-Collapser-child.linked-stale {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
   opacity: 0.6;
 }
 
 .refresher-cell .jp-InputCollapser {
-  border: 1px solid rgb(0,197,158);
+  border: 1px solid var(--refresher-color);
 }
 
 .refresher-cell.jp-mod-selected .jp-Collapser-child {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 .refresher-cell .jp-Collapser:hover > .jp-Collapser-child {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 .jp-Collapser-child.linked-refresher {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
   opacity: 0.6;
 }
 
 /* put input / output cells later since they should take precedence */
 
 .stale-output-cell .jp-OutputCollapser {
-  border: 1px solid rgb(254,0,82);
+  border: 1px solid var(--stale-color);
 }
 
 .stale-output-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .stale-output-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
-  background-color: rgb(254,0,82);
+  background-color: var(--stale-color);
 }
 
 .refresher-input-cell .jp-InputCollapser {
-  border: 1px solid rgb(0,197,158);
+  border: 1px solid var(--refresher-color);
 }
 
 .refresher-input-cell.jp-mod-selected .jp-InputCollapser .jp-Collapser-child {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }
 
 .refresher-input-cell .jp-InputCollapser:hover > .jp-Collapser-child {
-  background-color: rgb(0,197,158);
+  background-color: var(--refresher-color);
 }

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import logging
 from typing import cast, TYPE_CHECKING
 
+from ..analysis.attr_symbols import AttrSubSymbolChain, CallPoint, GetAttrSubSymbols
 from ..data_symbol import DataSymbol, DataSymbolType
 from ..scope import NamespaceScope
 from ..utils import retrieve_namespace_attr_or_sub
@@ -13,14 +14,14 @@ if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
     from ..safety import NotebookSafety
     from ..scope import Scope
-    DeepRef = Tuple[int, Optional[str], Tuple[str, ...]]
-    Mutation = Tuple[int, Tuple[str, ...]]
+    DeepRef = Tuple[int, Optional[str], Tuple[Union[str, AttrSubSymbolChain], ...]]
+    Mutation = Tuple[int, Tuple[Union[str, AttrSubSymbolChain], ...]]
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     SavedStoreData = Tuple[NamespaceScope, Any, str, bool]
     TextualCallNestingStackFrame = Tuple[Scope, bool]
     TextualCallNestingStack = List[TextualCallNestingStackFrame]
     AttrSubStackFrame = Tuple[
-        List[SavedStoreData], Set[DeepRef], Set[Mutation], RefCandidate, Set[str], Scope, Scope, TextualCallNestingStack
+        List[SavedStoreData], Set[DeepRef], Set[Mutation], List[Tuple[RefCandidate, Set[Union[str, AttrSubSymbolChain]]]], Scope, Scope, TextualCallNestingStack
     ]
     AttrSubStack = List[AttrSubStackFrame]
 
@@ -51,10 +52,9 @@ class AttrSubTracingManager(object):
         )
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
-        self.deep_ref_candidate: RefCandidate = None
+        self.deep_ref_candidates: List[Tuple[RefCandidate, Set[Union[str, AttrSubSymbolChain]]]] = []
         self.deep_refs: Set[DeepRef] = set()
         self.mutations: Set[Mutation] = set()
-        self.recorded_args: Set[str] = set()
         self.nested_call_stack: TextualCallNestingStack = []
         self.stack: AttrSubStack = []
         self._waiting_for_call = False
@@ -82,8 +82,7 @@ class AttrSubTracingManager(object):
             self.saved_store_data,
             self.deep_refs,
             self.mutations,
-            self.deep_ref_candidate,
-            self.recorded_args,
+            self.deep_ref_candidates,
             self.active_scope,
             self.original_active_scope,
             self.nested_call_stack,
@@ -91,7 +90,7 @@ class AttrSubTracingManager(object):
         self.saved_store_data = []
         self.deep_refs = set()
         self.mutations = set()
-        self.recorded_args = set()
+        self.deep_ref_candidates = []
         self.original_active_scope = new_scope
         self.active_scope = new_scope
         self.nested_call_stack = []
@@ -101,8 +100,7 @@ class AttrSubTracingManager(object):
             self.saved_store_data,
             self.deep_refs,
             self.mutations,
-            self.deep_ref_candidate,
-            self.recorded_args,
+            self.deep_ref_candidates,
             self.active_scope,
             self.original_active_scope,
             self.nested_call_stack,
@@ -183,9 +181,8 @@ class AttrSubTracingManager(object):
                     self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
                 except (AttributeError, KeyError, IndexError):
                     pass
-            self.deep_ref_candidate = None
             if call_context:
-                self.deep_ref_candidate = (self.trace_event_counter[0], obj_id, obj_name)
+                self.deep_ref_candidates.append(((self.trace_event_counter[0], obj_id, obj_name), set()))
             elif data_sym is not None:
                 # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
                 self.loaded_data_symbols.add(data_sym)
@@ -195,23 +192,30 @@ class AttrSubTracingManager(object):
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             self.active_scope = self.original_active_scope
             return obj
-        if self.deep_ref_candidate is not None:
-            evt_counter, obj_id, obj_name = self.deep_ref_candidate
-            self.deep_ref_candidate = None
+        if len(self.deep_ref_candidates) > 0:
+            (evt_counter, obj_id, obj_name), recorded_args = self.deep_ref_candidates.pop()
             if evt_counter == self.trace_event_counter[0]:
                 if obj is None:
-                    self.mutations.add((obj_id, tuple(self.recorded_args)))
+                    self.mutations.add((obj_id, tuple(recorded_args)))
                 else:
-                    self.deep_refs.add((obj_id, obj_name, tuple(self.recorded_args)))
+                    self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
         # print('reset active scope from', self.active_scope, 'to', self.original_active_scope)
         self.active_scope = self.original_active_scope
-        self.recorded_args = set()
         return obj
 
     def arg_recorder(self, obj, name):
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             return obj
-        self.recorded_args.add(name)
+        if len(self.deep_ref_candidates) == 0:
+            logger.error('Error: no associated symbol for recorded args; skipping recording')
+            return obj
+
+        if isinstance(name, str):
+            self.deep_ref_candidates[-1][1].add(name)
+        elif isinstance(name, tuple) and len(name) > 0:
+            recorded_arg = AttrSubSymbolChain(name)
+            self.deep_ref_candidates[-1][1].add(recorded_arg)
+
         return obj
 
     def scope_pusher(self, obj):
@@ -236,7 +240,7 @@ class AttrSubTracingManager(object):
         self.saved_store_data = []
         self.deep_refs = set()
         self.mutations = set()
-        self.deep_ref_candidate = None
+        self.deep_ref_candidates = []
         self.active_scope = self.original_active_scope
         # self.nested_call_stack = []
         # self.stmt_transition_hook()
@@ -312,39 +316,39 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             )
         return new_node
 
+    def _get_replacement_args(self, args):
+        replacement_args = []
+        for arg in args:
+            chain = GetAttrSubSymbols()(arg)
+            statically_resolvable = []
+            for sym in chain.symbols:
+                # TODO: only handles attributes properly; subscripts will break
+                if not isinstance(sym, str):
+                    break
+                statically_resolvable.append(ast.Str(sym))
+            statically_resolvable = ast.Tuple(elts=statically_resolvable, ctx=ast.Load())
+            new_arg_value = cast(ast.expr, ast.Call(
+                func=ast.Name(self.arg_recorder, ast.Load()),
+                args=[getattr(arg, 'value', arg), statically_resolvable],
+                keywords=[]
+            ))
+            ast.copy_location(new_arg_value, getattr(arg, 'value', arg))
+            if hasattr(arg, 'value'):
+                setattr(arg, 'value', new_arg_value)
+            else:
+                arg = new_arg_value
+            replacement_args.append(arg)
+        return replacement_args
+
     def visit_Call(self, node: ast.Call):
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             with self.attrsub_load_context():
                 node.func = self.visit_Attribute_or_Subscript(node.func, call_context=True)
 
-        replacement_args = []
-        for arg in node.args:
-            if isinstance(arg, ast.Name):
-                replacement_args.append(cast(ast.expr, ast.Call(
-                    func=ast.Name(self.arg_recorder, ast.Load()),
-                    args=[arg, ast.Str(arg.id)],
-                    keywords=[]
-                )))
-                ast.copy_location(replacement_args[-1], arg)
-            else:
-                with self.attrsub_load_context(False):
-                    replacement_args.append(self.visit(arg))
-        node.args = replacement_args
-        replacement_kwargs = []
-        for kwarg in node.keywords:
-            if isinstance(kwarg.value, ast.Name):
-                new_kwarg_value = cast(ast.expr, ast.Call(
-                    func=ast.Name(self.arg_recorder, ast.Load()),
-                    args=[kwarg.value, ast.Str(kwarg.value.id)],
-                    keywords=[]
-                ))
-                ast.copy_location(new_kwarg_value, kwarg.value)
-                kwarg.value = new_kwarg_value
-                replacement_kwargs.append(kwarg)
-            else:
-                with self.attrsub_load_context(False):
-                    replacement_kwargs.append(self.visit(kwarg))
-        node.keywords = replacement_kwargs
+        # TODO: need a way to rewrite ast of attribute and subscript args,
+        #  and to process these separately from outer rewrite
+        node.args = self._get_replacement_args(node.args)
+        node.keywords = self._get_replacement_args(node.keywords)
 
         # in order to ensure that the args are processed with appropriate active scope,
         # we need to push current active scope before processing the args and pop after

@@ -23,7 +23,8 @@ class CallPoint(CommonEqualityMixin):
 
 
 class AttrSubSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols: 'List[Union[str, CallPoint]]'):
+    def __init__(self, symbols: 'Union[List[Union[str, CallPoint]], Tuple[Union[str, CallPoint]]]'):
+        # FIXME: each symbol should distinguish between attribute and subscript
         self.symbols: 'Tuple[Union[str, CallPoint], ...]' = tuple(symbols)
         self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
 

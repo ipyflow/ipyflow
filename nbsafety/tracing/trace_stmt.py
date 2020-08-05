@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
+from ..analysis.attr_symbols import AttrSubSymbolChain
 from ..analysis import get_statement_symbol_edges
 from ..utils import retrieve_namespace_attr_or_sub
 
@@ -130,7 +131,13 @@ class TraceStatement(object):
     def _gather_deep_ref_rval_dsyms(self):
         deep_ref_rval_dsyms = set()
         for deep_ref_obj_id, deep_ref_name, deep_ref_args in self.safety.attr_trace_manager.deep_refs:
-            deep_ref_arg_dsyms = set(self.scope.lookup_data_symbol_by_name(arg) for arg in deep_ref_args) - {None}
+            deep_ref_arg_dsyms = set()
+            for arg in deep_ref_args:
+                if isinstance(arg, str):
+                    deep_ref_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
+                elif isinstance(arg, AttrSubSymbolChain):
+                    deep_ref_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg))
+            deep_ref_arg_dsyms.discard(None)
             deep_ref_rval_dsyms |= deep_ref_arg_dsyms
             if deep_ref_name is None:
                 deep_ref_rval_dsyms |= self.safety.aliases.get(deep_ref_obj_id, set())
@@ -146,9 +153,15 @@ class TraceStatement(object):
         if not self.safety.dependency_tracking_enabled:
             return
         for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
-            mutation_arg_dsyms = set(self.scope.lookup_data_symbol_by_name(arg) for arg in mutation_args) - {None}
-            for mutated_dc in self.safety.aliases[mutated_obj_id]:
-                mutated_dc.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
+            mutation_arg_dsyms = set()
+            for arg in mutation_args:
+                if isinstance(arg, str):
+                    mutation_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
+                elif isinstance(arg, AttrSubSymbolChain):
+                    mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg))
+            mutation_arg_dsyms.discard(None)
+            for mutated_sym in self.safety.aliases[mutated_obj_id]:
+                mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self.has_lval:
             self._make_lval_data_symbols()
         else:

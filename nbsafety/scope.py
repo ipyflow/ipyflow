@@ -97,9 +97,7 @@ class Scope(object):
                 return dict(inspect.getmembers(obj))
         return name_to_obj
 
-    def get_most_specific_data_symbol_for_attrsub_chain(
-            self, chain: AttrSubSymbolChain, namespaces: 'Dict[int, NamespaceScope]'
-    ):
+    def get_most_specific_data_symbol_for_attrsub_chain(self, chain: AttrSubSymbolChain):
         """
         Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
@@ -121,7 +119,7 @@ class Scope(object):
                 obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
             except (KeyError, IndexError, Exception):
                 break
-            cur_scope = namespaces.get(id(obj), None)
+            cur_scope = self.safety.namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
         return dsym

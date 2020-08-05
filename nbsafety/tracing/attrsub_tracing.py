@@ -5,7 +5,7 @@ from contextlib import contextmanager
 import logging
 from typing import cast, TYPE_CHECKING
 
-from ..analysis.attr_symbols import AttrSubSymbolChain, CallPoint, GetAttrSubSymbols
+from ..analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from ..data_symbol import DataSymbol, DataSymbolType
 from ..scope import NamespaceScope
 from ..utils import retrieve_namespace_attr_or_sub
@@ -316,7 +316,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             )
         return new_node
 
-    def _get_replacement_args(self, args):
+    def _get_replacement_args(self, args, should_record):
         replacement_args = []
         for arg in args:
             chain = GetAttrSubSymbols()(arg)
@@ -327,12 +327,19 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                     break
                 statically_resolvable.append(ast.Str(sym))
             statically_resolvable = ast.Tuple(elts=statically_resolvable, ctx=ast.Load())
-            new_arg_value = cast(ast.expr, ast.Call(
-                func=ast.Name(self.arg_recorder, ast.Load()),
-                args=[getattr(arg, 'value', arg), statically_resolvable],
-                keywords=[]
-            ))
-            ast.copy_location(new_arg_value, getattr(arg, 'value', arg))
+            maybe_kwarg = getattr(arg, 'value', arg)
+            with self.attrsub_load_context(False):
+                visited_maybe_kwarg = self.visit(maybe_kwarg)
+            argrecord_args = [visited_maybe_kwarg, statically_resolvable]
+            if should_record:
+                new_arg_value = cast(ast.expr, ast.Call(
+                    func=ast.Name(self.arg_recorder, ast.Load()),
+                    args=argrecord_args,
+                    keywords=[]
+                ))
+            else:
+                new_arg_value = visited_maybe_kwarg
+            ast.copy_location(new_arg_value, maybe_kwarg)
             if hasattr(arg, 'value'):
                 setattr(arg, 'value', new_arg_value)
             else:
@@ -341,14 +348,17 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         return replacement_args
 
     def visit_Call(self, node: ast.Call):
+        is_attrsub = False
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
+            is_attrsub = True
             with self.attrsub_load_context():
                 node.func = self.visit_Attribute_or_Subscript(node.func, call_context=True)
 
-        # TODO: need a way to rewrite ast of attribute and subscript args,
-        #  and to process these separately from outer rewrite
-        node.args = self._get_replacement_args(node.args)
-        node.keywords = self._get_replacement_args(node.keywords)
+            # TODO: need a way to rewrite ast of attribute and subscript args,
+            #  and to process these separately from outer rewrite
+
+        node.args = self._get_replacement_args(node.args, is_attrsub)
+        node.keywords = self._get_replacement_args(node.keywords, is_attrsub)
 
         # in order to ensure that the args are processed with appropriate active scope,
         # we need to push current active scope before processing the args and pop after

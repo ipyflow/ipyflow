@@ -882,7 +882,6 @@ d = {
     assert_detected('`d` depends on stale `x`')
 
 
-@skipif_known_failing
 def test_list_mutation():
     run_cell('lst = list(range(5))')
     run_cell('x = 42')

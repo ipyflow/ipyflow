@@ -38,7 +38,7 @@ _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
 
 
 def _safety_warning(node: 'DataSymbol'):
-    if node.has_stale_ancestor:
+    if node.is_stale:
         required_cell_num = node.required_cell_num
         fresher_ancestors = node.fresher_ancestors
     else:
@@ -85,7 +85,7 @@ class NotebookSafety(object):
 
         self._disable_level = 0
         self._skip_unsafe_cells = kwargs.pop('skip_unsafe', True)
-        self._prev_cell_nodes_with_stale_deps: Set[DataSymbol] = set()
+        self._prev_cell_stale_symbols: Set[DataSymbol] = set()
 
         if self.use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
@@ -184,9 +184,9 @@ class NotebookSafety(object):
                 continue
             if dsym is None:
                 continue
-            # print(node, node.has_stale_ancestor)
+            # print(node, node.is_stale)
             max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
-            if dsym.has_stale_ancestor:
+            if dsym.is_stale:
                 stale_symbols.add(dsym)
             if dsym.obj_id in self.namespaces:
                 namespace_scope = self.namespaces[dsym.obj_id]
@@ -216,12 +216,12 @@ class NotebookSafety(object):
             return False
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_nodes_with_stale_deps = self._precheck_stale_nodes(cell_ast)[0]
-            if len(self._prev_cell_nodes_with_stale_deps) > 0 and self._disable_level < 2:
+            self._prev_cell_stale_symbols = self._precheck_stale_nodes(cell_ast)[0]
+            if len(self._prev_cell_stale_symbols) > 0 and self._disable_level < 2:
                 warning_counter = 0
-                for node in self._prev_cell_nodes_with_stale_deps:
+                for node in self._prev_cell_stale_symbols:
                     if warning_counter >= _MAX_WARNINGS:
-                        logger.warning(f'{len(self._prev_cell_nodes_with_stale_deps) - warning_counter}'
+                        logger.warning(f'{len(self._prev_cell_stale_symbols) - warning_counter}'
                                        ' more nodes with stale dependencies skipped...')
                         break
                     _safety_warning(node)
@@ -233,11 +233,11 @@ class NotebookSafety(object):
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers
-            for node in self._prev_cell_nodes_with_stale_deps:
+            for node in self._prev_cell_stale_symbols:
                 node.defined_cell_num = node.required_cell_num
-                node.namespace_data_syms_with_stale = set()
+                node.namespace_stale_symbols = set()
                 node.fresher_ancestors = set()
-            self._prev_cell_nodes_with_stale_deps.clear()
+            self._prev_cell_stale_symbols.clear()
 
         self._last_refused_code = None
         return False

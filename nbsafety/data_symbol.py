@@ -67,7 +67,7 @@ class DataSymbol(object):
         self.required_cell_num = self.defined_cell_num
 
         self.fresher_ancestors: Set[DataSymbol] = set()
-        self.namespace_data_syms_with_stale: Set[DataSymbol] = set()
+        self.namespace_stale_symbols: Set[DataSymbol] = set()
 
         # Will never be stale if no_warning is True
         self.disable_warnings = False
@@ -214,7 +214,7 @@ class DataSymbol(object):
         self.fresher_ancestors = set()
         self.defined_cell_num = cell_counter()
         self.required_cell_num = self.defined_cell_num
-        self.namespace_data_syms_with_stale = set()
+        self.namespace_stale_symbols = set()
         self._propagate_refresh_to_namespace_parents(set())
 
     def _propagate_update_to_deps(
@@ -288,11 +288,11 @@ class DataSymbol(object):
                             self.safety.updated_symbols.add(new_dc)
                 except (KeyError, IndexError, AttributeError):
                     dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
-            if dc_in_self_namespace and dc.has_stale_ancestor:
+            if dc_in_self_namespace and dc.is_stale:
                 if dc.should_mark_stale(updated_dep) and self.should_mark_stale(updated_dep):
-                    self.namespace_data_syms_with_stale.add(dc)
+                    self.namespace_stale_symbols.add(dc)
             else:
-                self.namespace_data_syms_with_stale.discard(dc)
+                self.namespace_stale_symbols.discard(dc)
 
         if mutated or self.cached_obj_id != self.obj_id:
             self._propagate_update_to_deps(updated_dep, seen, parent_seen)
@@ -304,9 +304,9 @@ class DataSymbol(object):
             for alias in self.safety.aliases[old_id]:
                 if alias.defined_cell_num < alias.required_cell_num < cell_counter():
                     logger.debug('possible stale usage of namespace descendent %s' % alias)
-                if len(alias.namespace_data_syms_with_stale) > 0:
-                    logger.debug('unexpected stale namespace symbols for symbol %s: %s' % (alias, alias.namespace_data_syms_with_stale))
-                    alias.namespace_data_syms_with_stale.clear()
+                if len(alias.namespace_stale_symbols) > 0:
+                    logger.debug('unexpected stale namespace symbols for symbol %s: %s' % (alias, alias.namespace_stale_symbols))
+                    alias.namespace_stale_symbols.clear()
                 if old_id != new_id or mutated:
                     # TODO: better equality testing
                     #  Doing equality testing properly requires that we still have a reference to old object around;
@@ -340,8 +340,8 @@ class DataSymbol(object):
         containing_scope.max_defined_timestamp = cell_counter()
         containing_namespace_obj_id = containing_scope.obj_id
         for alias in self.safety.aliases[containing_namespace_obj_id]:
-            alias.namespace_data_syms_with_stale.discard(self)
-            if not alias.has_stale_ancestor:
+            alias.namespace_stale_symbols.discard(self)
+            if not alias.is_stale:
                 alias.fresher_ancestors = set()
                 alias._propagate_refresh_to_namespace_parents(seen)
 
@@ -353,9 +353,9 @@ class DataSymbol(object):
         containing_namespace_obj_id = containing_scope.obj_id
         for alias in self.safety.aliases[containing_namespace_obj_id]:
             # print('propagate from ns parent', alias, 'with refresh=', refresh)
-            if refresh and not self.has_stale_ancestor:
-                alias.namespace_data_syms_with_stale.discard(self)
-                if not alias.has_stale_ancestor:
+            if refresh and not self.is_stale:
+                alias.namespace_stale_symbols.discard(self)
+                if not alias.is_stale:
                     alias.fresher_ancestors = set()
             alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
             for alias_child in alias.children:
@@ -374,13 +374,13 @@ class DataSymbol(object):
                 self.safety.updated_scopes.add(containing_scope)
             else:
                 if self.should_mark_stale(updated_dep):
-                    alias.namespace_data_syms_with_stale.add(self)
+                    alias.namespace_stale_symbols.add(self)
 
     @property
-    def has_stale_ancestor(self):
+    def is_stale(self):
         if self.disable_warnings:
             return False
-        return self.defined_cell_num < self.required_cell_num or len(self.namespace_data_syms_with_stale) > 0
+        return self.defined_cell_num < self.required_cell_num or len(self.namespace_stale_symbols) > 0
 
     def should_mark_stale(self, updated_dep):
         if self.disable_warnings:

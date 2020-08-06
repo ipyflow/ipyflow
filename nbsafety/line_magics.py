@@ -71,7 +71,7 @@ def show_stale(safety: 'NotebookSafety', line: 'List[str]'):
     stale_set = set()
     for dsym_set in dsym_sets:
         for data_sym in dsym_set:
-            if data_sym.has_stale_ancestor:
+            if data_sym.is_stale:
                 stale_set.add(data_sym)
     if not stale_set:
         print("No DataSymbol has stale dependency for now!")

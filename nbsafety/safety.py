@@ -12,7 +12,7 @@ import black
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import AttrSubSymbolChain, ComputeLiveSymbolRefs, compute_lineno_to_stmt_mapping
+from .analysis import AttrSubSymbolChain, compute_live_dead_symbol_refs, compute_lineno_to_stmt_mapping
 from .ipython_utils import (
     ast_transformer_context,
     cell_counter,
@@ -163,17 +163,12 @@ class NotebookSafety(object):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def compute_live_dead_symbol_refs(self, code: 'Union[ast.Module, str]') -> 'Tuple[Set[SymbolRef], Set[SymbolRef]]':
-        if isinstance(code, str):
-            code = ast.parse(code)
-        return ComputeLiveSymbolRefs(self)(code)
-
     def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]') -> 'Tuple[Set[DataSymbol], Set[DataSymbol], int]':
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         stale_symbols = set()
         max_defined_cell_num = -1
-        live_symbol_refs, dead_symbol_refs = self.compute_live_dead_symbol_refs(cell)
+        live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
         for symbol_ref in live_symbol_refs:
             if isinstance(symbol_ref, str):
                 dsym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)

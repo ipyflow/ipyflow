@@ -16,6 +16,7 @@ from .ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
+    import ast
     from .safety import NotebookSafety
 
 
@@ -129,13 +130,14 @@ class Scope(object):
             name: str,
             obj: 'Any',
             deps: 'Set[DataSymbol]',
+            stmt_node: 'ast.AST',
             is_subscript,
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
     ):
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
-            name, obj, deps, is_subscript,
+            name, obj, deps, stmt_node, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
         # print('upsert', name, 'with deps', deps)
@@ -146,6 +148,7 @@ class Scope(object):
             name: str,
             obj: 'Any',
             deps: 'Set[DataSymbol]',
+            stmt_node: 'ast.AST',
             is_subscript,
             overwrite=True,
             is_function_def=False,
@@ -174,6 +177,7 @@ class Scope(object):
             if name in self.data_symbol_by_name(old_dc.is_subscript):
                 old_dc.update_obj_ref(obj)
                 old_dc.update_type(symbol_type)
+                old_dc.update_stmt_node(stmt_node)
                 old_dc.update_deps(deps, overwrite=overwrite)
                 return old_dc, old_dc, old_id
             else:
@@ -196,7 +200,7 @@ class Scope(object):
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
                 deps.add(old_dc)
-        dc = DataSymbol(name, symbol_type, obj, self, self.safety, parents=deps)
+        dc = DataSymbol(name, symbol_type, obj, self, self.safety, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
         self.put(name, dc)
         dc.update_deps(deps, overwrite=True)
         return dc, old_dc, old_id

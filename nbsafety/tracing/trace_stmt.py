@@ -101,8 +101,10 @@ class TraceStatement(object):
             #     print('create function', name, 'in scope', self.scope)
             try:
                 obj = self.frame.f_locals[lval_name]
+                # TODO: pass self.stmt_node here and save in datasym
+                #  then, if function, can do liveness analysis lazily
                 self.scope.upsert_data_symbol_for_name(
-                    lval_name, obj, rval_deps, False,
+                    lval_name, obj, rval_deps, self.stmt_node, False,
                     overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
                 )
             except KeyError:
@@ -124,7 +126,7 @@ class TraceStatement(object):
                 # Nobody before `scope` has it, so we'll insert it at this level
                 scope_to_use = scope
             scope_to_use.upsert_data_symbol_for_name(
-                attr_or_sub, attr_or_sub_obj, rval_deps, is_subscript,
+                attr_or_sub, attr_or_sub_obj, rval_deps, self.stmt_node, is_subscript,
                 overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
 

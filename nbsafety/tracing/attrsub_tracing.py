@@ -172,7 +172,16 @@ class AttrSubTracingManager(object):
                 try:
                     obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
                     symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-                    data_sym = DataSymbol(attr_or_subscript, symbol_type, obj_attr_or_sub, scope, self.safety, refresh_cached_obj=True)
+                    data_sym = DataSymbol(
+                        attr_or_subscript,
+                        symbol_type,
+                        obj_attr_or_sub,
+                        scope,
+                        self.safety,
+                        stmt_node=None,
+                        parents=None,
+                        refresh_cached_obj=True
+                    )
                     # this is to prevent refs to the scope object from being considered as stale if we just load it
                     data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
                     scope.put(attr_or_subscript, data_sym)

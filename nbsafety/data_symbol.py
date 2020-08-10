@@ -9,6 +9,7 @@ from .utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
+    import ast
     from .safety import NotebookSafety
     from .scope import Scope, NamespaceScope
 
@@ -32,6 +33,7 @@ class DataSymbol(object):
             obj: 'Any',
             containing_scope: 'Scope',
             safety: 'NotebookSafety',
+            stmt_node: 'Optional[ast.AST]' = None,
             parents: 'Optional[Set[DataSymbol]]' = None,
             refresh_cached_obj=False,
     ):
@@ -50,6 +52,8 @@ class DataSymbol(object):
             self._refresh_cached_obj()
         self.containing_scope = containing_scope
         self.safety = safety
+        self.stmt_node = stmt_node
+        self._funcall_live_symbols = None
         if parents is None:
             parents = set()
         self.parents: Set[DataSymbol] = parents
@@ -177,6 +181,10 @@ class DataSymbol(object):
             obj_ref = obj
             has_weakref = False
         return tombstone, obj_ref, has_weakref
+
+    def update_stmt_node(self, stmt_node):
+        self.stmt_node = stmt_node
+        self._funcall_live_symbols = None
 
     def _refresh_cached_obj(self):
         self.cached_obj_ref = self._obj_ref

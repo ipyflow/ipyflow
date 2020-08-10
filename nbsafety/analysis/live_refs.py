@@ -8,7 +8,6 @@ from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixi
 
 if TYPE_CHECKING:
     from typing import List, Set, Union
-    from ..safety import NotebookSafety
     from ..types import SymbolRef
 
 logger = logging.getLogger(__name__)
@@ -16,8 +15,7 @@ logger = logging.getLogger(__name__)
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
-    def __init__(self, safety: 'NotebookSafety'):
-        self.safety = safety
+    def __init__(self):
         self.dead: Set[Union[str, AttrSubSymbolChain]] = set()
         self.in_kill_context = False
 
@@ -134,6 +132,16 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
     def visit_arg(self, node):
         if self.in_kill_context:
             self.dead.add(node.arg)
+
+
+def compute_live_dead_symbol_refs(
+        code: 'Union[ast.Module, List[ast.AST], str]'
+) -> 'Tuple[Set[SymbolRef], Set[SymbolRef]]':
+    if isinstance(code, str):
+        code = ast.parse(code)
+    elif isinstance(code, list):
+        code = ast.Module(body=code)
+    return ComputeLiveSymbolRefs()(code)
 
 
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.

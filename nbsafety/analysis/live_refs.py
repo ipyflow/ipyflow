@@ -7,7 +7,7 @@ from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import List, Set, Union
+    from typing import List, Set, Tuple, Union
     from ..types import SymbolRef
 
 logger = logging.getLogger(__name__)

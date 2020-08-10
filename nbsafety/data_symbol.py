@@ -198,8 +198,7 @@ class DataSymbol(object):
             overwrite=True,
             mutated=False,
     ):
-
-        # quick last fix to avoid ovewriting if we appear inside the set of deps to add
+        # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
         new_deps.discard(self)
         if overwrite:

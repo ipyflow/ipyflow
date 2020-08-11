@@ -5,7 +5,7 @@ from typing import cast, TYPE_CHECKING
 import weakref
 
 from .ipython_utils import cell_counter
-from .utils import retrieve_namespace_attr_or_sub
+from .utils.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
@@ -140,6 +140,10 @@ class DataSymbol(object):
             or not self.containing_scope.is_globally_accessible
             or (self._has_weakref and self._get_obj() is None)
         )
+
+    @property
+    def is_globally_accessible(self):
+        return self.containing_scope.is_globally_accessible
 
     def _obj_reference_expired_callback(self, *_):
         # just write a tombstone here; we'll do a batch collect after the main part of the cell is done running

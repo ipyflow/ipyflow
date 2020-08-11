@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from ..analysis.attr_symbols import AttrSubSymbolChain
 from ..analysis import get_statement_symbol_edges
-from ..utils import retrieve_namespace_attr_or_sub
+from ..utils.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -138,7 +138,7 @@ class TraceStatement(object):
                 if isinstance(arg, str):
                     deep_ref_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
                 elif isinstance(arg, AttrSubSymbolChain):
-                    deep_ref_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg))
+                    deep_ref_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
             deep_ref_arg_dsyms.discard(None)
             deep_ref_rval_dsyms |= deep_ref_arg_dsyms
             if deep_ref_name is None:
@@ -160,7 +160,7 @@ class TraceStatement(object):
                 if isinstance(arg, str):
                     mutation_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
                 elif isinstance(arg, AttrSubSymbolChain):
-                    mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg))
+                    mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
             mutation_arg_dsyms.discard(None)
             for mutated_sym in self.safety.aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)

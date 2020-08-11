@@ -3,7 +3,7 @@ import ast
 import logging
 from typing import TYPE_CHECKING
 
-from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain
+from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
@@ -43,6 +43,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
                         continue
                     leading_symbol = ref.symbols[0]
                     if isinstance(leading_symbol, str) and leading_symbol in self.dead:
+                        continue
+                    if isinstance(leading_symbol, CallPoint) and leading_symbol.symbol in self.dead:
                         continue
                 live.add(ref)
         # print(self.safe_set)
@@ -135,7 +137,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
 
 
 def compute_live_dead_symbol_refs(
-        code: 'Union[ast.Module, List[ast.AST], str]'
+        code: 'Union[ast.Module, List[ast.stmt], str]'
 ) -> 'Tuple[Set[SymbolRef], Set[SymbolRef]]':
     if isinstance(code, str):
         code = ast.parse(code)
@@ -179,8 +181,8 @@ class GetAllSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsM
             self.generic_visit(node.args)
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
+        self.ref_set.add(get_attrsub_symbol_chain(node))
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            self.ref_set.add(get_attrsub_symbol_chain(node))
             with self.attrsub_context():
                 self.visit(node.func)
         else:

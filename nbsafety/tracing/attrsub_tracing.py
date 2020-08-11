@@ -8,7 +8,7 @@ from typing import cast, TYPE_CHECKING
 from ..analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from ..data_symbol import DataSymbol, DataSymbolType
 from ..scope import NamespaceScope
-from ..utils import retrieve_namespace_attr_or_sub
+from ..utils.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union

@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
 import ast
-from .utils import skipif_known_failing
+# from .utils import skipif_known_failing
 
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
+
+
+def _remove_callpoints(symbols):
+    return set(sym for sym in symbols if isinstance(sym, str))
 
 
 def test_simple():
     live, dead = compute_live_dead_symbol_refs("""
 x = 5
 print(foo, x)""")
+    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
     assert live == {'foo', 'print'}
     assert dead == {'x'}
 
@@ -21,5 +26,6 @@ def func():
     x = 5
 """).body[0].body
     live, dead = compute_live_dead_symbol_refs(fbody)
+    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
     assert live == {'foo', 'bar', 'baz', 'x', 'print'}
     assert dead == {'x', 'y'}

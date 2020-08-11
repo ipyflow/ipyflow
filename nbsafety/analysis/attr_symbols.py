@@ -53,6 +53,8 @@ class GetAttrSubSymbols(ast.NodeVisitor):
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Name):
             self.symbol_chain.append(CallPoint(node.func.id))
+        elif isinstance(node.func, ast.Call):
+            pass
         else:
             raise TypeError('invalid type for node.func %s' % node.func)
 

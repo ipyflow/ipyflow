@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from .utils import make_safety_fixture, skipif_known_failing
+from .utils import make_safety_fixture  # , skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 

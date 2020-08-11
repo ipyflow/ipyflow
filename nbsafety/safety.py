@@ -12,7 +12,7 @@ import black
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import AttrSubSymbolChain, compute_live_dead_symbol_refs, compute_lineno_to_stmt_mapping
+from .analysis import compute_live_dead_symbol_refs, compute_lineno_to_stmt_mapping
 from .ipython_utils import (
     ast_transformer_context,
     cell_counter,
@@ -22,10 +22,10 @@ from .ipython_utils import (
 from . import line_magics
 from .scope import Scope, NamespaceScope
 from .tracing import AttrSubTracingManager, make_tracer, TraceState
+from .utils.utils import get_symbols_for_references, compute_call_chain_live_symbols
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
-    from .analysis import SymbolRef
     from .data_symbol import DataSymbol
 
 logger = logging.getLogger(__name__)
@@ -166,37 +166,19 @@ class NotebookSafety(object):
     def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]') -> 'Tuple[Set[DataSymbol], Set[DataSymbol], int]':
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
-        stale_symbols = set()
         max_defined_cell_num = -1
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
-        for symbol_ref in live_symbol_refs:
-            if isinstance(symbol_ref, str):
-                dsym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
-            elif isinstance(symbol_ref, AttrSubSymbolChain):
-                dsym = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
-            else:
-                logger.warning('invalid type for ref %s', symbol_ref)
-                continue
-            if dsym is None:
-                continue
-            # print(node, node.is_stale)
+        live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
+        live_symbols = live_symbols.union(compute_call_chain_live_symbols(called_symbols))
+        dead_symbols, _ = get_symbols_for_references(dead_symbol_refs, self.global_scope)
+        stale_symbols = set()
+        for dsym in live_symbols:
             max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
             if dsym.is_stale:
                 stale_symbols.add(dsym)
             if dsym.obj_id in self.namespaces:
                 namespace_scope = self.namespaces[dsym.obj_id]
                 max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-        dead_symbols = set()
-        for symbol_ref in dead_symbol_refs:
-            if isinstance(symbol_ref, str):
-                dsym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
-            elif isinstance(symbol_ref, AttrSubSymbolChain):
-                dsym = self.global_scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
-            else:
-                logger.warning('invalid type for ref %s', symbol_ref)
-                continue
-            if dsym is not None:
-                dead_symbols.add(dsym)
         return stale_symbols, dead_symbols, max_defined_cell_num
 
     def _precheck_simple(self, cell):

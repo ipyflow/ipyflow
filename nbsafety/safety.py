@@ -64,7 +64,9 @@ class NotebookSafety(object):
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)
-        self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(self, self.global_scope, self.trace_event_counter)
+        self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(
+            self, self.global_scope, self.trace_event_counter
+        )
         self.store_history: bool = kwargs.pop('store_history', True)
         self.use_comm: bool = use_comm
         self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)

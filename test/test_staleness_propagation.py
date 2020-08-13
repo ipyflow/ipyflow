@@ -389,6 +389,39 @@ def f():
     assert_detected('`y` as referenced in call of function `f` is stale')
 
 
+def test_symbol_callpoint_2():
+    run_cell('x = 0')
+    run_cell('y = x + 1')
+    run_cell("""
+def f():
+    y = 9
+    return y + 7
+""")
+    run_cell('z = f()')
+    assert_not_detected()
+    run_cell('x = 42')
+    run_cell('z = f()')
+    assert_not_detected()
+
+
+def test_symbol_callpoint_3():
+    run_cell('x = 0')
+    run_cell('y = x + 1')
+    run_cell("""
+def f():
+    return y + 7
+""")
+    run_cell('z = f()')
+    assert_not_detected()
+    run_cell('x = 42')
+    run_cell("""
+def f():
+    return y + 7
+""")
+    run_cell('z = f()')
+    assert_detected('`y` as referenced in call of function `f` is stale')
+
+
 def test_lambda_capture():
     run_cell('x = 42')
     run_cell('lst = []')

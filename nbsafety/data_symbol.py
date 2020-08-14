@@ -326,8 +326,20 @@ class DataSymbol(object):
             else:
                 self.namespace_stale_symbols.discard(dc)
 
-        if mutated or self.cached_obj_id != self.obj_id:
+        # if mutated or self.cached_obj_id != self.obj_id:
+        if self.cached_obj_id != self.obj_id:
             self._propagate_update_to_deps(updated_dep, seen, parent_seen)
+        elif mutated:
+            children_to_skip = set()
+            # skip any children that themselves contain an alias of self
+            # TODO: this definitely won't work unless we are aware of containing namespaces
+            #  need to therefore create data symbols for list literals and things like lst `append`
+            for self_alias in self.safety.aliases[self.obj_id]:
+                containing_obj_id = getattr(self_alias.containing_scope, 'obj_id', None)
+                if containing_obj_id is not None:
+                    children_to_skip |= self.safety.aliases[containing_obj_id]
+            # print(self, children_to_skip, self.children, seen)
+            self._propagate_update_to_deps(updated_dep, seen | children_to_skip, parent_seen)
 
         if updated_dep is self:
             return

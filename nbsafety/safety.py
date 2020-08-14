@@ -61,6 +61,7 @@ class NotebookSafety(object):
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
+        self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)

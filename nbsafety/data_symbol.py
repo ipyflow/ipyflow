@@ -53,7 +53,7 @@ class DataSymbol(object):
             self._refresh_cached_obj()
         self.containing_scope = containing_scope
         self.safety = safety
-        self.stmt_node = stmt_node
+        self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
         if parents is None:
             parents = set()
@@ -189,6 +189,9 @@ class DataSymbol(object):
     def update_stmt_node(self, stmt_node):
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
+        if self.is_function:
+            self.safety.statement_to_func_cell[id(stmt_node)] = self
+        return stmt_node
 
     def _refresh_cached_obj(self):
         self.cached_obj_ref = self._obj_ref

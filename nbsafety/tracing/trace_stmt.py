@@ -69,7 +69,7 @@ class TraceStatement(object):
             #     raise TypeError('unexpected type for ast node %s' % self.ast_node)
             return old_scope
         func_name = self.stmt_node.name
-        func_cell = self.scope.lookup_data_symbol_by_name(func_name)
+        func_cell = self.safety.statement_to_func_cell.get(id(self.stmt_node), None)
         if func_cell is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope

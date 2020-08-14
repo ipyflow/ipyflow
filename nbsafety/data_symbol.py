@@ -295,7 +295,7 @@ class DataSymbol(object):
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None and refresh:  # if we are at a leaf
             self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
-        for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation():
+        for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation(exclude_class=True):
             dc_in_self_namespace = False
             if new_parent_obj is NOT_FOUND:
                 dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)

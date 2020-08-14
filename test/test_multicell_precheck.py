@@ -65,4 +65,5 @@ def test_refresh_after_val_changed():
     run_cell(cells[2], 2)
     run_cell(cells[3], 3)
     response = _safety_state[0].multicell_precheck(cells)
+    print(response)
     assert response['stale_output_cells'] == [2]

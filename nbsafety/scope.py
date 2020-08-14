@@ -59,7 +59,7 @@ class Scope(object):
             return self.parent_scope.non_namespace_parent_scope
         return self.parent_scope
 
-    def make_child_scope(self, scope_name, obj_id=None):
+    def make_child_scope(self, scope_name, obj_id=None) -> 'Scope':
         if obj_id is None:
             return Scope(self.safety, scope_name, parent_scope=self)
         else:

@@ -75,6 +75,7 @@ class TraceStatement(object):
             return old_scope
         if not func_cell.is_function:
             raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
+        func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
     def _make_lval_data_symbols(self):

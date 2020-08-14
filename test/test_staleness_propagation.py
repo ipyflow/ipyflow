@@ -422,6 +422,34 @@ def f():
     assert_detected('`y` as referenced in call of function `f` is stale')
 
 
+def test_symbol_callpoint_4():
+    run_cell('x = 0')
+    run_cell('y = x + 1')
+    run_cell("""
+def f(y):
+    return y + 7
+""")
+    run_cell('z = f(5)')
+    assert_not_detected()
+    run_cell('x = 42')
+    run_cell('z = f(5)')
+    assert_not_detected('`y` as referenced in call of function `f` is an arg and therefore not stale')
+
+
+def test_function_arg_independent_of_outer_staleness():
+    run_cell('x = 0')
+    run_cell('y = x + 1')
+    run_cell("""
+def f(y):
+    return y + 7
+""")
+    run_cell('z = f(5)')
+    assert_not_detected()
+    run_cell('x = 42')
+    run_cell('logging.info(z)')
+    assert_not_detected('`z` independent of `x`')
+
+
 def test_lambda_capture():
     run_cell('x = 42')
     run_cell('lst = []')

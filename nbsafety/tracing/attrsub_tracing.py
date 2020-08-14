@@ -21,7 +21,15 @@ if TYPE_CHECKING:
     TextualCallNestingStackFrame = Tuple[Scope, bool]
     TextualCallNestingStack = List[TextualCallNestingStackFrame]
     AttrSubStackFrame = Tuple[
-        List[SavedStoreData], Set[DeepRef], Set[Mutation], List[Tuple[RefCandidate, Set[Union[str, AttrSubSymbolChain]]]], Scope, Scope, TextualCallNestingStack
+        List[SavedStoreData],
+        Set[DeepRef],
+        Set[Mutation],
+        List[Tuple[RefCandidate, Set[Union[str, AttrSubSymbolChain]]]],
+        Scope,
+        Scope,
+        TextualCallNestingStack,
+        bool,
+        List[bool]
     ]
     AttrSubStack = List[AttrSubStackFrame]
 
@@ -35,6 +43,7 @@ class AttrSubTracingManager(object):
         self.safety = safety
         self.original_active_scope = active_scope
         self.active_scope = active_scope
+        self.should_record_args = False
         self.trace_event_counter = trace_event_counter
         self.attrsub_tracer_name = '_NBSAFETY_ATTR_TRACER'
         self.end_tracer_name = '_NBSAFETY_ATTR_TRACER_END'
@@ -47,8 +56,11 @@ class AttrSubTracingManager(object):
         setattr(builtins, self.scope_pusher_name, self.scope_pusher)
         setattr(builtins, self.scope_popper_name, self.scope_popper)
         self.ast_transformer = AttrSubTracingNodeTransformer(
-            self.attrsub_tracer_name, self.end_tracer_name, self.arg_recorder_name,
-            self.scope_pusher_name, self.scope_popper_name,
+            self.attrsub_tracer_name,
+            self.end_tracer_name,
+            self.arg_recorder_name,
+            self.scope_pusher_name,
+            self.scope_popper_name
         )
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
@@ -56,6 +68,7 @@ class AttrSubTracingManager(object):
         self.deep_refs: Set[DeepRef] = set()
         self.mutations: Set[Mutation] = set()
         self.nested_call_stack: TextualCallNestingStack = []
+        self.should_record_args_stack: List[bool] = []
         self.stack: AttrSubStack = []
         self._waiting_for_call = False
 
@@ -86,6 +99,8 @@ class AttrSubTracingManager(object):
             self.active_scope,
             self.original_active_scope,
             self.nested_call_stack,
+            self.should_record_args,
+            self.should_record_args_stack
         ))
         self.saved_store_data = []
         self.deep_refs = set()
@@ -93,6 +108,8 @@ class AttrSubTracingManager(object):
         self.deep_ref_candidates = []
         self.original_active_scope = new_scope
         self.active_scope = new_scope
+        self.should_record_args = False
+        self.should_record_args_stack = []
         self.nested_call_stack = []
 
     def pop_stack(self):
@@ -104,6 +121,8 @@ class AttrSubTracingManager(object):
             self.active_scope,
             self.original_active_scope,
             self.nested_call_stack,
+            self.should_record_args,
+            self.should_record_args_stack
         ) = self.stack.pop()
 
     @staticmethod
@@ -112,96 +131,103 @@ class AttrSubTracingManager(object):
         return obj
 
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
-        if obj is None:
-            return None
-        if not isinstance(attr_or_subscript, (str, int)):
-            return obj
-        obj_id = id(obj)
-        scope = self.safety.namespaces.get(obj_id, None)
-        # print('%s attr %s of obj %s' % (ctx, attr, obj))
-        if scope is None:
-            class_scope = self.safety.namespaces.get(id(obj.__class__), None)
-            if class_scope is not None and not is_subscript:
-                # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
-                scope = class_scope.clone(obj)
-                if obj_name is not None:
-                    scope.scope_name = obj_name
-                self.safety.namespaces[obj_id] = scope
-            else:
-                # print('no scope for class', obj.__class__)
-                # if self.safety.trace_state.prev_trace_stmt.finished:
-                #     # avoid creating new scopes if we already did this computation
-                #     self.active_scope = None
-                #     return obj
-                try:
-                    scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
-                except (TypeError, StopIteration):
-                    scope_name = '<unknown namespace>'
-
-                # FIXME: brittle strategy for determining parent scope of obj
-                if (
-                    obj_name is not None and
-                    obj_name not in self.safety.trace_state.prev_trace_stmt_in_cur_frame.frame.f_locals
-                ):
-                    parent_scope = self.safety.global_scope
+        should_record_args = False
+        try:
+            if obj is None:
+                return None
+            if not isinstance(attr_or_subscript, (str, int)):
+                return obj
+            obj_id = id(obj)
+            scope = self.safety.namespaces.get(obj_id, None)
+            # print('%s attr %s of obj %s' % (ctx, attr, obj))
+            if scope is None:
+                class_scope = self.safety.namespaces.get(id(obj.__class__), None)
+                if class_scope is not None and not is_subscript:
+                    # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
+                    scope = class_scope.clone(obj)
+                    if obj_name is not None:
+                        scope.scope_name = obj_name
+                    self.safety.namespaces[obj_id] = scope
                 else:
-                    parent_scope = self.active_scope
-                scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
-                self.safety.namespaces[obj_id] = scope
-        self.active_scope = scope
-        # if scope is None:  # or self.safety.trace_state.prev_trace_stmt.finished:
-        #     if ctx in ('Store', 'AugStore'):
-        #         self.active_scope = self.original_active_scope
-        #     return obj
-        if scope is None or self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
-            return obj
-        elif ctx in ('Store', 'AugStore') and scope is not None:
-            self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
-            # reset active scope here
-            self.active_scope = self.original_active_scope
-        if ctx == 'Load':
-            # save off event counter and obj_id
-            # if event counter didn't change when we process the Call retval, and if the
-            # retval is None, this is a likely signal that we have a mutation
-            # TODO: this strategy won't work if the arguments themselves lead to traced function calls
-            # print('looking for', attr_or_subscript)
-            data_sym = scope.lookup_data_symbol_by_name_this_indentation(
-                attr_or_subscript, is_subscript=is_subscript
-            )
-            if data_sym is None:
-                try:
-                    obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
-                    symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-                    data_sym = DataSymbol(
-                        attr_or_subscript,
-                        symbol_type,
-                        obj_attr_or_sub,
-                        scope,
-                        self.safety,
-                        stmt_node=None,
-                        parents=None,
-                        refresh_cached_obj=True
-                    )
-                    # this is to prevent refs to the scope object from being considered as stale if we just load it
-                    data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
-                    scope.put(attr_or_subscript, data_sym)
-                    # print('put', data_sym, 'in', scope.full_namespace_path)
-                    # FIXME: DataSymbols should probably register themselves with the alias manager at creation
-                    self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
-                except (AttributeError, KeyError, IndexError):
-                    pass
-            if call_context:
-                self.deep_ref_candidates.append(((self.trace_event_counter[0], obj_id, obj_name), set()))
-            elif data_sym is not None:
-                # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
-                self.loaded_data_symbols.add(data_sym)
-        return obj
+                    # print('no scope for class', obj.__class__)
+                    # if self.safety.trace_state.prev_trace_stmt.finished:
+                    #     # avoid creating new scopes if we already did this computation
+                    #     self.active_scope = None
+                    #     return obj
+                    try:
+                        scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
+                    except (TypeError, StopIteration):
+                        scope_name = '<unknown namespace>'
 
-    def end_tracer(self, obj):
+                    # FIXME: brittle strategy for determining parent scope of obj
+                    if (
+                        obj_name is not None and
+                        obj_name not in self.safety.trace_state.prev_trace_stmt_in_cur_frame.frame.f_locals
+                    ):
+                        parent_scope = self.safety.global_scope
+                    else:
+                        parent_scope = self.active_scope
+                    scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
+                    self.safety.namespaces[obj_id] = scope
+            self.active_scope = scope
+            # if scope is None:  # or self.safety.trace_state.prev_trace_stmt.finished:
+            #     if ctx in ('Store', 'AugStore'):
+            #         self.active_scope = self.original_active_scope
+            #     return obj
+            if scope is None or self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+                return obj
+            elif ctx in ('Store', 'AugStore') and scope is not None:
+                self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
+                # reset active scope here
+                self.active_scope = self.original_active_scope
+            if ctx == 'Load':
+                # save off event counter and obj_id
+                # if event counter didn't change when we process the Call retval, and if the
+                # retval is None, this is a likely signal that we have a mutation
+                # TODO: this strategy won't work if the arguments themselves lead to traced function calls
+                # print('looking for', attr_or_subscript)
+                data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+                    attr_or_subscript, is_subscript=is_subscript
+                )
+                if data_sym is None:
+                    try:
+                        obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
+                        symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
+                        data_sym = DataSymbol(
+                            attr_or_subscript,
+                            symbol_type,
+                            obj_attr_or_sub,
+                            scope,
+                            self.safety,
+                            stmt_node=None,
+                            parents=None,
+                            refresh_cached_obj=True
+                        )
+                        # this is to prevent refs to the scope object from being considered as stale if we just load it
+                        data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
+                        scope.put(attr_or_subscript, data_sym)
+                        # print('put', data_sym, 'in', scope.full_namespace_path)
+                        # FIXME: DataSymbols should probably register themselves with the alias manager at creation
+                        self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
+                    except (AttributeError, KeyError, IndexError):
+                        pass
+                if call_context:
+                    should_record_args = True
+                    self.deep_ref_candidates.append(((self.trace_event_counter[0], obj_id, obj_name), set()))
+                elif data_sym is not None:
+                    # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
+                    self.loaded_data_symbols.add(data_sym)
+            return obj
+        finally:
+            if call_context:
+                self.should_record_args_stack.append(self.should_record_args)
+                self.should_record_args = should_record_args
+
+    def end_tracer(self, obj, call_context):
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             self.active_scope = self.original_active_scope
             return obj
-        if len(self.deep_ref_candidates) > 0:
+        if call_context and len(self.deep_ref_candidates) > 0:
             (evt_counter, obj_id, obj_name), recorded_args = self.deep_ref_candidates.pop()
             if evt_counter == self.trace_event_counter[0]:
                 if obj is None:
@@ -213,7 +239,7 @@ class AttrSubTracingManager(object):
         return obj
 
     def arg_recorder(self, obj, name):
-        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
             return obj
         if len(self.deep_ref_candidates) == 0:
             logger.error('Error: no associated symbol for recorded args; skipping recording')
@@ -235,10 +261,12 @@ class AttrSubTracingManager(object):
         self.active_scope = self.original_active_scope
         return obj
 
-    def scope_popper(self, obj):
+    def scope_popper(self, obj, should_pop_should_record_args_stack):
         # if self.safety.trace_state.prev_trace_stmt.finished:
         #     return obj
         self.active_scope, self._waiting_for_call = self.nested_call_stack.pop()
+        if should_pop_should_record_args_stack:
+            self.should_record_args = self.should_record_args_stack.pop()
         return obj
 
     def stmt_transition_hook(self):
@@ -251,12 +279,20 @@ class AttrSubTracingManager(object):
         self.mutations = set()
         self.deep_ref_candidates = []
         self.active_scope = self.original_active_scope
+        self.should_record_args = False
         # self.nested_call_stack = []
         # self.stmt_transition_hook()
 
 
 class AttrSubTracingNodeTransformer(ast.NodeTransformer):
-    def __init__(self, attrsub_tracer: str, end_tracer: str, arg_recorder: str, scope_pusher: str, scope_popper: str):
+    def __init__(
+            self,
+            attrsub_tracer: str,
+            end_tracer: str,
+            arg_recorder: str,
+            scope_pusher: str,
+            scope_popper: str
+    ):
         self.attrsub_tracer = attrsub_tracer
         self.end_tracer = end_tracer
         self.arg_recorder = arg_recorder
@@ -320,15 +356,19 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         if not self.inside_attrsub_load_chain and is_load:
             new_node = ast.Call(
                 func=ast.Name(self.end_tracer, ast.Load()),
-                args=[node],
+                args=[node, ast.NameConstant(call_context)],
                 keywords=[]
             )
         return new_node
 
-    def _get_replacement_args(self, args, should_record):
+    def _get_replacement_args(self, args, should_record, keywords):
         replacement_args = []
         for arg in args:
-            chain = GetAttrSubSymbols()(arg)
+            if keywords:
+                maybe_kwarg = getattr(arg, 'value')
+            else:
+                maybe_kwarg = arg
+            chain = GetAttrSubSymbols()(maybe_kwarg)
             statically_resolvable = []
             for sym in chain.symbols:
                 # TODO: only handles attributes properly; subscripts will break
@@ -336,20 +376,21 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                     break
                 statically_resolvable.append(ast.Str(sym))
             statically_resolvable = ast.Tuple(elts=statically_resolvable, ctx=ast.Load())
-            maybe_kwarg = getattr(arg, 'value', arg)
             with self.attrsub_load_context(False):
                 visited_maybe_kwarg = self.visit(maybe_kwarg)
+            ast.copy_location(visited_maybe_kwarg, maybe_kwarg)
             argrecord_args = [visited_maybe_kwarg, statically_resolvable]
             if should_record:
-                new_arg_value = cast(ast.expr, ast.Call(
-                    func=ast.Name(self.arg_recorder, ast.Load()),
-                    args=argrecord_args,
-                    keywords=[]
-                ))
+                with self.attrsub_load_context(False):
+                    new_arg_value = cast(ast.expr, ast.Call(
+                        func=ast.Name(self.arg_recorder, ast.Load()),
+                        args=argrecord_args,
+                        keywords=[]
+                    ))
             else:
                 new_arg_value = visited_maybe_kwarg
-            ast.copy_location(new_arg_value, maybe_kwarg)
-            if hasattr(arg, 'value'):
+            # ast.copy_location(new_arg_value, maybe_kwarg)
+            if keywords:
                 setattr(arg, 'value', new_arg_value)
             else:
                 arg = new_arg_value
@@ -366,8 +407,8 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             # TODO: need a way to rewrite ast of attribute and subscript args,
             #  and to process these separately from outer rewrite
 
-        node.args = self._get_replacement_args(node.args, is_attrsub)
-        node.keywords = self._get_replacement_args(node.keywords, is_attrsub)
+        node.args = self._get_replacement_args(node.args, is_attrsub, False)
+        node.keywords = self._get_replacement_args(node.keywords, is_attrsub, True)
 
         # in order to ensure that the args are processed with appropriate active scope,
         # we need to push current active scope before processing the args and pop after
@@ -380,16 +421,16 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
 
         node = ast.Call(
             func=ast.Name(self.scope_popper, ast.Load()),
-            args=[node],
+            args=[node, ast.NameConstant(is_attrsub)],
             keywords=[]
         )
 
-        if self.inside_attrsub_load_chain:
+        if self.inside_attrsub_load_chain or not is_attrsub:
             return node
 
         replacement_node = ast.Call(
             func=ast.Name(self.end_tracer, ast.Load()),
-            args=[node],
+            args=[node, ast.NameConstant(True)],
             keywords=[]
         )
         ast.copy_location(replacement_node, node)

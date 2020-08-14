@@ -1,22 +1,26 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
 from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import List, Set, Tuple, Union
+    from typing import List, Optional, Set, Tuple, Union
     from ..types import SymbolRef
+    Killable = Union[str, AttrSubSymbolChain]
 
 logger = logging.getLogger(__name__)
 
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVisitor):
-    def __init__(self):
-        self.dead: Set[Union[str, AttrSubSymbolChain]] = set()
+    def __init__(self, init_killed: 'Optional[Set[str]]' = None):
+        if init_killed is None:
+            self.dead: 'Set[Killable]' = set()
+        else:
+            self.dead = cast('Set[Killable]', init_killed)
         self.in_kill_context = False
 
     def __call__(self, module_node: ast.Module):
@@ -137,13 +141,16 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
 
 
 def compute_live_dead_symbol_refs(
-        code: 'Union[ast.Module, List[ast.stmt], str]'
+        code: 'Union[ast.Module, List[ast.stmt], str]',
+        init_killed: 'Optional[Set[str]]' = None
 ) -> 'Tuple[Set[SymbolRef], Set[SymbolRef]]':
+    if init_killed is None:
+        init_killed = set()
     if isinstance(code, str):
         code = ast.parse(code)
     elif isinstance(code, list):
         code = ast.Module(body=code)
-    return ComputeLiveSymbolRefs()(code)
+    return ComputeLiveSymbolRefs(init_killed)(code)
 
 
 # Call GetAllNames()(ast_tree) to get a set of all names appeared in ast_tree.

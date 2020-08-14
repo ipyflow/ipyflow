@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ast
 from enum import Enum
 import logging
 from typing import cast, TYPE_CHECKING
@@ -60,10 +61,9 @@ class DataSymbol(object):
         self.children: Set[DataSymbol] = set()
         self.readable_name = containing_scope.make_namespace_qualified_name(self)
 
+        self.call_scope: 'Optional[Scope]' = None
         if self.is_function:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
-        else:
-            self.call_scope = None
 
         self.defined_cell_num = cell_counter()
 
@@ -195,6 +195,24 @@ class DataSymbol(object):
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
         self._cached_has_weakref = self._has_weakref
+
+    def get_call_args(self):
+        # TODO: handle lambda, objects w/ __call__, etc
+        args = set()
+        if self.is_function:
+            assert isinstance(self.stmt_node, ast.FunctionDef)
+            for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
+                args.add(arg.arg)
+            if self.stmt_node.args.vararg is not None:
+                args.add(self.stmt_node.args.vararg.arg)
+            if self.stmt_node.args.kwarg is not None:
+                args.add(self.stmt_node.args.kwarg.arg)
+        return args
+
+    def create_symbols_for_call_args(self):
+        for arg in self.get_call_args():
+            # TODO: ideally we should try to pass the object here
+            self.call_scope.upsert_data_symbol_for_name(arg, None, set(), self.stmt_node, False)
 
     def update_deps(
             self,

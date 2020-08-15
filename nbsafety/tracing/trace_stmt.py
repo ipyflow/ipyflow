@@ -77,7 +77,8 @@ class TraceStatement(object):
             return old_scope
         if not func_cell.is_function:
             raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
-        func_cell.create_symbols_for_call_args()
+        if not self.finished:
+            func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
     def _make_lval_data_symbols(self):
@@ -104,17 +105,6 @@ class TraceStatement(object):
             #     print('create function', name, 'in scope', self.scope)
             try:
                 obj = self.frame.f_locals[lval_name]
-                # TODO: pass self.stmt_node here and save in datasym
-                #  then, if function, can do liveness analysis lazily
-                # should_skip = False
-                # if isinstance(self.stmt_node, ast.For):
-                #     for dep in rval_deps:
-                #         namespace = self.safety.namespaces.get(dep.obj_id, None)
-                #         if namespace is None:
-                #             continue
-                #         all_obj_ids_in_namespace = set(map(lambda sym: sym.obj_id, namespace.all_data_symbols_this_indentation()))
-                #         if id(obj) in all_obj_ids_in_namespace:
-                #             should_skip = True
                 self.scope.upsert_data_symbol_for_name(
                     lval_name, obj, rval_deps, self.stmt_node, False,
                     overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
@@ -185,21 +175,25 @@ class TraceStatement(object):
                 elif isinstance(arg, AttrSubSymbolChain):
                     mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
             mutation_arg_dsyms.discard(None)
-            # if method_special_case == MethodSpecialCase.list_append and len(mutation_arg_dsyms) == 1:
-            #     namespace_scope = self.safety.namespaces.get(mutated_obj_id, None)
-            #     mutated_sym = next(iter(self.safety.aliases.get(mutated_obj_id, None)))
-            #     mutated_obj = mutated_sym._get_obj()
-            #     mutation_arg_sym = next(iter(mutation_arg_dsyms))
-            #     mutation_arg_obj = mutation_arg_sym._get_obj()
-            #     if mutated_sym is not None and mutation_arg_obj is not None and not isinstance(mutation_arg_obj, int):
-            #         if namespace_scope is None:
-            #             namespace_scope = NamespaceScope(
-            #                 mutated_obj, self.safety, mutated_sym.name,
-            #                 parent_scope=mutated_sym.containing_scope
-            #             )
-            #         namespace_scope.upsert_data_symbol_for_name(
-            #             len(mutated_obj) - 1, mutation_arg_obj, set(), self.stmt_node, True
-            #         )
+            # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
+            # of the mutated symbol. This helps to avoid propagating through to dependency children that are
+            # themselves namespace children.
+            if method_special_case == MethodSpecialCase.list_append and len(mutation_arg_dsyms) == 1:
+                namespace_scope = self.safety.namespaces.get(mutated_obj_id, None)
+                mutated_sym = next(iter(self.safety.aliases.get(mutated_obj_id, None)))
+                mutated_obj = mutated_sym._get_obj()
+                mutation_arg_sym = next(iter(mutation_arg_dsyms))
+                mutation_arg_obj = mutation_arg_sym._get_obj()
+                # TODO: replace int check w/ more general "immutable" check
+                if mutated_sym is not None and mutation_arg_obj is not None and not isinstance(mutation_arg_obj, int):
+                    if namespace_scope is None:
+                        namespace_scope = NamespaceScope(
+                            mutated_obj, self.safety, mutated_sym.name,
+                            parent_scope=mutated_sym.containing_scope
+                        )
+                    namespace_scope.upsert_data_symbol_for_name(
+                        len(mutated_obj) - 1, mutation_arg_obj, set(), self.stmt_node, True
+                    )
             for mutated_sym in self.safety.aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self.has_lval:

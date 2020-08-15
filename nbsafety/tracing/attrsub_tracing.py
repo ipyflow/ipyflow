@@ -168,7 +168,6 @@ class AttrSubTracingManager(object):
                     scope = class_scope.clone(obj)
                     if obj_name is not None:
                         scope.scope_name = obj_name
-                    self.safety.namespaces[obj_id] = scope
                 else:
                     # print('no scope for class', obj.__class__)
                     # if self.safety.trace_state.prev_trace_stmt.finished:
@@ -179,8 +178,10 @@ class AttrSubTracingManager(object):
                         scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
                     except (TypeError, StopIteration):
                         scope_name = '<unknown namespace>'
-
-                    # FIXME: brittle strategy for determining parent scope of obj
+                    scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
+                self.safety.namespaces[obj_id] = scope
+                # FIXME: brittle strategy for determining parent scope of obj
+                if scope.parent_scope is None:
                     if (
                         obj_name is not None and
                         obj_name not in self.safety.trace_state.prev_trace_stmt_in_cur_frame.frame.f_locals
@@ -188,8 +189,8 @@ class AttrSubTracingManager(object):
                         parent_scope = self.safety.global_scope
                     else:
                         parent_scope = self.active_scope
-                    scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=parent_scope)
-                    self.safety.namespaces[obj_id] = scope
+                    scope.parent_scope = parent_scope
+
             self.active_scope = scope
             # if scope is None:  # or self.safety.trace_state.prev_trace_stmt.finished:
             #     if ctx in ('Store', 'AugStore'):

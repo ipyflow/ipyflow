@@ -136,10 +136,11 @@ class Scope(object):
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
+            propagate=True
     ):
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps, stmt_node, is_subscript,
-            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
+            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope, propagate=propagate
         )
         # print('upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
@@ -154,7 +155,9 @@ class Scope(object):
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
+            propagate=True
     ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
+        # print(self, 'upsert', name)
         assert not (class_scope is not None and is_function_def)
         symbol_type = DataSymbolType.DEFAULT
         if is_function_def:
@@ -179,7 +182,7 @@ class Scope(object):
                 old_dc.update_obj_ref(obj)
                 old_dc.update_type(symbol_type)
                 old_dc.update_stmt_node(stmt_node)
-                old_dc.update_deps(deps, overwrite=overwrite)
+                old_dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
                 return old_dc, old_dc, old_id
             else:
                 # In this case, we are copying from a class and we need the dsym from which we are copying
@@ -203,7 +206,7 @@ class Scope(object):
                 deps.add(old_dc)
         dc = DataSymbol(name, symbol_type, obj, self, self.safety, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
         self.put(name, dc)
-        dc.update_deps(deps, overwrite=True)
+        dc.update_deps(deps, overwrite=True, propagate=propagate)
         return dc, old_dc, old_id
 
     def _handle_aliases(

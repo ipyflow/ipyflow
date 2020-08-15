@@ -215,13 +215,14 @@ class DataSymbol(object):
     def create_symbols_for_call_args(self):
         for arg in self.get_call_args():
             # TODO: ideally we should try to pass the object here
-            self.call_scope.upsert_data_symbol_for_name(arg, None, set(), self.stmt_node, False)
+            self.call_scope.upsert_data_symbol_for_name(arg, None, set(), self.stmt_node, False, propagate=False)
 
     def update_deps(
             self,
             new_deps: 'Set[DataSymbol]',
             overwrite=True,
             mutated=False,
+            propagate=True
     ):
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
@@ -238,7 +239,9 @@ class DataSymbol(object):
             self.parents.add(new_parent)
 
         self.required_cell_num = -1
-        self._propagate_update(self._get_obj(), self, set(), set(), refresh=True, mutated=mutated)
+        if propagate:
+            # print(self, 'update deps')
+            self._propagate_update(self._get_obj(), self, set(), set(), refresh=True, mutated=mutated)
         self._refresh_cached_obj()
         self.safety.updated_symbols.add(self)
 
@@ -260,7 +263,22 @@ class DataSymbol(object):
             self.fresher_ancestors.add(updated_dep)
             self.required_cell_num = cell_counter()
         for child in self.children:
+            # print(self, 'prop to', child, self._get_children_to_skip())
             child._propagate_update(child._get_obj(), updated_dep, seen, parent_seen)
+
+    def _get_children_to_skip(self, obj_id=None):
+        # TODO: this should probably DFS in order to skip all namespace ancestors
+        if obj_id is None:
+            obj_id = self.obj_id
+        children_to_skip = set()
+        # skip any children that themselves contain an alias of self
+        # TODO: this definitely won't work unless we are aware of containing namespaces
+        #  need to therefore create data symbols for list literals and things like lst `append`
+        for self_alias in self.safety.aliases[obj_id]:
+            containing_obj_id = getattr(self_alias.containing_scope, 'obj_id', None)
+            if containing_obj_id is not None:
+                children_to_skip |= self.safety.aliases[containing_obj_id]
+        return children_to_skip
 
     def _propagate_update(
             self, new_parent_obj: 'Any',
@@ -331,18 +349,12 @@ class DataSymbol(object):
                     self.namespace_stale_symbols.discard(dc)
 
         # if mutated or self.cached_obj_id != self.obj_id:
-        if (old_id != new_id or not refresh) and not mutated:
-            self._propagate_update_to_deps(updated_dep, seen, parent_seen)
-        elif mutated:
-            children_to_skip = set()
-            # skip any children that themselves contain an alias of self
-            # TODO: this definitely won't work unless we are aware of containing namespaces
-            #  need to therefore create data symbols for list literals and things like lst `append`
-            for self_alias in self.safety.aliases[self.obj_id]:
-                containing_obj_id = getattr(self_alias.containing_scope, 'obj_id', None)
-                if containing_obj_id is not None:
-                    children_to_skip |= self.safety.aliases[containing_obj_id]
-            self._propagate_update_to_deps(updated_dep, seen | children_to_skip, parent_seen)
+        # if (old_id != new_id or not refresh) and not mutated:
+        #     self._propagate_update_to_deps(updated_dep, seen, parent_seen)
+        # elif mutated:
+        if old_id != new_id or not refresh or mutated:
+            self._propagate_update_to_deps(updated_dep, seen | self._get_children_to_skip(), parent_seen)
+            # print(self, 'propagate+skip done')
 
         if updated_dep is self:
             return
@@ -372,6 +384,7 @@ class DataSymbol(object):
             #     alias._propagate_update_to_deps(updated_dep, seen, parent_seen)
             if namespace is None and self.should_mark_stale(updated_dep):  # if we are at a leaf
                 self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
+        # print(self, 'done')
 
     def mark_mutated(self):
         # print(self, 'mark mutated')
@@ -399,32 +412,43 @@ class DataSymbol(object):
         # print('parent propagate', self)
         parent_seen.add(self)
         containing_scope = cast('NamespaceScope', self.containing_scope)
-        containing_namespace_obj_id = containing_scope.obj_id
-        for alias in self.safety.aliases[containing_namespace_obj_id]:
-            # print('propagate from ns parent', alias, 'with refresh=', refresh)
-            if refresh and not self.is_stale:
-                alias.namespace_stale_symbols.discard(self)
-                if not alias.is_stale:
-                    alias.fresher_ancestors = set()
-            alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
-            if self.should_mark_stale(updated_dep):
-                alias.namespace_stale_symbols.add(self)
-            if refresh:
-                # containing_scope.max_defined_timestamp = cell_counter()
-                self.safety.updated_scopes.add(containing_scope)
-            for alias_child in alias.children:
-                if alias_child.obj_id == containing_namespace_obj_id:
-                    continue
-                # Next, complicated check to avoid propagating along a class -> instance edge.
-                # The only time this is OK is when we changed the class, which will not be the case here.
-                alias_child_namespace = alias_child.namespace
-                if alias_child_namespace is not None:
-                    if alias_child_namespace.cloned_from is containing_scope:
-                        if updated_dep.namespace is not containing_scope:
-                            continue
-                # if len(self.safety.aliases[alias_child.obj_id] & seen) > 0:
-                #     continue
-                alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
+        containing_namespace_obj_ids_to_consider = {containing_scope.obj_id}
+        # if refresh:
+        #     for self_alias in self.safety.aliases[self.obj_id]:
+        #         if self_alias.containing_scope.is_namespace_scope:
+        #             containing_namespace_obj_ids_to_consider.add(getattr(self_alias.containing_scope, 'obj_id', None))
+        #     containing_namespace_obj_ids_to_consider.discard(None)
+        for containing_namespace_obj_id in containing_namespace_obj_ids_to_consider:
+            if containing_namespace_obj_id in parent_seen:
+                continue
+            parent_seen.add(containing_namespace_obj_id)
+            children_to_skip = self._get_children_to_skip(containing_namespace_obj_id)
+            for alias in self.safety.aliases[containing_namespace_obj_id]:
+                # print('propagate from ns parent', alias, 'with refresh=', refresh)
+                if refresh and not self.is_stale:
+                    alias.namespace_stale_symbols.discard(self)
+                    if not alias.is_stale:
+                        alias.fresher_ancestors = set()
+                alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
+                if self.should_mark_stale(updated_dep):
+                    alias.namespace_stale_symbols.add(self)
+                if refresh:
+                    # containing_scope.max_defined_timestamp = cell_counter()
+                    self.safety.updated_scopes.add(containing_scope)
+                for alias_child in alias.children:
+                    if alias_child.obj_id == containing_namespace_obj_id or alias_child in children_to_skip:
+                        continue
+                    # Next, complicated check to avoid propagating along a class -> instance edge.
+                    # The only time this is OK is when we changed the class, which will not be the case here.
+                    alias_child_namespace = alias_child.namespace
+                    if alias_child_namespace is not None:
+                        if alias_child_namespace.cloned_from is containing_scope:
+                            if updated_dep.namespace is not containing_scope:
+                                continue
+                    # if len(self.safety.aliases[alias_child.obj_id] & seen) > 0:
+                    #     continue
+                    # print(self, alias, self.containing_scope, containing_namespace_obj_id, 'propagate to', alias_child, refresh, alias.is_stale, children_to_skip)
+                    alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
 
     @property
     def is_stale(self):

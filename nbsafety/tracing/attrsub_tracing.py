@@ -2,6 +2,7 @@
 import ast
 import builtins
 from contextlib import contextmanager
+from enum import Enum
 import logging
 from typing import cast, TYPE_CHECKING
 
@@ -10,26 +11,37 @@ from ..data_symbol import DataSymbol, DataSymbolType
 from ..scope import NamespaceScope
 from ..utils.utils import retrieve_namespace_attr_or_sub
 
+
+class MethodSpecialCase(Enum):
+    normal = 'normal'
+    list_append = 'list_append'
+
+
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
     from ..safety import NotebookSafety
     from ..scope import Scope
-    DeepRef = Tuple[int, Optional[str], Tuple[Union[str, AttrSubSymbolChain], ...]]
-    Mutation = Tuple[int, Tuple[Union[str, AttrSubSymbolChain], ...]]
+    SymbolRef = Union[str, AttrSubSymbolChain]
+    AttrSubVal = Union[str, int]
+    DeepRef = Tuple[int, Optional[str], Tuple[SymbolRef, ...]]
+    Mutation = Tuple[int, Tuple[SymbolRef, ...], MethodSpecialCase]
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
-    SavedStoreData = Tuple[NamespaceScope, Any, str, bool]
+    RecordedArgs = Set[SymbolRef]
+    DeepRefCandidate = Tuple[RefCandidate, MethodSpecialCase, RecordedArgs]
+    SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     TextualCallNestingStackFrame = Tuple[Scope, bool]
     TextualCallNestingStack = List[TextualCallNestingStackFrame]
     AttrSubStackFrame = Tuple[
         List[SavedStoreData],
         Set[DeepRef],
         Set[Mutation],
-        List[Tuple[RefCandidate, Set[Union[str, AttrSubSymbolChain]]]],
+        List[DeepRefCandidate],
         Scope,
         Scope,
         TextualCallNestingStack,
         bool,
-        List[bool]
+        List[bool],
+        NamespaceScope
     ]
     AttrSubStack = List[AttrSubStackFrame]
 
@@ -50,25 +62,29 @@ class AttrSubTracingManager(object):
         self.arg_recorder_name = '_NBSAFETY_ARG_RECORDER'
         self.scope_pusher_name = '_NBSAFETY_SCOPE_PUSHER'
         self.scope_popper_name = '_NBSAFETY_SCOPE_POPPER'
+        self.literal_tracer_name = '_NBSAFETY_LITERAL_TRACER'
         setattr(builtins, self.attrsub_tracer_name, self.attrsub_tracer)
         setattr(builtins, self.end_tracer_name, self.end_tracer)
         setattr(builtins, self.arg_recorder_name, self.arg_recorder)
         setattr(builtins, self.scope_pusher_name, self.scope_pusher)
         setattr(builtins, self.scope_popper_name, self.scope_popper)
+        setattr(builtins, self.literal_tracer_name, self.literal_tracer)
         self.ast_transformer = AttrSubTracingNodeTransformer(
             self.attrsub_tracer_name,
             self.end_tracer_name,
             self.arg_recorder_name,
             self.scope_pusher_name,
-            self.scope_popper_name
+            self.scope_popper_name,
+            self.literal_tracer_name
         )
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
-        self.deep_ref_candidates: List[Tuple[RefCandidate, Set[Union[str, AttrSubSymbolChain]]]] = []
         self.deep_refs: Set[DeepRef] = set()
         self.mutations: Set[Mutation] = set()
+        self.deep_ref_candidates: List[DeepRefCandidate] = []
         self.nested_call_stack: TextualCallNestingStack = []
         self.should_record_args_stack: List[bool] = []
+        self.literal_namespace: Optional[NamespaceScope] = None
         self.stack: AttrSubStack = []
         self._waiting_for_call = False
 
@@ -89,6 +105,8 @@ class AttrSubTracingManager(object):
             delattr(builtins, self.scope_pusher_name)
         if hasattr(builtins, self.scope_popper_name):
             delattr(builtins, self.scope_popper_name)
+        if hasattr(builtins, self.literal_tracer_name):
+            delattr(builtins, self.literal_tracer_name)
 
     def push_stack(self, new_scope: 'Scope'):
         self.stack.append((
@@ -100,7 +118,8 @@ class AttrSubTracingManager(object):
             self.original_active_scope,
             self.nested_call_stack,
             self.should_record_args,
-            self.should_record_args_stack
+            self.should_record_args_stack,
+            self.literal_namespace
         ))
         self.saved_store_data = []
         self.deep_refs = set()
@@ -111,6 +130,7 @@ class AttrSubTracingManager(object):
         self.should_record_args = False
         self.should_record_args_stack = []
         self.nested_call_stack = []
+        self.literal_namespace = None
 
     def pop_stack(self):
         (
@@ -122,7 +142,8 @@ class AttrSubTracingManager(object):
             self.original_active_scope,
             self.nested_call_stack,
             self.should_record_args,
-            self.should_record_args_stack
+            self.should_record_args_stack,
+            self.literal_namespace
         ) = self.stack.pop()
 
     @staticmethod
@@ -213,7 +234,12 @@ class AttrSubTracingManager(object):
                         pass
                 if call_context:
                     should_record_args = True
-                    self.deep_ref_candidates.append(((self.trace_event_counter[0], obj_id, obj_name), set()))
+                    method_special_case = MethodSpecialCase.normal
+                    if isinstance(obj, list) and attr_or_subscript == 'append':
+                        method_special_case = MethodSpecialCase.list_append
+                    self.deep_ref_candidates.append(
+                        ((self.trace_event_counter[0], obj_id, obj_name), method_special_case, set())
+                    )
                 elif data_sym is not None:
                     # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
                     self.loaded_data_symbols.add(data_sym)
@@ -228,10 +254,10 @@ class AttrSubTracingManager(object):
             self.active_scope = self.original_active_scope
             return obj
         if call_context and len(self.deep_ref_candidates) > 0:
-            (evt_counter, obj_id, obj_name), recorded_args = self.deep_ref_candidates.pop()
+            (evt_counter, obj_id, obj_name), method_special_case, recorded_args = self.deep_ref_candidates.pop()
             if evt_counter == self.trace_event_counter[0]:
                 if obj is None:
-                    self.mutations.add((obj_id, tuple(recorded_args)))
+                    self.mutations.add((obj_id, tuple(recorded_args), method_special_case))
                 else:
                     self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
         # print('reset active scope from', self.active_scope, 'to', self.original_active_scope)
@@ -246,10 +272,10 @@ class AttrSubTracingManager(object):
             return obj
 
         if isinstance(name, str):
-            self.deep_ref_candidates[-1][1].add(name)
+            self.deep_ref_candidates[-1][-1].add(name)
         elif isinstance(name, tuple) and len(name) > 0:
             recorded_arg = AttrSubSymbolChain(name)
-            self.deep_ref_candidates[-1][1].add(recorded_arg)
+            self.deep_ref_candidates[-1][-1].add(recorded_arg)
 
         return obj
 
@@ -269,6 +295,18 @@ class AttrSubTracingManager(object):
             self.should_record_args = self.should_record_args_stack.pop()
         return obj
 
+    def literal_tracer(self, literal):
+        if isinstance(literal, list):
+            scope = NamespaceScope(literal, self.safety)
+            for i, obj in enumerate(literal):
+                if obj is None or isinstance(obj, int):
+                    continue
+                scope.upsert_data_symbol_for_name(
+                    i, obj, set(), self.safety.trace_state.prev_trace_stmt.stmt_node, True
+                )
+            self.literal_namespace = scope
+        return literal
+
     def stmt_transition_hook(self):
         self._waiting_for_call = False
 
@@ -280,6 +318,7 @@ class AttrSubTracingManager(object):
         self.deep_ref_candidates = []
         self.active_scope = self.original_active_scope
         self.should_record_args = False
+        self.literal_namespace = None
         # self.nested_call_stack = []
         # self.stmt_transition_hook()
 
@@ -291,13 +330,15 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             end_tracer: str,
             arg_recorder: str,
             scope_pusher: str,
-            scope_popper: str
+            scope_popper: str,
+            literal_tracer: str
     ):
         self.attrsub_tracer = attrsub_tracer
         self.end_tracer = end_tracer
         self.arg_recorder = arg_recorder
         self.scope_pusher = scope_pusher
         self.scope_popper = scope_popper
+        self.literal_tracer = literal_tracer
         self.inside_attrsub_load_chain = False
 
     @contextmanager
@@ -435,3 +476,20 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         )
         ast.copy_location(replacement_node, node)
         return replacement_node
+
+    def visit_Assign(self, node: ast.Assign):
+        if not isinstance(node.value, ast.List):
+            return self.generic_visit(node)
+
+        new_targets = []
+        for target in node.targets:
+            new_targets.append(self.generic_visit(target))
+        node.targets = cast('List[ast.expr]', new_targets)
+        replacement_literal = ast.Call(
+            func=ast.Name(self.literal_tracer, ast.Load()),
+            args=[node.value],
+            keywords=[]
+        )
+        ast.copy_location(node.value, replacement_literal)
+        node.value = replacement_literal
+        return node

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from .utils import make_safety_fixture, skipif_known_failing
+from .utils import make_safety_fixture  # , skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -17,10 +17,6 @@ def run_cell(cell, cell_id=None):
             'active_cell_id': cell_id
         })
     run_cell_(cell)
-
-
-def list_to_dict(lst):
-    return dict((i, val) for i, val in enumerate(lst))
 
 
 def test_simple():
@@ -68,7 +64,6 @@ def test_refresh_after_val_changed():
     assert response['stale_output_cells'] == [2]
 
 
-@skipif_known_failing
 def test_inner_mutation_considered_fresh():
     cells = {
         0: 'lst_0 = [0,1,2]',
@@ -83,6 +78,5 @@ def test_inner_mutation_considered_fresh():
     run_cell(cells[3], 3)
     run_cell(cells[4], 4)
     response = _safety_state[0].multicell_precheck(cells)
-    print(response)
     assert response['stale_input_cells'] == []
     assert 3 in response['stale_output_cells']

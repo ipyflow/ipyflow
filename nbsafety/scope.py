@@ -128,7 +128,7 @@ class Scope(object):
 
     def upsert_data_symbol_for_name(
             self,
-            name: str,
+            name: 'Union[str, int]',
             obj: 'Any',
             deps: 'Set[DataSymbol]',
             stmt_node: 'ast.AST',
@@ -146,7 +146,7 @@ class Scope(object):
 
     def _upsert_data_symbol_for_name_inner(
             self,
-            name: str,
+            name: 'Union[str, int]',
             obj: 'Any',
             deps: 'Set[DataSymbol]',
             stmt_node: 'ast.AST',

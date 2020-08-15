@@ -6,14 +6,16 @@ from typing import TYPE_CHECKING
 
 from ..analysis.attr_symbols import AttrSubSymbolChain
 from ..analysis import get_statement_symbol_edges
+from ..scope import NamespaceScope
 from ..utils.utils import retrieve_namespace_attr_or_sub
+from .attrsub_tracing import MethodSpecialCase
 
 if TYPE_CHECKING:
     from types import FrameType
     from typing import List, Optional, Set
     from ..data_symbol import DataSymbol
     from ..safety import NotebookSafety
-    from ..scope import Scope, NamespaceScope
+    from ..scope import Scope
 
 logger = logging.getLogger(__name__)
 
@@ -104,12 +106,32 @@ class TraceStatement(object):
                 obj = self.frame.f_locals[lval_name]
                 # TODO: pass self.stmt_node here and save in datasym
                 #  then, if function, can do liveness analysis lazily
+                # should_skip = False
+                # if isinstance(self.stmt_node, ast.For):
+                #     for dep in rval_deps:
+                #         namespace = self.safety.namespaces.get(dep.obj_id, None)
+                #         if namespace is None:
+                #             continue
+                #         all_obj_ids_in_namespace = set(map(lambda sym: sym.obj_id, namespace.all_data_symbols_this_indentation()))
+                #         if id(obj) in all_obj_ids_in_namespace:
+                #             should_skip = True
                 self.scope.upsert_data_symbol_for_name(
                     lval_name, obj, rval_deps, self.stmt_node, False,
                     overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
                 )
             except KeyError:
                 pass
+
+            if self.safety.attr_trace_manager.literal_namespace is not None:
+                # assert len(symbol_edges) == 1
+                if len(symbol_edges) != 1:
+                    logger.warning('Expected one lval; got %d', len(symbol_edges))
+                literal_namespace = self.safety.attr_trace_manager.literal_namespace
+                self.safety.attr_trace_manager.literal_namespace = None
+                literal_namespace.scope_name = lval_name
+                literal_namespace.parent_scope = self.scope
+                self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
+
         if len(symbol_edges) == 0:
             rval_deps = deep_rval_deps
         else:
@@ -155,7 +177,7 @@ class TraceStatement(object):
     def handle_dependencies(self):
         if not self.safety.dependency_tracking_enabled:
             return
-        for mutated_obj_id, mutation_args in self.safety.attr_trace_manager.mutations:
+        for mutated_obj_id, mutation_args, method_special_case in self.safety.attr_trace_manager.mutations:
             mutation_arg_dsyms = set()
             for arg in mutation_args:
                 if isinstance(arg, str):
@@ -163,6 +185,21 @@ class TraceStatement(object):
                 elif isinstance(arg, AttrSubSymbolChain):
                     mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
             mutation_arg_dsyms.discard(None)
+            # if method_special_case == MethodSpecialCase.list_append and len(mutation_arg_dsyms) == 1:
+            #     namespace_scope = self.safety.namespaces.get(mutated_obj_id, None)
+            #     mutated_sym = next(iter(self.safety.aliases.get(mutated_obj_id, None)))
+            #     mutated_obj = mutated_sym._get_obj()
+            #     mutation_arg_sym = next(iter(mutation_arg_dsyms))
+            #     mutation_arg_obj = mutation_arg_sym._get_obj()
+            #     if mutated_sym is not None and mutation_arg_obj is not None and not isinstance(mutation_arg_obj, int):
+            #         if namespace_scope is None:
+            #             namespace_scope = NamespaceScope(
+            #                 mutated_obj, self.safety, mutated_sym.name,
+            #                 parent_scope=mutated_sym.containing_scope
+            #             )
+            #         namespace_scope.upsert_data_symbol_for_name(
+            #             len(mutated_obj) - 1, mutation_arg_obj, set(), self.stmt_node, True
+            #         )
             for mutated_sym in self.safety.aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self.has_lval:

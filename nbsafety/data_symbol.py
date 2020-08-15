@@ -295,39 +295,43 @@ class DataSymbol(object):
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None and refresh:  # if we are at a leaf
             self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
-        for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation(exclude_class=True):
-            dc_in_self_namespace = False
-            if new_parent_obj is NOT_FOUND:
-                dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
-            else:
-                try:
-                    obj = self._get_obj()
-                    obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, dc.name, dc.is_subscript)
-                    dc._propagate_update(
-                        obj_attr_or_sub, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated
-                    )
-                    dc_in_self_namespace = True
-                    if new_parent_obj is not old_parent_obj and new_id is not None:
-                        new_namespace = self.safety.namespaces.get(new_id, None)
-                        if new_namespace is None:
-                            new_namespace = namespace.shallow_clone(new_parent_obj)
-                            self.safety.namespaces[new_id] = new_namespace
-                        # TODO: handle class data cells properly;
-                        #  in fact; we still need to handle aliases of class data cells
-                        if dc.name not in new_namespace.data_symbol_by_name(dc.is_subscript):
-                            new_dc = dc.shallow_clone(obj_attr_or_sub, new_namespace, dc.symbol_type)
-                            new_namespace.put(dc.name, new_dc)
-                            self.safety.updated_symbols.add(new_dc)
-                except (KeyError, IndexError, AttributeError):
+        if old_id != new_id or mutated or not refresh:
+            for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation(exclude_class=True):
+                dc_in_self_namespace = False
+                if new_parent_obj is NOT_FOUND:
                     dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
-            if dc_in_self_namespace and dc.is_stale:
-                if dc.should_mark_stale(updated_dep) and self.should_mark_stale(updated_dep):
-                    self.namespace_stale_symbols.add(dc)
-            else:
-                self.namespace_stale_symbols.discard(dc)
+                else:
+                    try:
+                        obj = self._get_obj()
+                        obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, dc.name, dc.is_subscript)
+                        # print(dc, obj, obj_attr_or_sub, updated_dep, seen, parent_seen, refresh, mutated, old_id, new_id)
+                        dc._propagate_update(
+                            obj_attr_or_sub, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated
+                        )
+                        dc_in_self_namespace = True
+                        if new_parent_obj is not old_parent_obj and new_id is not None:
+                            new_namespace = self.safety.namespaces.get(new_id, None)
+                            if new_namespace is None:
+                                new_namespace = namespace.shallow_clone(new_parent_obj)
+                                self.safety.namespaces[new_id] = new_namespace
+                            # TODO: handle class data cells properly;
+                            #  in fact; we still need to handle aliases of class data cells
+                            if dc.name not in new_namespace.data_symbol_by_name(dc.is_subscript):
+                                new_dc = dc.shallow_clone(obj_attr_or_sub, new_namespace, dc.symbol_type)
+                                new_namespace.put(dc.name, new_dc)
+                                self.safety.updated_symbols.add(new_dc)
+                    except (KeyError, IndexError, AttributeError):
+                        dc._propagate_update(
+                            NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated
+                        )
+                if dc_in_self_namespace and dc.is_stale:
+                    if dc.should_mark_stale(updated_dep) and self.should_mark_stale(updated_dep):
+                        self.namespace_stale_symbols.add(dc)
+                else:
+                    self.namespace_stale_symbols.discard(dc)
 
         # if mutated or self.cached_obj_id != self.obj_id:
-        if self.cached_obj_id != self.obj_id:
+        if (old_id != new_id or not refresh) and not mutated:
             self._propagate_update_to_deps(updated_dep, seen, parent_seen)
         elif mutated:
             children_to_skip = set()
@@ -338,7 +342,6 @@ class DataSymbol(object):
                 containing_obj_id = getattr(self_alias.containing_scope, 'obj_id', None)
                 if containing_obj_id is not None:
                     children_to_skip |= self.safety.aliases[containing_obj_id]
-            # print(self, children_to_skip, self.children, seen)
             self._propagate_update_to_deps(updated_dep, seen | children_to_skip, parent_seen)
 
         if updated_dep is self:
@@ -377,6 +380,7 @@ class DataSymbol(object):
     def _propagate_refresh_to_namespace_parents(self, seen):
         if not self.containing_scope.is_namespace_scope or self in seen:
             return
+        # print('refresh propagate', self)
         seen.add(self)
         containing_scope: 'NamespaceScope' = cast('NamespaceScope', self.containing_scope)
         if containing_scope.max_defined_timestamp == cell_counter():
@@ -392,6 +396,7 @@ class DataSymbol(object):
     def _propagate_update_to_namespace_parents(self, updated_dep, seen, parent_seen, refresh):
         if not self.containing_scope.is_namespace_scope or self in parent_seen:
             return
+        # print('parent propagate', self)
         parent_seen.add(self)
         containing_scope = cast('NamespaceScope', self.containing_scope)
         containing_namespace_obj_id = containing_scope.obj_id
@@ -402,6 +407,11 @@ class DataSymbol(object):
                 if not alias.is_stale:
                     alias.fresher_ancestors = set()
             alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
+            if self.should_mark_stale(updated_dep):
+                alias.namespace_stale_symbols.add(self)
+            if refresh:
+                # containing_scope.max_defined_timestamp = cell_counter()
+                self.safety.updated_scopes.add(containing_scope)
             for alias_child in alias.children:
                 if alias_child.obj_id == containing_namespace_obj_id:
                     continue
@@ -412,13 +422,9 @@ class DataSymbol(object):
                     if alias_child_namespace.cloned_from is containing_scope:
                         if updated_dep.namespace is not containing_scope:
                             continue
+                # if len(self.safety.aliases[alias_child.obj_id] & seen) > 0:
+                #     continue
                 alias_child._propagate_update(alias_child._get_obj(), updated_dep, seen, parent_seen)
-            if refresh:
-                # containing_scope.max_defined_timestamp = cell_counter()
-                self.safety.updated_scopes.add(containing_scope)
-            else:
-                if self.should_mark_stale(updated_dep):
-                    alias.namespace_stale_symbols.add(self)
 
     @property
     def is_stale(self):

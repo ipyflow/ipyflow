@@ -256,10 +256,12 @@ class DataSymbol(object):
             self,
             updated_dep: 'DataSymbol',
             seen: 'Set[DataSymbol]',
-            parent_seen: 'Set[DataSymbol]',
+            parent_seen: 'Set[DataSymbol]'
     ):
         # print(self, 'propagate to child deps', self.children)
         if self.should_mark_stale(updated_dep):
+            # if self.full_namespace_path == updated_dep.full_namespace_path:
+            #     print('weird', self.full_namespace_path, self, updated_dep, self.obj_id, updated_dep.obj_id, self.cached_obj_id, updated_dep.cached_obj_id)
             self.fresher_ancestors.add(updated_dep)
             self.required_cell_num = cell_counter()
         for child in self.children:
@@ -313,18 +315,19 @@ class DataSymbol(object):
         namespace = self.safety.namespaces.get(old_id, None)
         if namespace is None and refresh:  # if we are at a leaf
             self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
-        if old_id != new_id or mutated or not refresh:
-            for dc in [] if namespace is None else namespace.all_data_symbols_this_indentation(exclude_class=True):
+        if namespace is not None and (old_id != new_id or mutated or not refresh):
+            for dc in namespace.all_data_symbols_this_indentation(exclude_class=True):
+                should_refresh = refresh  # or updated_dep in set(namespace.all_data_symbols_this_indentation())
                 dc_in_self_namespace = False
                 if new_parent_obj is NOT_FOUND:
-                    dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated)
+                    dc._propagate_update(NOT_FOUND, updated_dep, seen, parent_seen, refresh=should_refresh, mutated=mutated)
                 else:
                     try:
                         obj = self._get_obj()
                         obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, dc.name, dc.is_subscript)
                         # print(dc, obj, obj_attr_or_sub, updated_dep, seen, parent_seen, refresh, mutated, old_id, new_id)
                         dc._propagate_update(
-                            obj_attr_or_sub, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated
+                            obj_attr_or_sub, updated_dep, seen, parent_seen, refresh=should_refresh, mutated=mutated
                         )
                         dc_in_self_namespace = True
                         if new_parent_obj is not old_parent_obj and new_id is not None:
@@ -340,11 +343,11 @@ class DataSymbol(object):
                                 self.safety.updated_symbols.add(new_dc)
                     except (KeyError, IndexError, AttributeError):
                         dc._propagate_update(
-                            NOT_FOUND, updated_dep, seen, parent_seen, refresh=refresh, mutated=mutated
+                            NOT_FOUND, updated_dep, seen, parent_seen, refresh=should_refresh, mutated=mutated
                         )
-                if dc_in_self_namespace and dc.is_stale:
-                    if dc.should_mark_stale(updated_dep) and self.should_mark_stale(updated_dep):
-                        self.namespace_stale_symbols.add(dc)
+                if dc_in_self_namespace and dc.should_mark_stale(updated_dep):
+                    # print(self, 'add', dc, 'to namespace stale symbols due to', updated_dep, self.defined_cell_num, dc.defined_cell_num, updated_dep.defined_cell_num, dc.fresher_ancestors)
+                    self.namespace_stale_symbols.add(dc)
                 else:
                     self.namespace_stale_symbols.discard(dc)
 
@@ -353,7 +356,8 @@ class DataSymbol(object):
         #     self._propagate_update_to_deps(updated_dep, seen, parent_seen)
         # elif mutated:
         if old_id != new_id or not refresh or mutated:
-            self._propagate_update_to_deps(updated_dep, seen | self._get_children_to_skip(), parent_seen)
+            to_skip = self._get_children_to_skip()
+            self._propagate_update_to_deps(updated_dep, seen | to_skip, parent_seen)
             # print(self, 'propagate+skip done')
 
         if updated_dep is self:
@@ -383,6 +387,7 @@ class DataSymbol(object):
             #     # print('propagate', updated_dep, 'to', alias, 'via', self, updated_dep.defined_cell_num, alias.defined_cell_num, self.defined_cell_num)
             #     alias._propagate_update_to_deps(updated_dep, seen, parent_seen)
             if namespace is None and self.should_mark_stale(updated_dep):  # if we are at a leaf
+                # print('propagate', updated_dep, 'to', self, updated_dep.defined_cell_num, self.defined_cell_num)
                 self._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh=refresh)
         # print(self, 'done')
 
@@ -430,7 +435,8 @@ class DataSymbol(object):
                     if not alias.is_stale:
                         alias.fresher_ancestors = set()
                 alias._propagate_update_to_namespace_parents(updated_dep, seen, parent_seen, refresh)
-                if self.should_mark_stale(updated_dep):
+                if not refresh and self.should_mark_stale(updated_dep):
+                    # print(self, 'mark stale due to', updated_dep, 'which is in namespace of', alias)
                     alias.namespace_stale_symbols.add(self)
                 if refresh:
                     # containing_scope.max_defined_timestamp = cell_counter()
@@ -438,6 +444,9 @@ class DataSymbol(object):
                 for alias_child in alias.children:
                     if alias_child.obj_id == containing_namespace_obj_id or alias_child in children_to_skip:
                         continue
+                    # should_refresh = containing_namespace_obj_id == getattr(alias_child.containing_scope, 'obj_id', None)
+                    # if alias_child.obj_id == alias_child.cached_obj_id and alias_child in children_to_skip:
+                    #     continue
                     # Next, complicated check to avoid propagating along a class -> instance edge.
                     # The only time this is OK is when we changed the class, which will not be the case here.
                     alias_child_namespace = alias_child.namespace

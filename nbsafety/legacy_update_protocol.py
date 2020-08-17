@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from typing import Any, Set
     from .data_symbol import DataSymbol
     from .safety import NotebookSafety
+    from .scope import NamespaceScope
 
 logger = logging.getLogger(__name__)
 NOT_FOUND = object()

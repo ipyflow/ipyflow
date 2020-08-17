@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from .utils import make_safety_fixture  # , skipif_known_failing
+import pytest
+
+from .utils import make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -72,11 +74,67 @@ def test_inner_mutation_considered_fresh():
         3: 'logging.info(lst)',
         4: 'lst_0.append(42)',
     }
-    run_cell(cells[0], 0)
-    run_cell(cells[1], 1)
-    run_cell(cells[2], 2)
-    run_cell(cells[3], 3)
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == [2, 3]
+
+
+@skipif_known_failing
+@pytest.mark.parametrize("force_subscript_symbol_creation", [True, False])
+def test_update_list_elem(force_subscript_symbol_creation):
+    cells = {
+        0: """
+class Foo(object):
+    def __init__(self):
+        self.counter = 0
+        self.dummy = 0
+        
+    def inc(self):
+        self.counter += 1""",
+
+        1: """
+lst = []
+for i in range(5):
+    x = Foo()
+    lst.append(x)""",
+
+        2: """
+for foo in lst:
+    foo.inc()""",
+
+        3: 'print(lst)',
+    }
+
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == []
+
+    cells[4] = 'x.inc()'
+    run_cell(cells[4], 4)
+
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == [2, 3]
+
+    cells[5] = 'foo.inc()'
+    run_cell(cells[5], 5)
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == [2, 3, 4]
+
+    if force_subscript_symbol_creation:
+        cells[6] = 'lst[-1]'
+        run_cell(cells[6], 6)
+        response = _safety_state[0].multicell_precheck(cells)
+        assert response['stale_input_cells'] == []
+        assert response['stale_output_cells'] == [2, 3, 4]
+
     run_cell(cells[4], 4)
     response = _safety_state[0].multicell_precheck(cells)
     assert response['stale_input_cells'] == []
-    assert 3 in response['stale_output_cells']
+    assert response['stale_output_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])

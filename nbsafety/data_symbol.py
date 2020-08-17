@@ -2,17 +2,17 @@
 import ast
 from enum import Enum
 import logging
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 import weakref
 
 from .ipython_utils import cell_counter
-from .legacy_update_protocol import LegacyUpdateProtocolMixin
+from .legacy_update_protocol import LegacyUpdateProtocol
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
     import ast
     from .safety import NotebookSafety
-    from .scope import Scope
+    from .scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class DataSymbolType(Enum):
     CLASS = 'class'
 
 
-class DataSymbol(LegacyUpdateProtocolMixin):
+class DataSymbol(object):
     def __init__(
             self,
             name: 'Union[str, int]',
@@ -229,3 +229,30 @@ class DataSymbol(LegacyUpdateProtocolMixin):
         should_mark_stale = not self.safety.no_stale_propagation_for_same_cell_definition
         should_mark_stale = should_mark_stale or updated_dep.defined_cell_num != self.defined_cell_num
         return should_mark_stale
+
+    def update_deps(self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True):
+        update_protocol = LegacyUpdateProtocol(self.safety, self, new_deps, mutated)
+        update_protocol(overwrite=overwrite, propagate=propagate)
+
+    def refresh(self: 'DataSymbol'):
+        self.fresher_ancestors = set()
+        self.defined_cell_num = cell_counter()
+        self.required_cell_num = self.defined_cell_num
+        self.namespace_stale_symbols = set()
+        self._propagate_refresh_to_namespace_parents(set())
+
+    def _propagate_refresh_to_namespace_parents(self, seen: 'Set[DataSymbol]'):
+        if not self.containing_scope.is_namespace_scope or self in seen:
+            return
+        # print('refresh propagate', self)
+        seen.add(self)
+        containing_scope: 'NamespaceScope' = cast('NamespaceScope', self.containing_scope)
+        if containing_scope.max_defined_timestamp == cell_counter():
+            return
+        containing_scope.max_defined_timestamp = cell_counter()
+        containing_namespace_obj_id = containing_scope.obj_id
+        for alias in self.safety.aliases[containing_namespace_obj_id]:
+            alias.namespace_stale_symbols.discard(self)
+            if not alias.is_stale:
+                alias.fresher_ancestors = set()
+                alias._propagate_refresh_to_namespace_parents(seen)

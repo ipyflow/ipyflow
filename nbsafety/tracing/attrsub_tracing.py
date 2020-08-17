@@ -151,7 +151,31 @@ class AttrSubTracingManager(object):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
+    def _try_to_resync_obj_ref(self, obj, obj_name):
+        if obj_name is None:
+            return
+        dsym = self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope.lookup_data_symbol_by_name_this_indentation(obj_name)
+        if dsym is None:
+            return
+        # namespace = self.safety.namespaces.get(dsym.cached_obj_id, None)
+        # if namespace is not None:
+        #     del self.safety.namespaces[dsym.cached_obj_id]
+        #     self.safety.namespaces[id(obj)] = namespace
+        #     namespace.update_obj_ref(obj)
+        # namespace = self.safety.namespaces.get(dsym.obj_id, None)
+        # if namespace is not None:
+        #     del self.safety.namespaces[dsym.obj_id]
+        #     self.safety.namespaces[id(obj)] = namespace
+        #     namespace.update_obj_ref(obj)
+        # self.safety.aliases[dsym.obj_id].discard(dsym)
+        # self.safety.aliases[dsym.cached_obj_id].discard(dsym)
+        # self.safety.aliases[id(obj)].add(dsym)
+        dsym.update_obj_ref(obj)
+        # dsym._refresh_cached_obj()
+
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
+        # print(obj_name, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope)
+        # self._try_to_resync_obj_ref(obj, obj_name)
         should_record_args = False
         try:
             if obj is None:
@@ -297,6 +321,8 @@ class AttrSubTracingManager(object):
         return obj
 
     def literal_tracer(self, literal):
+        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+            return literal
         if isinstance(literal, list):
             scope = NamespaceScope(literal, self.safety)
             for i, obj in enumerate(literal):

@@ -38,15 +38,12 @@ _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
 
 
 def _safety_warning(node: 'DataSymbol'):
-    if node.is_stale:
-        required_cell_num = node.required_cell_num
-        fresher_ancestors = node.fresher_ancestors
-    else:
+    if not node.is_stale:
         raise ValueError('Expected node with stale ancestor; got %s' % node)
     logger.warning(
         f'`{node.readable_name}` defined in cell {node.defined_cell_num} may depend on '
-        f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_ancestors)}] '
-        f'(latest update in cell {required_cell_num}).'
+        f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in (node.fresher_ancestors | node.namespace_stale_symbols))}] '
+        f'(latest update in cell {node.required_cell_num}).'
     )
 
 
@@ -127,7 +124,7 @@ class NotebookSafety(object):
         killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[Union[int, str]]]' = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
             try:
-                stale_symbols, dead_symbols, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
+                stale_symbols, dead_symbols, _, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_input_cells.append(cell_id)
@@ -166,7 +163,7 @@ class NotebookSafety(object):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]') -> 'Tuple[Set[DataSymbol], Set[DataSymbol], int]':
+    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]') -> 'Tuple[Set[DataSymbol], Set[DataSymbol], Set[DataSymbol], int]':
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         max_defined_cell_num = -1
@@ -182,7 +179,7 @@ class NotebookSafety(object):
             if dsym.obj_id in self.namespaces:
                 namespace_scope = self.namespaces[dsym.obj_id]
                 max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-        return stale_symbols, dead_symbols, max_defined_cell_num
+        return stale_symbols, dead_symbols, live_symbols, max_defined_cell_num
 
     def _precheck_simple(self, cell):
         return len(self._precheck_stale_nodes(cell)[0]) > 0
@@ -195,9 +192,10 @@ class NotebookSafety(object):
         except SyntaxError:
             return False
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
+        stale_symbols, _, live_symbols, _ = self._precheck_stale_nodes(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_stale_symbols = self._precheck_stale_nodes(cell_ast)[0]
-            if len(self._prev_cell_stale_symbols) > 0 and self._disable_level < 2:
+            self._prev_cell_stale_symbols = stale_symbols
+            if len(stale_symbols) > 0 and self._disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_stale_symbols:
                     if warning_counter >= _MAX_WARNINGS:
@@ -220,7 +218,28 @@ class NotebookSafety(object):
             self._prev_cell_stale_symbols.clear()
 
         self._last_refused_code = None
+        # self._resync_symbols(live_symbols)
         return False
+
+    def _resync_symbols(self, symbols: 'Set[DataSymbol]'):
+        for dsym in symbols:
+            if not dsym.containing_scope.is_global:
+                continue
+            obj = get_ipython().user_global_ns.get(dsym.name, None)
+            if obj is None:
+                continue
+            if dsym.obj_id == id(obj):
+                continue
+            # self.aliases[dsym.obj_id].discard(dsym)
+            # self.aliases[id(obj)].add(dsym)
+            self.aliases[id(obj)] = self.aliases[dsym.obj_id]
+            del self.aliases[dsym.obj_id]
+            namespace = self.namespaces.get(dsym.obj_id, None)
+            if namespace is not None:
+                namespace.update_obj_ref(obj)
+                del self.namespaces[dsym.obj_id]
+                self.namespaces[id(obj)] = namespace
+            dsym.update_obj_ref(obj)
 
     def safe_execute(self, cell: str, run_cell_func):
         try:

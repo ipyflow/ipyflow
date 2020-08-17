@@ -137,6 +137,7 @@ class LegacyUpdateProtocol(object):
         # elif mutated:
         if old_id != new_id or not refresh or self.mutated:
             to_skip = self._get_children_to_skip(dsym)
+            # self.seen |= to_skip
             old_seen = self.seen
             self.seen = self.seen | to_skip
             self._propagate_update_to_deps(dsym)

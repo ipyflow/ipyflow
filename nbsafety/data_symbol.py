@@ -240,19 +240,28 @@ class DataSymbol(object):
         self.required_cell_num = self.defined_cell_num
         self.namespace_stale_symbols = set()
         self._propagate_refresh_to_namespace_parents(set())
+        # seen = set()
+        # for alias in self.safety.aliases[self.obj_id]:
+        #     alias._propagate_refresh_to_namespace_parents(seen)
 
     def _propagate_refresh_to_namespace_parents(self, seen: 'Set[DataSymbol]'):
-        if not self.containing_scope.is_namespace_scope or self in seen:
+        if self in seen:
             return
         # print('refresh propagate', self)
         seen.add(self)
-        containing_scope: 'NamespaceScope' = cast('NamespaceScope', self.containing_scope)
-        if containing_scope.max_defined_timestamp == cell_counter():
-            return
-        containing_scope.max_defined_timestamp = cell_counter()
-        containing_namespace_obj_id = containing_scope.obj_id
-        for alias in self.safety.aliases[containing_namespace_obj_id]:
-            alias.namespace_stale_symbols.discard(self)
-            if not alias.is_stale:
-                alias.fresher_ancestors = set()
+        for self_alias in self.safety.aliases[self.obj_id]:
+            containing_scope: 'NamespaceScope' = cast('NamespaceScope', self_alias.containing_scope)
+            if not containing_scope.is_namespace_scope:
+                continue
+            # if containing_scope.max_defined_timestamp == cell_counter():
+            #     return
+            containing_scope.max_defined_timestamp = cell_counter()
+            containing_namespace_obj_id = containing_scope.obj_id
+            # print('containing namespaces:', self.safety.aliases[containing_namespace_obj_id])
+            for alias in self.safety.aliases[containing_namespace_obj_id]:
+                alias.namespace_stale_symbols.discard(self)
+                if not alias.is_stale:
+                    alias.defined_cell_num = cell_counter()
+                    alias.fresher_ancestors = set()
+                # print('working on', alias, '; stale?', alias.is_stale, alias.namespace_stale_symbols)
                 alias._propagate_refresh_to_namespace_parents(seen)

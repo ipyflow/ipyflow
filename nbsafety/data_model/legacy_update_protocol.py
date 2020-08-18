@@ -8,6 +8,7 @@ from nbsafety.utils.utils import retrieve_namespace_attr_or_sub
 if TYPE_CHECKING:
     from typing import Any, Set
     from nbsafety.data_model.data_symbol import DataSymbol
+    from nbsafety.data_model.scope import NamespaceScope
     from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)

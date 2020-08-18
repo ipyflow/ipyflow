@@ -211,6 +211,7 @@ class NotebookSafety(object):
                     warning_counter += 1
                 self.stale_dependency_detected = True
                 self._last_refused_code = cell
+                return True
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers

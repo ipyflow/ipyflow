@@ -29,7 +29,7 @@ def assert_detected(msg=''):
 
 
 def assert_detected_if_full_propagation(msg=''):
-    if _safety_state[0].no_stale_propagation_for_same_cell_definition:
+    if _safety_state[0].config.no_stale_propagation_for_same_cell_definition:
         assert_not_detected(msg=msg)
     else:
         assert_detected(msg=msg)
@@ -307,7 +307,7 @@ def bar():
 
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_for_loop_with_map(no_stale_propagation_for_same_cell_definition):
-    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
+    _safety_state[0].config.no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 accum = 0
 foo = [1, 2, 3, 4, 5]
@@ -509,7 +509,7 @@ def test_variable_scope_2():
 
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_default_args(no_stale_propagation_for_same_cell_definition):
-    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
+    _safety_state[0].config.no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 x = 7
 def foo(y=x):
@@ -610,7 +610,7 @@ z = func(c)
 
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_func_assign_helper_func(no_stale_propagation_for_same_cell_definition):
-    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
+    _safety_state[0].config.no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 x = 3
 a = 4
@@ -634,7 +634,7 @@ y = f()
 
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_func_assign_helper_func_2(no_stale_propagation_for_same_cell_definition):
-    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
+    _safety_state[0].config.no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 x = 3
 a = 4
@@ -1455,7 +1455,7 @@ def test_tuple_unpack_hard():
 
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_attr_dep_with_top_level_overwrite(no_stale_propagation_for_same_cell_definition):
-    _safety_state[0].no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
+    _safety_state[0].config.no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
     run_cell("""
 class Foo:
     def __init__(self):

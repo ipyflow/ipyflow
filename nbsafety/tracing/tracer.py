@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def make_tracer(safety: 'NotebookSafety'):
-    if safety.trace_messages_enabled:
+    if safety.config.trace_messages_enabled:
         logger.setLevel(logging.WARNING)
     else:
         logger.setLevel(logging.ERROR)
@@ -46,7 +46,7 @@ def make_tracer(safety: 'NotebookSafety'):
             stmt_node = safety.statement_cache[cell_num][lineno]
         except KeyError:
             return tracer
-        if safety.store_history and logger.getEffectiveLevel() <= logging.WARNING:
+        if safety.config.store_history and logger.getEffectiveLevel() <= logging.WARNING:
             try:
                 source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
                 logger.warning(' %3d: %9s >>> %s', lineno, event, source[lineno-1])

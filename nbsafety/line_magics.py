@@ -89,7 +89,7 @@ def set_disable_level(safety: 'NotebookSafety', line: 'List[str]'):
 -level 2: No Warning, Run code,    Record new dependencies, (Don't show warnings)
 -level 3: No warning, Run cocde,   No new dependencies,     (Original Kernel)""")
         return
-    safety._disable_level = int(line[1])
+    safety.config.disable_level = int(line[1])
 
 
 def set_propagation(safety: 'NotebookSafety', line: 'List[str]'):
@@ -104,7 +104,7 @@ def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")
         return
-    safety.trace_messages_enabled = (line[1].lower().startswith("enable"))
+    safety.config.trace_messages_enabled = (line[1].lower().startswith("enable"))
 
 
 def remove_dep(safety: 'NotebookSafety', line: 'List[str]'):

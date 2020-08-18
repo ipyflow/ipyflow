@@ -22,7 +22,7 @@ from .ipython_utils import (
 from . import line_magics
 from .scope import Scope, NamespaceScope
 from .tracing import AttrSubTracingManager, make_tracer, TraceState
-from .utils.utils import get_symbols_for_references, compute_call_chain_live_symbols
+from .utils import get_symbols_for_references, compute_call_chain_live_symbols, DotDict
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
@@ -65,9 +65,6 @@ class NotebookSafety(object):
         self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(
             self, self.global_scope, self.trace_event_counter
         )
-        self.store_history: bool = kwargs.pop('store_history', True)
-        self.use_comm: bool = use_comm
-        self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)
         self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[Union[str, int], int] = {}
         self._active_cell_id: Optional[str] = None
@@ -80,14 +77,18 @@ class NotebookSafety(object):
             self._cell_magic = self._make_cell_magic(cell_magic_name)
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
-        self.no_stale_propagation_for_same_cell_definition = True
-        self._track_dependencies = True
-
-        self._disable_level = 0
-        self._skip_unsafe_cells = kwargs.pop('skip_unsafe', True)
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
-
-        if self.use_comm:
+        self.config = DotDict(dict(
+            store_history=kwargs.pop('store_history', True),
+            use_comm=use_comm,
+            trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
+            no_stale_propagation_for_same_cell_definition=True,
+            track_dependencies=True,
+            disable_level=0,
+            skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
+            **kwargs
+        ))
+        if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
     def set_active_cell(self, cell_id):
@@ -195,7 +196,7 @@ class NotebookSafety(object):
         stale_symbols, _, live_symbols, _ = self._precheck_stale_nodes(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
             self._prev_cell_stale_symbols = stale_symbols
-            if len(stale_symbols) > 0 and self._disable_level < 2:
+            if len(stale_symbols) > 0 and self.config.disable_level < 2:
                 warning_counter = 0
                 for node in self._prev_cell_stale_symbols:
                     if warning_counter >= _MAX_WARNINGS:
@@ -206,7 +207,7 @@ class NotebookSafety(object):
                     warning_counter += 1
                 self.stale_dependency_detected = True
                 self._last_refused_code = cell
-                if self._disable_level == 0:
+                if self.config.disable_level == 0:
                     return True
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
@@ -250,7 +251,7 @@ class NotebookSafety(object):
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
 
-            if self._disable_level == 3:
+            if self.config.disable_level == 3:
                 return run_cell_func(cell)
 
             for line in cell.strip().split('\n'):
@@ -263,7 +264,7 @@ class NotebookSafety(object):
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell) and self._skip_unsafe_cells:
+            if self._precheck_for_stale(cell) and self.config.skip_unsafe_cells:
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')
@@ -285,7 +286,7 @@ class NotebookSafety(object):
 
     def _make_cell_magic(self, cell_magic_name):
         def _run_cell_func(cell):
-            run_cell(cell, store_history=self.store_history)
+            run_cell(cell, store_history=self.config.store_history)
 
         def _dependency_safety(_, cell: str):
             self.safe_execute(cell, _run_cell_func)
@@ -355,7 +356,7 @@ class NotebookSafety(object):
 
     @property
     def dependency_tracking_enabled(self):
-        return self._track_dependencies
+        return self.config.track_dependencies
 
     @property
     def cell_magic_name(self):

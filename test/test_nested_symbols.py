@@ -6,7 +6,7 @@ from .utils import assert_bool, make_safety_fixture
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['from fakelib import DotDict'])
+_safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['from nbsafety.utils import DotDict'])
 run_cell = run_cell_
 
 

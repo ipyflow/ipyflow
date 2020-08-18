@@ -16,35 +16,17 @@ NOT_FOUND = object()
 
 
 class LegacyUpdateProtocol(object):
-    def __init__(self, safety: 'NotebookSafety', updated_dep: 'DataSymbol', new_deps: 'Set[DataSymbol]', mutated: bool):
+    def __init__(self, safety: 'NotebookSafety', updated_dep: 'DataSymbol', mutated: bool):
         self.safety = safety
         self.updated_dep = updated_dep
-        self.new_deps = set(new_deps)
         self.seen: Set[DataSymbol] = set()
         self.parent_seen: Set[DataSymbol] = set()
         self.mutated = mutated
 
-    def __call__(self, overwrite=True, propagate=True):
-        # quick last fix to avoid overwriting if we appear inside the set of deps to add
-        overwrite = overwrite and self.updated_dep not in self.new_deps
-        self.new_deps.discard(self.updated_dep)
-        if overwrite:
-            for parent in self.updated_dep.parents - self.new_deps:
-                parent.children.discard(self.updated_dep)
-            self.updated_dep.parents = set()
-
-        for new_parent in self.new_deps - self.updated_dep.parents:
-            if new_parent is None:
-                continue
-            new_parent.children.add(self.updated_dep)
-            self.updated_dep.parents.add(new_parent)
-
-        self.updated_dep.required_cell_num = -1
+    def __call__(self, propagate=True):
         if propagate:
             # print(self, 'update deps')
             self._propagate_update(self.updated_dep, self.updated_dep._get_obj(), refresh=True)
-        self.updated_dep._refresh_cached_obj()
-        self.safety.updated_symbols.add(self.updated_dep)
 
     def _propagate_update_to_deps(self, dsym: 'DataSymbol'):
         # print(self, 'propagate to child deps', self.children)

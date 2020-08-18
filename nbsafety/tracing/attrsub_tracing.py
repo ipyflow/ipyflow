@@ -176,6 +176,7 @@ class AttrSubTracingManager(object):
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
         # print(obj_name, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope)
         # self._try_to_resync_obj_ref(obj, obj_name)
+        # print(obj, attr_or_subscript, is_subscript, ctx)
         should_record_args = False
         try:
             if obj is None:
@@ -389,6 +390,13 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             sub_node = cast(ast.Subscript, node)
             if isinstance(sub_node.slice, ast.Index):
                 attr_or_sub = sub_node.slice.value
+                # if isinstance(attr_or_sub, ast.Str):
+                #     attr_or_sub = attr_or_sub.s
+                # elif isinstance(attr_or_sub, ast.Num):
+                #     attr_or_sub = attr_or_sub.n
+                # else:
+                #     logger.debug('unimpled index: %s', attr_or_sub)
+                #     return node
             else:
                 logger.debug('unimpled slice: %s', sub_node.slice)
                 return node
@@ -510,7 +518,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
 
         new_targets = []
         for target in node.targets:
-            new_targets.append(self.generic_visit(target))
+            new_targets.append(self.visit(target))
         node.targets = cast('List[ast.expr]', new_targets)
         replacement_literal = ast.Call(
             func=ast.Name(self.literal_tracer, ast.Load()),

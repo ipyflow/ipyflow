@@ -144,6 +144,7 @@ class TraceStatement(object):
                 attr_or_sub, attr_or_sub_obj, rval_deps, self.stmt_node, is_subscript,
                 overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
+            # print(scope_to_use, 'upsert', attr_or_sub, attr_or_sub_obj, rval_deps)
 
     def _gather_deep_ref_rval_dsyms(self):
         deep_ref_rval_dsyms = set()

@@ -144,6 +144,7 @@ class Scope(object):
         )
         # print('upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
+        dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
 
     def _upsert_data_symbol_for_name_inner(
             self,
@@ -182,7 +183,6 @@ class Scope(object):
                 old_dc.update_obj_ref(obj)
                 old_dc.update_type(symbol_type)
                 old_dc.update_stmt_node(stmt_node)
-                old_dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
                 return old_dc, old_dc, old_id
             else:
                 # In this case, we are copying from a class and we need the dsym from which we are copying
@@ -206,7 +206,6 @@ class Scope(object):
                 deps.add(old_dc)
         dc = DataSymbol(name, symbol_type, obj, self, self.safety, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
         self.put(name, dc)
-        dc.update_deps(deps, overwrite=True, propagate=propagate)
         return dc, old_dc, old_id
 
     def _handle_aliases(

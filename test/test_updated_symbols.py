@@ -36,8 +36,16 @@ def test_dict_hierarchy():
     run_cell('d = {}')
     assert updated_symbol_names() == ['d']
     run_cell('d["foo"] = {}')
-    assert updated_symbol_names() == ['d[foo]', 'd']
+    assert updated_symbol_names() == sorted(['d[foo]', 'd'])
     run_cell('d["foo"]["bar"] = []')
-    assert updated_symbol_names() == ['d[foo][bar]', 'd[foo]', 'd']
+    assert updated_symbol_names() == sorted(['d[foo][bar]', 'd[foo]', 'd'])
     run_cell('d["foo"]["bar"].append(0)')
-    assert updated_symbol_names() == ['d[foo][bar]', 'd[foo]', 'd']
+    assert updated_symbol_names() == sorted(['d[foo][bar]', 'd[foo]', 'd'])
+
+
+def test_dict_hierarchy_new_protocol():
+    try:
+        _safety_state[0].config.use_new_update_protocol = True
+        test_dict_hierarchy()
+    finally:
+        _safety_state[0].config.use_new_update_protocol = False

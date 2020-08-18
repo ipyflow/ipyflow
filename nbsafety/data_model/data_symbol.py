@@ -7,6 +7,7 @@ import weakref
 
 from nbsafety.ipython_utils import cell_counter
 from nbsafety.data_model.legacy_update_protocol import LegacyUpdateProtocol
+from nbsafety.data_model.update_protocol import UpdateProtocol
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
@@ -231,8 +232,27 @@ class DataSymbol(object):
         return should_mark_stale
 
     def update_deps(self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True):
-        update_protocol = LegacyUpdateProtocol(self.safety, self, new_deps, mutated)
-        update_protocol(overwrite=overwrite, propagate=propagate)
+        # quick last fix to avoid overwriting if we appear inside the set of deps to add
+        overwrite = overwrite and self not in new_deps
+        new_deps.discard(self)
+        if overwrite:
+            for parent in self.parents - new_deps:
+                parent.children.discard(self)
+            self.parents = set()
+
+        for new_parent in new_deps - self.parents:
+            if new_parent is None:
+                continue
+            new_parent.children.add(self)
+            self.parents.add(new_parent)
+        self.required_cell_num = -1
+        if self.safety.config.get('use_new_update_protocol', False):
+            update_protocol = UpdateProtocol(self.safety, self, mutated)
+        else:
+            update_protocol = LegacyUpdateProtocol(self.safety, self, mutated)
+        update_protocol(propagate=propagate)
+        self._refresh_cached_obj()
+        self.safety.updated_symbols.add(self)
 
     def refresh(self: 'DataSymbol'):
         self.fresher_ancestors = set()

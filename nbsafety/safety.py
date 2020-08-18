@@ -84,7 +84,6 @@ class NotebookSafety(object):
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             no_stale_propagation_for_same_cell_definition=True,
             track_dependencies=True,
-            disable_level=0,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             **kwargs
         ))
@@ -196,7 +195,7 @@ class NotebookSafety(object):
         stale_symbols, _, live_symbols, _ = self._precheck_stale_nodes(cell_ast)
         if self._last_refused_code is None or cell != self._last_refused_code:
             self._prev_cell_stale_symbols = stale_symbols
-            if len(stale_symbols) > 0 and self.config.disable_level < 2:
+            if len(stale_symbols) > 0:
                 warning_counter = 0
                 for node in self._prev_cell_stale_symbols:
                     if warning_counter >= _MAX_WARNINGS:
@@ -207,8 +206,6 @@ class NotebookSafety(object):
                     warning_counter += 1
                 self.stale_dependency_detected = True
                 self._last_refused_code = cell
-                if self.config.disable_level == 0:
-                    return True
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers
@@ -250,9 +247,6 @@ class NotebookSafety(object):
 
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
-
-            if self.config.disable_level == 3:
-                return run_cell_func(cell)
 
             for line in cell.strip().split('\n'):
                 if _NB_MAGIC_PATTERN.search(line) is None:
@@ -335,8 +329,6 @@ class NotebookSafety(object):
                 return line_magics.show_deps(self, line)
             elif line[0] == "show_stale":
                 return line_magics.show_stale(self, line)
-            elif line[0] == "set_disable_level":
-                return line_magics.set_disable_level(self, line)
             elif line[0] == "set_propagation":
                 return line_magics.set_propagation(self, line)
             elif line[0] == "trace_messages":

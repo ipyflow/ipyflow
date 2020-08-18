@@ -97,7 +97,7 @@ def set_propagation(safety: 'NotebookSafety', line: 'List[str]'):
         print('Usage: %safety set_propagation [cells | always]')
         # TODO: complete explanation
         return
-    safety.no_stale_propagation_for_same_cell_definition = (line[1] == 'cells')
+    safety.config.no_stale_propagation_for_same_cell_definition = (line[1] == 'cells')
 
 
 def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):

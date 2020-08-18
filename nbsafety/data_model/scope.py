@@ -10,14 +10,14 @@ try:
 except ImportError:
     pandas = None
 
-from .analysis import AttrSubSymbolChain, CallPoint
-from .data_symbol import DataSymbol, DataSymbolType
-from .ipython_utils import cell_counter
+from nbsafety.analysis import AttrSubSymbolChain, CallPoint
+from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
+from nbsafety.ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
     import ast
-    from .safety import NotebookSafety
+    from nbsafety.safety import NotebookSafety
 
 
 class Scope(object):

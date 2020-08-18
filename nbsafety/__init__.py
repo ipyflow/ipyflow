@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-
 # Jupyter Extension points
 def _jupyter_nbextension_paths():
     return [dict(

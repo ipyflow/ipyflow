@@ -4,9 +4,9 @@ from collections import defaultdict
 import logging
 from typing import TYPE_CHECKING
 
-from .attr_symbols import AttrSubSymbolChain
-from .assignment_edges import get_assignment_lval_and_rval_symbol_refs
-from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
+from nbsafety.analysis.assignment_edges import get_assignment_lval_and_rval_symbol_refs
+from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
     from typing import List, Set, Tuple, Union

@@ -3,8 +3,8 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
-from .attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
-from .mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
     from typing import List, Optional, Set, Tuple, Union

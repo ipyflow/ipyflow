@@ -2,7 +2,7 @@
 import ast
 from typing import cast, Union, TYPE_CHECKING
 
-from ..utils.mixins import CommonEqualityMixin
+from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
     from typing import List, Tuple, Union

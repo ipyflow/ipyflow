@@ -5,14 +5,14 @@ import logging
 from typing import cast, TYPE_CHECKING
 import weakref
 
-from .ipython_utils import cell_counter
-from .legacy_update_protocol import LegacyUpdateProtocol
+from nbsafety.ipython_utils import cell_counter
+from nbsafety.data_model.legacy_update_protocol import LegacyUpdateProtocol
 
 if TYPE_CHECKING:
     from typing import Any, Optional, Set, Union
     import ast
-    from .safety import NotebookSafety
-    from .scope import Scope, NamespaceScope
+    from nbsafety.safety import NotebookSafety
+    from nbsafety.data_model.scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
 

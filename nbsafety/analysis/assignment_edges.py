@@ -2,8 +2,8 @@
 import ast
 from typing import cast, TYPE_CHECKING
 
-from .attr_symbols import get_attrsub_symbol_chain
-from .mixins import SaveOffAttributesMixin, VisitListsMixin
+from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain
+from nbsafety.analysis.mixins import SaveOffAttributesMixin, VisitListsMixin
 
 if TYPE_CHECKING:
     from typing import Sequence, Union

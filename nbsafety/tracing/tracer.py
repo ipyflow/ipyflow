@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING
 
 from IPython import get_ipython
 
-from .trace_stmt import TraceStatement
-from .trace_events import TraceEvent
-from .trace_state import TraceState
+from nbsafety.tracing.trace_stmt import TraceStatement
+from nbsafety.tracing.trace_events import TraceEvent
+from nbsafety.tracing.trace_state import TraceState
 
 if TYPE_CHECKING:
     from types import FrameType
-    from ..safety import NotebookSafety
+    from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
 

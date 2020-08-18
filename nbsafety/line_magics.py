@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any, List
-    from .safety import NotebookSafety
+    from nbsafety.safety import NotebookSafety
 
 
 # USAGE = """Options:

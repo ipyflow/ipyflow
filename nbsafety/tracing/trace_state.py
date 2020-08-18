@@ -3,14 +3,13 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
-from .trace_events import TraceEvent
+from nbsafety.tracing.trace_events import TraceEvent
 
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Tuple
     from types import FrameType
-    from .trace_stmt import TraceStatement
-    from ..safety import NotebookSafety
-    from ..scope import NamespaceScope
+    from nbsafety.tracing.trace_stmt import TraceStatement
+    from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
 

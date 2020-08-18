@@ -1,5 +1,5 @@
 from typing import Union
 
-from .analysis.attr_symbols import AttrSubSymbolChain
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
 
 SymbolRef = Union[str, AttrSubSymbolChain]

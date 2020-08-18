@@ -6,10 +6,10 @@ from enum import Enum
 import logging
 from typing import cast, TYPE_CHECKING
 
-from ..analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
-from ..data_symbol import DataSymbol, DataSymbolType
-from ..scope import NamespaceScope
-from ..utils.utils import retrieve_namespace_attr_or_sub
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
+from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
+from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.utils import retrieve_namespace_attr_or_sub
 
 
 class MethodSpecialCase(Enum):
@@ -20,7 +20,7 @@ class MethodSpecialCase(Enum):
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
     from ..safety import NotebookSafety
-    from ..scope import Scope
+    from nbsafety.data_model.scope import Scope
     SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
     DeepRef = Tuple[int, Optional[str], Tuple[SymbolRef, ...]]

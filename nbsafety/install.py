@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import sys
 
-from .kernel.install import main
+from nbsafety.kernel.install import main
 
 
 # this is just a pointer to nbsafety.kernel.install

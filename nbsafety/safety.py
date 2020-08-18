@@ -12,21 +12,26 @@ import black
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from .analysis import compute_live_dead_symbol_refs, compute_lineno_to_stmt_mapping
-from .ipython_utils import (
+from nbsafety.analysis import (
+    compute_live_dead_symbol_refs,
+    compute_lineno_to_stmt_mapping,
+    get_symbols_for_references,
+    compute_call_chain_live_symbols,
+)
+from nbsafety.ipython_utils import (
     ast_transformer_context,
     cell_counter,
     run_cell,
     save_number_of_currently_executing_cell,
 )
-from . import line_magics
-from .scope import Scope, NamespaceScope
-from .tracing import AttrSubTracingManager, make_tracer, TraceState
-from .utils import get_symbols_for_references, compute_call_chain_live_symbols, DotDict
+from nbsafety import line_magics
+from nbsafety.data_model.scope import Scope, NamespaceScope
+from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState
+from nbsafety.utils import DotDict
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
-    from .data_symbol import DataSymbol
+    from nbsafety.data_model.data_symbol import DataSymbol
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

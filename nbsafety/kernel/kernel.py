@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 from ipykernel.ipkernel import IPythonKernel
-from ..version import __version__
-from ..safety import NotebookSafety
-# import warnings
-#Avoid networkx gives a FutureWarning
-# TODO (smacke): this disables all FutureWarnings; disable until we can figure out a better system
-# warnings.filterwarnings("ignore", category=FutureWarning)
+from nbsafety.version import __version__
+from nbsafety.safety import NotebookSafety
 
 
 class SafeKernel(IPythonKernel):

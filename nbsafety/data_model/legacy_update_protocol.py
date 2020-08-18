@@ -2,14 +2,13 @@
 import logging
 from typing import cast, TYPE_CHECKING
 
-from .ipython_utils import cell_counter
-from .utils.utils import retrieve_namespace_attr_or_sub
+from nbsafety.ipython_utils import cell_counter
+from nbsafety.utils.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Set
-    from .data_symbol import DataSymbol
-    from .safety import NotebookSafety
-    from .scope import NamespaceScope
+    from nbsafety.data_model.data_symbol import DataSymbol
+    from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
 NOT_FOUND = object()

@@ -4,18 +4,20 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
-from ..analysis.attr_symbols import AttrSubSymbolChain
-from ..analysis import get_statement_symbol_edges
-from ..scope import NamespaceScope
-from ..utils.utils import retrieve_namespace_attr_or_sub
-from .attrsub_tracing import MethodSpecialCase
+from nbsafety.analysis import (
+    AttrSubSymbolChain,
+    get_statement_symbol_edges
+)
+from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.tracing.attrsub_tracing import MethodSpecialCase
+from nbsafety.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from types import FrameType
     from typing import List, Optional, Set
-    from ..data_symbol import DataSymbol
-    from ..safety import NotebookSafety
-    from ..scope import Scope
+    from nbsafety.data_model.data_symbol import DataSymbol
+    from nbsafety.data_model.scope import Scope
+    from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
 

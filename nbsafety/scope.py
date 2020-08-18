@@ -260,7 +260,10 @@ class Scope(object):
         else:
             prefix = ''
         if prefix:
-            return f'{prefix}.{self.scope_name}'
+            if getattr(self, 'is_subscript', False):
+                return f'{prefix}[{self.scope_name}]'
+            else:
+                return f'{prefix}.{self.scope_name}'
         else:
             return self.scope_name
 
@@ -285,6 +288,13 @@ class NamespaceScope(Scope):
     @property
     def is_garbage(self):
         return self._tombstone or self.obj_id not in self.safety.aliases or self.obj_id not in self.safety.namespaces
+
+    @property
+    def is_subscript(self):
+        try:
+            return next(iter(self.safety.aliases.get(self.obj_id, None))).is_subscript
+        except (StopIteration, TypeError):
+            return False
 
     def update_obj_ref(self, obj):
         tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)

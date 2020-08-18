@@ -297,6 +297,8 @@ class NotebookSafety(object):
 
     @contextmanager
     def _tracing_context(self):
+        self.updated_symbols.clear()
+        self.updated_scopes.clear()
         sys.settrace(make_tracer(self))
         try:
             with ast_transformer_context(self.attr_trace_manager.ast_transformer):
@@ -310,8 +312,6 @@ class NotebookSafety(object):
                 updated_symbol.refresh()
             for updated_scope in self.updated_scopes:
                 updated_scope.refresh()
-            self.updated_symbols.clear()
-            self.updated_scopes.clear()
 
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:

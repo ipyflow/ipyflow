@@ -541,7 +541,8 @@ def test_func_assign_objs():
 a = [1]
 b = [1]
 c = [2]
-d = [3]
+d = [3]""")
+    run_cell("""
 def func(x, y=a):
     e = [c[0] + d[0]]
     f = [x[0] + y[0]]
@@ -557,18 +558,28 @@ def func(x, y=a):
     e = [c[0] + d[0]]
     f = [x[0] + y[0]]
     return f
-z = func(c)
-""")
+# z = func(c)""")
+    run_cell('z = func(c)')
     run_cell('logging.info(z[0])')
     assert_not_detected()
+    run_cell('logging.info(z)')
+    assert_not_detected()
     run_cell('c = [3]')
+    run_cell('logging.info(z)')
+    assert_detected("Should have detected stale dependency of z on c")
+    run_cell('c = [77]')
     run_cell('logging.info(z[0])')
     assert_detected("Should have detected stale dependency of z on c")
     run_cell('z = func(c)')
     run_cell('logging.info(z[0])')
     assert_not_detected()
+    run_cell('logging.info(z)')
+    assert_not_detected()
     run_cell('b = [4]')
     run_cell('d = [1]')
+    run_cell('logging.info(z[0])')
+    assert_not_detected("Changing b and d should not affect z")
+    run_cell('logging.info(z)')
     assert_not_detected("Changing b and d should not affect z")
 
 

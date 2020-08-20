@@ -39,6 +39,7 @@ class UpdateProtocol(object):
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue
+            # TODO: figure out what this is for again
             # self.safety.updated_scopes.add(containing_scope)
             containing_scope.max_defined_timestamp = cell_counter()
             containing_namespace_obj_id = containing_scope.obj_id
@@ -46,13 +47,25 @@ class UpdateProtocol(object):
                 alias.namespace_stale_symbols.discard(dsym)
                 self._collect_updated_symbols(alias)
 
+    def _propagate_staleness_to_namespace_parents(self, dsym: 'DataSymbol'):
+        if dsym in self.seen:
+            return
+        self.seen.add(dsym)
+        containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym.containing_scope)
+        if not containing_scope.is_namespace_scope:
+            return
+        for containing_alias in self.safety.aliases[containing_scope.obj_id]:
+            containing_alias.namespace_stale_symbols.add(dsym)
+            self._propagate_staleness_to_namespace_parents(containing_alias)
+
     def _propagate_update_to_deps(self, dsym: 'DataSymbol', updated=False):
         if not updated:
             if dsym in self.seen:
                 return
-            self.seen.add(dsym)
             if dsym.should_mark_stale(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
                 dsym.required_cell_num = cell_counter()
+                self._propagate_staleness_to_namespace_parents(dsym)
+            self.seen.add(dsym)
         for child in dsym.children:
             self._propagate_update_to_deps(child)

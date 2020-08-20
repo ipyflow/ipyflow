@@ -25,11 +25,13 @@ class UpdateProtocol(object):
             self._collect_updated_symbols(self.updated_sym)
         self.safety.updated_symbols = set(self.seen)
         for dsym in self.safety.updated_symbols:
-            self._propagate_update_to_deps(dsym, updated=True)
+            self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
         # important! don't bump defined_cell_num until the very end!
         #  need to wait until here because, by default,
         #  we don't want to propagate to symbols defined in the same cell
         self.updated_sym.defined_cell_num = cell_counter()
+        self.updated_sym.fresher_ancestors.clear()
+        self.updated_sym.namespace_stale_symbols.clear()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol'):
         if dsym in self.seen:
@@ -47,25 +49,54 @@ class UpdateProtocol(object):
                 alias.namespace_stale_symbols.discard(dsym)
                 self._collect_updated_symbols(alias)
 
-    def _propagate_staleness_to_namespace_parents(self, dsym: 'DataSymbol'):
-        if dsym in self.seen:
+    def _propagate_staleness_to_namespace_parents(self, dsym: 'DataSymbol', skip_seen_check=False):
+        if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)
         containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym.containing_scope)
-        if not containing_scope.is_namespace_scope:
+        if containing_scope is None or not containing_scope.is_namespace_scope:
             return
         for containing_alias in self.safety.aliases[containing_scope.obj_id]:
             containing_alias.namespace_stale_symbols.add(dsym)
             self._propagate_staleness_to_namespace_parents(containing_alias)
+            for child in self._non_class_to_instance_children(containing_alias):
+                # print('propagate from', dsym, 'to', child)
+                self._propagate_staleness_to_deps(child)
 
-    def _propagate_update_to_deps(self, dsym: 'DataSymbol', updated=False):
-        if not updated:
-            if dsym in self.seen:
-                return
+    def _non_class_to_instance_children(self, dsym):
+        if self.updated_sym == dsym:
+            yield from dsym.children
+            return
+        for child in dsym.children:
+            # Next, complicated check to avoid propagating along a class -> instance edge.
+            # The only time this is OK is when we changed the class, which will not be the case here.
+            child_namespace = child.namespace
+            if child_namespace is not None and child_namespace.cloned_from is not None:
+                if child_namespace.cloned_from.obj_id == dsym.obj_id:
+                    continue
+            yield child
+
+    def _propagate_staleness_to_namespace_children(self, dsym: 'DataSymbol', skip_seen_check=False):
+        if not skip_seen_check and dsym in self.seen:
+            return
+        self.seen.add(dsym)
+        self_scope = self.safety.namespaces.get(dsym.obj_id, None)
+        if self_scope is None:
+            return
+        for ns_child in self_scope.all_data_symbols_this_indentation(exclude_class=True):
+            # print('propagate from', dsym, 'to namespace child', ns_child)
+            self._propagate_staleness_to_deps(ns_child)
+
+    def _propagate_staleness_to_deps(self, dsym: 'DataSymbol', skip_seen_check=False):
+        if not skip_seen_check and dsym in self.seen:
+            return
+        self.seen.add(dsym)
+        if dsym not in self.safety.updated_symbols:
             if dsym.should_mark_stale(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
                 dsym.required_cell_num = cell_counter()
-                self._propagate_staleness_to_namespace_parents(dsym)
-            self.seen.add(dsym)
-        for child in dsym.children:
-            self._propagate_update_to_deps(child)
+                self._propagate_staleness_to_namespace_parents(dsym, skip_seen_check=True)
+                self._propagate_staleness_to_namespace_children(dsym, skip_seen_check=True)
+        for child in self._non_class_to_instance_children(dsym):
+            # print('propagate from', dsym, 'to', child)
+            self._propagate_staleness_to_deps(child)

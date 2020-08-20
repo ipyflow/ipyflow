@@ -64,7 +64,7 @@ class UpdateProtocol(object):
                 self._propagate_staleness_to_deps(child)
 
     def _non_class_to_instance_children(self, dsym):
-        if self.updated_sym == dsym:
+        if self.updated_sym is dsym:
             yield from dsym.children
             return
         for child in dsym.children:

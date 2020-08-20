@@ -90,6 +90,7 @@ class NotebookSafety(object):
             no_stale_propagation_for_same_cell_definition=True,
             track_dependencies=True,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
+            # use_new_update_protocol=True,
             **kwargs
         ))
         if use_comm:
@@ -308,6 +309,8 @@ class NotebookSafety(object):
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state.error_occurred:
             self._reset_trace_state_hook()
+            if self.config.get('use_new_update_protocol', False):
+                return
             for updated_symbol in self.updated_symbols:
                 updated_symbol.refresh()
             for updated_scope in self.updated_scopes:

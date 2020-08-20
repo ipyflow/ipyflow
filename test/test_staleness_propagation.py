@@ -313,8 +313,8 @@ accum = 0
 foo = [1, 2, 3, 4, 5]
 for ret in map(lambda x: x * 5, foo):
     accum += ret
-logging.info(accum)
 """)
+    run_cell('logging.info(accum)')
     assert_not_detected('no stale dep foo -> accum')
     run_cell('foo = [0]')
     run_cell('logging.info(accum)')

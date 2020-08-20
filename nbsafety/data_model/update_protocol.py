@@ -18,18 +18,23 @@ class UpdateProtocol(object):
         self.safety = safety
         self.updated_sym = updated_sym
         self.mutated = mutated
-        self.updated_symbols: Set[DataSymbol] = set()
+        self.seen: Set[DataSymbol] = set()
 
     def __call__(self, propagate=True):
-        self.updated_sym.defined_cell_num = cell_counter()
         if propagate:
             self._collect_updated_symbols(self.updated_sym)
-        self.safety.updated_symbols = self.updated_symbols
+        self.safety.updated_symbols = set(self.seen)
+        for dsym in self.safety.updated_symbols:
+            self._propagate_update_to_deps(dsym, updated=True)
+        # important! don't bump defined_cell_num until the very end!
+        #  need to wait until here because, by default,
+        #  we don't want to propagate to symbols defined in the same cell
+        self.updated_sym.defined_cell_num = cell_counter()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol'):
-        if dsym in self.updated_symbols:
+        if dsym in self.seen:
             return
-        self.updated_symbols.add(dsym)
+        self.seen.add(dsym)
         for dsym_alias in self.safety.aliases[dsym.obj_id]:
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
@@ -40,3 +45,14 @@ class UpdateProtocol(object):
             for alias in self.safety.aliases[containing_namespace_obj_id]:
                 alias.namespace_stale_symbols.discard(dsym)
                 self._collect_updated_symbols(alias)
+
+    def _propagate_update_to_deps(self, dsym: 'DataSymbol', updated=False):
+        if not updated:
+            if dsym in self.seen:
+                return
+            self.seen.add(dsym)
+            if dsym.should_mark_stale(self.updated_sym):
+                dsym.fresher_ancestors.add(self.updated_sym)
+                dsym.required_cell_num = cell_counter()
+        for child in dsym.children:
+            self._propagate_update_to_deps(child)

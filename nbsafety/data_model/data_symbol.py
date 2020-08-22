@@ -58,7 +58,6 @@ class DataSymbol(object):
             parents = set()
         self.parents: Set[DataSymbol] = parents
         self.children: Set[DataSymbol] = set()
-        self.readable_name = containing_scope.make_namespace_qualified_name(self)
 
         self.call_scope: 'Optional[Scope]' = None
         if self.is_function:
@@ -83,6 +82,10 @@ class DataSymbol(object):
 
     def __hash__(self):
         return hash(self.full_path)
+
+    @property
+    def readable_name(self):
+        return self.containing_scope.make_namespace_qualified_name(self)
 
     @property
     def is_subscript(self):

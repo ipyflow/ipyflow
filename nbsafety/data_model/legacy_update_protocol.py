@@ -18,7 +18,7 @@ NOT_FOUND = object()
 class LegacyUpdateProtocol(object):
     def __init__(self, safety: 'NotebookSafety', updated_dep: 'DataSymbol', mutated: bool):
         self.safety = safety
-        self.updated_dep = updated_dep
+        self.updated_sym = updated_dep
         self.seen: Set[DataSymbol] = set()
         self.parent_seen: Set[DataSymbol] = set()
         self.mutated = mutated
@@ -26,14 +26,14 @@ class LegacyUpdateProtocol(object):
     def __call__(self, propagate=True):
         if propagate:
             # print(self, 'update deps')
-            self._propagate_update(self.updated_dep, self.updated_dep._get_obj(), refresh=True)
+            self._propagate_update(self.updated_sym, self.updated_sym._get_obj(), refresh=True)
 
     def _propagate_update_to_deps(self, dsym: 'DataSymbol'):
         # print(self, 'propagate to child deps', self.children)
-        if dsym.should_mark_stale(self.updated_dep):
+        if dsym.should_mark_stale(self.updated_sym):
             # if self.full_namespace_path == updated_dep.full_namespace_path:
             #     print('weird', self.full_namespace_path, self, updated_dep, self.obj_id, updated_dep.obj_id, self.cached_obj_id, updated_dep.cached_obj_id)
-            dsym.fresher_ancestors.add(self.updated_dep)
+            dsym.fresher_ancestors.add(self.updated_sym)
             dsym.required_cell_num = cell_counter()
         for child in dsym.children:
             # print(self, 'prop to', child, self._get_children_to_skip())
@@ -72,7 +72,7 @@ class LegacyUpdateProtocol(object):
 
         new_id = None if new_parent_obj is NOT_FOUND else id(new_parent_obj)
 
-        if self.updated_dep is dsym:
+        if self.updated_sym is dsym:
             old_parent_obj = dsym._get_cached_obj()
             old_id = dsym.cached_obj_id
         else:
@@ -108,7 +108,7 @@ class LegacyUpdateProtocol(object):
                                 self.safety.updated_symbols.add(new_dc)
                     except (KeyError, IndexError, AttributeError):
                         self._propagate_update(dc, NOT_FOUND, refresh=should_refresh)
-                if dc_in_self_namespace and dc.should_mark_stale(self.updated_dep):
+                if dc_in_self_namespace and dc.should_mark_stale(self.updated_sym):
                     # print(self, 'add', dc, 'to namespace stale symbols due to', updated_dep, self.defined_cell_num, dc.defined_cell_num, updated_dep.defined_cell_num, dc.fresher_ancestors)
                     dsym.namespace_stale_symbols.add(dc)
                 else:
@@ -127,7 +127,7 @@ class LegacyUpdateProtocol(object):
             self.seen = old_seen
             # print(self, 'propagate+skip done')
 
-        if self.updated_dep is dsym:
+        if self.updated_sym is dsym:
             return
 
         if refresh:
@@ -153,7 +153,7 @@ class LegacyUpdateProtocol(object):
             # for alias in self.safety.aliases[old_id]:
             #     # print('propagate', updated_dep, 'to', alias, 'via', self, updated_dep.defined_cell_num, alias.defined_cell_num, self.defined_cell_num)
             #     alias._propagate_update_to_deps(updated_dep, seen, parent_seen)
-            if namespace is None and dsym.should_mark_stale(self.updated_dep):  # if we are at a leaf
+            if namespace is None and dsym.should_mark_stale(self.updated_sym):  # if we are at a leaf
                 # print('propagate', updated_dep, 'to', self, updated_dep.defined_cell_num, self.defined_cell_num)
                 self._propagate_update_to_namespace_parents(dsym, refresh=refresh)
         # print(self, 'done')
@@ -182,7 +182,7 @@ class LegacyUpdateProtocol(object):
                     if not alias.is_stale:
                         alias.fresher_ancestors = set()
                 self._propagate_update_to_namespace_parents(alias, refresh)
-                if not refresh and dsym.should_mark_stale(self.updated_dep):
+                if not refresh and dsym.should_mark_stale(self.updated_sym):
                     # print(self, 'mark stale due to', updated_dep, 'which is in namespace of', alias)
                     alias.namespace_stale_symbols.add(dsym)
                 if refresh:
@@ -199,7 +199,7 @@ class LegacyUpdateProtocol(object):
                     alias_child_namespace = alias_child.namespace
                     if alias_child_namespace is not None:
                         if alias_child_namespace.cloned_from is containing_scope:
-                            if self.updated_dep.namespace is not containing_scope:
+                            if self.updated_sym.namespace is not containing_scope:
                                 continue
                     # if len(self.safety.aliases[alias_child.obj_id] & seen) > 0:
                     #     continue

@@ -142,7 +142,7 @@ class Scope(object):
             name, obj, deps, stmt_node, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope, propagate=propagate
         )
-        # print('upsert', name, 'with deps', deps)
+        # print(self, 'upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
         dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
 

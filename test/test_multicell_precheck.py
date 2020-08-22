@@ -138,3 +138,17 @@ for foo in lst:
     response = _safety_state[0].multicell_precheck(cells)
     assert response['stale_input_cells'] == []
     assert response['stale_output_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
+
+
+@skipif_known_failing
+def test_no_freshness_for_alias_assignment_post_mutation():
+    cells = {
+        '0': 'x = []',
+        '1': 'y = x',
+        '2': 'x.append(5)',
+    }
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == []

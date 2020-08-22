@@ -44,8 +44,9 @@ def test_dict_hierarchy():
 
 
 def test_dict_hierarchy_new_protocol():
+    prev = _safety_state[0].config.get('use_new_update_protocol', False)
     try:
         _safety_state[0].config.use_new_update_protocol = True
         test_dict_hierarchy()
     finally:
-        _safety_state[0].config.use_new_update_protocol = False
+        _safety_state[0].config.use_new_update_protocol = prev

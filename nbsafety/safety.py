@@ -90,7 +90,7 @@ class NotebookSafety(object):
             no_stale_propagation_for_same_cell_definition=True,
             track_dependencies=True,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
-            # use_new_update_protocol=True,
+            use_new_update_protocol=True,
             **kwargs
         ))
         if use_comm:
@@ -223,7 +223,7 @@ class NotebookSafety(object):
             self._prev_cell_stale_symbols.clear()
 
         self._last_refused_code = None
-        # self._resync_symbols(live_symbols)
+        self._resync_symbols(live_symbols)
         return False
 
     def _resync_symbols(self, symbols: 'Set[DataSymbol]'):

@@ -91,9 +91,20 @@ class TraceStatement(object):
         if is_function_def or is_class_def:
             assert len(symbol_edges) == 1
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
+
         for lval_name, rval_names in symbol_edges.items():
+            if self.safety.attr_trace_manager.literal_namespace is not None:
+                literal_namespace = self.safety.attr_trace_manager.literal_namespace
+                self.safety.attr_trace_manager.literal_namespace = None
+                if lval_name is None:
+                    literal_namespace.scope_name = '<unknown namespace>'
+                else:
+                    literal_namespace.scope_name = lval_name
+                self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
+
             if lval_name is None:
                 continue
+                
             should_overwrite_for_name = should_overwrite and lval_name not in rval_names
             rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name}) | deep_rval_deps
             # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
@@ -113,16 +124,6 @@ class TraceStatement(object):
                 )
             except KeyError:
                 pass
-
-            if self.safety.attr_trace_manager.literal_namespace is not None:
-                # assert len(symbol_edges) == 1
-                if len(symbol_edges) != 1:
-                    logger.warning('Expected one lval; got %d', len(symbol_edges))
-                literal_namespace = self.safety.attr_trace_manager.literal_namespace
-                self.safety.attr_trace_manager.literal_namespace = None
-                literal_namespace.scope_name = lval_name
-                literal_namespace.parent_scope = self.scope
-                self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
 
         if len(symbol_edges) == 0:
             rval_deps = deep_rval_deps

@@ -22,7 +22,11 @@ class UpdateProtocol(object):
 
     def __call__(self, propagate=True):
         if propagate:
-            self._collect_updated_symbols(self.updated_sym)
+            if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
+                self._collect_updated_symbols(self.updated_sym)
+            if self.mutated:
+                for updated_alias in self.safety.aliases[self.updated_sym.obj_id]:
+                    self._collect_updated_symbols(updated_alias)
         self.safety.updated_symbols = set(self.seen)
         for dsym in self.safety.updated_symbols:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
@@ -37,7 +41,11 @@ class UpdateProtocol(object):
         if dsym in self.seen:
             return
         self.seen.add(dsym)
-        for dsym_alias in self.safety.aliases[dsym.obj_id]:
+        if isinstance(dsym._get_obj(), int):
+            aliases_to_consider = {dsym}
+        else:
+            aliases_to_consider = self.safety.aliases[dsym.obj_id]
+        for dsym_alias in aliases_to_consider:
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue

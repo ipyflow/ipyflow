@@ -325,9 +325,9 @@ class AttrSubTracingManager(object):
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             return literal
         if isinstance(literal, list):
-            scope = NamespaceScope(literal, self.safety)
+            scope = NamespaceScope(literal, self.safety, None, self.safety.trace_state.prev_trace_stmt.scope)
             for i, obj in enumerate(literal):
-                if obj is None or isinstance(obj, int):
+                if obj is None:
                     continue
                 scope.upsert_data_symbol_for_name(
                     i, obj, set(), self.safety.trace_state.prev_trace_stmt.stmt_node, True

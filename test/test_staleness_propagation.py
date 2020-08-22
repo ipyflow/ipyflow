@@ -575,8 +575,8 @@ def func(x, y=a):
     assert_not_detected()
     run_cell('logging.info(z)')
     assert_not_detected()
-    run_cell('b = [4]')
-    run_cell('d = [1]')
+    run_cell('b = [40]')
+    run_cell('d = [4]')
     run_cell('logging.info(z[0])')
     assert_not_detected("Changing b and d should not affect z")
     run_cell('logging.info(z)')
@@ -695,7 +695,6 @@ def test_identity_checking():
     assert_not_detected('`y` was not mutated')
 
 
-@skipif_known_failing
 def test_identity_checking_obj():
     # To get this working properly, we need to create datasyms for all of the values in the literal
     run_cell('y = [7]')
@@ -718,6 +717,7 @@ class Foo(object):
     assert_detected('y depends on stale attrval x.x')
 
 
+@skipif_known_failing
 def test_attributes_2():
     run_cell("""
 class Foo(object):
@@ -731,6 +731,15 @@ class Foo(object):
     run_cell('x = 8')
     run_cell('logging.info(y)')
     assert_detected('y depends on stale x')
+
+
+def test_attributes_2_old_protocol():
+    prev = _safety_state[0].config.get('use_new_update_protocol', True)
+    try:
+        _safety_state[0].config.use_new_update_protocol = False
+        test_attributes_2()
+    finally:
+        _safety_state[0].config.use_new_update_protocol = prev
 
 
 def test_attributes_3():
@@ -1464,6 +1473,7 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
+@skipif_known_failing
 @pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
 def test_attr_dep_with_top_level_overwrite(no_stale_propagation_for_same_cell_definition):
     _safety_state[0].config.no_stale_propagation_for_same_cell_definition = no_stale_propagation_for_same_cell_definition
@@ -1484,6 +1494,16 @@ foo.y = x + 7
     run_cell('foo = 81')
     run_cell('logging.info(x)')
     assert_detected('`x` has stale dep on `foo` (transitively through `foo.y`)')
+
+
+@pytest.mark.parametrize("no_stale_propagation_for_same_cell_definition", [True, False])
+def test_attr_dep_with_top_level_overwrite_old_protocol(no_stale_propagation_for_same_cell_definition):
+    prev = _safety_state[0].config.get('use_new_update_protocol', True)
+    try:
+        _safety_state[0].config.use_new_update_protocol = False
+        test_attr_dep_with_top_level_overwrite(no_stale_propagation_for_same_cell_definition)
+    finally:
+        _safety_state[0].config.use_new_update_protocol = prev
 
 
 def test_typed_assignment():

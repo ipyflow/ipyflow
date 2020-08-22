@@ -23,10 +23,7 @@ class UpdateProtocol(object):
     def __call__(self, propagate=True):
         if propagate:
             if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
-                self._collect_updated_symbols(self.updated_sym)
-            if self.mutated:
-                for updated_alias in self.safety.aliases[self.updated_sym.obj_id]:
-                    self._collect_updated_symbols(updated_alias)
+                self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
         self.safety.updated_symbols = set(self.seen)
         for dsym in self.safety.updated_symbols:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
@@ -37,15 +34,15 @@ class UpdateProtocol(object):
         self.updated_sym.fresher_ancestors.clear()
         self.updated_sym.namespace_stale_symbols.clear()
 
-    def _collect_updated_symbols(self, dsym: 'DataSymbol'):
-        if dsym in self.seen:
-            return
-        self.seen.add(dsym)
-        if isinstance(dsym._get_obj(), int):
+    def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
+        if skip_aliases:
             aliases_to_consider = {dsym}
         else:
             aliases_to_consider = self.safety.aliases[dsym.obj_id]
         for dsym_alias in aliases_to_consider:
+            if dsym_alias in self.seen:
+                continue
+            self.seen.add(dsym)
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue

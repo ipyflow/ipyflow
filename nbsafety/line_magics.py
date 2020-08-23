@@ -134,7 +134,7 @@ def turn_off_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
     for data_sym_name in line[1:]:
         data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
         if data_sym:
-            data_sym.no_warning = True
+            data_sym.disable_warnings = True
             print("Warnings are turned off for", data_sym_name)
         else:
             print("Cannot find DataSymbol", data_sym_name)
@@ -147,7 +147,7 @@ def turn_on_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
     for data_sym_name in line[1:]:
         data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
         if data_sym:
-            data_sym.no_warning = False
+            data_sym.disable_warnings = False
             print("Warnings are turned on for", data_sym_name)
         else:
             print("Cannot find DataSymbol", data_sym_name)

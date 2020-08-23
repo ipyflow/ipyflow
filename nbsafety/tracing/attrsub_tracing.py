@@ -324,13 +324,14 @@ class AttrSubTracingManager(object):
     def literal_tracer(self, literal):
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             return literal
-        if isinstance(literal, list):
-            scope = NamespaceScope(literal, self.safety, None, self.safety.trace_state.prev_trace_stmt.scope)
-            for i, obj in enumerate(literal):
-                if obj is None:
-                    continue
+        if isinstance(literal, (dict, list, tuple)):
+            scope = NamespaceScope(
+                literal, self.safety, None, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope
+            )
+            gen = literal.items() if isinstance(literal, dict) else enumerate(literal)
+            for i, obj in gen:
                 scope.upsert_data_symbol_for_name(
-                    i, obj, set(), self.safety.trace_state.prev_trace_stmt.stmt_node, True
+                    i, obj, set(), self.safety.trace_state.prev_trace_stmt_in_cur_frame.stmt_node, True
                 )
             self.literal_namespace = scope
         return literal
@@ -513,7 +514,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         return replacement_node
 
     def visit_Assign(self, node: ast.Assign):
-        if not isinstance(node.value, ast.List):
+        if not isinstance(node.value, (ast.List, ast.Tuple)):
             return self.generic_visit(node)
 
         new_targets = []

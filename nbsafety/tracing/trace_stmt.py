@@ -83,48 +83,7 @@ class TraceStatement(object):
             func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
-    def _make_lval_data_symbols(self):
-        symbol_edges, should_overwrite = get_statement_symbol_edges(self.stmt_node)
-        deep_rval_deps = self._gather_deep_ref_rval_dsyms()
-        is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        is_class_def = isinstance(self.stmt_node, ast.ClassDef)
-        if is_function_def or is_class_def:
-            assert len(symbol_edges) == 1
-            # assert not lval_symbol_refs.issubset(rval_symbol_refs)
-
-        for lval_name, rval_names in symbol_edges.items():
-            if self.safety.attr_trace_manager.literal_namespace is not None:
-                literal_namespace = self.safety.attr_trace_manager.literal_namespace
-                self.safety.attr_trace_manager.literal_namespace = None
-                if lval_name is None:
-                    literal_namespace.scope_name = '<unknown namespace>'
-                else:
-                    literal_namespace.scope_name = lval_name
-                self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
-
-            if lval_name is None:
-                continue
-                
-            should_overwrite_for_name = should_overwrite and lval_name not in rval_names
-            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name}) | deep_rval_deps
-            # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
-            if is_class_def:
-                assert self.class_scope is not None
-                class_ref = self.frame.f_locals[self.stmt_node.name]
-                class_obj_id = id(class_ref)
-                self.class_scope.obj_id = class_obj_id
-                self.safety.namespaces[class_obj_id] = self.class_scope
-            # if is_function_def:
-            #     print('create function', name, 'in scope', self.scope)
-            try:
-                obj = self.frame.f_locals[lval_name]
-                self.scope.upsert_data_symbol_for_name(
-                    lval_name, obj, rval_deps, self.stmt_node, False,
-                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
-                )
-            except KeyError:
-                pass
-
+    def _handle_attrsub_stores(self, symbol_edges, deep_rval_deps):
         if len(symbol_edges) == 0:
             rval_deps = deep_rval_deps
         else:
@@ -146,6 +105,87 @@ class TraceStatement(object):
                 overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
             # print(scope_to_use, 'upsert', attr_or_sub, attr_or_sub_obj, rval_deps)
+            if len(self.safety.attr_trace_manager.saved_store_data) == 1:
+                break
+        else:
+            return None, None
+
+        return scope_to_use, attr_or_sub
+
+    def _handle_literal_namespace(self, lval_name, rval_names, stored_attrsub_scope, stored_attrsub_name):
+        # remaining_rval_names = set(rval_names)
+        remaining_rval_names = rval_names
+        if self.safety.attr_trace_manager.literal_namespace is None:
+            return remaining_rval_names
+        literal_namespace = self.safety.attr_trace_manager.literal_namespace
+        self.safety.attr_trace_manager.literal_namespace = None
+        if lval_name is None:
+            if stored_attrsub_name is None:
+                literal_namespace.scope_name = '<unknown namespace>'
+            else:
+                literal_namespace.scope_name = stored_attrsub_name
+                if stored_attrsub_scope is not None:
+                    literal_namespace.parent_scope = stored_attrsub_scope
+        else:
+            literal_namespace.scope_name = lval_name
+        self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
+
+        # TODO: need tighter integration w/ assignment edges to allow for accurate drawing of edges to literal elements
+        return remaining_rval_names
+        # if len(rval_names) != literal_namespace.num_subscript_symbols:
+        #     return remaining_rval_names
+        #
+        # # FIXME: rval_names can be traversed in the wrong order!
+        # for rval_name, literal_namespace_symbol in zip(
+        #         rval_names, literal_namespace.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)
+        # ):
+        #     if rval_name is None or rval_name == lval_name:
+        #         continue
+        #     literal_namespace_sym_parent = self.scope.lookup_data_symbol_by_name(rval_name)
+        #     if literal_namespace_sym_parent is None:
+        #         continue
+        #     remaining_rval_names.discard(rval_name)
+        #     literal_namespace_sym_parent.children.add(literal_namespace_symbol)
+        #     literal_namespace_symbol.parents.add(literal_namespace_sym_parent)
+        #
+        # return remaining_rval_names
+
+    def _make_lval_data_symbols(self):
+        symbol_edges, should_overwrite = get_statement_symbol_edges(self.stmt_node)
+        deep_rval_deps = self._gather_deep_ref_rval_dsyms()
+        is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        is_class_def = isinstance(self.stmt_node, ast.ClassDef)
+        if is_function_def or is_class_def:
+            assert len(symbol_edges) == 1
+            # assert not lval_symbol_refs.issubset(rval_symbol_refs)
+
+        stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_stores(symbol_edges, deep_rval_deps)
+        for lval_name, rval_names in symbol_edges.items():
+            rval_names = self._handle_literal_namespace(
+                lval_name, rval_names, stored_attrsub_scope, stored_attrsub_name
+            )
+            if lval_name is None:
+                continue
+
+            should_overwrite_for_name = should_overwrite and lval_name not in rval_names
+            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name}) | deep_rval_deps
+            # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
+            if is_class_def:
+                assert self.class_scope is not None
+                class_ref = self.frame.f_locals[self.stmt_node.name]
+                class_obj_id = id(class_ref)
+                self.class_scope.obj_id = class_obj_id
+                self.safety.namespaces[class_obj_id] = self.class_scope
+            # if is_function_def:
+            #     print('create function', name, 'in scope', self.scope)
+            try:
+                obj = self.frame.f_locals[lval_name]
+                self.scope.upsert_data_symbol_for_name(
+                    lval_name, obj, rval_deps, self.stmt_node, False,
+                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
+                )
+            except KeyError:
+                pass
 
     def _gather_deep_ref_rval_dsyms(self):
         deep_ref_rval_dsyms = set()

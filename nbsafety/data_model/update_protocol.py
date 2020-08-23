@@ -24,15 +24,16 @@ class UpdateProtocol(object):
         if propagate:
             if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
-        self.safety.updated_symbols = set(self.seen)
-        for dsym in self.safety.updated_symbols:
+        updated_symbols = set(self.seen)
+        self.safety.updated_symbols |= updated_symbols
+        for dsym in updated_symbols:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
         # important! don't bump defined_cell_num until the very end!
         #  need to wait until here because, by default,
         #  we don't want to propagate to symbols defined in the same cell
-        self.updated_sym.defined_cell_num = cell_counter()
-        self.updated_sym.fresher_ancestors.clear()
-        self.updated_sym.namespace_stale_symbols.clear()
+        self.updated_sym.refresh()
+        # for dsym in updated_symbols:
+        #     dsym.refresh()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
         if skip_aliases:
@@ -42,7 +43,7 @@ class UpdateProtocol(object):
         for dsym_alias in aliases_to_consider:
             if dsym_alias in self.seen:
                 continue
-            self.seen.add(dsym)
+            self.seen.add(dsym_alias)
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue

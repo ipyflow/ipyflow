@@ -1185,6 +1185,7 @@ def test_single_line_dictionary_literal_fix_stale_deps():
     run_cell('logging.info(d)')
     assert_false_positive('`d`s stale dep fixed, but this is hard to detect '
                           'since we did not yet have a DataSymbol for `d[foo]` when staleness introduced')
+    # assert_not_detected('`d`s stale dep fixed')
     run_cell('foo = 8')
     run_cell('logging.info(d)')
     assert_detected('`d` depends on stale `foo`')
@@ -1250,7 +1251,6 @@ for i in [a, b, c]:
     assert_not_detected('`i` should not depend on `a` at end of for loop')
 
 
-@skipif_known_failing
 def test_for_loop_partial_dep():
     run_cell('lst = list(range(10))')
     run_cell('s = 0')
@@ -1263,7 +1263,7 @@ for i in range(5):
     assert_not_detected('`s` does not depend on last entry of `lst`')
     run_cell('lst[1] = 22')
     run_cell('logging.info(s)')
-    assert_detected('`s` does depend on second entry of `lst`')
+    assert_false_negative('`s` does depend on second entry of `lst` but tracing every iteration of loop is slow')
 
 
 def test_same_cell_redefine():

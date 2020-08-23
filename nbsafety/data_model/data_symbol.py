@@ -74,17 +74,17 @@ class DataSymbol(object):
         # Will never be stale if no_warning is True
         self.disable_warnings = False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'<{self.readable_name}>'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.readable_name
 
     def __hash__(self):
         return hash(self.full_path)
 
     @property
-    def readable_name(self):
+    def readable_name(self) -> str:
         return self.containing_scope.make_namespace_qualified_name(self)
 
     @property
@@ -235,6 +235,8 @@ class DataSymbol(object):
         return should_mark_stale
 
     def update_deps(self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True):
+        if self.is_function:
+            print('update deps to function', self.full_path, id(self), 'with children', self.children)
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
         new_deps.discard(self)
@@ -260,8 +262,10 @@ class DataSymbol(object):
     def refresh(self: 'DataSymbol'):
         self.fresher_ancestors = set()
         self.defined_cell_num = cell_counter()
-        self.required_cell_num = self.defined_cell_num
         self.namespace_stale_symbols = set()
+        if self.safety.config.get('use_new_update_protocol', False):
+            return
+        self.required_cell_num = self.defined_cell_num
         self._propagate_refresh_to_namespace_parents(set())
         # seen = set()
         # for alias in self.safety.aliases[self.obj_id]:

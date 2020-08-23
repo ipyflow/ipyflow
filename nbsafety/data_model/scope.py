@@ -75,7 +75,7 @@ class Scope(object):
     def all_data_symbols_this_indentation(self):
         return self._data_symbol_by_name.values()
 
-    def lookup_data_symbol_by_name(self, name):
+    def lookup_data_symbol_by_name(self, name) -> 'Optional[DataSymbol]':
         ret = self.lookup_data_symbol_by_name_this_indentation(name)
         if ret is None and self.non_namespace_parent_scope is not None:
             ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name)
@@ -137,14 +137,15 @@ class Scope(object):
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
             propagate=True
-    ):
+    ) -> 'DataSymbol':
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps, stmt_node, is_subscript,
-            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope, propagate=propagate
+            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
         )
         # print(self, 'upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
         dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
+        return dc
 
     def _upsert_data_symbol_for_name_inner(
             self,
@@ -156,7 +157,6 @@ class Scope(object):
             overwrite=True,
             is_function_def=False,
             class_scope: 'Optional[Scope]' = None,
-            propagate=True
     ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
         # print(self, 'upsert', name)
         assert not (class_scope is not None and is_function_def)
@@ -177,7 +177,6 @@ class Scope(object):
         old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
         if old_dc is not None and self.is_globally_accessible:
             old_id = old_dc.cached_obj_id
-            # TODO: garbage collect old names (EDIT: does this happen automatically thanks to the handle_aliases logic?)
             # TODO: handle case where new dc is of different type
             if name in self.data_symbol_by_name(old_dc.is_subscript):
                 old_dc.update_obj_ref(obj)
@@ -266,8 +265,8 @@ class Scope(object):
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, dc: 'DataSymbol'):
-        return dc.name
+    def make_namespace_qualified_name(self, dc: 'DataSymbol') -> str:
+        return str(dc.name)
 
 
 class NamespaceScope(Scope):
@@ -338,13 +337,14 @@ class NamespaceScope(Scope):
 
     def make_namespace_qualified_name(self, dc: 'DataSymbol'):
         path = self.full_namespace_path
+        name = str(dc.name)
         if path:
             if dc.is_subscript:
-                return f'{path}[{dc.name}]'
+                return f'{path}[{name}]'
             else:
-                return f'{path}.{dc.name}'
+                return f'{path}.{name}'
         else:
-            return dc.name
+            return name
 
     def lookup_data_symbol_by_name_this_indentation(self, name, is_subscript=None):
         # TODO: specify in arguments whether `name` refers to a subscript
@@ -372,6 +372,18 @@ class NamespaceScope(Scope):
         if self.cloned_from is not None and not exclude_class:
             dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
         return itertools.chain(*dsym_collections_to_chain)
+
+    @property
+    def num_subscript_symbols(self):
+        return len(self._subscript_data_symbol_by_name)
+
+    @property
+    def num_dotted_symbols(self):
+        return len(self._data_symbol_by_name)
+
+    @property
+    def num_symbols(self):
+        return self.num_dotted_symbols + self.num_subscript_symbols
 
     def put(self, name: 'Union[str, int]', val: DataSymbol):
         if val.is_subscript:

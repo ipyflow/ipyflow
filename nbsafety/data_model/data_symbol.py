@@ -235,8 +235,6 @@ class DataSymbol(object):
         return should_mark_stale
 
     def update_deps(self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True):
-        if self.is_function:
-            print('update deps to function', self.full_path, id(self), 'with children', self.children)
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
         new_deps.discard(self)

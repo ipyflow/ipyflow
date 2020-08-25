@@ -183,3 +183,7 @@ History
 0.0.49 (2020-07-27)
 -------------------
 * Remove altered Python logo to comply with PSF requirements;
+
+0.0.50 (2020-08-25)
+-------------------
+* Significant stability improvements;

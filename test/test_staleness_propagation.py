@@ -63,6 +63,20 @@ def test_simplest():
     assert_detected('should have detected b has stale dep on old a')
 
 
+def test_readme_example():
+    run_cell('def eval_model_1(): return 0.5')
+    run_cell('def eval_model_2(): return 0.85')
+    run_cell('models = {"model_1": eval_model_1, "model_2": eval_model_2}')
+    output = """
+best_acc, best_model = max((f(), name) for name, f in models.items())
+logging.info(f'The best model was {best_model} with an accuracy of {best_acc}.')
+    """
+    run_cell(output)
+    run_cell('def eval_model_1(): return 0.9')
+    run_cell(output)
+    assert_detected('`models` depends on stale `eval_model_1`')
+
+
 def test_subscript_dependency():
     run_cell('lst = [0, 1, 2]')
     run_cell('x = 5')

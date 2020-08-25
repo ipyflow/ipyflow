@@ -115,6 +115,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
             self.visit(line)
 
     def visit_GeneratorExp(self, node):
+        print('visit generator exp')
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
     def visit_DictComp(self, node):
@@ -129,7 +130,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
     def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
         # TODO: as w/ for loop, this will have false positives on later live references
         with self.kill_context():
-            self.visit(node.generators)
+            for gen in node.generators:
+                self.visit(gen.target)
 
     def visit_Lambda(self, node):
         with self.kill_context():

@@ -49,8 +49,12 @@ class GetAttrSubSymbols(ast.NodeVisitor):
             self.symbol_chain.append(CallPoint(node.func.attr))
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
-            self.symbol_chain.append(CallPoint(node.func.slice))
-            self.visit(node.func.value)
+            if isinstance(node.func.slice, ast.Index) and isinstance(node.func.slice.value, (ast.Str, ast.Num)):
+                if isinstance(node.func.slice.value, ast.Str):
+                    self.symbol_chain.append(CallPoint(node.func.slice.value.s))
+                else:
+                    self.symbol_chain.append(CallPoint(str(node.func.slice.value.n)))
+                self.visit(node.func.value)
         elif isinstance(node.func, ast.Name):
             self.symbol_chain.append(CallPoint(node.func.id))
         elif isinstance(node.func, ast.Call):

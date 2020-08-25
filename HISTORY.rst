@@ -187,3 +187,7 @@ History
 0.0.50 (2020-08-25)
 -------------------
 * Significant stability improvements;
+
+0.0.51 (2020-08-25)
+-------------------
+* Fix bug wherein non loop vars killed in comprehensions;

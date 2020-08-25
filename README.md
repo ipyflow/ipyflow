@@ -45,7 +45,7 @@ pip install nbsafety
 
 If using JupyterLab, we highly recommend installing the companion extension:
 ```bash
-jupyter labextension install jupyterlab-nbsafety  # optional but highly recommended if using JupyterLab
+jupyter labextension install jupyterlab-nbsafety
 ```
 
 Interface

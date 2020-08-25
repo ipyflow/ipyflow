@@ -3,7 +3,6 @@ import logging
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.ipython_utils import cell_counter
-from nbsafety.utils.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from typing import Any, Set
@@ -91,7 +90,7 @@ class LegacyUpdateProtocol(object):
                 else:
                     try:
                         obj = dsym._get_obj()
-                        obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, dc.name, dc.is_subscript)
+                        obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(obj, dc.name, dc.is_subscript)
                         # print(dc, obj, obj_attr_or_sub, updated_dep, seen, parent_seen, refresh, mutated, old_id, new_id)
                         self._propagate_update(dc, obj_attr_or_sub, refresh=should_refresh)
                         dc_in_self_namespace = True

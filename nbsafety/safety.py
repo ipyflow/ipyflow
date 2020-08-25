@@ -26,6 +26,7 @@ from nbsafety.ipython_utils import (
 )
 from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
+from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState
 from nbsafety.utils import DotDict
 
@@ -91,10 +92,15 @@ class NotebookSafety(object):
             track_dependencies=True,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             use_new_update_protocol=True,
+            mode=kwargs.pop('mode', SafetyRunMode.DEVELOP),
             **kwargs
         ))
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
+
+    @property
+    def is_develop(self) -> bool:
+        return self.config.get('mode', SafetyRunMode.DEVELOP) == SafetyRunMode.DEVELOP
 
     def set_active_cell(self, cell_id):
         self._active_cell_id = cell_id
@@ -395,3 +401,22 @@ class NotebookSafety(object):
         for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
                 dsym.collect_self_garbage()
+
+    def retrieve_namespace_attr_or_sub(self, obj: 'Any', attr_or_sub: 'Union[str, int]', is_subscript: bool):
+        try:
+            if is_subscript:
+                # TODO: more complete list of things that are checkable
+                #  or could cause side effects upon subscripting
+                return obj[attr_or_sub]
+            else:
+                if self.is_develop:
+                    assert isinstance(attr_or_sub, str)
+                return getattr(obj, cast(str, attr_or_sub))
+        except (AttributeError, IndexError, KeyError):
+            raise
+        except Exception as e:
+            if self.is_develop:
+                logger.warning('unexpected exception: %s', e)
+                logger.warning('object: %s', obj)
+                logger.warning('attr / subscript: %s', attr_or_sub)
+            raise e

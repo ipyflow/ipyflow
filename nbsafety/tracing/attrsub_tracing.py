@@ -9,7 +9,6 @@ from typing import cast, TYPE_CHECKING
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
-from nbsafety.utils import retrieve_namespace_attr_or_sub
 
 
 class MethodSpecialCase(Enum):
@@ -238,7 +237,9 @@ class AttrSubTracingManager(object):
                 )
                 if data_sym is None:
                     try:
-                        obj_attr_or_sub = retrieve_namespace_attr_or_sub(obj, attr_or_subscript, is_subscript)
+                        obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
+                            obj, attr_or_subscript, is_subscript
+                        )
                         symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
                         data_sym = DataSymbol(
                             attr_or_subscript,
@@ -256,7 +257,7 @@ class AttrSubTracingManager(object):
                         # print('put', data_sym, 'in', scope.full_namespace_path)
                         # FIXME: DataSymbols should probably register themselves with the alias manager at creation
                         self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
-                    except (AttributeError, KeyError, IndexError):
+                    except:
                         pass
                 if call_context:
                     should_record_args = True

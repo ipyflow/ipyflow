@@ -9,8 +9,8 @@ from nbsafety.analysis import (
     get_statement_symbol_edges
 )
 from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing.attrsub_tracing import MethodSpecialCase
-from nbsafety.utils import retrieve_namespace_attr_or_sub
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -78,7 +78,11 @@ class TraceStatement(object):
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
         if not func_cell.is_function:
-            raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
+            if self.safety.is_develop:
+                raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
+            else:
+                # TODO: log an error to a file
+                return old_scope
         if not self.finished:
             func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
@@ -92,8 +96,8 @@ class TraceStatement(object):
             ) | deep_rval_deps
         for scope, obj, attr_or_sub, is_subscript in self.safety.attr_trace_manager.saved_store_data:
             try:
-                attr_or_sub_obj = retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
-            except (AttributeError, KeyError, IndexError):
+                attr_or_sub_obj = self.safety.retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+            except:
                 continue
             should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
             scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)

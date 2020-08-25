@@ -115,7 +115,6 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
             self.visit(line)
 
     def visit_GeneratorExp(self, node):
-        print('visit generator exp')
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
     def visit_DictComp(self, node):

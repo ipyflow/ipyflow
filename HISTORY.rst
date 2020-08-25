@@ -191,3 +191,7 @@ History
 0.0.51 (2020-08-25)
 -------------------
 * Fix bug wherein non loop vars killed in comprehensions;
+
+0.0.52 (2020-08-25)
+-------------------
+* Forgot to remove print statement;

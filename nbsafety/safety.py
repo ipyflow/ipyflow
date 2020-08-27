@@ -88,7 +88,7 @@ class NotebookSafety(object):
             store_history=kwargs.pop('store_history', True),
             use_comm=use_comm,
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
-            no_stale_propagation_for_same_cell_definition=True,
+            intra_cell_staleness_propagation=True,
             track_dependencies=True,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             use_new_update_protocol=True,

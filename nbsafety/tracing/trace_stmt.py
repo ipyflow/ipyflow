@@ -249,7 +249,7 @@ class TraceStatement(object):
         if self.has_lval:
             self._make_lval_data_symbols()
         else:
-            if len(self.safety.attr_trace_manager.saved_store_data) > 0:
+            if len(self.safety.attr_trace_manager.saved_store_data) > 0 and self.safety.is_develop:
                 logger.warning('saw unexpected state in saved_store_data: %s',
                                self.safety.attr_trace_manager.saved_store_data)
 

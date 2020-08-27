@@ -75,11 +75,11 @@ def show_stale(safety: 'NotebookSafety', line: 'List[str]'):
 
 
 def set_propagation(safety: 'NotebookSafety', line: 'List[str]'):
-    if len(line) != 2 or line[1] not in ['cells', 'always']:
-        print('Usage: %safety set_propagation [cells|always]')
+    if len(line) != 2 or line[1] not in ['between', 'within']:
+        print('Usage: %safety set_propagation [between|within]')
         # TODO: complete explanation
         return
-    safety.config.no_stale_propagation_for_same_cell_definition = (line[1] == 'cells')
+    safety.config.intra_cell_staleness_propagation = (line[1] == 'within')
 
 
 def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):

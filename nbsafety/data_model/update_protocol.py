@@ -31,9 +31,9 @@ class UpdateProtocol(object):
         # important! don't bump defined_cell_num until the very end!
         #  need to wait until here because, by default,
         #  we don't want to propagate to symbols defined in the same cell
-        self.updated_sym.refresh()
-        # for dsym in updated_symbols:
-        #     dsym.refresh()
+        self.updated_sym.defined_cell_num = cell_counter()
+        self.updated_sym.fresher_ancestors.clear()
+        self.updated_sym.namespace_stale_symbols.clear()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
         if skip_aliases:

@@ -46,9 +46,14 @@ _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
 def _safety_warning(node: 'DataSymbol'):
     if not node.is_stale:
         raise ValueError('Expected node with stale ancestor; got %s' % node)
+    if node.defined_cell_num < 1:
+        return
+    fresher_symbols = node.fresher_ancestors
+    if len(fresher_symbols) == 0:
+        fresher_symbols = node.namespace_stale_symbols
     logger.warning(
         f'`{node.readable_name}` defined in cell {node.defined_cell_num} may depend on '
-        f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in (node.fresher_ancestors | node.namespace_stale_symbols))}] '
+        f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
         f'(latest update in cell {node.required_cell_num}).'
     )
 
@@ -258,20 +263,19 @@ class NotebookSafety(object):
         except:  # noqa
             pass
 
+        self.attr_trace_manager.ast_transformer.skip_lines.clear()
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
 
-            for line in cell.strip().split('\n'):
-                if _NB_MAGIC_PATTERN.search(line) is None:
-                    break
-            else:
-                return run_cell_func(cell)
+            for lineno, line in enumerate(cell.strip().split('\n')):
+                if _NB_MAGIC_PATTERN.search(line) is not None:
+                    self.attr_trace_manager.ast_transformer.skip_lines.add(lineno + 1)
 
             if self._active_cell_id is not None:
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell) and self.config.skip_unsafe_cells:
+            if self._precheck_for_stale(cell) and self.config.get('skip_unsafe_cells', True):
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')

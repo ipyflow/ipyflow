@@ -21,7 +21,10 @@ markdown:
 deploy: build
 	./scripts/deploy.sh
 
-check:
+typecheck:
+	find nbsafety -iname '*.py' -print0 | xargs -0 mypy
+
+check: typecheck
 	./scripts/runtests.sh
 
 uicheck:
@@ -46,6 +49,3 @@ kernel:
 
 nbext:
 	./scripts/nbext.sh --sys-prefix
-
-typecheck:
-	find nbsafety -iname '*.py' -print0 | xargs -0 mypy

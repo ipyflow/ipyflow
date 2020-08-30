@@ -195,3 +195,7 @@ History
 0.0.52 (2020-08-25)
 -------------------
 * Forgot to remove print statement;
+
+0.0.53 (2020-08-29)
+-------------------
+* Fix pandas perf issue and other minor improvements;

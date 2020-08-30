@@ -89,11 +89,16 @@ class Scope(object):
             return obj
         else:
             try:
-                name_to_obj = obj.__dict__
                 if (pandas is not None) and isinstance(obj, pandas.DataFrame):
                     # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
-                    name_to_obj = dict(name_to_obj)
-                    name_to_obj.update(obj.to_dict())
+                    name_to_obj = {}
+                    for col in obj.columns:
+                        try:
+                            name_to_obj[col] = getattr(obj, col)
+                        except:
+                            continue
+                else:
+                    name_to_obj = obj.__dict__
             except:  # noqa
                 return dict(inspect.getmembers(obj))
         return name_to_obj

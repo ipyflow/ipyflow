@@ -250,7 +250,7 @@ class DataSymbol(object):
             self.parents.add(new_parent)
         self.required_cell_num = -1
         if self.safety.config.get('use_new_update_protocol', False):
-            update_protocol: Any = UpdateProtocol(self.safety, self, mutated)
+            update_protocol: Any = UpdateProtocol(self.safety, self, new_deps, mutated)
         else:
             update_protocol = LegacyUpdateProtocol(self.safety, self, mutated)
         update_protocol(propagate=propagate)

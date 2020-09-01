@@ -1595,3 +1595,13 @@ class Foo:
     run_cell('y = 42')
     run_cell('logging.info(z)')
     assert_not_detected('`z` independent of stale `y`')
+
+
+def test_no_rhs_propagation():
+    run_cell('import numpy as np')
+    run_cell('x = np.random.random(10)')
+    run_cell('y = np.random.random(10)')
+    run_cell('inds = np.argsort(x)')
+    run_cell('x = x[inds]')
+    run_cell('y = y[inds]')
+    assert_not_detected('`inds` not considered stale since it appears on RHS of assignment')

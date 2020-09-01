@@ -14,9 +14,10 @@ logger = logging.getLogger(__name__)
 
 
 class UpdateProtocol(object):
-    def __init__(self, safety: 'NotebookSafety', updated_sym: 'DataSymbol', mutated: bool):
+    def __init__(self, safety: 'NotebookSafety', updated_sym: 'DataSymbol', new_deps: 'Set[DataSymbol]', mutated: bool):
         self.safety = safety
         self.updated_sym = updated_sym
+        self.new_deps = new_deps
         self.mutated = mutated
         self.seen: Set[DataSymbol] = set()
 
@@ -26,6 +27,7 @@ class UpdateProtocol(object):
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
         updated_symbols = set(self.seen)
         self.safety.updated_symbols |= updated_symbols
+        self.seen |= self.new_deps  # don't propagate to stuff on RHS
         for dsym in updated_symbols:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
         # important! don't bump defined_cell_num until the very end!

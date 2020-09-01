@@ -133,6 +133,8 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
 
     def visit_Subscript(self, node):
         self.visit_Attribute_or_Subscript(node)
+        if self.gather_rvals:
+            self.visit(node.slice)
 
     def visit_Keyword(self, node):
         self.visit(node.value)

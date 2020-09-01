@@ -59,6 +59,8 @@ class TraceStatement(object):
             maybe_rval_dsym = self.scope.lookup_data_symbol_by_name(name)
             if maybe_rval_dsym is not None:
                 rval_data_symbols.add(maybe_rval_dsym)
+            # else:
+            #     assert not isinstance(name, AttrSubSymbolChain)
         return rval_data_symbols.union(*self.call_point_deps) | self.safety.attr_trace_manager.loaded_data_symbols
 
     def get_post_call_scope(self, old_scope: 'Scope'):
@@ -159,6 +161,7 @@ class TraceStatement(object):
         deep_rval_deps = self._gather_deep_ref_rval_dsyms()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
+        is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
         if is_function_def or is_class_def:
             assert len(symbol_edges) == 1
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
@@ -186,7 +189,8 @@ class TraceStatement(object):
                 obj = self.frame.f_locals[lval_name]
                 self.scope.upsert_data_symbol_for_name(
                     lval_name, obj, rval_deps, self.stmt_node, False,
-                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, class_scope=self.class_scope,
+                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, is_import=is_import,
+                    class_scope=self.class_scope,
                 )
             except KeyError:
                 pass
@@ -267,5 +271,6 @@ class TraceStatement(object):
     def has_lval(self):
         # TODO: expand to method calls, etc.
         return isinstance(self.stmt_node, (
-            ast.Assign, ast.AnnAssign, ast.AugAssign, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.For
+            ast.Assign, ast.AnnAssign, ast.AugAssign, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.For,
+            ast.Import, ast.ImportFrom
         ))

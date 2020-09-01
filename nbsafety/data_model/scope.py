@@ -140,12 +140,13 @@ class Scope(object):
             is_subscript,
             overwrite=True,
             is_function_def=False,
+            is_import=False,
             class_scope: 'Optional[Scope]' = None,
             propagate=True
     ) -> 'DataSymbol':
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps, stmt_node, is_subscript,
-            overwrite=overwrite, is_function_def=is_function_def, class_scope=class_scope
+            overwrite=overwrite, is_function_def=is_function_def, is_import=is_import, class_scope=class_scope
         )
         # print(self, 'upsert', name, 'with deps', deps)
         self._handle_aliases(old_id, old_dc, dc)
@@ -161,16 +162,21 @@ class Scope(object):
             is_subscript,
             overwrite=True,
             is_function_def=False,
+            is_import=False,
             class_scope: 'Optional[Scope]' = None,
     ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
         # print(self, 'upsert', name)
-        assert not (class_scope is not None and is_function_def)
+        assert not (class_scope is not None and (is_function_def or is_import))
         symbol_type = DataSymbolType.DEFAULT
         if is_function_def:
             assert overwrite
             assert not is_subscript
             symbol_type = DataSymbolType.FUNCTION
             # return self._upsert_function_data_symbol_for_name(name, obj, deps)
+        elif is_import:
+            assert overwrite
+            assert not is_subscript
+            symbol_type = DataSymbolType.IMPORT
         elif class_scope is not None:
             assert overwrite
             assert not is_subscript

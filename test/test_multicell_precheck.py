@@ -143,12 +143,24 @@ for foo in lst:
 @skipif_known_failing
 def test_no_freshness_for_alias_assignment_post_mutation():
     cells = {
-        '0': 'x = []',
-        '1': 'y = x',
-        '2': 'x.append(5)',
+        0: 'x = []',
+        1: 'y = x',
+        2: 'x.append(5)',
     }
     for idx, cell in cells.items():
         run_cell(cell, idx)
     response = _safety_state[0].multicell_precheck(cells)
     assert response['stale_input_cells'] == []
     assert response['stale_output_cells'] == []
+
+
+def test_fresh_after_import():
+    cells = {
+        0: 'x = np.random.random(10)',
+        1: 'import numpy as np'
+    }
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    response = _safety_state[0].multicell_precheck(cells)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == [0]

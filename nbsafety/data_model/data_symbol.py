@@ -23,6 +23,7 @@ class DataSymbolType(Enum):
     SUBSCRIPT = 'subscript'
     FUNCTION = 'function'
     CLASS = 'class'
+    IMPORT = 'import'
 
 
 class DataSymbol(object):
@@ -98,6 +99,10 @@ class DataSymbol(object):
     @property
     def is_function(self):
         return self.symbol_type == DataSymbolType.FUNCTION
+
+    @property
+    def is_import(self):
+        return self.symbol_type == DataSymbolType.IMPORT
 
     def _get_obj(self) -> 'Any':
         if self._has_weakref:
@@ -235,6 +240,9 @@ class DataSymbol(object):
         return should_mark_stale
 
     def update_deps(self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True):
+        # skip mutations for imports
+        if mutated and self.is_import:
+            return
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
         new_deps.discard(self)

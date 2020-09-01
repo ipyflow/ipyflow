@@ -9,7 +9,7 @@ from nbsafety.analysis.assignment_edges import get_assignment_lval_and_rval_symb
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
-    from typing import List, Set, Tuple, Union
+    from typing import Dict, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,9 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         self.should_overwrite = True
         self.gather_rvals = True
 
-    def __call__(self, node):
+    def __call__(self, node) -> 'Tuple[Dict[Optional[str], Set[Union[str, int, None]]], bool]':
         self.visit(node)
-        edges = defaultdict(set)
+        edges: Dict[Optional[str], Set[Union[str, int, None]]] = defaultdict(set)
         if len(self.lval_symbol_ref_set) == 0 and len(self.assignment_edges) == 0:
             edges[None] = self.rval_symbol_ref_set
             return edges, self.should_overwrite
@@ -36,7 +36,11 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
         for edge in self.assignment_edges:
             # FIXME: figure out how to handle attributes in a principled manner here
             left, right = edge
-            if isinstance(left, AttrSubSymbolChain):
+            if isinstance(left, AttrSubSymbolChain) and isinstance(right, AttrSubSymbolChain):
+                # still need this to indicate non empty edge set
+                edges[None].add(None)
+            elif isinstance(left, AttrSubSymbolChain):
+                assert not isinstance(right, AttrSubSymbolChain)
                 edges[None].add(right)
             elif isinstance(right, AttrSubSymbolChain) or right is None:
                 # just get the lval in the keys
@@ -180,6 +184,20 @@ class GetStatementLvalRvalSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixi
 
     def visit_arg(self, node):
         self.to_add_set.add(node.arg)
+
+    def visit_Import(self, node: 'ast.Import'):
+        self.visit_Import_or_ImportFrom(node)
+
+    def visit_ImportFrom(self, node: 'ast.ImportFrom'):
+        self.visit_Import_or_ImportFrom(node)
+
+    def visit_Import_or_ImportFrom(self, node: 'Union[ast.Import, ast.ImportFrom]'):
+        for name in node.names:
+            if name.asname is None:
+                if name.name != '*' and '.' not in name.name:
+                    self.lval_symbol_ref_set.add(name.name)
+            else:
+                self.lval_symbol_ref_set.add(name.asname)
 
 
 def get_statement_symbol_edges(node: ast.AST):

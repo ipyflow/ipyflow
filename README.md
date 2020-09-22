@@ -29,13 +29,6 @@ In particular, `nbsafety` requires ***minimal to no changes*** in user
 behavior, opting to get out of the way unless absolutely necessary and letting
 you use notebooks the way you prefer.
 
-:warning: Disclaimer :warning:
-------------------------------
-This project should be considered pre- or early alpha and may have bugs and
-stability issues. It is not impossible that `nbsafety` could crash on good
-code. We will remove this banner when the project is in a stabler state.
-Fortunately, it not a matter of 'if', but 'when'. Until then, please file
-issues for any bugs encountered!
 
 Install
 -------

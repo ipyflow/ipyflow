@@ -29,7 +29,6 @@ In particular, `nbsafety` requires ***minimal to no changes*** in user
 behavior, opting to get out of the way unless absolutely necessary and letting
 you use notebooks the way you prefer.
 
-
 Install
 -------
 ```bash
@@ -38,7 +37,7 @@ pip install nbsafety
 
 If using JupyterLab, we highly recommend installing the companion extension:
 ```bash
-jupyter labextension install jupyterlab-nbsafety
+jupyter labextension install jupyterlab-nbsafety  # optional but highly recommended if using JupyterLab
 ```
 
 Interface

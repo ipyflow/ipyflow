@@ -38,12 +38,14 @@ class UpdateProtocol(object):
         self.updated_sym.namespace_stale_symbols.clear()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
+        if dsym.is_import:
+            return
         if skip_aliases:
             aliases_to_consider = {dsym}
         else:
             aliases_to_consider = self.safety.aliases[dsym.obj_id]
         for dsym_alias in aliases_to_consider:
-            if dsym_alias in self.seen:
+            if dsym_alias.is_import or dsym_alias in self.seen:
                 continue
             self.seen.add(dsym_alias)
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)

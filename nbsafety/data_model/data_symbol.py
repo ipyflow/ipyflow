@@ -240,8 +240,8 @@ class DataSymbol(object):
         return should_mark_stale
 
     def update_deps(self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True):
-        # skip mutations for imports
-        if mutated and self.is_import:
+        # skip updates for imported symbols
+        if self.is_import:
             return
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps

@@ -39,7 +39,7 @@ def test_dict_hierarchy():
     assert updated_symbol_names() == sorted(['d[foo]', 'd'])
     run_cell('d["foo"]["bar"] = []')
     assert updated_symbol_names() == sorted(['d[foo][bar]', 'd[foo]', 'd'])
-    run_cell('d["foo"]["bar"].append(0)')
+    run_cell('d["foo"]["bar"] = 0')
     assert updated_symbol_names() == sorted(['d[foo][bar]', 'd[foo]', 'd'])
 
 

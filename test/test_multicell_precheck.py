@@ -164,3 +164,21 @@ def test_fresh_after_import():
     response = _safety_state[0].multicell_precheck(cells)
     assert response['stale_input_cells'] == []
     assert response['stale_output_cells'] == [0]
+
+
+def test_external_object_update_propagates_to_stale_namespace_symbols():
+    cells = {
+        0: 'import fakelib',
+        1: 'foo = fakelib.Foo()',
+        2: 'logging.info(foo.x)',
+        3: 'x = 42',
+        4: 'foo.x = x + 1',
+        5: 'x = 43',
+        6: 'foo = foo.set_x(10)',
+    }
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    response = _safety_state[0].multicell_precheck(cells)
+    print(response)
+    assert response['stale_input_cells'] == []
+    assert response['stale_output_cells'] == [2, 4]

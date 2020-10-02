@@ -22,9 +22,14 @@ class UpdateProtocol(object):
         self.seen: Set[DataSymbol] = set()
 
     def __call__(self, propagate=True):
+        namespace_refresh = None
         if propagate:
             if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
+            namespace = self.safety.namespaces.get(self.updated_sym.obj_id, None)
+            if namespace is not None:
+                # TODO: go deeper?
+                namespace_refresh = set(namespace.all_data_symbols_this_indentation())
         updated_symbols = set(self.seen)
         self.safety.updated_symbols |= updated_symbols
         self.seen |= self.new_deps  # don't propagate to stuff on RHS
@@ -33,9 +38,16 @@ class UpdateProtocol(object):
         # important! don't bump defined_cell_num until the very end!
         #  need to wait until here because, by default,
         #  we don't want to propagate to symbols defined in the same cell
-        self.updated_sym.defined_cell_num = cell_counter()
-        self.updated_sym.fresher_ancestors.clear()
-        self.updated_sym.namespace_stale_symbols.clear()
+        for updated_sym in updated_symbols:
+            if not updated_sym.is_stale:
+                updated_sym.refresh()
+        self.updated_sym.refresh()
+        if namespace_refresh is not None:
+            for updated_sym in namespace_refresh:
+                updated_sym.refresh()
+        # self.updated_sym.defined_cell_num = cell_counter()
+        # self.updated_sym.fresher_ancestors.clear()
+        # self.updated_sym.namespace_stale_symbols.clear()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
         if dsym.is_import:
@@ -57,6 +69,7 @@ class UpdateProtocol(object):
             containing_namespace_obj_id = containing_scope.obj_id
             for alias in self.safety.aliases[containing_namespace_obj_id]:
                 alias.namespace_stale_symbols.discard(dsym)
+                # print('discard stale', dsym, 'from', alias, 'namespace, has fresher ancestors:', alias.fresher_ancestors)
                 self._collect_updated_symbols(alias)
 
     def _propagate_staleness_to_namespace_parents(self, dsym: 'DataSymbol', skip_seen_check=False):

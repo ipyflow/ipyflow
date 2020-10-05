@@ -13,7 +13,7 @@ class StatementInserter(ast.NodeTransformer):
         else:
             self.stmt_to_insert_before = stmt_to_insert_before
 
-    def visit(self, node: 'ast.AST'):
+    def visit(self, node):
         if not hasattr(node, 'body'):
             return node
         if not all(isinstance(nd, ast.stmt) for nd in node.body):

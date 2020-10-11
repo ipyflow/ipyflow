@@ -26,10 +26,12 @@ class UpdateProtocol(object):
         if propagate:
             if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
-            namespace = self.safety.namespaces.get(self.updated_sym.obj_id, None)
-            if namespace is not None:
-                # TODO: go deeper?
-                namespace_refresh = set(namespace.all_data_symbols_this_indentation())
+            if self.updated_sym.cached_obj_id is not None:
+                # TODO: also condition on non simple assign
+                namespace = self.safety.namespaces.get(self.updated_sym.obj_id, None)
+                if namespace is not None:
+                    # TODO: go deeper?
+                    namespace_refresh = set(namespace.all_data_symbols_this_indentation())
         updated_symbols = set(self.seen)
         self.safety.updated_symbols |= updated_symbols
         self.seen |= self.new_deps  # don't propagate to stuff on RHS
@@ -45,9 +47,6 @@ class UpdateProtocol(object):
         if namespace_refresh is not None:
             for updated_sym in namespace_refresh:
                 updated_sym.refresh()
-        # self.updated_sym.defined_cell_num = cell_counter()
-        # self.updated_sym.fresher_ancestors.clear()
-        # self.updated_sym.namespace_stale_symbols.clear()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
         if dsym.is_import:

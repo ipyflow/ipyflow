@@ -199,3 +199,8 @@ History
 0.0.53 (2020-08-29)
 -------------------
 * Fix pandas perf issue and other minor improvements;
+
+0.0.54 (2020-10-11)
+-------------------
+* Propagate freshness to namespace children;
+* Make jupyterlab a requirement;

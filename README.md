@@ -13,6 +13,15 @@
 )](https://mybinder.org/v2/gh/nbsafety-project/nbsafety/master?urlpath=lab/tree/notebooks/demo.ipynb)
 
 
+JupyterCon 2020
+---------------
+![https://cfp.jupytercon.com/2020/schedule/presentation/274/tuesday-poster-session/](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/jupytercon.png)
+
+This repo is made available as a special prerelease for JupyterCon 2020.
+Check out the [tutorial repository](https://github.com/nbsafety-project/tutorial)
+for a hands-on introduction. Please give `nbsafety` a try, star it, and open issues ---
+this is super helpful in these early stages!
+
 About
 -----
 `nbsafety` adds a layer of protection to computational notebooks by solving the

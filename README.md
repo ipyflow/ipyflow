@@ -36,7 +36,7 @@ is suggested for re-execution with a turquoise highlight. The third cell contain
 to a stale `y` -- `y` is stale due to its dependency on an old value of `f`. As such, the third
 cell is marked as unsafe for re-execution with a red highlight.
 Once the second cell is rerun, it is now suggested to re-execute the third cell in order to
-refresh the third cell's stale output
+refresh its stale output.
 
 
 `nbsafety` accomplishes its magic using a combination of a runtime tracer (to

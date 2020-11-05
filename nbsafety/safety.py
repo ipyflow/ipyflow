@@ -154,29 +154,37 @@ class NotebookSafety(object):
                     fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
-        stale_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
+        stale_links: 'Dict[CellId, Set[CellId]]' = defaultdict(set)
         refresher_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
         for stale_cell_id in stale_input_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
-            refresher_cell_ids_prev = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
-            while True:
-                refresher_cell_ids = set()
-                for cell_id in refresher_cell_ids_prev:
-                    if cell_id in stale_input_cells:
-                        refresher_cell_ids |= set(stale_links[cell_id])
-                    else:
-                        refresher_cell_ids.add(cell_id)
-                if refresher_cell_ids == refresher_cell_ids_prev:
-                    break
-                refresher_cell_ids_prev = refresher_cell_ids
-            refresher_cell_ids -= stale_input_cells
-            stale_links[stale_cell_id] = list(refresher_cell_ids)
-            for refresher_cell_id in refresher_cell_ids:
+            refresher_cell_ids = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
+            stale_links[stale_cell_id] = refresher_cell_ids
+        stale_links_unchanged = True
+        # transitive closer up until we hit non-stale refresher cells
+        while stale_links_unchanged:
+            stale_links_unchanged = False
+            for stale_cell_id in stale_input_cells:
+                new_stale_links = set(stale_links[stale_cell_id])
+                original_length = len(new_stale_links)
+                for refresher_cell_id in stale_links[stale_cell_id]:
+                    if refresher_cell_id not in stale_input_cells:
+                        continue
+                    new_stale_links |= stale_links[refresher_cell_id]
+                new_stale_links.discard(stale_cell_id)
+                stale_links_unchanged = stale_links_unchanged and original_length != len(new_stale_links)
+                stale_links[stale_cell_id] = new_stale_links
+        for stale_cell_id in stale_input_cells:
+            stale_links[stale_cell_id] -= stale_input_cells
+            for refresher_cell_id in stale_links[stale_cell_id]:
                 refresher_links[refresher_cell_id].append(stale_cell_id)
         return {
             'stale_input_cells': list(stale_input_cells),
             'stale_output_cells': stale_output_cells,
-            'stale_links': stale_links,
+            'stale_links': {
+                stale_cell_id: list(refresher_cell_ids)
+                for stale_cell_id, refresher_cell_ids in stale_links.items()
+            },
             'refresher_links': refresher_links,
         }
 

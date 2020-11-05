@@ -33,6 +33,7 @@ from nbsafety.utils import DotDict
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
     from nbsafety.data_model.data_symbol import DataSymbol
+    CellId = Union[str, int]
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -137,8 +138,8 @@ class NotebookSafety(object):
         stale_input_cells = set()
         stale_output_cells = []
         fresh_cells = []
-        stale_symbols_by_cell_id: 'Dict[Union[int, str], Set[DataSymbol]]' = {}
-        killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[Union[int, str]]]' = defaultdict(set)
+        stale_symbols_by_cell_id: 'Dict[CellId, Set[DataSymbol]]' = {}
+        killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[CellId]]' = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
             try:
                 stale_symbols, dead_symbols, _, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
@@ -153,8 +154,8 @@ class NotebookSafety(object):
                     fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
-        stale_links = defaultdict(list)
-        refresher_links = defaultdict(list)
+        stale_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
+        refresher_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
         for stale_cell_id in stale_input_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             refresher_cell_ids_prev = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
@@ -168,8 +169,8 @@ class NotebookSafety(object):
                 if refresher_cell_ids == refresher_cell_ids_prev:
                     break
                 refresher_cell_ids_prev = refresher_cell_ids
-            refresher_cell_ids = list(refresher_cell_ids - stale_input_cells)
-            stale_links[stale_cell_id] = refresher_cell_ids
+            refresher_cell_ids -= stale_input_cells
+            stale_links[stale_cell_id] = list(refresher_cell_ids)
             for refresher_cell_id in refresher_cell_ids:
                 refresher_links[refresher_cell_id].append(stale_cell_id)
         return {

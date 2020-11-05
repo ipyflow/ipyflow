@@ -134,7 +134,7 @@ class NotebookSafety(object):
             logger.error('Unsupported request type for request %s' % request)
 
     def multicell_precheck(self, cells_by_id: 'Dict[Union[int, str], str]') -> 'Dict[str, Any]':
-        stale_input_cells = []
+        stale_input_cells = set()
         stale_output_cells = []
         fresh_cells = []
         stale_symbols_by_cell_id: 'Dict[Union[int, str], Set[DataSymbol]]' = {}
@@ -144,26 +144,36 @@ class NotebookSafety(object):
                 stale_symbols, dead_symbols, _, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
-                    stale_input_cells.append(cell_id)
+                    stale_input_cells.add(cell_id)
+                for dead_sym in dead_symbols:
+                    killing_cell_ids_for_symbol[dead_sym].add(cell_id)
+                if max_defined_cell_num > self._counters_by_cell_id.get(cell_id, cast(int, float('inf'))):
+                    stale_output_cells.append(cell_id)
                 else:
-                    for dead_sym in dead_symbols:
-                        killing_cell_ids_for_symbol[dead_sym].add(cell_id)
-                    if max_defined_cell_num > self._counters_by_cell_id.get(cell_id, cast(int, float('inf'))):
-                        stale_output_cells.append(cell_id)
-                    else:
-                        fresh_cells.append(cell_id)
+                    fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
         stale_links = defaultdict(list)
         refresher_links = defaultdict(list)
         for stale_cell_id in stale_input_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
-            refresher_cell_ids = list(set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)))
+            refresher_cell_ids_prev = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
+            while True:
+                refresher_cell_ids = set()
+                for cell_id in refresher_cell_ids_prev:
+                    if cell_id in stale_input_cells:
+                        refresher_cell_ids |= set(stale_links[cell_id])
+                    else:
+                        refresher_cell_ids.add(cell_id)
+                if refresher_cell_ids == refresher_cell_ids_prev:
+                    break
+                refresher_cell_ids_prev = refresher_cell_ids
+            refresher_cell_ids = list(refresher_cell_ids - stale_input_cells)
             stale_links[stale_cell_id] = refresher_cell_ids
             for refresher_cell_id in refresher_cell_ids:
                 refresher_links[refresher_cell_id].append(stale_cell_id)
         return {
-            'stale_input_cells': stale_input_cells,
+            'stale_input_cells': list(stale_input_cells),
             'stale_output_cells': stale_output_cells,
             'stale_links': stale_links,
             'refresher_links': refresher_links,

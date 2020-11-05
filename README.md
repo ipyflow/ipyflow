@@ -13,13 +13,6 @@
 )](https://mybinder.org/v2/gh/nbsafety-project/nbsafety/master?urlpath=lab/tree/notebooks/demo.ipynb)
 
 
-[![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/risecamp.png)](https://risecamp.berkeley.edu/)
-
-This repo is made available as a special prerelease for RISE Camp 2020.
-Check out the [tutorial](https://github.com/nbsafety-project/tutorial)
-for a hands-on introduction. Please give `nbsafety` a try, star it, and open issues ---
-this is super helpful in these early stages!
-
 About
 -----
 `nbsafety` adds a layer of protection to computational notebooks by solving the

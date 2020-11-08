@@ -30,7 +30,7 @@ function NbsafetyPageObject() {
     codeCell.click();
     this.clickRunCell();
     this.kernelIdleIcon.waitForEnabled(120000);
-    browser.pause(50);
+    browser.pause(500);
     return codeCell;
   };
 

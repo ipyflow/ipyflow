@@ -24,6 +24,12 @@ function NbsafetyPageObject() {
   NbsafetyPageObject.prototype = Object.create(LabPageObject);
 
 
+  this.getInputCollapserChildByIndex = function (index) {
+    return browser.$$(
+        'div.jp-Cell.jp-CodeCell.jp-Notebook-cell > div.jp-Cell-inputWrapper > div.jp-InputCollapser > div.jp-Collapser-child'
+    )[index];
+  }
+
   this.runCodeCellByIndex = function (index) {
     var codeCell = this.getCodeCellByIndex(index);
     codeCell.scrollIntoView();

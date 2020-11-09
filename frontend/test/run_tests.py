@@ -71,7 +71,7 @@ def main():
         if not line:
             continue
         print(line)
-        if 'The Jupyter Notebook is running' in line:
+        if 'Jupyter Notebook' in line and 'is running' in line:
             break
 
     signal.signal(signal.SIGINT, make_signal_handler(nbsafety))

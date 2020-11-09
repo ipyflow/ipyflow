@@ -160,10 +160,10 @@ class NotebookSafety(object):
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             refresher_cell_ids = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
             stale_links[stale_cell_id] = refresher_cell_ids
-        stale_links_unchanged = True
+        stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells
-        while stale_links_unchanged:
-            stale_links_unchanged = False
+        while stale_link_changes:
+            stale_link_changes = False
             for stale_cell_id in stale_input_cells:
                 new_stale_links = set(stale_links[stale_cell_id])
                 original_length = len(new_stale_links)
@@ -172,7 +172,7 @@ class NotebookSafety(object):
                         continue
                     new_stale_links |= stale_links[refresher_cell_id]
                 new_stale_links.discard(stale_cell_id)
-                stale_links_unchanged = stale_links_unchanged and original_length != len(new_stale_links)
+                stale_link_changes = stale_link_changes or original_length != len(new_stale_links)
                 stale_links[stale_cell_id] = new_stale_links
         for stale_cell_id in stale_input_cells:
             stale_links[stale_cell_id] -= stale_input_cells

@@ -1605,3 +1605,20 @@ def test_no_rhs_propagation():
     run_cell('x = x[inds]')
     run_cell('y = y[inds]')
     assert_not_detected('`inds` not considered stale since it appears on RHS of assignment')
+
+
+def test_if_true():
+    run_cell('y = 0')
+    run_cell('z = 42')
+    run_cell("""
+if True:
+    x = y + 1
+else:
+    x = z + 1
+""")
+    run_cell('z = 43')
+    run_cell('logging.info(x)')
+    assert_not_detected('`x` not dependent on `z`')
+    run_cell('y = 99')
+    run_cell('logging.info(x)')
+    assert_detected('`x` dependent on old `y`')

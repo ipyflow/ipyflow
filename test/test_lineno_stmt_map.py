@@ -38,3 +38,17 @@ for i in [
     assert isinstance(mapping[8], ast.Assign)
     assert isinstance(mapping[9], ast.Assign)
     assert isinstance(mapping[10], ast.Assign)
+
+
+def test_if():
+    code = """
+if True:
+    x = 0
+else:
+    x: int = 0
+""".strip()
+    mapping = compute_lineno_to_stmt_mapping(code)
+    assert isinstance(mapping[1], ast.If)
+    assert isinstance(mapping[2], ast.Assign)
+    assert 3 not in mapping
+    assert isinstance(mapping[4], ast.AnnAssign)

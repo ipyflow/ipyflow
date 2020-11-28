@@ -379,6 +379,28 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         yield
         self.inside_attrsub_load_chain = old
 
+    def visit_If(self, node: 'ast.If'):
+        """
+        This is to handle a corner case where the condition has a constant.
+        E.g.:
+        ```
+        if True:
+            ...
+        else:
+            ...
+        ```
+        Somehow this messes up the line numbers for the tracer.
+        Workaround is to make the interpreter to extra work in the
+        test of the conditional.
+        """
+        replacement_test = ast.Call(
+            func=ast.Name('bool', ast.Load()),
+            args=[node.test],
+            keywords=[]
+        )
+        node.test = replacement_test
+        return node
+
     def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
         return self.visit_Attribute_or_Subscript(node, call_context)
 

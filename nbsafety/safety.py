@@ -206,7 +206,10 @@ class NotebookSafety(object):
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
         live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
         live_symbols = live_symbols.union(compute_call_chain_live_symbols(called_symbols))
-        dead_symbols, _ = get_symbols_for_references(dead_symbol_refs, self.global_scope)
+        # only mark dead attrsubs as killed if we can traverse the entire chain
+        dead_symbols, _ = get_symbols_for_references(
+            dead_symbol_refs, self.global_scope, only_add_successful_resolutions=True
+        )
         stale_symbols = set()
         for dsym in live_symbols:
             max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)

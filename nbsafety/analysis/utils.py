@@ -16,21 +16,25 @@ logger = logging.getLogger(__name__)
 
 
 def get_symbols_for_references(
-        symbol_refs: 'Set[SymbolRef]', scope: 'Scope'
+        symbol_refs: 'Set[SymbolRef]',
+        scope: 'Scope',
+        only_add_successful_resolutions: bool = False
 ) -> 'Tuple[Set[DataSymbol], Set[DataSymbol]]':
     symbols = set()
     called_symbols = set()
     for symbol_ref in symbol_refs:
+        success = True
         if isinstance(symbol_ref, str):
             dsym = scope.lookup_data_symbol_by_name(symbol_ref)
             called_dsym = None
         elif isinstance(symbol_ref, AttrSubSymbolChain):
-            dsym, called_dsym = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
+            dsym, called_dsym, success = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
         else:
             logger.warning('invalid type for ref %s', symbol_ref)
             continue
         if dsym is not None:
-            symbols.add(dsym)
+            if success or not only_add_successful_resolutions:
+                symbols.add(dsym)
         if called_dsym is not None:
             called_symbols.add(called_dsym)
     return symbols, called_symbols

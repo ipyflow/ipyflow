@@ -114,7 +114,7 @@ class Scope(object):
         for name in chain.symbols:
             if isinstance(name, CallPoint):
                 next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
-                return dsym, next_dsym
+                return dsym, next_dsym, False
             next_dsym = cur_scope.lookup_data_symbol_by_name(name)
             # HUGE HACK: prevents us from checking namespace symbols unless entire namespace is stale
             # TODO: get rid of the cell number check once namespace symbols created for dictionary literals
@@ -129,7 +129,9 @@ class Scope(object):
             cur_scope = self.safety.namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
-        return dsym, None
+        else:
+            return dsym, None, True
+        return dsym, None, False
 
     def upsert_data_symbol_for_name(
             self,

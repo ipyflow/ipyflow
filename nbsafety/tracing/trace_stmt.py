@@ -9,7 +9,6 @@ from nbsafety.analysis import (
     get_statement_symbol_edges
 )
 from nbsafety.data_model.scope import NamespaceScope
-from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing.attrsub_tracing import MethodSpecialCase
 
 if TYPE_CHECKING:
@@ -32,6 +31,7 @@ class TraceStatement(object):
         self.call_point_deps: List[Set[DataSymbol]] = []
         self.lambda_call_point_deps_done_once = False
         self._marked_finished = False
+        self.call_seen = False
 
     @contextmanager
     def replace_active_scope(self, new_active_scope):

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import builtins
 from collections import defaultdict
 from contextlib import contextmanager
 import inspect
@@ -28,6 +29,7 @@ from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState
+from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.utils import DotDict
 
 if TYPE_CHECKING:
@@ -332,11 +334,28 @@ class NotebookSafety(object):
     def _tracing_context(self):
         self.updated_symbols.clear()
         self.updated_scopes.clear()
-        sys.settrace(make_tracer(self))
+        tracer = make_tracer(self)
+        seen_sites = set()
+
+        def _XuikX_reenable_tracing(site_id):
+            if site_id in seen_sites:
+                return
+            seen_sites.add(site_id)
+            sys.settrace(tracer)
+        sys.settrace(tracer)
+
+        setattr(builtins, _XuikX_reenable_tracing.__name__, _XuikX_reenable_tracing)
         try:
-            with ast_transformer_context(self.attr_trace_manager.ast_transformer):
+            with ast_transformer_context([
+                self.attr_trace_manager.ast_transformer,
+                StatementInserter(
+                    '{trace_enabler}({{site_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
+                    cell_counter()
+                )
+            ]):
                 yield
         finally:
+            delattr(builtins, _XuikX_reenable_tracing.__name__)
             sys.settrace(None)
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state.error_occurred:

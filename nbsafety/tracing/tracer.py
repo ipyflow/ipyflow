@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from typing import TYPE_CHECKING
+import sys
 
 from IPython import get_ipython
 
@@ -41,7 +42,13 @@ def make_tracer(safety: 'NotebookSafety'):
             if state.call_depth == 0:
                 return tracer
 
+        # bytecode for a line w/ function call
+        # no need to trace these, and we definitely want to skip the calls to reenable tracing
+        if frame.f_code.co_code == b'e\x00d\x00\x83\x01\x01\x00d\x01S\x00':
+            return tracer
+
         cell_num, lineno = TraceState.get_position(frame)
+
         try:
             stmt_node = safety.statement_cache[cell_num][lineno]
         except KeyError:
@@ -53,11 +60,18 @@ def make_tracer(safety: 'NotebookSafety'):
             except (KeyError, IndexError) as e:
                 logger.error('%s: cell %d, line %d', e, cell_num, lineno)
 
-        trace_stmt = state.traced_statements.get(
-            id(stmt_node),
-            TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
-        )
-        state.traced_statements[id(stmt_node)] = trace_stmt
+        trace_stmt = state.traced_statements.get(id(stmt_node), None)
+        if trace_stmt is None:
+            trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
+            state.traced_statements[id(stmt_node)] = trace_stmt
+        if event == TraceEvent.call:
+            if trace_stmt.call_seen:
+                sys.settrace(None)
+                state.call_depth -= 1
+                if state.call_depth == 1:
+                    state.call_depth = 0
+                return None
+            trace_stmt.call_seen = True
         state.state_transition_hook(event, trace_stmt)
         return tracer
     return tracer

@@ -330,6 +330,18 @@ class NotebookSafety(object):
         _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
+    def enable_tracing(self, tracer=None):
+        assert not self.trace_state.tracing_enabled
+        if tracer is None:
+            tracer = make_tracer(self)
+        self.trace_state.tracing_enabled = True
+        sys.settrace(tracer)
+
+    def disable_tracing(self):
+        assert self.trace_state.tracing_enabled
+        self.trace_state.tracing_enabled = False
+        sys.settrace(None)
+
     @contextmanager
     def _tracing_context(self):
         self.updated_symbols.clear()
@@ -337,12 +349,21 @@ class NotebookSafety(object):
         tracer = make_tracer(self)
         seen_sites = set()
 
+        def _finish_tracing_reset():
+            # do nothing; we just want to trigger the newly reenabled tracer
+            pass
+
         def _XuikX_reenable_tracing(site_id):
             if site_id in seen_sites:
                 return
             seen_sites.add(site_id)
-            sys.settrace(tracer)
-        sys.settrace(tracer)
+            if not self.trace_state.tracing_enabled:
+                assert not self.trace_state.tracing_reset_pending
+                self.enable_tracing(tracer=tracer)
+                self.trace_state.tracing_reset_pending = True
+                _finish_tracing_reset()  # trigger the tracer with a frame
+
+        self.enable_tracing(tracer=tracer)
 
         setattr(builtins, _XuikX_reenable_tracing.__name__, _XuikX_reenable_tracing)
         try:

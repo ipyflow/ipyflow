@@ -3,13 +3,13 @@ import ast
 
 class StatementInserter(ast.NodeTransformer):
     def __init__(self, insert_stmt_template: str, cell_counter: int):
-        self.insert_stmt_template = insert_stmt_template
-        self.cell_counter = cell_counter
-        self.cur_line_id = 0
+        self._insert_stmt_template = insert_stmt_template
+        self._cell_counter = cell_counter
+        self._cur_line_id = 0
 
     def _get_parsed_insert_stmt(self):
-        ret = ast.parse(self.insert_stmt_template.format(site_id=(self.cell_counter, self.cur_line_id))).body[0]
-        self.cur_line_id += 1
+        ret = ast.parse(self._insert_stmt_template.format(site_id=(self._cell_counter, self._cur_line_id))).body[0]
+        self._cur_line_id += 1
         return ret
 
     def visit(self, node):

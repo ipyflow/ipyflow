@@ -28,6 +28,8 @@ class TraceState(object):
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.prev_event: Optional[TraceEvent] = None
         self.error_occurred = False
+        self.tracing_enabled = False
+        self.tracing_reset_pending = False
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
         if event not in (

@@ -1622,3 +1622,38 @@ else:
     run_cell('y = 99')
     run_cell('logging.info(x)')
     assert_detected('`x` dependent on old `y`')
+
+
+def test_tracing_reenabled_after_dup_funcall():
+    run_cell('x = 0')
+    run_cell("""
+def f():
+    pass
+""")
+    run_cell("""
+f()
+f()
+y = x + 1
+""")
+    run_cell('x = 42')
+    run_cell('logging.info(y)')
+    assert_detected()
+
+
+def test_one_time_tracing_func():
+    run_cell('x = 0')
+    run_cell('y = 1')
+    run_cell("""
+def f(p):
+    if p:
+        return x
+    else:
+        return y
+""")
+    run_cell('z = f(False) + 1\nz = f(True) + 1')
+    run_cell('y = 2')
+    run_cell('logging.info(z)')
+    assert_not_detected()
+    run_cell('x = 3')
+    run_cell('logging.info(z)')
+    assert_false_negative('tracing should have been reactivated')

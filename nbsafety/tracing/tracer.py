@@ -23,12 +23,48 @@ def make_tracer(safety: 'NotebookSafety'):
         logger.setLevel(logging.ERROR)
 
     def tracer(frame: 'FrameType', evt: str, _):
+        state = safety.trace_state  # we'll be using this a lot
+
+        if state.tracing_reset_pending:
+            assert TraceEvent(evt) == TraceEvent.call
+            state.tracing_reset_pending = False
+            call_depth = 0
+            while frame is not None:
+                if frame.f_code.co_filename.startswith('<ipython-input'):
+                    call_depth += 1
+                frame = frame.f_back
+            if call_depth == 1 and state.call_depth == 0:
+                call_depth = 0
+            if call_depth != state.call_depth:
+                state.safety.disable_tracing()
+            return None
+            # TODO: eventually we'd like to reenable tracing even when the call depth isn't mismatched
+            # scopes_to_push = []
+            # while frame is not None:
+            #     if frame.f_code.co_filename.startswith('<ipython-input'):
+            #         call_depth += 1
+            #         fun_name = frame.f_code.co_name
+            #         if fun_name == '<module>':
+            #             if state.call_depth == 0:
+            #                 state.call_depth = 1
+            #             break
+            #         cell_num, lineno = TraceState.get_position(frame)
+            #         stmt_node = safety.statement_cache[cell_num][lineno]
+            #         func_cell = state.safety.statement_to_func_cell[id(stmt_node)]
+            #         scopes_to_push.append(func_cell.call_scope)
+            #     frame = frame.f_back
+            # scopes_to_push.reverse()
+            # scopes_to_push = scopes_to_push[state.call_depth-1:]
+            # for scope in scopes_to_push:
+            #     state.safety.attr_trace_manager.push_stack(scope)
+            # state.call_depth = call_depth
+            # return None
+
         # notebook cells have filenames that appear as '<ipython-input...>'
         if not frame.f_code.co_filename.startswith('<ipython-input'):
             return
 
         event = TraceEvent(evt)
-        state = safety.trace_state  # we'll be using this a lot
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
@@ -66,10 +102,10 @@ def make_tracer(safety: 'NotebookSafety'):
             state.traced_statements[id(stmt_node)] = trace_stmt
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
-                sys.settrace(None)
                 state.call_depth -= 1
                 if state.call_depth == 1:
                     state.call_depth = 0
+                state.safety.disable_tracing()
                 return None
             trace_stmt.call_seen = True
         state.state_transition_hook(event, trace_stmt)

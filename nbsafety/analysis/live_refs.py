@@ -78,11 +78,16 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, ast.NodeVis
         self.visit_Assign_or_AugAssign_target(node.target)
         self.visit(node.value)
 
-    def visit_Assign_or_AugAssign_target(self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.expr]'):
+    def visit_Assign_or_AugAssign_target(
+            self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.Tuple, ast.List, ast.expr]'
+    ):
         if isinstance(target_node, ast.Name):
             self.dead.add(target_node.id)
         elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
             self.dead.add(get_attrsub_symbol_chain(target_node))
+        elif isinstance(target_node, (ast.Tuple, ast.List)):
+            for elt in target_node.elts:
+                self.visit_Assign_or_AugAssign_target(elt)
         else:
             logger.warning('unsupported type for node %s' % target_node)
 

@@ -101,10 +101,11 @@ def remove_dep(safety: 'NotebookSafety', line: 'List[str]'):
     if not child_data_sym:
         print("Cannot find DataSymbol", line[2])
         return
-    if child_data_sym not in parent_data_sym.children or parent_data_sym not in child_data_sym.parents:
+    if parent_data_sym not in child_data_sym.parents:
         print("Two DataSymbols do not have a dependency relation")
         return
-    parent_data_sym.children.remove(child_data_sym)
+    for children in parent_data_sym.children_by_cell_position.values():
+        children.remove(child_data_sym)
     child_data_sym.parents.remove(parent_data_sym)
 
 
@@ -120,10 +121,10 @@ def add_dep(safety: 'NotebookSafety', line: 'List[str]'):
     if not child_data_sym:
         print("Cannot find DataSymbol", line[2])
         return
-    if child_data_sym in parent_data_sym.children and parent_data_sym in child_data_sym.parents:
+    if parent_data_sym in child_data_sym.parents:
         print("Two DataSymbols already have a dependency relation")
         return
-    parent_data_sym.children.add(child_data_sym)
+    parent_data_sym.children_by_cell_position[-1].add(child_data_sym)
     child_data_sym.parents.add(parent_data_sym)
 
 

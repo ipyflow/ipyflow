@@ -8,7 +8,6 @@ from nbsafety.tracing.trace_events import TraceEvent
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Set, Tuple
     from types import FrameType
-    from nbsafety.data_model.scope import NamespaceScope
     from nbsafety.tracing.trace_stmt import TraceStatement
     from nbsafety.safety import NotebookSafety
 
@@ -27,6 +26,7 @@ class TraceState(object):
         self.source: Optional[str] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.prev_event: Optional[TraceEvent] = None
+        self.cur_cell_position_idx = -1
         self.error_occurred = False
         self.tracing_enabled = False
         self.tracing_reset_pending = False

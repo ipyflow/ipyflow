@@ -34,13 +34,13 @@ const extension: JupyterFrontEndPlugin<void> = {
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
-        clearCellState(nbPanel.content);
+        clearCellState(nbPanel.content, -1);
         let commDisconnectHandler = connectToComm(
           session.session.kernel,
           nbPanel.content
         );
         session.kernelChanged.connect(() => {
-          clearCellState(nbPanel.content);
+          clearCellState(nbPanel.content, -1);
           commDisconnectHandler();
           commDisconnectHandler = connectToComm(
             session.session.kernel,
@@ -56,7 +56,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           if ((status === 'idle' || status === 'busy') && shouldReconnect) {
             shouldReconnect = false;
             session.ready.then(() => {
-              clearCellState(nbPanel.content);
+              clearCellState(nbPanel.content, -1);
               commDisconnectHandler();
               commDisconnectHandler = connectToComm(
                   session.session.kernel,
@@ -125,8 +125,11 @@ const addStaleOutputInteractions = (elem: HTMLElement) => {
   );
 };
 
-const clearCellState = (notebook: Notebook) => {
+const clearCellState = (notebook: Notebook, lastCellExecPositionIdx: any) => {
   notebook.widgets.forEach((cell, idx) => {
+    if (idx < lastCellExecPositionIdx) {
+      return;
+    }
     cell.node.classList.remove(staleClass);
     cell.node.classList.remove(refresherClass);
     cell.node.classList.remove(staleOutputClass);
@@ -180,8 +183,10 @@ const connectToComm = (
       return;
     }
     const content_by_cell_id: {[id: string]: string} = {};
+    const order_index_by_cell_id: {[id: string]: number} = {};
     notebook.widgets.forEach((itercell, idx) => {
       content_by_cell_id[itercell.model.id] = itercell.model.value.text;
+      order_index_by_cell_id[itercell.model.id] = idx;
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(staleOutputClass);
         itercell.node.classList.remove(refresherInputClass);
@@ -190,10 +195,26 @@ const connectToComm = (
     const payload = {
       type: 'cell_freshness',
       executed_cell_id: cell.id,
-      content_by_cell_id: content_by_cell_id
+      content_by_cell_id: content_by_cell_id,
+      order_index_by_cell_id: order_index_by_cell_id,
     };
     comm.send(payload);
   };
+
+  const notifyActiveCell = (newActiveCell: ICellModel) => {
+    let newActiveCellOrderIdx = -1;
+    notebook.widgets.forEach((itercell, idx) => {
+      if (itercell.model.id === newActiveCell.id) {
+        newActiveCellOrderIdx = idx;
+      }
+    });
+    const payload = {
+      type: 'change_active_cell',
+      'active_cell_id': newActiveCell.id,
+      'active_cell_order_idx': newActiveCellOrderIdx
+    }
+    comm.send(payload);
+  }
 
   const onNotebookStateChange = (nb: Notebook, args: IChangedArgs<any>) => {
     if (disconnected) {
@@ -210,6 +231,7 @@ const connectToComm = (
     const newActiveCell = nb.model.cells.get(args.newValue);
     if (newActiveCell !== null) {
       newActiveCell.stateChanged.connect(onExecution);
+      notifyActiveCell(newActiveCell);
     }
   }
   notebook.stateChanged.connect(onNotebookStateChange);
@@ -220,17 +242,24 @@ const connectToComm = (
     }
     if (msg.content.data['type'] === 'establish') {
       notebook.activeCell.model.stateChanged.connect(onExecution);
+      notifyActiveCell(notebook.activeCell.model);
     } else if (msg.content.data['type'] === 'cell_freshness') {
-      clearCellState(notebook);
       const staleInputCells: any = msg.content.data['stale_input_cells'];
       const staleOutputCells: any = msg.content.data['stale_output_cells'];
       const staleLinks: any = msg.content.data['stale_links'];
       const refresherLinks: any = msg.content.data['refresher_links'];
+      const lastCellExecPositionIdx: any = msg.content.data['last_cell_exec_position_idx'];
       const cellsById: {[id: string]: HTMLElement} = {};
+      const orderIdxById: {[id: string]: number} = {};
+      clearCellState(notebook, lastCellExecPositionIdx);
       notebook.widgets.forEach((cell, idx) => {
         cellsById[cell.model.id] = cell.node;
+        orderIdxById[cell.model.id] = idx;
       });
       for (const [id, elem] of Object.entries(cellsById)) {
+        if (orderIdxById[id] < lastCellExecPositionIdx) {
+          continue;
+        }
         if (staleInputCells.indexOf(id) > -1) {
           elem.classList.add(staleClass);
           elem.classList.add(staleOutputClass);

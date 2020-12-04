@@ -14,7 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 class UpdateProtocol(object):
-    def __init__(self, safety: 'NotebookSafety', updated_sym: 'DataSymbol', new_deps: 'Set[DataSymbol]', mutated: bool):
+    def __init__(
+            self,
+            safety: 'NotebookSafety',
+            updated_sym: 'DataSymbol',
+            new_deps: 'Set[DataSymbol]',
+            mutated: bool
+    ):
         self.safety = safety
         self.updated_sym = updated_sym
         self.new_deps = new_deps
@@ -87,16 +93,22 @@ class UpdateProtocol(object):
 
     def _non_class_to_instance_children(self, dsym):
         if self.updated_sym is dsym:
-            yield from dsym.children
-            return
-        for child in dsym.children:
-            # Next, complicated check to avoid propagating along a class -> instance edge.
-            # The only time this is OK is when we changed the class, which will not be the case here.
-            child_namespace = child.namespace
-            if child_namespace is not None and child_namespace.cloned_from is not None:
-                if child_namespace.cloned_from.obj_id == dsym.obj_id:
+            for dep_introduced_pos, dsym_children in dsym.children_by_cell_position.items():
+                if not self.safety.config.get('backwards_cell_staleness_propagation', True) and dep_introduced_pos <= self.safety.active_cell_position_idx:
                     continue
-            yield child
+                yield from dsym_children
+            return
+        for dep_introduced_pos, dsym_children in dsym.children_by_cell_position.items():
+            if not self.safety.config.get('backwards_cell_staleness_propagation', True) and dep_introduced_pos <= self.safety.active_cell_position_idx:
+                continue
+            for child in dsym_children:
+                # Next, complicated check to avoid propagating along a class -> instance edge.
+                # The only time this is OK is when we changed the class, which will not be the case here.
+                child_namespace = child.namespace
+                if child_namespace is not None and child_namespace.cloned_from is not None:
+                    if child_namespace.cloned_from.obj_id == dsym.obj_id:
+                        continue
+                yield child
 
     def _propagate_staleness_to_namespace_children(self, dsym: 'DataSymbol', skip_seen_check=False):
         if not skip_seen_check and dsym in self.seen:

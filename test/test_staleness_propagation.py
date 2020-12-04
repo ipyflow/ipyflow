@@ -747,15 +747,6 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
-def test_attributes_2_old_protocol():
-    prev = _safety_state[0].config.get('use_new_update_protocol', True)
-    try:
-        _safety_state[0].config.use_new_update_protocol = False
-        test_attributes_2()
-    finally:
-        _safety_state[0].config.use_new_update_protocol = prev
-
-
 def test_attributes_3():
     run_cell("""
 class Foo(object):
@@ -1508,16 +1499,6 @@ foo.y = x + 7
     run_cell('foo = 81')
     run_cell('logging.info(x)')
     assert_detected('`x` has stale dep on `foo` (transitively through `foo.y`)')
-
-
-@pytest.mark.parametrize("intra_cell_staleness_propagation", [True, False])
-def test_attr_dep_with_top_level_overwrite_old_protocol(intra_cell_staleness_propagation):
-    prev = _safety_state[0].config.get('use_new_update_protocol', True)
-    try:
-        _safety_state[0].config.use_new_update_protocol = False
-        test_attr_dep_with_top_level_overwrite(intra_cell_staleness_propagation)
-    finally:
-        _safety_state[0].config.use_new_update_protocol = prev
 
 
 def test_typed_assignment():

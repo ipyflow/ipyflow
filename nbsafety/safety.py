@@ -79,6 +79,7 @@ class NotebookSafety(object):
         self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(
             self, self.global_scope, self.trace_event_counter
         )
+        self.active_cell_position_idx = -1
         self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[Union[str, int], int] = {}
         self._active_cell_id: Optional[str] = None
@@ -97,9 +98,9 @@ class NotebookSafety(object):
             use_comm=use_comm,
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             intra_cell_staleness_propagation=True,
+            backwards_cell_staleness_propagation=True,
             track_dependencies=True,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
-            use_new_update_protocol=True,
             mode=kwargs.pop('mode', SafetyRunMode.DEVELOP),
             **kwargs
         ))
@@ -124,32 +125,39 @@ class NotebookSafety(object):
     def handle(self, request, comm=None):
         if request['type'] == 'change_active_cell':
             self.set_active_cell(request['active_cell_id'])
+            self.active_cell_position_idx = request.get('active_cell_order_idx', -1)
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
             if cell_id is not None:
                 self._counters_by_cell_id[cell_id] = self._last_execution_counter
             cells_by_id = request['content_by_cell_id']
-            # order_index_by_id = request['order_index_by_cell_id']
-            # min_idx = order_index_by_id.get(cell_id, float('-inf'))
-            # cells_by_id = {
-            #     cell_id: cell_contents
-            #     for cell_id, cell_contents in cells_by_id.items()
-            #     if order_index_by_id.get(cell_id, float('inf')) > min_idx
-            # }
-            response = self.multicell_precheck(cells_by_id)
+            if self.config.get('backwards_cell_staleness_propagation', True):
+                order_index_by_id = None
+                last_cell_exec_position_idx = -1
+            else:
+                order_index_by_id = request['order_index_by_cell_id']
+                last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
+            response = self.multicell_precheck(cells_by_id, order_index_by_id)
             response['type'] = 'cell_freshness'
+            response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             if comm is not None:
                 comm.send(response)
         else:
             logger.error('Unsupported request type for request %s' % request)
 
-    def multicell_precheck(self, cells_by_id: 'Dict[Union[int, str], str]') -> 'Dict[str, Any]':
+    def multicell_precheck(
+            self,
+            cells_by_id: 'Dict[Union[int, str], str]',
+            order_index_by_cell_id: 'Optional[Dict[Union[int, str], int]]' = None
+    ) -> 'Dict[str, Any]':
         stale_input_cells = set()
         stale_output_cells = []
         fresh_cells = []
         stale_symbols_by_cell_id: 'Dict[CellId, Set[DataSymbol]]' = {}
         killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[CellId]]' = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
+            if order_index_by_cell_id is not None and order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx:
+                continue
             try:
                 stale_symbols, dead_symbols, _, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
                 if len(stale_symbols) > 0:
@@ -389,12 +397,6 @@ class NotebookSafety(object):
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state.error_occurred:
             self._reset_trace_state_hook()
-            if self.config.get('use_new_update_protocol', False):
-                return
-            for updated_symbol in self.updated_symbols:
-                updated_symbol.refresh()
-            for updated_scope in self.updated_scopes:
-                updated_scope.refresh()
 
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:

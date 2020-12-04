@@ -8,6 +8,7 @@ from nbsafety.tracing.trace_events import TraceEvent
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Set, Tuple
     from types import FrameType
+    from nbsafety.data_model.scope import NamespaceScope
     from nbsafety.tracing.trace_stmt import TraceStatement
     from nbsafety.safety import NotebookSafety
 

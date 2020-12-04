@@ -111,8 +111,9 @@ class NotebookSafety(object):
     def is_develop(self) -> bool:
         return self.config.get('mode', SafetyRunMode.DEVELOP) == SafetyRunMode.DEVELOP
 
-    def set_active_cell(self, cell_id):
+    def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
+        self.active_cell_position_idx = position_idx
 
     def _comm_target(self, comm, open_msg):
         @comm.on_msg
@@ -124,8 +125,7 @@ class NotebookSafety(object):
 
     def handle(self, request, comm=None):
         if request['type'] == 'change_active_cell':
-            self.set_active_cell(request['active_cell_id'])
-            self.active_cell_position_idx = request.get('active_cell_order_idx', -1)
+            self.set_active_cell(request['active_cell_id'], position_idx=request.get('active_cell_order_idx', -1))
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
             if cell_id is not None:

@@ -62,9 +62,12 @@ def make_tracer(safety: 'NotebookSafety'):
 
         # notebook cells have filenames that appear as '<ipython-input...>'
         if not frame.f_code.co_filename.startswith('<ipython-input'):
-            return
+            return None
 
         event = TraceEvent(evt)
+
+        if event != TraceEvent.return_ and not state.tracing_enabled:
+            return None
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
@@ -102,12 +105,16 @@ def make_tracer(safety: 'NotebookSafety'):
             state.traced_statements[id(stmt_node)] = trace_stmt
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
+                # state.tracing_enabled = False
                 state.call_depth -= 1
                 if state.call_depth == 1:
                     state.call_depth = 0
                 state.safety.disable_tracing()
                 return None
             trace_stmt.call_seen = True
+        elif event == TraceEvent.return_ and not state.tracing_enabled:
+            state.tracing_enabled = True
+            return tracer
         state.state_transition_hook(event, trace_stmt)
         return tracer
     return tracer

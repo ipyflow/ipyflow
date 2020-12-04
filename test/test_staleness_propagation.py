@@ -1628,7 +1628,7 @@ def test_tracing_reenabled_after_dup_funcall():
     run_cell('x = 0')
     run_cell("""
 def f():
-    pass
+    return 42
 """)
     run_cell("""
 f()
@@ -1656,4 +1656,27 @@ def f(p):
     assert_not_detected()
     run_cell('x = 3')
     run_cell('logging.info(z)')
-    assert_false_negative('tracing should have been reactivated')
+    assert_false_negative('tracing should have been reactivated but this is hard')
+
+
+def test_tracing_disable_with_nested_calls():
+    run_cell('%safety trace_messages enable')
+    run_cell('y = 0')
+    run_cell("""
+def f():
+    return y
+""")
+    run_cell("""
+def g(flag):
+    if flag:
+        return f()
+    else:
+        return 2
+""")
+    run_cell("""
+g(False)
+x = g(True) + 1
+""")
+    run_cell('y = 42')
+    run_cell('logging.info(x)')
+    assert_false_negative('`x` has dep on stale `y` but capturing this is hard')

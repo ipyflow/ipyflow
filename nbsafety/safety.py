@@ -129,6 +129,13 @@ class NotebookSafety(object):
             if cell_id is not None:
                 self._counters_by_cell_id[cell_id] = self._last_execution_counter
             cells_by_id = request['content_by_cell_id']
+            # order_index_by_id = request['order_index_by_cell_id']
+            # min_idx = order_index_by_id.get(cell_id, float('-inf'))
+            # cells_by_id = {
+            #     cell_id: cell_contents
+            #     for cell_id, cell_contents in cells_by_id.items()
+            #     if order_index_by_id.get(cell_id, float('inf')) > min_idx
+            # }
             response = self.multicell_precheck(cells_by_id)
             response['type'] = 'cell_freshness'
             if comm is not None:
@@ -378,6 +385,7 @@ class NotebookSafety(object):
         finally:
             delattr(builtins, _XuikX_reenable_tracing.__name__)
             sys.settrace(None)
+            self.trace_state.tracing_enabled = False
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state.error_occurred:
             self._reset_trace_state_hook()

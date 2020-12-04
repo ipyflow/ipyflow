@@ -170,12 +170,12 @@ class DataSymbol(object):
                 # namespace needs to stick around to properly handle the staleness propagation protocol
                 self.safety.aliases.pop(self.cached_obj_id, None)
 
-    def update_type(self, new_type):
-        self.symbol_type = new_type
-        if self.is_function:
-            self.call_scope = self.containing_scope.make_child_scope(self.name)
-        else:
-            self.call_scope = None
+    # def update_type(self, new_type):
+    #     self.symbol_type = new_type
+    #     if self.is_function:
+    #         self.call_scope = self.containing_scope.make_child_scope(self.name)
+    #     else:
+    #         self.call_scope = None
 
     def update_obj_ref(self, obj):
         tombstone, obj_ref, has_weakref = self._update_obj_ref_inner(obj)

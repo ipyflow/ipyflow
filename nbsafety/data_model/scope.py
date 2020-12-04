@@ -191,9 +191,9 @@ class Scope(object):
         if old_dc is not None and self.is_globally_accessible:
             old_id = old_dc.cached_obj_id
             # TODO: handle case where new dc is of different type
-            if name in self.data_symbol_by_name(old_dc.is_subscript):
+            if name in self.data_symbol_by_name(old_dc.is_subscript) and old_dc.symbol_type == symbol_type:
                 old_dc.update_obj_ref(obj)
-                old_dc.update_type(symbol_type)
+                # old_dc.update_type(symbol_type)
                 old_dc.update_stmt_node(stmt_node)
                 return old_dc, old_dc, old_id
             else:

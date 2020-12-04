@@ -176,6 +176,8 @@ class AttrSubTracingManager(object):
         # print(obj_name, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope)
         # self._try_to_resync_obj_ref(obj, obj_name)
         # print(obj, attr_or_subscript, is_subscript, ctx)
+        if not self.safety.trace_state.tracing_enabled:
+            return obj
         should_record_args = False
         try:
             if obj is None:
@@ -277,6 +279,8 @@ class AttrSubTracingManager(object):
                 self.should_record_args = should_record_args
 
     def end_tracer(self, obj, call_context):
+        if not self.safety.trace_state.tracing_enabled:
+            return obj
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             self.active_scope = self.original_active_scope
             return obj
@@ -292,6 +296,8 @@ class AttrSubTracingManager(object):
         return obj
 
     def arg_recorder(self, obj, name):
+        if not self.safety.trace_state.tracing_enabled:
+            return obj
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
             return obj
         if len(self.deep_ref_candidates) == 0:
@@ -307,6 +313,8 @@ class AttrSubTracingManager(object):
         return obj
 
     def scope_pusher(self, obj):
+        if not self.safety.trace_state.tracing_enabled:
+            return obj
         # if self.safety.trace_state.prev_trace_stmt.finished:
         #     return obj
         self.nested_call_stack.append((self.active_scope, self._waiting_for_call))
@@ -315,6 +323,8 @@ class AttrSubTracingManager(object):
         return obj
 
     def scope_popper(self, obj, should_pop_should_record_args_stack):
+        if not self.safety.trace_state.tracing_enabled:
+            return obj
         # if self.safety.trace_state.prev_trace_stmt.finished:
         #     return obj
         self.active_scope, self._waiting_for_call = self.nested_call_stack.pop()
@@ -323,6 +333,8 @@ class AttrSubTracingManager(object):
         return obj
 
     def literal_tracer(self, literal):
+        if not self.safety.trace_state.tracing_enabled:
+            return literal
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             return literal
         if isinstance(literal, (dict, list, tuple)):

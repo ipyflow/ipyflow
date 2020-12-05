@@ -33,12 +33,21 @@ def make_tracer(safety: 'NotebookSafety'):
                 if frame.f_code.co_filename.startswith('<ipython-input'):
                     call_depth += 1
                 frame = frame.f_back
+            # put us back in a good state given weird way notebook executes code
             if call_depth == 1 and state.call_depth == 0:
-                call_depth = 0
+                state.call_depth = 1
+            while state.call_depth > call_depth:
+                state.call_depth -= 1
+                state.stack.pop()
+                safety.attr_trace_manager.pop_stack()
+            while len(safety.attr_trace_manager.nested_call_stack) > 0:
+                safety.attr_trace_manager.nested_call_stack.pop()
             if call_depth != state.call_depth:
+                # TODO: also check that the stacks agree with each other beyond just size
+                # logger.warning('reenable tracing failed: %d vs %d', call_depth, state.call_depth)
                 state.safety.disable_tracing()
             # else:
-            #     print('reenable tracing', call_depth, state.call_depth)
+            #     logger.warning('reenable tracing: %d vs %d', call_depth, state.call_depth)
             return None
             # TODO: eventually we'd like to reenable tracing even when the call depth isn't mismatched
             # scopes_to_push = []

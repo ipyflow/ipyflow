@@ -13,6 +13,11 @@ class StatementInserter(ast.NodeTransformer):
         return ret
 
     def visit(self, node):
+        if hasattr(node, 'handlers'):
+            new_handlers = []
+            for handler in node.handlers:
+                new_handlers.append(self.visit(handler))
+            node.handlers = new_handlers
         if not hasattr(node, 'body'):
             return node
         if not all(isinstance(nd, ast.stmt) for nd in node.body):

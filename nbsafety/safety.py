@@ -372,6 +372,7 @@ class NotebookSafety(object):
         def _XuikX_reenable_tracing(site_id):
             if site_id in seen_sites:
                 return
+            # logger.warning('reenable tracing: %s', site_id)
             seen_sites.add(site_id)
             if not self.trace_state.tracing_enabled:
                 assert not self.trace_state.tracing_reset_pending

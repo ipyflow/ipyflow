@@ -37,6 +37,8 @@ def make_tracer(safety: 'NotebookSafety'):
                 call_depth = 0
             if call_depth != state.call_depth:
                 state.safety.disable_tracing()
+            else:
+                print('reenable tracing', call_depth, state.call_depth)
             return None
             # TODO: eventually we'd like to reenable tracing even when the call depth isn't mismatched
             # scopes_to_push = []
@@ -105,7 +107,6 @@ def make_tracer(safety: 'NotebookSafety'):
             state.traced_statements[id(stmt_node)] = trace_stmt
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
-                # state.tracing_enabled = False
                 state.call_depth -= 1
                 if state.call_depth == 1:
                     state.call_depth = 0

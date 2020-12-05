@@ -168,6 +168,7 @@ class NotebookSafety(object):
                 if max_defined_cell_num > self._counters_by_cell_id.get(cell_id, cast(int, float('inf'))):
                     stale_output_cells.append(cell_id)
                 else:
+                    # TODO: this isn't used? maybe get rid of this
                     fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
@@ -401,7 +402,8 @@ class NotebookSafety(object):
     def _reset_trace_state_hook(self):
         if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
             self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
-        assert len(self.attr_trace_manager.stack) == 0
+        # this assert doesn't hold anymore now that tracing could be disabled inside of something
+        # assert len(self.attr_trace_manager.stack) == 0
         self.attr_trace_manager.reset()  # should happen on finish_execution_hook, but since its idempotent do it again
         if self._save_prev_trace_state_for_tests:
             self.prev_trace_state = self.trace_state

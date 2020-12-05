@@ -37,8 +37,8 @@ def make_tracer(safety: 'NotebookSafety'):
                 call_depth = 0
             if call_depth != state.call_depth:
                 state.safety.disable_tracing()
-            else:
-                print('reenable tracing', call_depth, state.call_depth)
+            # else:
+            #     print('reenable tracing', call_depth, state.call_depth)
             return None
             # TODO: eventually we'd like to reenable tracing even when the call depth isn't mismatched
             # scopes_to_push = []
@@ -83,28 +83,28 @@ def make_tracer(safety: 'NotebookSafety'):
             if state.call_depth == 0:
                 return tracer
 
-        # bytecode for a line w/ function call
-        # no need to trace these, and we definitely want to skip the calls to reenable tracing
-        if frame.f_code.co_code == b'e\x00d\x00\x83\x01\x01\x00d\x01S\x00':
-            return tracer
-
         cell_num, lineno = TraceState.get_position(frame)
 
         try:
             stmt_node = safety.statement_cache[cell_num][lineno]
         except KeyError:
             return tracer
+
+        trace_stmt = state.traced_statements.get(id(stmt_node), None)
+        if trace_stmt is None:
+            trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
+            state.traced_statements[id(stmt_node)] = trace_stmt
+
+        # skip duped line events (can happen if we insert stmts in the ast, as for tracing reenabling)
+        if event == TraceEvent.line and state.prev_event == TraceEvent.line and trace_stmt is state.prev_trace_stmt:
+            return tracer
+
         if safety.config.store_history and logger.getEffectiveLevel() <= logging.WARNING:
             try:
                 source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
                 logger.warning(' %3d: %9s >>> %s', lineno, event, source[lineno-1])
             except (KeyError, IndexError) as e:
                 logger.error('%s: cell %d, line %d', e, cell_num, lineno)
-
-        trace_stmt = state.traced_statements.get(id(stmt_node), None)
-        if trace_stmt is None:
-            trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
-            state.traced_statements[id(stmt_node)] = trace_stmt
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
                 state.call_depth -= 1

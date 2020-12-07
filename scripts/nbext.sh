@@ -6,7 +6,6 @@ else
     prefix="$1"
 fi
 
-source "$HOME/.virtualenvs/nbsafety/bin/activate"
 pushd ./frontend/nbextension
 npm install
 npm run build

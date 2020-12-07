@@ -71,7 +71,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 };
 
 const staleClass = 'stale-cell';
-const staleOutputClass = 'stale-output-cell';
+const freshClass = 'fresh-cell';
 const refresherClass = 'refresher-cell';
 const refresherInputClass = 'refresher-input-cell';
 const linkedStaleClass = 'linked-stale';
@@ -132,7 +132,7 @@ const clearCellState = (notebook: Notebook, lastCellExecPositionIdx: any) => {
     }
     cell.node.classList.remove(staleClass);
     cell.node.classList.remove(refresherClass);
-    cell.node.classList.remove(staleOutputClass);
+    cell.node.classList.remove(freshClass);
     cell.node.classList.remove(refresherInputClass);
 
     // clear any old event listeners
@@ -188,7 +188,7 @@ const connectToComm = (
       content_by_cell_id[itercell.model.id] = itercell.model.value.text;
       order_index_by_cell_id[itercell.model.id] = idx;
       if (itercell.model.id === cell.id) {
-        itercell.node.classList.remove(staleOutputClass);
+        itercell.node.classList.remove(freshClass);
         itercell.node.classList.remove(refresherInputClass);
       }
     });
@@ -244,8 +244,8 @@ const connectToComm = (
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
     } else if (msg.content.data['type'] === 'cell_freshness') {
-      const staleInputCells: any = msg.content.data['stale_input_cells'];
-      const staleOutputCells: any = msg.content.data['stale_output_cells'];
+      const staleCells: any = msg.content.data['stale_cells'];
+      const freshCells: any = msg.content.data['fresh_cells'];
       const staleLinks: any = msg.content.data['stale_links'];
       const refresherLinks: any = msg.content.data['refresher_links'];
       const lastCellExecPositionIdx: any = msg.content.data['last_cell_exec_position_idx'];
@@ -260,13 +260,13 @@ const connectToComm = (
         if (orderIdxById[id] < lastCellExecPositionIdx) {
           continue;
         }
-        if (staleInputCells.indexOf(id) > -1) {
+        if (staleCells.indexOf(id) > -1) {
           elem.classList.add(staleClass);
-          elem.classList.add(staleOutputClass);
+          elem.classList.add(freshClass);
           elem.classList.remove(refresherInputClass);
-        } else if (staleOutputCells.indexOf(id) > -1) {
+        } else if (freshCells.indexOf(id) > -1) {
           elem.classList.add(refresherInputClass);
-          elem.classList.add(staleOutputClass);
+          elem.classList.add(freshClass);
 
           addStaleOutputInteractions(elem);
         }
@@ -295,7 +295,7 @@ const connectToComm = (
 
         if (refresherLinks.hasOwnProperty(id)) {
           elem.classList.add(refresherClass);
-          elem.classList.add(staleOutputClass);
+          elem.classList.add(freshClass);
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpInputCollapser,
               'mouseover', 'add', linkedStaleClass

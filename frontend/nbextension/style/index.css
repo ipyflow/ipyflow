@@ -35,11 +35,11 @@
   background-color: var(--stale-color);
 }
 
-.cell.code_cell.linked-stale-input .input_prompt::before {
+.cell.code_cell.linked-stale .input_prompt::before {
   background-color: var(--stale-color);
 }
 
-.cell.code_cell.linked-stale-output .out_prompt_overlay::before {
+.cell.code_cell.linked-fresh .out_prompt_overlay::before {
   background-color: var(--stale-color);
 }
 
@@ -61,15 +61,15 @@
 
 /* put input / output cells later since they should take precedence */
 
-.cell.code_cell.stale-output-cell .out_prompt_overlay::before {
+.cell.code_cell.fresh-cell .out_prompt_overlay::before {
   border: 1px solid var(--stale-color);
 }
 
-.cell.code_cell.stale-output-cell.selected .out_prompt_overlay::before, .cell.code_cell.stale-output-cell.jupyter-soft-selected .out_prompt_overlay::before {
+.cell.code_cell.fresh-cell.selected .out_prompt_overlay::before, .cell.code_cell.fresh-cell.jupyter-soft-selected .out_prompt_overlay::before {
   background-color: var(--stale-color);
 }
 
-.cell.code_cell.stale-output-cell .out_prompt_overlay:hover::before {
+.cell.code_cell.fresh-cell .out_prompt_overlay:hover::before {
   background-color: var(--stale-color);
 }
 

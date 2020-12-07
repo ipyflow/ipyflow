@@ -31,9 +31,9 @@ def test_simple():
     run_cell(cells[0])
     run_cell(cells[1])
     run_cell(cells[2])
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == [3]
-    assert response['stale_output_cells'] == []
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [3]
+    assert response['fresh_cells'] == []
     assert response['stale_links'] == {3: [1]}
     assert response['refresher_links'] == {1: [3]}
 
@@ -47,8 +47,8 @@ def test_refresh_after_exception_fixed():
     run_cell(cells[0], 0)
     run_cell(cells[2], 2)
     run_cell(cells[1], 1)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_output_cells'] == [2]
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['fresh_cells'] == [2]
 
 
 def test_refresh_after_val_changed():
@@ -62,8 +62,8 @@ def test_refresh_after_val_changed():
     run_cell(cells[1], 1)
     run_cell(cells[2], 2)
     run_cell(cells[3], 3)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_output_cells'] == [2]
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['fresh_cells'] == [2]
 
 
 def test_inner_mutation_considered_fresh():
@@ -76,9 +76,9 @@ def test_inner_mutation_considered_fresh():
     }
     for idx, cell in cells.items():
         run_cell(cell, idx)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == [2, 3]
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 3]
 
 
 @skipif_known_failing
@@ -110,34 +110,34 @@ for foo in lst:
     for idx, cell in cells.items():
         run_cell(cell, idx)
 
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == []
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
 
     cells[4] = 'x.inc()'
     run_cell(cells[4], 4)
 
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == [2, 3]
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 3]
 
     cells[5] = 'foo.inc()'
     run_cell(cells[5], 5)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == [2, 3, 4]
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 3, 4]
 
     if force_subscript_symbol_creation:
         cells[6] = 'lst[-1]'
         run_cell(cells[6], 6)
-        response = _safety_state[0].multicell_precheck(cells)
-        assert response['stale_input_cells'] == []
-        assert response['stale_output_cells'] == [2, 3, 4]
+        response = _safety_state[0].check_and_link_multiple_cells(cells)
+        assert response['stale_cells'] == []
+        assert response['fresh_cells'] == [2, 3, 4]
 
     run_cell(cells[4], 4)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
 
 
 @skipif_known_failing
@@ -149,9 +149,9 @@ def test_no_freshness_for_alias_assignment_post_mutation():
     }
     for idx, cell in cells.items():
         run_cell(cell, idx)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == []
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
 
 
 def test_fresh_after_import():
@@ -161,9 +161,9 @@ def test_fresh_after_import():
     }
     for idx, cell in cells.items():
         run_cell(cell, idx)
-    response = _safety_state[0].multicell_precheck(cells)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == [0]
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [0]
 
 
 def test_external_object_update_propagates_to_stale_namespace_symbols():
@@ -178,7 +178,7 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
     }
     for idx, cell in cells.items():
         run_cell(cell, idx)
-    response = _safety_state[0].multicell_precheck(cells)
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
     print(response)
-    assert response['stale_input_cells'] == []
-    assert response['stale_output_cells'] == [2, 4]
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 4]

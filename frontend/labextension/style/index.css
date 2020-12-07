@@ -39,15 +39,15 @@
 
 /* put input / output cells later since they should take precedence */
 
-.stale-output-cell .jp-OutputCollapser {
+.fresh-cell .jp-OutputCollapser {
   border: 1px solid var(--stale-color);
 }
 
-.stale-output-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
+.fresh-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
   background-color: var(--stale-color);
 }
 
-.stale-output-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
+.fresh-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
   background-color: var(--stale-color);
 }
 

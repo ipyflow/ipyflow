@@ -137,7 +137,7 @@ class NotebookSafety(object):
             else:
                 order_index_by_id = request['order_index_by_cell_id']
                 last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
-            response = self.multicell_precheck(cells_by_id, order_index_by_id)
+            response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id)
             response['type'] = 'cell_freshness'
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             if comm is not None:
@@ -145,36 +145,35 @@ class NotebookSafety(object):
         else:
             logger.error('Unsupported request type for request %s' % request)
 
-    def multicell_precheck(
+    def check_and_link_multiple_cells(
             self,
             cells_by_id: 'Dict[Union[int, str], str]',
             order_index_by_cell_id: 'Optional[Dict[Union[int, str], int]]' = None
     ) -> 'Dict[str, Any]':
-        stale_input_cells = set()
-        stale_output_cells = []
+        stale_cells = set()
         fresh_cells = []
         stale_symbols_by_cell_id: 'Dict[CellId, Set[DataSymbol]]' = {}
         killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[CellId]]' = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
-            if order_index_by_cell_id is not None and order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx:
+            if (order_index_by_cell_id is not None and
+                    order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx):
                 continue
             try:
-                stale_symbols, dead_symbols, _, max_defined_cell_num = self._precheck_stale_nodes(cell_content)
+                symbols = self._check_cell_and_resolve_symbols(cell_content)
+                stale_symbols, dead_symbols = symbols['stale'], symbols['dead']
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
-                    stale_input_cells.add(cell_id)
+                    stale_cells.add(cell_id)
+                elif (self._get_max_defined_cell_num_for_symbols(symbols['live']) >
+                      self._counters_by_cell_id.get(cell_id, cast(int, float('inf')))):
+                    fresh_cells.append(cell_id)
                 for dead_sym in dead_symbols:
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
-                if max_defined_cell_num > self._counters_by_cell_id.get(cell_id, cast(int, float('inf'))):
-                    stale_output_cells.append(cell_id)
-                else:
-                    # TODO: this isn't used? maybe get rid of this
-                    fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
         stale_links: 'Dict[CellId, Set[CellId]]' = defaultdict(set)
         refresher_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
-        for stale_cell_id in stale_input_cells:
+        for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             refresher_cell_ids = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
             stale_links[stale_cell_id] = refresher_cell_ids
@@ -182,23 +181,23 @@ class NotebookSafety(object):
         # transitive closer up until we hit non-stale refresher cells
         while stale_link_changes:
             stale_link_changes = False
-            for stale_cell_id in stale_input_cells:
+            for stale_cell_id in stale_cells:
                 new_stale_links = set(stale_links[stale_cell_id])
                 original_length = len(new_stale_links)
                 for refresher_cell_id in stale_links[stale_cell_id]:
-                    if refresher_cell_id not in stale_input_cells:
+                    if refresher_cell_id not in stale_cells:
                         continue
                     new_stale_links |= stale_links[refresher_cell_id]
                 new_stale_links.discard(stale_cell_id)
                 stale_link_changes = stale_link_changes or original_length != len(new_stale_links)
                 stale_links[stale_cell_id] = new_stale_links
-        for stale_cell_id in stale_input_cells:
-            stale_links[stale_cell_id] -= stale_input_cells
+        for stale_cell_id in stale_cells:
+            stale_links[stale_cell_id] -= stale_cells
             for refresher_cell_id in stale_links[stale_cell_id]:
                 refresher_links[refresher_cell_id].append(stale_cell_id)
         return {
-            'stale_input_cells': list(stale_input_cells),
-            'stale_output_cells': stale_output_cells,
+            'stale_cells': list(stale_cells),
+            'fresh_cells': fresh_cells,
             'stale_links': {
                 stale_cell_id: list(refresher_cell_ids)
                 for stale_cell_id, refresher_cell_ids in stale_links.items()
@@ -217,10 +216,21 @@ class NotebookSafety(object):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def _precheck_stale_nodes(self, cell: 'Union[ast.Module, str]') -> 'Tuple[Set[DataSymbol], Set[DataSymbol], Set[DataSymbol], int]':
+    def _get_max_defined_cell_num_for_symbols(self, symbols: 'Set[DataSymbol]') -> int:
+        max_defined_cell_num = -1
+        for dsym in symbols:
+            max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
+            if dsym.obj_id in self.namespaces:
+                namespace_scope = self.namespaces[dsym.obj_id]
+                max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+        return max_defined_cell_num
+
+    def _check_cell_and_resolve_symbols(
+            self,
+            cell: 'Union[ast.Module, str]'
+    ) -> 'Dict[str, Set[DataSymbol]]':
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
-        max_defined_cell_num = -1
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
         live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
         live_symbols = live_symbols.union(compute_call_chain_live_symbols(called_symbols))
@@ -228,18 +238,12 @@ class NotebookSafety(object):
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, self.global_scope, only_add_successful_resolutions=True
         )
-        stale_symbols = set()
-        for dsym in live_symbols:
-            max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
-            if dsym.is_stale:
-                stale_symbols.add(dsym)
-            if dsym.obj_id in self.namespaces:
-                namespace_scope = self.namespaces[dsym.obj_id]
-                max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
-        return stale_symbols, dead_symbols, live_symbols, max_defined_cell_num
-
-    def _precheck_simple(self, cell):
-        return len(self._precheck_stale_nodes(cell)[0]) > 0
+        stale_symbols = set(dsym for dsym in live_symbols if dsym.is_stale)
+        return {
+            'live': live_symbols,
+            'dead': dead_symbols,
+            'stale': stale_symbols,
+        }
 
     def _precheck_for_stale(self, cell: str):
         # Precheck process. First obtain the names that need to be checked. Then we check if their
@@ -249,7 +253,8 @@ class NotebookSafety(object):
         except SyntaxError:
             return False
         self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
-        stale_symbols, _, live_symbols, _ = self._precheck_stale_nodes(cell_ast)
+        symbols = self._check_cell_and_resolve_symbols(cell_ast)
+        stale_symbols, live_symbols = symbols['stale'], symbols['live']
         if self._last_refused_code is None or cell != self._last_refused_code:
             self._prev_cell_stale_symbols = stale_symbols
             if len(stale_symbols) > 0:

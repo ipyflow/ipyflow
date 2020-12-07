@@ -229,8 +229,11 @@ class NotebookSafety(object):
             if (order_index_by_cell_id is not None and
                     order_index_by_cell_id.get(cell_id, -1) >= order_index_by_cell_id.get(stale_cell_id, -1)):
                 continue
-            concated_content = f'{cell_content}\n{stale_cell_content}'
-            concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)['stale']
+            concated_content = f'{cell_content}\n\n{stale_cell_content}'
+            try:
+                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)['stale']
+            except SyntaxError:
+                continue
             if concated_stale_symbols < stale_symbols:
                 refresher_cell_ids.add(cell_id)
         return refresher_cell_ids

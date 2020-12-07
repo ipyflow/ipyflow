@@ -81,7 +81,7 @@ class NotebookSafety(object):
         )
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
-        self._counters_by_cell_id: Dict[Union[str, int], int] = {}
+        self._counters_by_cell_id: Dict[CellId, int] = {}
         self._active_cell_id: Optional[str] = None
         self._save_prev_trace_state_for_tests: bool = kwargs.pop('save_prev_trace_state_for_tests', False)
         if self._save_prev_trace_state_for_tests:
@@ -100,6 +100,7 @@ class NotebookSafety(object):
             intra_cell_staleness_propagation=True,
             backwards_cell_staleness_propagation=True,
             track_dependencies=True,
+            naive_refresher_computation=False,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             mode=kwargs.pop('mode', SafetyRunMode.DEVELOP),
             **kwargs
@@ -147,8 +148,8 @@ class NotebookSafety(object):
 
     def check_and_link_multiple_cells(
             self,
-            cells_by_id: 'Dict[Union[int, str], str]',
-            order_index_by_cell_id: 'Optional[Dict[Union[int, str], int]]' = None
+            cells_by_id: 'Dict[CellId, str]',
+            order_index_by_cell_id: 'Optional[Dict[CellId, int]]' = None
     ) -> 'Dict[str, Any]':
         stale_cells = set()
         fresh_cells = []
@@ -175,7 +176,15 @@ class NotebookSafety(object):
         refresher_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
-            refresher_cell_ids = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
+            if self.config.get('naive_refresher_computation', False):
+                refresher_cell_ids = self._naive_compute_refresher_cells(
+                    stale_cell_id,
+                    stale_syms,
+                    cells_by_id,
+                    order_index_by_cell_id=order_index_by_cell_id
+                )
+            else:
+                refresher_cell_ids = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells
@@ -204,6 +213,27 @@ class NotebookSafety(object):
             },
             'refresher_links': refresher_links,
         }
+
+    def _naive_compute_refresher_cells(
+            self,
+            stale_cell_id: 'CellId',
+            stale_symbols: 'Set[DataSymbol]',
+            cells_by_id: 'Dict[CellId, str]',
+            order_index_by_cell_id: 'Optional[Dict[CellId, int]]' = None
+    ) -> 'Set[CellId]':
+        refresher_cell_ids: Set[CellId] = set()
+        stale_cell_content = cells_by_id[stale_cell_id]
+        for cell_id, cell_content in cells_by_id.items():
+            if cell_id == stale_cell_id:
+                continue
+            if (order_index_by_cell_id is not None and
+                    order_index_by_cell_id.get(cell_id, -1) >= order_index_by_cell_id.get(stale_cell_id, -1)):
+                continue
+            concated_content = f'{cell_content}\n{stale_cell_content}'
+            concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)['stale']
+            if concated_stale_symbols < stale_symbols:
+                refresher_cell_ids.add(cell_id)
+        return refresher_cell_ids
 
     @staticmethod
     def _get_cell_ast(cell):

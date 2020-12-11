@@ -1585,7 +1585,7 @@ def test_no_rhs_propagation():
     run_cell('inds = np.argsort(x)')
     run_cell('x = x[inds]')
     run_cell('y = y[inds]')
-    assert_false_positive('`inds` should not be considered stale since it appears on RHS of assignment')
+    assert_not_detected('`inds` should not be considered stale since it appears on RHS of assignment')
 
 
 def test_if_true():

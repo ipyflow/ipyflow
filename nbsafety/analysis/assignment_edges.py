@@ -132,11 +132,24 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
         self.visit_Attribute_or_Subscript(node)
 
     def visit_Subscript(self, node):
-        self.visit_Attribute_or_Subscript(node)
-        # TODO: the reason we wanted this before is to avoid propagating to the slice
-        #  add something back in to avoid propagating to everything on RHS
-        # if self.gather_rvals:
-        #     self.visit(node.slice)
+        if self.gather_rvals:
+            temp = self.to_add_set
+            self.to_add_set = []
+            self.visit_Attribute_or_Subscript(node)
+            # add slice to RHS to avoid propagating to it
+            self.visit(node.slice)
+            self.to_add_set, temp = temp, self.to_add_set
+            self.to_add_set.append(tuple(temp))
+        else:
+            self.visit_Attribute_or_Subscript(node)
+
+
+    # def visit_Subscript(self, node):
+    #     self.visit_Attribute_or_Subscript(node)
+    #     # TODO: the reason we wanted this before is to avoid propagating to the slice
+    #     #  add something back in to avoid propagating to everything on RHS
+    #     # if self.gather_rvals:
+    #     #     self.visit(node.slice)
 
     def visit_Keyword(self, node):
         self.visit(node.value)

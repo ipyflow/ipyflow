@@ -179,11 +179,17 @@ class DataSymbol(object):
     #     else:
     #         self.call_scope = None
 
-    def update_obj_ref(self, obj):
+    def update_obj_ref(self, obj, refresh_cached=True):
         tombstone, obj_ref, has_weakref = self._update_obj_ref_inner(obj)
         self._tombstone = tombstone
         self._obj_ref = obj_ref
         self._has_weakref = has_weakref
+        if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
+            old_ns = self.safety.namespaces.get(self.cached_obj_id, None)
+            if old_ns is not None:
+                old_ns.update_obj_ref(obj)
+        if refresh_cached:
+            self._refresh_cached_obj()
 
     def _update_obj_ref_inner(self, obj):
         tombstone = False

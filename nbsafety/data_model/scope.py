@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
     import ast
     from nbsafety.safety import NotebookSafety
+    from nbsafety.types import SupportedIndexType
 
 
 class Scope(object):
@@ -32,7 +33,7 @@ class Scope(object):
         self.safety = safety
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
-        self._data_symbol_by_name: Dict[Union[str, int], DataSymbol] = {}
+        self._data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 
     def __hash__(self):
         return hash(self.full_path)
@@ -65,7 +66,7 @@ class Scope(object):
         else:
             return NamespaceScope(obj_id, self.safety, scope_name, parent_scope=self)
 
-    def put(self, name: 'Union[str, int]', val: DataSymbol):
+    def put(self, name: 'SupportedIndexType', val: DataSymbol):
         self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
@@ -82,7 +83,7 @@ class Scope(object):
         return ret
 
     @staticmethod
-    def _get_name_to_obj_mapping(obj, dc) -> 'Dict[str, Any]':
+    def _get_name_to_obj_mapping(obj, dc) -> 'Dict[SupportedIndexType, Any]':
         if obj is None:
             return get_ipython().ns_table['user_global']
         elif dc is not None and dc.is_subscript:
@@ -192,7 +193,7 @@ class Scope(object):
             old_id = old_dc.cached_obj_id
             # TODO: handle case where new dc is of different type
             if name in self.data_symbol_by_name(old_dc.is_subscript) and old_dc.symbol_type == symbol_type:
-                old_dc.update_obj_ref(obj)
+                old_dc.update_obj_ref(obj, refresh_cached=False)
                 # old_dc.update_type(symbol_type)
                 old_dc.update_stmt_node(stmt_node)
                 return old_dc, old_dc, old_id
@@ -293,8 +294,9 @@ class NamespaceScope(Scope):
         self._tombstone = tombstone
         self._obj_ref = obj_ref
         self.obj_id = obj_id
+        self.safety.namespaces[obj_id] = self
         self.max_defined_timestamp = 0
-        self._subscript_data_symbol_by_name: Dict[Union[int, str], DataSymbol] = {}
+        self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 
     @property
     def is_garbage(self):
@@ -312,6 +314,13 @@ class NamespaceScope(Scope):
         self._tombstone = tombstone
         self._obj_ref = obj_ref
         self.obj_id = obj_id
+        self.safety.namespaces[obj_id] = self
+
+    def clear_namespace(self):
+        if self.obj_id in self.safety.namespaces:
+            raise ValueError('precondition failed; namespace should no longer be registered before we can clear')
+        self._data_symbol_by_name.clear()
+        self._subscript_data_symbol_by_name.clear()
 
     def _update_obj_ref_inner(self, obj):
         tombstone = False
@@ -340,12 +349,6 @@ class NamespaceScope(Scope):
         cloned._data_symbol_by_name = {}
         cloned._subscript_data_symbol_by_name = {}
         self.child_clones.append(cloned)
-        return cloned
-
-    def shallow_clone(self, obj: 'Any'):
-        cloned = NamespaceScope(obj, self.safety)
-        cloned.scope_name = self.scope_name
-        cloned.parent_scope = self.parent_scope
         return cloned
 
     def make_namespace_qualified_name(self, dc: 'DataSymbol'):
@@ -398,10 +401,12 @@ class NamespaceScope(Scope):
     def num_symbols(self):
         return self.num_dotted_symbols + self.num_subscript_symbols
 
-    def put(self, name: 'Union[str, int]', val: DataSymbol):
+    def put(self, name: 'SupportedIndexType', val: DataSymbol):
         if val.is_subscript:
             self._subscript_data_symbol_by_name[name] = val
         else:
+            if not isinstance(name, str):
+                raise TypeError('%s should be a string' % name)
             self._data_symbol_by_name[name] = val
         val.containing_scope = self
 

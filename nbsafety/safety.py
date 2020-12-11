@@ -480,7 +480,7 @@ class NotebookSafety(object):
 
     @property
     def dependency_tracking_enabled(self):
-        return self.config.track_dependencies
+        return self.config.get('track_dependencies', True)
 
     @property
     def cell_magic_name(self):
@@ -502,7 +502,9 @@ class NotebookSafety(object):
 
     def _namespace_gc(self):
         for obj_id in self.garbage_namespace_obj_ids:
-            self.namespaces.pop(obj_id, None)
+            garbage_ns = self.namespaces.pop(obj_id, None)
+            if garbage_ns is not None:
+                garbage_ns.clear_namespace()
         self.garbage_namespace_obj_ids.clear()
         # while True:
         #     for obj_id in self.garbage_namespace_obj_ids:

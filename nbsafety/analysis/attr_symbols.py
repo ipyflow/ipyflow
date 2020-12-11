@@ -6,6 +6,7 @@ from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
     from typing import List, Tuple, Union
+    from nbsafety.types import SupportedIndexType
 
 
 class CallPoint(CommonEqualityMixin):
@@ -23,9 +24,9 @@ class CallPoint(CommonEqualityMixin):
 
 
 class AttrSubSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols: 'Union[List[Union[str, CallPoint]], Tuple[Union[str, CallPoint]]]'):
+    def __init__(self, symbols: 'Union[List[Union[SupportedIndexType, CallPoint]], Tuple[Union[SupportedIndexType, CallPoint]]]'):
         # FIXME: each symbol should distinguish between attribute and subscript
-        self.symbols: 'Tuple[Union[str, CallPoint], ...]' = tuple(symbols)
+        self.symbols: 'Tuple[Union[SupportedIndexType, CallPoint], ...]' = tuple(symbols)
         self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
 
     def __hash__(self):
@@ -37,7 +38,7 @@ class AttrSubSymbolChain(CommonEqualityMixin):
 
 class GetAttrSubSymbols(ast.NodeVisitor):
     def __init__(self):
-        self.symbol_chain: List[Union[str, CallPoint]] = []
+        self.symbol_chain: List[Union[str, int, Tuple[Union[str, int], ...], CallPoint]] = []
 
     def __call__(self, node: 'Union[ast.Attribute, ast.Subscript, ast.Call]') -> 'AttrSubSymbolChain':
         self.visit(node)
@@ -74,6 +75,17 @@ class GetAttrSubSymbols(ast.NodeVisitor):
                 self.symbol_chain.append(slice_index.s)
             elif isinstance(slice_index, ast.Num):
                 self.symbol_chain.append(slice_index.n)
+            elif isinstance(slice_index, ast.Tuple):
+                elts = []
+                for v in slice_index.elts:
+                    if isinstance(v, ast.Num):
+                        elts.append(v.n)
+                    elif isinstance(v, ast.Str):
+                        elts.append(v.s)
+                    else:
+                        break
+                else:
+                    self.symbol_chain.append(tuple(elts))
             elif isinstance(slice_index, ast.Name):
                 # FIXME: hack to make the static checker stop here
                 # In the future, it should try to attempt to resolve
@@ -104,7 +116,8 @@ def get_attrsub_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Subscript
     if isinstance(maybe_node, (ast.Attribute, ast.Subscript, ast.Call)):
         node = maybe_node
     else:
-        node = cast(Union[ast.Attribute, ast.Subscript, ast.Call], cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
+        node = cast('Union[ast.Attribute, ast.Subscript, ast.Call]',
+                    cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
     if not isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
     return GetAttrSubSymbols()(node)

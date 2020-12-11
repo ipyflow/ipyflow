@@ -182,11 +182,14 @@ class AttrSubTracingManager(object):
         try:
             if obj is None:
                 return None
-            if not isinstance(attr_or_subscript, (str, int)):
+            if isinstance(attr_or_subscript, tuple):
+                if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
+                    return obj
+            elif not isinstance(attr_or_subscript, (str, int)):
                 return obj
             obj_id = id(obj)
             scope = self.safety.namespaces.get(obj_id, None)
-            # print('%s attr %s of obj %s' % (ctx, attr, obj))
+            # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
             if scope is None:
                 class_scope = self.safety.namespaces.get(id(obj.__class__), None)
                 if class_scope is not None and not is_subscript:
@@ -205,7 +208,6 @@ class AttrSubTracingManager(object):
                     except (TypeError, StopIteration):
                         scope_name = '<unknown namespace>'
                     scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
-                self.safety.namespaces[obj_id] = scope
                 # FIXME: brittle strategy for determining parent scope of obj
                 if scope.parent_scope is None:
                     if (
@@ -237,11 +239,11 @@ class AttrSubTracingManager(object):
                 data_sym = scope.lookup_data_symbol_by_name_this_indentation(
                     attr_or_subscript, is_subscript=is_subscript
                 )
-                if data_sym is None:
-                    try:
-                        obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
-                            obj, attr_or_subscript, is_subscript
-                        )
+                try:
+                    obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
+                        obj, attr_or_subscript, is_subscript
+                    )
+                    if data_sym is None:
                         symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
                         data_sym = DataSymbol(
                             attr_or_subscript,
@@ -259,8 +261,10 @@ class AttrSubTracingManager(object):
                         # print('put', data_sym, 'in', scope.full_namespace_path)
                         # FIXME: DataSymbols should probably register themselves with the alias manager at creation
                         self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
-                    except:
-                        pass
+                    elif data_sym.obj_id != id(obj_attr_or_sub):
+                        data_sym.update_obj_ref(obj_attr_or_sub)
+                except:
+                    pass
                 if call_context:
                     should_record_args = True
                     method_special_case = MethodSpecialCase.normal

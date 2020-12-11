@@ -190,7 +190,7 @@ class TraceStatement(object):
                 self.scope.upsert_data_symbol_for_name(
                     lval_name, obj, rval_deps, self.stmt_node, False,
                     overwrite=should_overwrite_for_name, is_function_def=is_function_def, is_import=is_import,
-                    class_scope=self.class_scope,
+                    class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
                 )
             except KeyError:
                 pass

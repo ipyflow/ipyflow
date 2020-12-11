@@ -1585,7 +1585,7 @@ def test_no_rhs_propagation():
     run_cell('inds = np.argsort(x)')
     run_cell('x = x[inds]')
     run_cell('y = y[inds]')
-    assert_not_detected('`inds` not considered stale since it appears on RHS of assignment')
+    assert_false_positive('`inds` should not be considered stale since it appears on RHS of assignment')
 
 
 def test_if_true():
@@ -1661,3 +1661,20 @@ x = g(True) + 1
     run_cell('y = 42')
     run_cell('logging.info(x)')
     assert_false_negative('`x` has dep on stale `y` but capturing this is hard')
+
+
+def test_dict():
+    run_cell('d = {}; d[0] = 0')
+    run_cell('x = d[0] + 1')
+    run_cell('d = {}; d[0] = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` has dependency on old value of `d[0]`')
+
+
+def test_default_dict():
+    run_cell('from collections import defaultdict')
+    run_cell('d = defaultdict(dict); d[0][0] = 0')
+    run_cell('x = d[0][0] + 1')
+    run_cell('d = defaultdict(dict); d[0][0] = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` has dependency on old value of `d[0][0]`')

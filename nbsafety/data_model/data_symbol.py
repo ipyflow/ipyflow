@@ -37,6 +37,7 @@ class DataSymbol(object):
             stmt_node: 'Optional[ast.AST]' = None,
             parents: 'Optional[Set[DataSymbol]]' = None,
             refresh_cached_obj=False,
+            implicit=False,
     ):
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
@@ -72,6 +73,9 @@ class DataSymbol(object):
         self.fresher_ancestors: Set[DataSymbol] = set()
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 
+        # if implicitly created by attrsub access
+        self._implicit = implicit
+
         # Will never be stale if no_warning is True
         self.disable_warnings = False
 
@@ -103,6 +107,10 @@ class DataSymbol(object):
     @property
     def is_import(self):
         return self.symbol_type == DataSymbolType.IMPORT
+
+    @property
+    def is_implicit(self):
+        return self._implicit
 
     def _get_obj(self) -> 'Any':
         if self._has_weakref:
@@ -253,6 +261,8 @@ class DataSymbol(object):
         # skip updates for imported symbols
         if self.is_import:
             return
+        # if we get here, no longer implicit
+        self._implicit = False
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
         new_deps.discard(self)

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def get_symbols_for_references(
         symbol_refs: 'Set[SymbolRef]',
         scope: 'Scope',
-        only_add_successful_resolutions: bool = False
+        only_add_successful_resolutions: bool = False,
 ) -> 'Tuple[Set[DataSymbol], Set[DataSymbol]]':
     symbols = set()
     called_symbols = set()

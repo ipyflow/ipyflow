@@ -253,7 +253,8 @@ class AttrSubTracingManager(object):
                             self.safety,
                             stmt_node=None,
                             parents=None,
-                            refresh_cached_obj=True
+                            refresh_cached_obj=True,
+                            implicit=True,
                         )
                         # this is to prevent refs to the scope object from being considered as stale if we just load it
                         data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp

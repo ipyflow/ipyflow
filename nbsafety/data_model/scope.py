@@ -109,20 +109,20 @@ class Scope(object):
         Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
         cur_scope = self
-        name_to_obj = get_ipython().ns_table['user_global']
-        dsym = None
+        dsym, next_dsym, success = None, None, False
         obj = None
         for name in chain.symbols:
             if isinstance(name, CallPoint):
                 next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
-                return dsym, next_dsym, False
-            next_dsym = cur_scope.lookup_data_symbol_by_name(name)
-            # HUGE HACK: prevents us from checking namespace symbols unless entire namespace is stale
-            # TODO: get rid of the cell number check once namespace symbols created for dictionary literals
-            if next_dsym is not None or dsym is None or dsym.defined_cell_num >= dsym.required_cell_num:
-                dsym = next_dsym
-            if name_to_obj is None:
                 break
+            next_dsym = cur_scope.lookup_data_symbol_by_name(name)
+            if dsym is not None and next_dsym is None:
+                # HUGE HACK: prevents us from checking namespace symbols unless entire namespace is stale
+                # TODO: get rid of this check once namespace symbols created for dictionary literals
+                if dsym.is_stale and dsym.defined_cell_num >= dsym.required_cell_num:
+                    dsym = None
+                break
+            dsym, next_dsym = next_dsym, None
             try:
                 obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
             except (KeyError, IndexError, Exception):
@@ -131,8 +131,8 @@ class Scope(object):
             if cur_scope is None:
                 break
         else:
-            return dsym, None, True
-        return dsym, None, False
+            success = True
+        return dsym, next_dsym, success
 
     def upsert_data_symbol_for_name(
             self,
@@ -316,8 +316,8 @@ class NamespaceScope(Scope):
         self.obj_id = obj_id
         self.safety.namespaces[obj_id] = self
 
-    def clear_namespace(self):
-        if self.obj_id in self.safety.namespaces:
+    def clear_namespace(self, prev_obj_id):
+        if prev_obj_id != self.obj_id and prev_obj_id in self.safety.namespaces:
             raise ValueError('precondition failed; namespace should no longer be registered before we can clear')
         self._data_symbol_by_name.clear()
         self._subscript_data_symbol_by_name.clear()

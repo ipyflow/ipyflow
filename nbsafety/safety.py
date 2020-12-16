@@ -504,7 +504,7 @@ class NotebookSafety(object):
         for obj_id in self.garbage_namespace_obj_ids:
             garbage_ns = self.namespaces.pop(obj_id, None)
             if garbage_ns is not None:
-                garbage_ns.clear_namespace()
+                garbage_ns.clear_namespace(obj_id)
         self.garbage_namespace_obj_ids.clear()
         # while True:
         #     for obj_id in self.garbage_namespace_obj_ids:

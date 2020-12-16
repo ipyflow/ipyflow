@@ -185,12 +185,22 @@ class GetAssignmentLvalRvalSymbolRefs(SaveOffAttributesMixin, VisitListsMixin, a
 
     def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
         assert self.gather_rvals
-        with self.push_attributes(rval_symbols=[]):
-            self.visit(node.generators)
-            discard_set = set(self.rval_symbols)
-        self.rval_symbols = list(set(self.rval_symbols) - discard_set)
-        # TODO: actually append the symbols that appear in the comprehension
-        self.rval_symbols.append(TiedTuple())
+        to_append = set()
+        for gen in node.generators:
+            if isinstance(gen, ast.comprehension):
+                with self.push_attributes(rval_symbols=[]):
+                    self.visit(gen.iter)
+                    self.visit(gen.ifs)
+                    to_append |= set(_flatten(self.rval_symbols))
+                with self.push_attributes(rval_symbols=[]):
+                    self.visit(gen.target)
+                    discard_set = set(self.rval_symbols)
+            else:
+                with self.push_attributes(rval_symbols=[]):
+                    self.visit(gen)
+                    discard_set = set(self.rval_symbols)
+            to_append -= discard_set
+        self.rval_symbols.append(TiedTuple(to_append))
 
     def visit_arg(self, node):
         self.to_add_set.append(node.arg)

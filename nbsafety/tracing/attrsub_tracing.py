@@ -11,9 +11,10 @@ from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 
 
-class MethodSpecialCase(Enum):
+class MutationEvent(Enum):
     normal = 'normal'
     list_append = 'list_append'
+    arg_mutate = 'argument_mutation'
 
 
 if TYPE_CHECKING:
@@ -23,10 +24,10 @@ if TYPE_CHECKING:
     SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
     DeepRef = Tuple[int, Optional[str], Tuple[SymbolRef, ...]]
-    Mutation = Tuple[int, Tuple[SymbolRef, ...], MethodSpecialCase]
+    Mutation = Tuple[int, Tuple[SymbolRef, ...], MutationEvent]
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
-    RecordedArgs = Set[SymbolRef]
-    DeepRefCandidate = Tuple[RefCandidate, MethodSpecialCase, RecordedArgs]
+    RecordedArgs = Set[Tuple[SymbolRef, int]]
+    DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     TextualCallNestingStackFrame = Tuple[Scope, bool]
     TextualCallNestingStack = List[TextualCallNestingStackFrame]
@@ -40,7 +41,8 @@ if TYPE_CHECKING:
         TextualCallNestingStack,
         bool,
         List[bool],
-        NamespaceScope
+        NamespaceScope,
+        int,
     ]
     AttrSubStack = List[AttrSubStackFrame]
 
@@ -84,6 +86,7 @@ class AttrSubTracingManager(object):
         self.nested_call_stack: TextualCallNestingStack = []
         self.should_record_args_stack: List[bool] = []
         self.literal_namespace: Optional[NamespaceScope] = None
+        self.first_obj_id_in_chain: Optional[int] = None
         self.stack: AttrSubStack = []
         self._waiting_for_call = False
 
@@ -118,7 +121,8 @@ class AttrSubTracingManager(object):
             self.nested_call_stack,
             self.should_record_args,
             self.should_record_args_stack,
-            self.literal_namespace
+            self.literal_namespace,
+            self.first_obj_id_in_chain,
         ))
         self.saved_store_data = []
         self.deep_refs = set()
@@ -130,6 +134,7 @@ class AttrSubTracingManager(object):
         self.should_record_args_stack = []
         self.nested_call_stack = []
         self.literal_namespace = None
+        self.first_obj_id_in_chain = None
 
     def pop_stack(self):
         (
@@ -142,7 +147,8 @@ class AttrSubTracingManager(object):
             self.nested_call_stack,
             self.should_record_args,
             self.should_record_args_stack,
-            self.literal_namespace
+            self.literal_namespace,
+            self.first_obj_id_in_chain,
         ) = self.stack.pop()
 
     @staticmethod
@@ -182,12 +188,14 @@ class AttrSubTracingManager(object):
         try:
             if obj is None:
                 return None
+            obj_id = id(obj)
+            if self.first_obj_id_in_chain is None:
+                self.first_obj_id_in_chain = obj_id
             if isinstance(attr_or_subscript, tuple):
                 if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
                     return obj
             elif not isinstance(attr_or_subscript, (str, int)):
                 return obj
-            obj_id = id(obj)
             scope = self.safety.namespaces.get(obj_id, None)
             # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
             if scope is None:
@@ -268,11 +276,11 @@ class AttrSubTracingManager(object):
                     pass
                 if call_context:
                     should_record_args = True
-                    method_special_case = MethodSpecialCase.normal
+                    mutation_event = MutationEvent.normal
                     if isinstance(obj, list) and attr_or_subscript == 'append':
-                        method_special_case = MethodSpecialCase.list_append
+                        mutation_event = MutationEvent.list_append
                     self.deep_ref_candidates.append(
-                        ((self.trace_event_counter[0], obj_id, obj_name), method_special_case, set())
+                        ((self.trace_event_counter[0], obj_id, obj_name), mutation_event, set())
                     )
                 elif data_sym is not None:
                     # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
@@ -284,38 +292,48 @@ class AttrSubTracingManager(object):
                 self.should_record_args = should_record_args
 
     def end_tracer(self, obj, call_context):
+        first_obj_id_in_chain = self.first_obj_id_in_chain
+        self.first_obj_id_in_chain = None
         if not self.safety.trace_state.tracing_enabled:
             return obj
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
             self.active_scope = self.original_active_scope
             return obj
         if call_context and len(self.deep_ref_candidates) > 0:
-            (evt_counter, obj_id, obj_name), method_special_case, recorded_args = self.deep_ref_candidates.pop()
+            (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
             if evt_counter == self.trace_event_counter[0]:
                 if obj is None:
-                    self.mutations.add((obj_id, tuple(recorded_args), method_special_case))
+                    if mutation_event == MutationEvent.normal:
+                        try:
+                            top_level_sym = next(iter(self.safety.aliases[first_obj_id_in_chain]))
+                            if top_level_sym.is_import:
+                                mutation_event = MutationEvent.arg_mutate
+                        except:
+                            pass
+                    self.mutations.add((obj_id, tuple(recorded_args), mutation_event))
                 else:
                     self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
         # print('reset active scope from', self.active_scope, 'to', self.original_active_scope)
         self.active_scope = self.original_active_scope
         return obj
 
-    def arg_recorder(self, obj, name):
+    def arg_recorder(self, arg_obj, name):
         if not self.safety.trace_state.tracing_enabled:
-            return obj
+            return arg_obj
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
-            return obj
+            return arg_obj
         if len(self.deep_ref_candidates) == 0:
             logger.error('Error: no associated symbol for recorded args; skipping recording')
-            return obj
+            return arg_obj
 
+        arg_obj_id = id(arg_obj)
         if isinstance(name, str):
-            self.deep_ref_candidates[-1][-1].add(name)
+            self.deep_ref_candidates[-1][-1].add((name, arg_obj_id))
         elif isinstance(name, tuple) and len(name) > 0:
             recorded_arg = AttrSubSymbolChain(name)
-            self.deep_ref_candidates[-1][-1].add(recorded_arg)
+            self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
-        return obj
+        return arg_obj
 
     def scope_pusher(self, obj):
         if not self.safety.trace_state.tracing_enabled:
@@ -366,6 +384,7 @@ class AttrSubTracingManager(object):
         self.active_scope = self.original_active_scope
         self.should_record_args = False
         self.literal_namespace = None
+        self.first_obj_id_in_chain = None
         # self.nested_call_stack = []
         # self.stmt_transition_hook()
 

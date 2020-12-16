@@ -9,7 +9,7 @@ from nbsafety.analysis import (
     get_statement_symbol_edges
 )
 from nbsafety.data_model.scope import NamespaceScope
-from nbsafety.tracing.attrsub_tracing import MethodSpecialCase
+from nbsafety.tracing.attrsub_tracing import MutationEvent
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -219,18 +219,27 @@ class TraceStatement(object):
     def handle_dependencies(self):
         if not self.safety.dependency_tracking_enabled:
             return
-        for mutated_obj_id, mutation_args, method_special_case in self.safety.attr_trace_manager.mutations:
+        for mutated_obj_id, mutation_args, mutation_event in self.safety.attr_trace_manager.mutations:
+            if mutation_event == MutationEvent.arg_mutate:
+                for _, arg_id in mutation_args:
+                    for mutated_sym in self.safety.aliases[arg_id]:
+                        # TODO: happens when module mutates args
+                        #  should we add module as a dep in this case?
+                        mutated_sym.update_deps(set(), overwrite=False, mutated=True)
+                continue
+
             mutation_arg_dsyms = set()
-            for arg in mutation_args:
+            for arg, _ in mutation_args:
                 if isinstance(arg, str):
                     mutation_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
                 elif isinstance(arg, AttrSubSymbolChain):
                     mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
             mutation_arg_dsyms.discard(None)
+
             # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
-            if method_special_case == MethodSpecialCase.list_append and len(mutation_arg_dsyms) == 1:
+            if mutation_event == MutationEvent.list_append and len(mutation_arg_dsyms) == 1:
                 namespace_scope = self.safety.namespaces.get(mutated_obj_id, None)
                 mutated_obj_aliases = self.safety.aliases.get(mutated_obj_id, None)
                 if mutated_obj_aliases is not None:

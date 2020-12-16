@@ -1678,3 +1678,12 @@ def test_default_dict():
     run_cell('d = defaultdict(dict); d[0][0] = 42')
     run_cell('logging.info(x)')
     assert_detected('`x` has dependency on old value of `d[0][0]`')
+
+
+def test_mutate_arg():
+    run_cell('import numpy as np')
+    run_cell('x = np.ones(5)')
+    run_cell('y = x + 1')
+    run_cell('np.random.shuffle(x)')
+    run_cell('logging.info(y)')
+    assert_detected('`y` has a dependency on an old value of `x`')

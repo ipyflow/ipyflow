@@ -6,6 +6,7 @@ from enum import Enum
 import logging
 from typing import cast, TYPE_CHECKING
 
+from .recovery import on_exception_default_to, return_arg_at_index
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
@@ -178,6 +179,7 @@ class AttrSubTracingManager(object):
         dsym.update_obj_ref(obj)
         # dsym._refresh_cached_obj()
 
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
         # print(obj_name, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope)
         # self._try_to_resync_obj_ref(obj, obj_name)
@@ -291,6 +293,7 @@ class AttrSubTracingManager(object):
                 self.should_record_args_stack.append(self.should_record_args)
                 self.should_record_args = should_record_args
 
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def end_tracer(self, obj, call_context):
         first_obj_id_in_chain = self.first_obj_id_in_chain
         self.first_obj_id_in_chain = None
@@ -317,6 +320,7 @@ class AttrSubTracingManager(object):
         self.active_scope = self.original_active_scope
         return obj
 
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def arg_recorder(self, arg_obj, name):
         if not self.safety.trace_state.tracing_enabled:
             return arg_obj
@@ -335,6 +339,7 @@ class AttrSubTracingManager(object):
 
         return arg_obj
 
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def scope_pusher(self, obj):
         if not self.safety.trace_state.tracing_enabled:
             return obj
@@ -345,6 +350,7 @@ class AttrSubTracingManager(object):
         self.active_scope = self.original_active_scope
         return obj
 
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def scope_popper(self, obj, should_pop_should_record_args_stack):
         if not self.safety.trace_state.tracing_enabled:
             return obj
@@ -355,6 +361,7 @@ class AttrSubTracingManager(object):
             self.should_record_args = self.should_record_args_stack.pop()
         return obj
 
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def literal_tracer(self, literal):
         if not self.safety.trace_state.tracing_enabled:
             return literal

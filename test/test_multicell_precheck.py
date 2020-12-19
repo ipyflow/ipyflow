@@ -176,9 +176,15 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
         5: 'x = 43',
         6: 'foo = foo.set_x(10)',
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
-    response = _safety_state[0].check_and_link_multiple_cells(cells)
-    print(response)
-    assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [2, 4]
+    old_skip_stale = _safety_state[0].config.get('skip_unsafe_cells', True)
+    try:
+        _safety_state[0].config.skip_unsafe_cells = False
+        for idx, cell in cells.items():
+            print('running', cell)
+            run_cell(cell, idx)
+        response = _safety_state[0].check_and_link_multiple_cells(cells)
+        print(response)
+        assert response['stale_cells'] == []
+        assert response['fresh_cells'] == [2, 4]
+    finally:
+        _safety_state[0].config.skip_unsafe_cells = old_skip_stale

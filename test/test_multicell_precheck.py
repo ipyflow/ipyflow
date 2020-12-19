@@ -180,11 +180,24 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
     try:
         _safety_state[0].config.skip_unsafe_cells = False
         for idx, cell in cells.items():
-            print('running', cell)
             run_cell(cell, idx)
         response = _safety_state[0].check_and_link_multiple_cells(cells)
-        print(response)
         assert response['stale_cells'] == []
         assert response['fresh_cells'] == [2, 4]
     finally:
         _safety_state[0].config.skip_unsafe_cells = old_skip_stale
+
+
+def test_symbol_on_both_sides_of_assignment():
+    cells = {
+        0: 'x = 0',
+        1: 'y = x + 1',
+        2: 'x = 42',
+    }
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    cells[3] = 'y += 7'
+    response = _safety_state[0].check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [3]
+    assert response['fresh_cells'] == [1]
+    assert list(response['refresher_links'].keys()) == [1]

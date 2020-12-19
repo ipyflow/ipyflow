@@ -62,28 +62,33 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             return
         self.live.add(ref)
 
-    # In case of assignment, we put the new assigned variable into a safe_set
-    # to indicate that we know for sure it won't have stale dependency.  Note
-    # that node.targets might contain multiple ast.Name node in the case of
-    # "a = b = 3", so we go through each node in the targets.  Also note that
-    # `target` would be an ast.Tuple node in the case of "a,b = 3,4". Thus
-    # we need to break the tuple in that case.
+    # the idea behind this one is that we don't treat a symbol as dead
+    # if it is used on the RHS of an assignment
+    def visit_Assign_impl(self, targets, value, aug_assign_target=None):
+        this_assign_live = set()
+        this_assign_dead = set()
+        with self.push_attributes(live=this_assign_live):
+            self.visit(value)
+            if aug_assign_target is not None:
+                self.visit(aug_assign_target)
+        with self.push_attributes(dead=this_assign_dead):
+            with self.kill_context():
+                for target in targets:
+                    self.visit_Assign_target(target)
+        this_assign_dead -= this_assign_live
+        self.live |= this_assign_live
+        self.dead |= this_assign_dead
+
     def visit_Assign(self, node: ast.Assign):
-        self.visit(node.value)
-        with self.kill_context():
-            for target in node.targets:
-                self.visit_Assign_or_AugAssign_target(target)
+        self.visit_Assign_impl(node.targets, node.value)
 
     def visit_AnnAssign(self, node: ast.AnnAssign):
-        self.visit(node.value)
-        with self.kill_context():
-            self.visit_Assign_or_AugAssign_target(node.target)
+        self.visit_Assign_impl([node.target], node.value)
 
     def visit_AugAssign(self, node: ast.AugAssign):
-        self.visit(node.value)
-        self.visit_Assign_or_AugAssign_target(node.target)
+        self.visit_Assign_impl([], node.value, aug_assign_target=node.target)
 
-    def visit_Assign_or_AugAssign_target(
+    def visit_Assign_target(
             self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.Tuple, ast.List, ast.expr]'
     ):
         if isinstance(target_node, ast.Name):
@@ -92,7 +97,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.dead.add(get_attrsub_symbol_chain(target_node))
         elif isinstance(target_node, (ast.Tuple, ast.List)):
             for elt in target_node.elts:
-                self.visit_Assign_or_AugAssign_target(elt)
+                self.visit_Assign_target(elt)
         else:
             logger.warning('unsupported type for node %s' % target_node)
 

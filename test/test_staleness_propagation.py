@@ -99,7 +99,6 @@ def test_long_chain():
     assert_detected('f has stale dependency on old value of a')
 
 
-@skipif_known_failing
 def test_for_loop_liveness_check():
     run_cell('x = 0')
     run_cell('y = x + 1')

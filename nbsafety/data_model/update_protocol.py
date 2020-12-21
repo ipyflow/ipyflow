@@ -53,6 +53,8 @@ class UpdateProtocol(object):
         if namespace_refresh is not None:
             for updated_sym in namespace_refresh:
                 updated_sym.refresh()
+                for updated_sym_alias in self.safety.aliases.get(updated_sym.obj_id, []):
+                    updated_sym_alias.refresh()
 
     def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
         if dsym.is_import:

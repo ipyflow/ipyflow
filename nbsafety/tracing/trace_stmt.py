@@ -255,8 +255,10 @@ class TraceStatement(object):
                                 parent_scope=mutated_sym.containing_scope
                             )
                         namespace_scope.upsert_data_symbol_for_name(
-                            len(mutated_obj) - 1, mutation_arg_obj, set(), self.stmt_node, True
+                            len(mutated_obj) - 1, mutation_arg_obj, set(), self.stmt_node,
+                            is_subscript=True, overwrite=False, propagate=False
                         )
+            # TODO: add mechanism for skipping namespace children in case of list append
             for mutated_sym in self.safety.aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self.has_lval:

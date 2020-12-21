@@ -97,7 +97,6 @@ class NotebookSafety(object):
             store_history=kwargs.pop('store_history', True),
             use_comm=use_comm,
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
-            intra_cell_staleness_propagation=True,
             backwards_cell_staleness_propagation=True,
             track_dependencies=True,
             naive_refresher_computation=False,
@@ -312,7 +311,6 @@ class NotebookSafety(object):
             self._prev_cell_stale_symbols.clear()
 
         self._last_refused_code = None
-        self._resync_symbols(live_symbols)
         return False
 
     def _resync_symbols(self, symbols: 'Set[DataSymbol]'):
@@ -324,10 +322,27 @@ class NotebookSafety(object):
                 continue
             if dsym.obj_id == id(obj):
                 continue
-            # self.aliases[dsym.obj_id].discard(dsym)
-            # self.aliases[id(obj)].add(dsym)
-            self.aliases[id(obj)] = self.aliases[dsym.obj_id]
-            del self.aliases[dsym.obj_id]
+            for alias in self.aliases[dsym.cached_obj_id] | self.aliases[dsym.obj_id]:
+                if not alias.containing_scope.is_namespace_scope:
+                    continue
+                containing_scope = cast('NamespaceScope', alias.containing_scope)
+                if containing_scope._obj_ref is None:
+                    continue
+                containing_obj = containing_scope._obj_ref()
+                # TODO: handle dict case too
+                if isinstance(containing_obj, list) and containing_obj[-1] is obj:
+                    new_alias_sym = containing_scope.upsert_data_symbol_for_name(
+                        len(containing_obj) - 1,
+                        obj,
+                        set(alias.parents),
+                        alias.stmt_node,
+                        is_subscript=True,
+                        propagate=False
+                    )
+                    self.aliases[id(obj)].add(new_alias_sym)
+            self.aliases[dsym.cached_obj_id].discard(dsym)
+            self.aliases[dsym.obj_id].discard(dsym)
+            self.aliases[id(obj)].add(dsym)
             namespace = self.namespaces.get(dsym.obj_id, None)
             if namespace is not None:
                 namespace.update_obj_ref(obj)
@@ -368,6 +383,10 @@ class NotebookSafety(object):
             try:
                 with self._tracing_context():
                     ret = run_cell_func(cell)
+                # Stage 2.1: resync any defined symbols that could have gotten out-of-sync
+                #  due to tracing being disabled
+                defined = self._check_cell_and_resolve_symbols(cell)['dead']
+                self._resync_symbols(defined)
             finally:
                 if self.trace_state.error_occurred:
                     ret = _backup()
@@ -461,8 +480,6 @@ class NotebookSafety(object):
                 return line_magics.show_deps(self, line)
             elif line[0] == "show_stale":
                 return line_magics.show_stale(self, line)
-            elif line[0] == "set_propagation":
-                return line_magics.set_propagation(self, line)
             elif line[0] == "trace_messages":
                 return line_magics.trace_messages(self, line)
             elif line[0] == "remove_dependency":

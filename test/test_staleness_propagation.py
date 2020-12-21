@@ -28,13 +28,6 @@ def assert_detected(msg=''):
     assert_bool(stale_detected(), msg=msg)
 
 
-def assert_detected_if_full_propagation(msg=''):
-    if _safety_state[0].config.intra_cell_staleness_propagation:
-        assert_detected(msg=msg)
-    else:
-        assert_not_detected(msg=msg)
-
-
 def assert_false_positive(msg=''):
     """
     Same as `assert_detected` but asserts a false positive.
@@ -318,9 +311,7 @@ def bar():
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
-@pytest.mark.parametrize("intra_cell_staleness_propagation", [True, False])
-def test_for_loop_with_map(intra_cell_staleness_propagation):
-    _safety_state[0].config.intra_cell_staleness_propagation = intra_cell_staleness_propagation
+def test_for_loop_with_map():
     run_cell("""
 accum = 0
 foo = [1, 2, 3, 4, 5]
@@ -331,7 +322,7 @@ for ret in map(lambda x: x * 5, foo):
     assert_not_detected('no stale dep foo -> accum')
     run_cell('foo = [0]')
     run_cell('logging.info(accum)')
-    assert_detected_if_full_propagation('should detect stale dep foo -> accum unless only propagating past cell bounds')
+    assert_detected('should detect stale dep foo -> accum unless only propagating past cell bounds')
 
 
 def test_redefined_function_over_list_comp():
@@ -520,9 +511,7 @@ def test_variable_scope_2():
     assert_not_detected("Updating y should solve the problem")
 
 
-@pytest.mark.parametrize("intra_cell_staleness_propagation", [True, False])
-def test_default_args(intra_cell_staleness_propagation):
-    _safety_state[0].config.intra_cell_staleness_propagation = intra_cell_staleness_propagation
+def test_default_args():
     run_cell("""
 x = 7
 def foo(y=x):
@@ -533,7 +522,7 @@ def foo(y=x):
     run_cell('x = 10')
     assert_not_detected()
     run_cell('b = foo()')
-    assert_detected_if_full_propagation("Should have detected stale dependency of fn foo() on x")
+    assert_detected("Should have detected stale dependency of fn foo() on x")
 
 
 def test_same_pointer():
@@ -632,9 +621,7 @@ z = func(c)
     assert_not_detected("Changing b and d should not affect z")
 
 
-@pytest.mark.parametrize("intra_cell_staleness_propagation", [True, False])
-def test_func_assign_helper_func(intra_cell_staleness_propagation):
-    _safety_state[0].config.intra_cell_staleness_propagation = intra_cell_staleness_propagation
+def test_func_assign_helper_func():
     run_cell("""
 x = 3
 a = 4
@@ -647,7 +634,7 @@ y = f()
 """)
     run_cell('x = 4')
     run_cell('logging.info(y)')
-    assert_detected_if_full_propagation("Should have detected stale dependency of y on x")
+    assert_detected("Should have detected stale dependency of y on x")
     run_cell('y = f()')
     run_cell('logging.info(y)')
     assert_not_detected()
@@ -656,9 +643,7 @@ y = f()
     assert_not_detected("Changing a should not affect y")
 
 
-@pytest.mark.parametrize("intra_cell_staleness_propagation", [True, False])
-def test_func_assign_helper_func_2(intra_cell_staleness_propagation):
-    _safety_state[0].config.intra_cell_staleness_propagation = intra_cell_staleness_propagation
+def test_func_assign_helper_func_2():
     run_cell("""
 x = 3
 a = 4
@@ -671,7 +656,7 @@ y = f()()
 """)
     run_cell('x = 4')
     run_cell('logging.info(y)')
-    assert_detected_if_full_propagation("Should have detected stale dependency of y on x")
+    assert_detected("Should have detected stale dependency of y on x")
 
 
 def test_branching():
@@ -1478,9 +1463,7 @@ def test_tuple_unpack_hard():
 
 
 @skipif_known_failing
-@pytest.mark.parametrize("intra_cell_staleness_propagation", [True, False])
-def test_attr_dep_with_top_level_overwrite(intra_cell_staleness_propagation):
-    _safety_state[0].config.intra_cell_staleness_propagation = intra_cell_staleness_propagation
+def test_attr_dep_with_top_level_overwrite():
     run_cell("""
 class Foo:
     def __init__(self):

@@ -74,14 +74,6 @@ def show_stale(safety: 'NotebookSafety', line: 'List[str]'):
         print("DataSymbols with stale dependencies are:", [str(n) for n in stale_set])
 
 
-def set_propagation(safety: 'NotebookSafety', line: 'List[str]'):
-    if len(line) != 2 or line[1] not in ['between', 'within']:
-        print('Usage: %safety set_propagation [between|within]')
-        # TODO: complete explanation
-        return
-    safety.config.intra_cell_staleness_propagation = (line[1] == 'within')
-
-
 def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")

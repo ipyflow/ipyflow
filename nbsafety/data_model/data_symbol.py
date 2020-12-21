@@ -251,9 +251,7 @@ class DataSymbol(object):
             return False
         if updated_dep is self:
             return False
-        should_mark_stale = self.safety.config.get('intra_cell_staleness_propagation', True)
-        should_mark_stale = should_mark_stale or updated_dep.defined_cell_num != self.defined_cell_num
-        return should_mark_stale
+        return True
 
     def update_deps(
             self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True

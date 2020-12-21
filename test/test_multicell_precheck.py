@@ -81,7 +81,6 @@ def test_inner_mutation_considered_fresh():
     assert response['fresh_cells'] == [2, 3]
 
 
-@skipif_known_failing
 @pytest.mark.parametrize("force_subscript_symbol_creation", [True, False])
 def test_update_list_elem(force_subscript_symbol_creation):
     cells = {
@@ -135,6 +134,7 @@ for foo in lst:
         assert response['fresh_cells'] == [2, 3, 4]
 
     run_cell(cells[4], 4)
+    run_cell('%safety show_deps foo', 1234)
     response = _safety_state[0].check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])

@@ -51,6 +51,23 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+class ListLiteral(list):
+    pass
+
+
+class DictLiteral(dict):
+    pass
+
+
+def _make_weakrefable_literal(literal):
+    if type(literal) == list:
+        return ListLiteral(literal)
+    elif type(literal) == dict:
+        return DictLiteral(literal)
+    else:
+        return literal
+
+
 class AttrSubTracingManager(object):
     def __init__(self, safety: 'NotebookSafety',
                  active_scope: 'Scope', trace_event_counter: 'List[int]'):
@@ -363,6 +380,7 @@ class AttrSubTracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def literal_tracer(self, literal):
+        literal = _make_weakrefable_literal(literal)
         if not self.safety.trace_state.tracing_enabled:
             return literal
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:

@@ -326,7 +326,7 @@ class NotebookSafety(object):
                 if not alias.containing_scope.is_namespace_scope:
                     continue
                 containing_scope = cast('NamespaceScope', alias.containing_scope)
-                if containing_scope._obj_ref is None:
+                if containing_scope._obj_ref is None or containing_scope._obj_ref() is None:
                     continue
                 containing_obj = containing_scope._obj_ref()
                 # TODO: handle dict case too

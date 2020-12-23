@@ -53,14 +53,16 @@ class TraceState(object):
         if prev_this_frame is None or prev_this_frame.finished:
             return
 
-        if prev_this_frame is not trace_stmt:
-            if not isinstance(prev_this_frame.stmt_node, ast.ClassDef):
-                # classdefs are not finished until we reach the end of the class body
-                # we handle these with special logic below
-                prev_this_frame.finished_execution_hook()
-        elif isinstance(prev_this_frame.stmt_node, ast.ClassDef):
-            if self.prev_event == TraceEvent.return_ and event == TraceEvent.line:
-                prev_this_frame.finished_execution_hook()
+        if isinstance(prev_this_frame.stmt_node, ast.ClassDef):
+            # classdefs are not finished until we reach the end of the class body
+            # we handle these with special logic
+            if self.prev_event == TraceEvent.return_:
+                if event == TraceEvent.line or prev_this_frame is not trace_stmt:
+                    # NOTE: in Python >= 3.8, it seems that prev_this_frame and trace_stmt would always point to the
+                    # same things due to how tracing is implemented, but we cannot rely on that for Python < 3.7
+                    prev_this_frame.finished_execution_hook()
+        elif prev_this_frame is not trace_stmt:
+            prev_this_frame.finished_execution_hook()
 
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
         # TODO: figure out a better way to determine if we're inside a lambda

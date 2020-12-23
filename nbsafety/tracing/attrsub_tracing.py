@@ -443,8 +443,10 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         Workaround is to make the interpreter to extra work in the
         test of the conditional.
         """
+        func_name = ast.Name('bool', ast.Load())
+        ast.copy_location(func_name, node.test)
         replacement_test = ast.Call(
-            func=ast.Name('bool', ast.Load()),
+            func=func_name,
             args=[node.test],
             keywords=[]
         )
@@ -464,7 +466,8 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         if is_subscript:
             sub_node = cast(ast.Subscript, node)
             if isinstance(sub_node.slice, ast.Index):
-                attr_or_sub = sub_node.slice.value
+                attr_or_sub = sub_node.slice.value  # type: ignore
+                # ast.copy_location(attr_or_sub, sub_node.slice.value)
                 # if isinstance(attr_or_sub, ast.Str):
                 #     attr_or_sub = attr_or_sub.s
                 # elif isinstance(attr_or_sub, ast.Num):
@@ -472,6 +475,9 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                 # else:
                 #     logger.debug('unimpled index: %s', attr_or_sub)
                 #     return node
+            elif isinstance(sub_node.slice, ast.Constant):
+                # Python > 3.8 doesn't use ast.Index for constant slices
+                attr_or_sub = sub_node.slice
             else:
                 logger.debug('unimpled slice: %s', sub_node.slice)
                 return node
@@ -483,21 +489,31 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
             #     raise ValueError('unexpected slice: %s' % sub_node.slice)
         else:
             attr_node = cast(ast.Attribute, node)
-            attr_or_sub = ast.Str(attr_node.attr)
+            attr_or_sub = ast.Str(attr_node.attr)  # type: ignore
 
         extra_args = []
         if isinstance(node.value, ast.Name):
             extra_args = [ast.Str(node.value.id)]
+            ast.copy_location(extra_args[0], node.value)
 
         with self.attrsub_load_context():
+            func_name = ast.Name(self.attrsub_tracer, ast.Load())
+            is_subscript_arg = ast.NameConstant(is_subscript)
+            context_arg = ast.Str(node.ctx.__class__.__name__)
+            call_context_arg = ast.NameConstant(call_context)
+            ast.copy_location(func_name, node.value)
+            ast.copy_location(attr_or_sub, node.value)
+            ast.copy_location(is_subscript_arg, node.value)
+            ast.copy_location(context_arg, node.value)
+            ast.copy_location(call_context_arg, node.value)
             replacement_value = ast.Call(
-                func=ast.Name(self.attrsub_tracer, ast.Load()),
+                func=func_name,
                 args=[
                     self.visit(node.value),
                     attr_or_sub,
-                    ast.NameConstant(is_subscript),
-                    ast.Str(node.ctx.__class__.__name__),
-                    ast.NameConstant(call_context),
+                    is_subscript_arg,
+                    context_arg,
+                    call_context_arg,
                 ] + extra_args,
                 keywords=[]
             )
@@ -505,11 +521,16 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         node.value = replacement_value
         new_node: Union[ast.Attribute, ast.Subscript, ast.Call] = node
         if not self.inside_attrsub_load_chain and is_load:
+            func_name = ast.Name(self.end_tracer, ast.Load())
+            call_context_arg = ast.NameConstant(call_context)
+            ast.copy_location(func_name, node)
+            ast.copy_location(call_context_arg, node)
             new_node = ast.Call(
-                func=ast.Name(self.end_tracer, ast.Load()),
-                args=[node, ast.NameConstant(call_context)],
+                func=func_name,
+                args=[node, call_context_arg],
                 keywords=[]
             )
+            ast.copy_location(new_node, node)
         return new_node
 
     def _get_replacement_args(self, args, should_record, keywords):
@@ -525,22 +546,27 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                 # TODO: only handles attributes properly; subscripts will break
                 if not isinstance(sym, str):
                     break
-                statically_resolvable.append(ast.Str(sym))
+                to_append = ast.Str(sym)
+                ast.copy_location(to_append, maybe_kwarg)
+                statically_resolvable.append(to_append)
             statically_resolvable = ast.Tuple(elts=statically_resolvable, ctx=ast.Load())
+            ast.copy_location(statically_resolvable, maybe_kwarg)
             with self.attrsub_load_context(False):
                 visited_maybe_kwarg = self.visit(maybe_kwarg)
             ast.copy_location(visited_maybe_kwarg, maybe_kwarg)
             argrecord_args = [visited_maybe_kwarg, statically_resolvable]
             if should_record:
                 with self.attrsub_load_context(False):
+                    func_name = ast.Name(self.arg_recorder, ast.Load())
+                    ast.copy_location(func_name, visited_maybe_kwarg)
                     new_arg_value = cast(ast.expr, ast.Call(
-                        func=ast.Name(self.arg_recorder, ast.Load()),
+                        func=func_name,
                         args=argrecord_args,
                         keywords=[]
                     ))
             else:
                 new_arg_value = visited_maybe_kwarg
-            # ast.copy_location(new_arg_value, maybe_kwarg)
+            ast.copy_location(new_arg_value, maybe_kwarg)
             if keywords:
                 setattr(arg, 'value', new_arg_value)
             else:
@@ -564,24 +590,38 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         # in order to ensure that the args are processed with appropriate active scope,
         # we need to push current active scope before processing the args and pop after
         # (pop happens on function return as opposed to in tracer)
-        node.func = ast.Call(
-            func=ast.Name(self.scope_pusher, ast.Load()),
+        func_name = ast.Name(self.scope_pusher, ast.Load())
+        ast.copy_location(func_name, node.func)
+        node_func = ast.Call(
+            func=func_name,
             args=[node.func],
             keywords=[],
         )
+        ast.copy_location(node_func, node.func)
+        node.func = node_func
 
-        node = ast.Call(
-            func=ast.Name(self.scope_popper, ast.Load()),
-            args=[node, ast.NameConstant(is_attrsub)],
+        func_name = ast.Name(self.scope_popper, ast.Load())
+        is_attrsub_arg = ast.NameConstant(is_attrsub)
+        ast.copy_location(func_name, node)
+        ast.copy_location(is_attrsub_arg, node)
+        new_node = ast.Call(
+            func=func_name,
+            args=[node, is_attrsub_arg],
             keywords=[]
         )
+        ast.copy_location(new_node, node)
+        node = new_node
 
         if self.inside_attrsub_load_chain or not is_attrsub:
             return node
 
+        func_name = ast.Name(self.end_tracer, ast.Load())
+        call_context_arg = ast.NameConstant(True)
+        ast.copy_location(func_name, node)
+        ast.copy_location(call_context_arg, node)
         replacement_node = ast.Call(
-            func=ast.Name(self.end_tracer, ast.Load()),
-            args=[node, ast.NameConstant(True)],
+            func=func_name,
+            args=[node, call_context_arg],
             keywords=[]
         )
         ast.copy_location(replacement_node, node)
@@ -595,12 +635,14 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         for target in node.targets:
             new_targets.append(self.visit(target))
         node.targets = cast('List[ast.expr]', new_targets)
+        func_name = ast.Name(self.literal_tracer, ast.Load())
+        ast.copy_location(func_name, node.value)
         replacement_literal = ast.Call(
-            func=ast.Name(self.literal_tracer, ast.Load()),
+            func=func_name,
             args=[node.value],
             keywords=[]
         )
-        ast.copy_location(node.value, replacement_literal)
+        ast.copy_location(replacement_literal, node.value)
         node.value = replacement_literal
         return node
 

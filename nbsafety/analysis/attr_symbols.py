@@ -50,7 +50,9 @@ class GetAttrSubSymbols(ast.NodeVisitor):
             self.symbol_chain.append(CallPoint(node.func.attr))
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
-            if isinstance(node.func.slice, ast.Index) and isinstance(node.func.slice.value, (ast.Str, ast.Num)):
+            if isinstance(node.func.slice, ast.Constant):
+                self.symbol_chain.append(CallPoint(str(node.func.slice.value)))
+            elif isinstance(node.func.slice, ast.Index) and isinstance(node.func.slice.value, (ast.Str, ast.Num)):
                 if isinstance(node.func.slice.value, ast.Str):
                     self.symbol_chain.append(CallPoint(node.func.slice.value.s))
                 else:
@@ -69,7 +71,9 @@ class GetAttrSubSymbols(ast.NodeVisitor):
 
     def visit_Subscript(self, node):
         node_slice = node.slice
-        if isinstance(node_slice, ast.Index):
+        if isinstance(node_slice, ast.Constant):
+            self.symbol_chain.append(node_slice.value)
+        elif isinstance(node_slice, ast.Index):
             slice_index = node_slice.value
             if isinstance(slice_index, ast.Str):
                 self.symbol_chain.append(slice_index.s)

@@ -30,8 +30,8 @@ if TYPE_CHECKING:
     RecordedArgs = Set[Tuple[SymbolRef, int]]
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    TextualCallNestingStackFrame = Tuple[Scope, bool]
-    TextualCallNestingStack = List[TextualCallNestingStackFrame]
+    # TextualCallNestingStackFrame = Tuple[Scope, bool]
+    TextualCallNestingStack = List[Scope]
     AttrSubStackFrame = Tuple[
         List[SavedStoreData],
         Set[DeepRef],
@@ -106,13 +106,6 @@ class AttrSubTracingManager(object):
         self.literal_namespace: Optional[NamespaceScope] = None
         self.first_obj_id_in_chain: Optional[int] = None
         self.stack: AttrSubStack = []
-        self._waiting_for_call = False
-
-    @property
-    def active_scope_for_call(self) -> 'Scope':
-        if self._waiting_for_call:
-            return self.nested_call_stack[-1][0]
-        return self.active_scope
 
     def __del__(self):
         if hasattr(builtins, self.attrsub_tracer_name):
@@ -362,8 +355,7 @@ class AttrSubTracingManager(object):
             return obj
         # if self.safety.trace_state.prev_trace_stmt.finished:
         #     return obj
-        self.nested_call_stack.append((self.active_scope, self._waiting_for_call))
-        self._waiting_for_call = True
+        self.nested_call_stack.append(self.active_scope)
         self.active_scope = self.original_active_scope
         return obj
 
@@ -373,7 +365,7 @@ class AttrSubTracingManager(object):
             return obj
         # if self.safety.trace_state.prev_trace_stmt.finished:
         #     return obj
-        self.active_scope, self._waiting_for_call = self.nested_call_stack.pop()
+        self.active_scope = self.nested_call_stack.pop()
         if should_pop_should_record_args_stack:
             self.should_record_args = self.should_record_args_stack.pop()
         return obj
@@ -396,9 +388,6 @@ class AttrSubTracingManager(object):
                 )
             self.literal_namespace = scope
         return literal
-
-    def stmt_transition_hook(self):
-        self._waiting_for_call = False
 
     def reset(self):
         self.loaded_data_symbols = set()

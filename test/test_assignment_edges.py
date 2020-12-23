@@ -1,4 +1,4 @@
-from nbsafety.analysis.assignment_edges import get_assignment_lval_and_rval_symbol_refs
+from nbsafety.analysis.symbol_edges import get_assignment_lval_and_rval_symbol_refs
 
 
 def test_simple_implicit_tuple_assignment():

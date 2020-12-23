@@ -11,6 +11,13 @@ def return_arg_at_index(index, logger):
     return return_arg_func
 
 
+def return_val(val, logger):
+    def return_val_func(exc, *args, **kwargs):
+        logger.warning('Exception occurred: %s' % exc)
+        return val
+    return return_val_func
+
+
 def on_exception_default_to(recovery_func):
     def make_wrapper(original_func):
         @functools.wraps(original_func)

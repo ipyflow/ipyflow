@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
 from typing import TYPE_CHECKING
-import sys
 
 from IPython import get_ipython
 
+from nbsafety.tracing.recovery import on_exception_default_to, return_val
 from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_state import TraceState
@@ -22,6 +22,7 @@ def make_tracer(safety: 'NotebookSafety'):
     else:
         logger.setLevel(logging.ERROR)
 
+    @on_exception_default_to(return_val(None, logger))
     def tracer(frame: 'FrameType', evt: str, _):
         state = safety.trace_state  # we'll be using this a lot
 

@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+import sys
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
+from nbsafety.analysis.mixins import VisitListsMixin
 
 if TYPE_CHECKING:
     from nbsafety.data_model.data_symbol import DataSymbol
@@ -60,3 +62,38 @@ def compute_call_chain_live_symbols(live: 'Set[DataSymbol]'):
         called_symbols = set(sym for sym in called_symbols if sym.is_globally_accessible)
         live |= live_symbols.union(called_symbols)
     return live
+
+
+class ContainsNamedExprVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.contains_named_expr = False
+
+    def __call__(self, node: 'ast.stmt') -> bool:
+        if sys.version_info.minor < 8:
+            return False
+        self.visit(node)
+        return self.contains_named_expr
+
+    def visit_NamedExpr(self, node: 'ast.NamedExpr'):
+        self.contains_named_expr = True
+
+    def generic_visit(self, node: 'ast.AST'):
+        if self.contains_named_expr:
+            return
+        super().generic_visit(node)
+
+
+def stmt_contains_lval(node: 'ast.stmt'):
+    # TODO: expand to method calls, etc.
+    simple_contains_lval = isinstance(node, (
+        ast.Assign,
+        ast.AnnAssign,
+        ast.AugAssign,
+        ast.ClassDef,
+        ast.FunctionDef,
+        ast.AsyncFunctionDef,
+        ast.For,
+        ast.Import,
+        ast.ImportFrom,
+    ))
+    return simple_contains_lval or ContainsNamedExprVisitor()(node)

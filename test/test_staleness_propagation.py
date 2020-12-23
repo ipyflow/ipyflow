@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import sys
 
 import pytest
 
@@ -1474,7 +1475,7 @@ foo.y = x + 7
 """)
     run_cell('x = 43')
     run_cell('logging.info(foo)')  # this should be a 'deep' usage of foo
-    assert_detected_if_full_propagation('logging.info could display `foo.y` which depends on x')
+    assert_detected('logging.info could display `foo.y` which depends on x')
     run_cell('foo.y = 70')
     assert_not_detected('we just fixed stale dep of `foo.y` by changing its deps')
     run_cell('x = foo.y + 7')
@@ -1669,3 +1670,39 @@ def test_mutate_arg():
     run_cell('np.random.shuffle(x)')
     run_cell('logging.info(y)')
     assert_detected('`y` has a dependency on an old value of `x`')
+
+
+def test_augassign_does_not_overwrite():
+    run_cell('x = 0')
+    run_cell('y = 1')
+    run_cell('z = x + 2')
+    run_cell('z += y')
+    run_cell('x = 42')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on old value of `x`')
+
+
+if sys.version_info.minor >= 8:
+    def test_walrus_simple():
+        run_cell("""
+if (x := 1) > 0:
+    y = x + 1
+""")
+        run_cell('x = 42')
+        run_cell('logging.info(y)')
+        assert_detected('`y` depends on old value of `x`')
+
+    def test_walrus_fancy():
+        run_cell("""
+if (x := (y := (z := 1) + 1) + 1) > 0:
+    a = x + 1
+""")
+        run_cell('y = 42')
+        run_cell('logging.info(z)')
+        assert_not_detected('`z` does not depend on `y`')
+        run_cell('logging.info(y)')
+        assert_not_detected('`y` is updated')
+        run_cell('logging.info(x)')
+        assert_detected('`x` depends on old value of `y`')
+        run_cell('logging.info(a)')
+        assert_detected('`a` depends on old value of `y`')

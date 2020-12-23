@@ -5,8 +5,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nbsafety.analysis import (
-    AttrSubSymbolChain,
-    get_statement_symbol_edges
+    AttrSubSymbolChain, get_symbol_edges, stmt_contains_lval
 )
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.attrsub_tracing import MutationEvent
@@ -47,7 +46,7 @@ class TraceStatement(object):
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
-            symbol_edges, _ = get_statement_symbol_edges(self.stmt_node)
+            symbol_edges, _ = get_symbol_edges(self.stmt_node)
             if len(symbol_edges) == 0:
                 rval_symbol_refs = set()
             else:
@@ -157,7 +156,7 @@ class TraceStatement(object):
         # return remaining_rval_names
 
     def _make_lval_data_symbols(self):
-        symbol_edges, should_overwrite = get_statement_symbol_edges(self.stmt_node)
+        symbol_edges, should_overwrite = get_symbol_edges(self.stmt_node)
         deep_rval_deps = self._gather_deep_ref_rval_dsyms()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
@@ -261,7 +260,7 @@ class TraceStatement(object):
             # TODO: add mechanism for skipping namespace children in case of list append
             for mutated_sym in self.safety.aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
-        if self.has_lval:
+        if stmt_contains_lval(self.stmt_node):
             self._make_lval_data_symbols()
         else:
             if len(self.safety.attr_trace_manager.saved_store_data) > 0 and self.safety.is_develop:
@@ -277,11 +276,3 @@ class TraceStatement(object):
         self.safety.attr_trace_manager.reset()
         self.safety._namespace_gc()
         # self.safety._gc()
-
-    @property
-    def has_lval(self):
-        # TODO: expand to method calls, etc.
-        return isinstance(self.stmt_node, (
-            ast.Assign, ast.AnnAssign, ast.AugAssign, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef, ast.For,
-            ast.Import, ast.ImportFrom
-        ))

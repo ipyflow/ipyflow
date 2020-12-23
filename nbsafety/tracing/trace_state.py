@@ -40,31 +40,27 @@ class TraceState(object):
         ):
             return
 
-        # we'll be needing these
-        prev_this_frame = self.prev_trace_stmt_in_cur_frame
-        prev_overall = self.prev_trace_stmt
-
         if event == TraceEvent.return_:
+            prev_overall = self.prev_trace_stmt
             if prev_overall is not None and prev_overall is not self.stack[-1][0]:
+                # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
                 prev_overall.finished_execution_hook()
-
-        if self.prev_event == TraceEvent.return_:
-            if prev_this_frame is not None:
-                if len(self.stack) == 0 or prev_this_frame is not self.stack[-1][0]:
-                    # this condition ensures we're not inside of a list comprehension or something with multiple calls
-                    prev_this_frame.finished_execution_hook()
             return
+
+        # we'll be needing this
+        prev_this_frame = self.prev_trace_stmt_in_cur_frame
 
         if prev_this_frame is None or prev_this_frame.finished:
             return
 
-        finished = prev_this_frame is not trace_stmt
-        finished = finished and not (
-            # classdefs are not finished until we reach the end of the class body
-            isinstance(prev_this_frame.stmt_node, ast.ClassDef) and self.prev_event != TraceEvent.return_
-        )
-        if finished:
-            prev_this_frame.finished_execution_hook()
+        if prev_this_frame is not trace_stmt:
+            if not isinstance(prev_this_frame.stmt_node, ast.ClassDef):
+                # classdefs are not finished until we reach the end of the class body
+                # we handle these with special logic below
+                prev_this_frame.finished_execution_hook()
+        elif isinstance(prev_this_frame.stmt_node, ast.ClassDef):
+            if self.prev_event == TraceEvent.return_ and event == TraceEvent.line:
+                prev_this_frame.finished_execution_hook()
 
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
         # TODO: figure out a better way to determine if we're inside a lambda

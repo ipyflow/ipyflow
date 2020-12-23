@@ -74,7 +74,7 @@ class ContainsNamedExprVisitor(ast.NodeVisitor):
         self.visit(node)
         return self.contains_named_expr
 
-    def visit_NamedExpr(self, node: 'ast.NamedExpr'):
+    def visit_NamedExpr(self, node):
         self.contains_named_expr = True
 
     def generic_visit(self, node: 'ast.AST'):

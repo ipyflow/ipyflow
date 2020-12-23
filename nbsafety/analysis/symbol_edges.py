@@ -354,7 +354,7 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
                     self.lval_symbols.append(name.asname)
             self._collect_simple_edges()
 
-    def visit_NamedExpr(self, node: 'ast.NamedExpr'):
+    def visit_NamedExpr(self, node):
         with self.push_attributes(lval_symbols=[], rval_symbols=[]):
             with self.gather_lvals_context():
                 self.visit(node.target)

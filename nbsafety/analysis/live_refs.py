@@ -79,7 +79,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self.live |= this_assign_live
         self.dead |= this_assign_dead
 
-    def visit_NamedExpr(self, node: 'ast.NamedExpr'):
+    def visit_NamedExpr(self, node):
         self.visit_Assign_impl([node.target], node.value)
 
     def visit_Assign(self, node: ast.Assign):

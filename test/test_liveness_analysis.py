@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import sys
 # from .utils import skipif_known_failing
 
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
@@ -31,11 +32,12 @@ def func():
     assert dead == {'x', 'y'}
 
 
-def test_walrus():
-    live, dead = compute_live_dead_symbol_refs("""
-if (y := (x := x + 1) + 1) > 0:
-    z = y + 1
-""")
-    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
-    assert live == {'x'}
-    assert dead == {'y', 'z'}
+if sys.version_info.minor >= 8:
+    def test_walrus():
+        live, dead = compute_live_dead_symbol_refs("""
+    if (y := (x := x + 1) + 1) > 0:
+        z = y + 1
+    """)
+        live, dead = _remove_callpoints(live), _remove_callpoints(dead)
+        assert live == {'x'}
+        assert dead == {'y', 'z'}

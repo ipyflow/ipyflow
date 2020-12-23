@@ -122,9 +122,12 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.to_add_set.append(node.id)
 
     def visit_Num(self, node):
-        self.to_add_set.append(None)
+        self.visit_Constant(node)
 
     def visit_Str(self, node):
+        self.visit_Constant(node)
+
+    def visit_Constant(self, node):
         self.to_add_set.append(None)
 
     def visit_NameConstant(self, node):

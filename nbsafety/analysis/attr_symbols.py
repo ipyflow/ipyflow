@@ -103,9 +103,6 @@ class GetAttrSubSymbols(ast.NodeVisitor):
     def visit_Name(self, node):
         self.symbol_chain.append(node.id)
 
-    def visit_Str(self, node):
-        return
-
     def generic_visit(self, node):
         # raise ValueError('we should never get here: %s' % node)
         # give up

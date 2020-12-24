@@ -319,8 +319,12 @@ class AttrSubTracingManager(object):
                     if mutation_event == MutationEvent.normal:
                         try:
                             top_level_sym = next(iter(self.safety.aliases[first_obj_id_in_chain]))
-                            if top_level_sym.is_import:
-                                mutation_event = MutationEvent.arg_mutate
+                            if top_level_sym.is_import and top_level_sym.name != 'logging':
+                                for recorded_arg, _ in recorded_args:
+                                    if len(recorded_arg.symbols) > 0:
+                                        # only make this an arg mutation event if it looks like there's an arg to mutate
+                                        mutation_event = MutationEvent.arg_mutate
+                                        break
                         except:
                             pass
                     self.mutations.add((obj_id, tuple(recorded_args), mutation_event))
@@ -341,11 +345,8 @@ class AttrSubTracingManager(object):
             return arg_obj
 
         arg_obj_id = id(arg_obj)
-        if isinstance(name, str):
-            self.deep_ref_candidates[-1][-1].add((name, arg_obj_id))
-        elif isinstance(name, tuple) and len(name) > 0:
-            recorded_arg = AttrSubSymbolChain(name)
-            self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
+        recorded_arg = AttrSubSymbolChain(name)
+        self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
         return arg_obj
 

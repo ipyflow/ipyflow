@@ -1672,6 +1672,22 @@ def test_mutate_arg():
     assert_detected('`y` has a dependency on an old value of `x`')
 
 
+def test_mutate_arg_special_cases():
+    run_cell('import numpy as np')
+    run_cell('x = np.random.random(10)')
+    run_cell('y = np.ones(5)')
+    run_cell('np.random.seed(42)')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on previous seed')
+    run_cell('logging.info(y)')
+    assert_not_detected('`y` has no dependency on seed')
+    run_cell('x = y + 5')
+    run_cell('logging.info(y)')
+    assert_not_detected()
+    run_cell('logging.info(x)')
+    assert_not_detected('`logging.info` does not mutate `y`')
+
+
 def test_augassign_does_not_overwrite():
     run_cell('x = 0')
     run_cell('y = 1')

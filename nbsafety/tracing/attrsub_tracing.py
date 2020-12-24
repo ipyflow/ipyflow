@@ -18,6 +18,21 @@ class MutationEvent(Enum):
     arg_mutate = 'argument_mutation'
 
 
+ARG_MUTATION_EXCEPTED_MODULES = {
+    'alt',
+    'altair',
+    'display',
+    'logging',
+    'matplotlib',
+    'pyplot',
+    'plot',
+    'plt',
+    'seaborn',
+    'sns',
+    'widget',
+}
+
+
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
     from ..safety import NotebookSafety
@@ -319,7 +334,9 @@ class AttrSubTracingManager(object):
                     if mutation_event == MutationEvent.normal:
                         try:
                             top_level_sym = next(iter(self.safety.aliases[first_obj_id_in_chain]))
-                            if top_level_sym.is_import and top_level_sym.name != 'logging':
+                            if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
+                                # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
+                                #  with np.random.seed?
                                 for recorded_arg, _ in recorded_args:
                                     if len(recorded_arg.symbols) > 0:
                                         # only make this an arg mutation event if it looks like there's an arg to mutate

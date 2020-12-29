@@ -10,7 +10,7 @@ from .recovery import on_exception_default_to, return_arg_at_index
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
-from nbsafety.utils import fast
+from nbsafety.utils import fast, SkipNodesMixin
 
 
 class MutationEvent(Enum):
@@ -422,7 +422,7 @@ class AttrSubTracingManager(object):
         # self.stmt_transition_hook()
 
 
-class AttrSubTracingNodeTransformer(ast.NodeTransformer):
+class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
     def __init__(
             self,
             attrsub_tracer: str,
@@ -508,7 +508,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                 attr_node = cast(ast.Attribute, node)
                 attr_or_sub = fast.Str(attr_node.attr)
 
-            extra_args = []
+            extra_args: 'List[ast.AST]' = []
             if isinstance(node.value, ast.Name):
                 extra_args = [fast.Str(node.value.id)]
 

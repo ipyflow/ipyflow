@@ -438,11 +438,11 @@ class NotebookSafety(object):
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
-                    self.attr_trace_manager.ast_transformer,
                     StatementInserter(
                         '{trace_enabler}({{site_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
                         cell_counter()
                     ),
+                    self.attr_trace_manager.ast_transformer,
                 )
             ]):
                 yield

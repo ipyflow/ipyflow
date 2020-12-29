@@ -38,8 +38,3 @@ for ctor_name in ast.__dict__:
 if sys.version_info >= (3, 9):
     FastAst.Str = staticmethod(_make_func('Constant'))
     FastAst.Num = staticmethod(_make_func('Constant'))
-
-
-if sys.version_info >= (3, 7):
-    def __getattr__(name):
-        return getattr(FastAst, name)

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 from contextlib import contextmanager
+import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -20,18 +21,23 @@ class FastAst(object):
         _LOCATION_OF_NODE = old_location_of_node
 
 
+def _make_ctor(ctor_name):
+    def ctor(*args, **kwargs):
+        ret = getattr(ast, ctor_name)(*args, **kwargs)
+        if _LOCATION_OF_NODE is not None:
+            ast.copy_location(ret, _LOCATION_OF_NODE)
+        return ret
+    return ctor
+
+
 for ctor_name in ast.__dict__:
     if ctor_name.startswith('_'):
         continue
+    setattr(FastAst, ctor_name, staticmethod(_make_ctor(ctor_name)))
 
-    def _make_ctor(ctor_name):
-        def ctor(cls, *args, **kwargs):
-            ret = getattr(ast, ctor_name)(*args, **kwargs)
-            if _LOCATION_OF_NODE is not None:
-                ast.copy_location(ret, _LOCATION_OF_NODE)
-            return ret
-        return ctor
-    setattr(FastAst, ctor_name, classmethod(_make_ctor(ctor_name)))
+if sys.version_info >= (3, 9):
+    FastAst.Str = staticmethod(_make_ctor('Constant'))
+    FastAst.Num = staticmethod(_make_ctor('Constant'))
 
 
 def __getattr__(name: str) -> 'Any':

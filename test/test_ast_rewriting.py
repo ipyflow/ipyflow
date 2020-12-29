@@ -1,0 +1,25 @@
+# -*- coding: utf-8 -*-
+import ast
+from nbsafety.tracing.attrsub_tracing import AttrSubTracingNodeTransformer
+
+
+PROGRAM = """
+for i in [foo(x) for x in [1, 2, 3]]:
+    try:
+        logging.info(i)
+    except:
+        logging.warning("warning!")
+    finally:
+        sys.exit(0)
+        
+if False:
+    asdf(qwer(1, 2, a().b[c,d,e](f.g()).h))[a, 7] = foo.bar
+"""
+
+
+def test_ast_rewrite():
+    """
+    No asserts; just make sure we don't throw an error.
+    """
+    rewriter = AttrSubTracingNodeTransformer('a', 'b', 'c', 'd', 'e', 'f')
+    assert rewriter.visit(ast.parse(PROGRAM)) is not None

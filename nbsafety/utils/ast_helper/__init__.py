@@ -6,5 +6,4 @@ if sys.version_info >= (3, 7):
 else:
     from typing import cast
     from . import ast_helper
-    from .ast_helper import FastAst as fast
-    fast = cast(type(ast_helper), fast)
+    fast = cast(type(ast_helper), ast_helper.FastAst)

@@ -528,7 +528,7 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         # end fast.location_of(node.value)
         if not self.inside_attrsub_load_chain and is_load:
             with fast.location_of(node):
-                return ast.Call(
+                return fast.Call(
                     func=fast.Name(self.end_tracer, ast.Load()),
                     args=[node, fast.NameConstant(call_context)],
                     keywords=[]

@@ -11,9 +11,9 @@ _LOCATION_OF_NODE: 'Optional[ast.AST]' = None
 
 
 class FastAst(object):
-    @classmethod
+    @staticmethod
     @contextmanager
-    def location_of(cls, node):
+    def location_of(node):
         global _LOCATION_OF_NODE
         old_location_of_node = _LOCATION_OF_NODE
         _LOCATION_OF_NODE = node
@@ -21,9 +21,9 @@ class FastAst(object):
         _LOCATION_OF_NODE = old_location_of_node
 
 
-def _make_ctor(ctor_name):
+def _make_func(func_name):
     def ctor(*args, **kwargs):
-        ret = getattr(ast, ctor_name)(*args, **kwargs)
+        ret = getattr(ast, func_name)(*args, **kwargs)
         if _LOCATION_OF_NODE is not None:
             ast.copy_location(ret, _LOCATION_OF_NODE)
         return ret
@@ -33,11 +33,11 @@ def _make_ctor(ctor_name):
 for ctor_name in ast.__dict__:
     if ctor_name.startswith('_'):
         continue
-    setattr(FastAst, ctor_name, staticmethod(_make_ctor(ctor_name)))
+    setattr(FastAst, ctor_name, staticmethod(_make_func(ctor_name)))
 
 if sys.version_info >= (3, 9):
-    FastAst.Str = staticmethod(_make_ctor('Constant'))
-    FastAst.Num = staticmethod(_make_ctor('Constant'))
+    FastAst.Str = staticmethod(_make_func('Constant'))
+    FastAst.Num = staticmethod(_make_func('Constant'))
 
 
 def __getattr__(name: str) -> 'Any':

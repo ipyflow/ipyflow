@@ -439,7 +439,6 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         self.scope_popper = scope_popper
         self.literal_tracer = literal_tracer
         self.inside_attrsub_load_chain = False
-        self.skip_lines: Set[int] = set()
 
     @contextmanager
     def attrsub_load_context(self, override=True):
@@ -625,9 +624,3 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
                 keywords=[],
             )
         return node
-
-    def visit(self, node):
-        if getattr(node, 'lineno', -1) in self.skip_lines:
-            return node
-        else:
-            return super().visit(node)

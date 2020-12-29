@@ -30,7 +30,7 @@ from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState
 from nbsafety.tracing.stmt_inserter import StatementInserter
-from nbsafety.utils import DotDict
+from nbsafety.utils import ChainedNodeTransformer, DotDict
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
@@ -356,13 +356,8 @@ class NotebookSafety(object):
         except:  # noqa
             pass
 
-        self.attr_trace_manager.ast_transformer.skip_lines.clear()
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
-
-            for lineno, line in enumerate(cell.strip().split('\n')):
-                if _NB_MAGIC_PATTERN.search(line) is not None:
-                    self.attr_trace_manager.ast_transformer.skip_lines.add(lineno + 1)
 
             if self._active_cell_id is not None:
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
@@ -442,10 +437,12 @@ class NotebookSafety(object):
         setattr(builtins, _XuikX_reenable_tracing.__name__, _XuikX_reenable_tracing)
         try:
             with ast_transformer_context([
-                self.attr_trace_manager.ast_transformer,
-                StatementInserter(
-                    '{trace_enabler}({{site_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
-                    cell_counter()
+                ChainedNodeTransformer(
+                    self.attr_trace_manager.ast_transformer,
+                    StatementInserter(
+                        '{trace_enabler}({{site_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
+                        cell_counter()
+                    ),
                 )
             ]):
                 yield

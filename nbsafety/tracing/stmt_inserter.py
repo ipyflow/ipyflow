@@ -16,15 +16,19 @@ class StatementInserter(ast.NodeTransformer):
         self.skip_nodes: 'Set[int]' = set()
         self.original_stmts = original_stmts
 
-    def _get_parsed_insert_stmt(self):
-        ret = ast.parse(self._insert_stmt_template.format(site_id=(self._cell_counter, self._cur_line_id))).body[0]
+    def _get_parsed_insert_stmt(self, stmt: 'ast.stmt'):
+        stmt_id = id(stmt)
+        if self.original_stmts is not None:
+            copied = copy.deepcopy(stmt)
+            self.original_stmts[id(copied)] = copied
+        ret = ast.parse(self._insert_stmt_template.format(
+            site_id=(self._cell_counter, self._cur_line_id),
+            stmt_id=stmt_id,
+        )).body[0]
         self._cur_line_id += 1
         return ret
 
     def visit(self, node):
-        if self.original_stmts is not None and isinstance(node, ast.stmt):
-            copied = copy.deepcopy(node)
-            self.original_stmts[id(copied)] = copied
         if hasattr(node, 'handlers'):
             new_handlers = []
             for handler in node.handlers:
@@ -36,7 +40,7 @@ class StatementInserter(ast.NodeTransformer):
             return node
         new_stmts = []
         for stmt in node.body:
-            insert_stmt = self._get_parsed_insert_stmt()
+            insert_stmt = self._get_parsed_insert_stmt(stmt)
             ast.copy_location(insert_stmt, stmt)
             self.skip_nodes.add(id(insert_stmt))
             new_stmts.append(insert_stmt)

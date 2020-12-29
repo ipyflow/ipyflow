@@ -416,12 +416,13 @@ class NotebookSafety(object):
         self.updated_scopes.clear()
         tracer = make_tracer(self)
         seen_sites = set()
+        # stmts = {}
 
         def _finish_tracing_reset():
             # do nothing; we just want to trigger the newly reenabled tracer
             pass
 
-        def _XuikX_reenable_tracing(site_id):
+        def _XuikX_reenable_tracing(site_id, stmt_id):
             if site_id in seen_sites:
                 return
             # logger.warning('reenable tracing: %s', site_id)
@@ -439,8 +440,9 @@ class NotebookSafety(object):
             with ast_transformer_context([
                 ChainedNodeTransformer(
                     StatementInserter(
-                        '{trace_enabler}({{site_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
-                        cell_counter()
+                        '{trace_enabler}({{site_id}}, {{stmt_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
+                        cell_counter(),
+                        # original_stmts=stmts,
                     ),
                     self.attr_trace_manager.ast_transformer,
                 )

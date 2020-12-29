@@ -22,7 +22,7 @@ deploy: build
 	./scripts/deploy.sh
 
 typecheck:
-	find nbsafety -iname '*.py' -print0 | xargs -0 mypy
+	mypy nbsafety
 
 check: typecheck
 	./scripts/runtests.sh

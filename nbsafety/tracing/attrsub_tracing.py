@@ -587,14 +587,14 @@ class AttrSubTracingNodeTransformer(ast.NodeTransformer):
         # we need to push current active scope before processing the args and pop after
         # (pop happens on function return as opposed to in tracer)
         with fast.location_of(node.func):
-            node.func = ast.Call(
+            node.func = fast.Call(
                 func=fast.Name(self.scope_pusher, ast.Load()),
                 args=[node.func],
                 keywords=[],
             )
 
         with fast.location_of(node):
-            node = ast.Call(
+            node = fast.Call(
                 func=fast.Name(self.scope_popper, ast.Load()),
                 args=[node, fast.NameConstant(is_attrsub)],
                 keywords=[]

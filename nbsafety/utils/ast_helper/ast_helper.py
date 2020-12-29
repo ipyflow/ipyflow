@@ -40,5 +40,6 @@ if sys.version_info >= (3, 9):
     FastAst.Num = staticmethod(_make_func('Constant'))
 
 
-def __getattr__(name: str) -> 'Any':
-    return getattr(FastAst, name)
+if sys.version_info >= (3, 7):
+    def __getattr__(name):
+        return getattr(FastAst, name)

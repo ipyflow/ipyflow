@@ -10,7 +10,7 @@ from .recovery import on_exception_default_to, return_arg_at_index
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
-import nbsafety.utils.ast_helper as fast
+from nbsafety.utils.ast_helper import fast
 
 
 class MutationEvent(Enum):

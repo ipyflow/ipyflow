@@ -9,14 +9,11 @@ import re
 import sys
 from typing import cast, TYPE_CHECKING
 
-import black
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
 from nbsafety.analysis import (
     compute_live_dead_symbol_refs,
-    # compute_lineno_to_stmt_mapping,
-    ComputeLinenoToStmtMapping,
     compute_call_chain_live_symbols,
     get_symbols_for_references,
 )
@@ -29,7 +26,7 @@ from nbsafety.ipython_utils import (
 from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState, TraceStatement
+from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceEvent, TraceState, TraceStatement
 from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.utils import ChainedNodeTransformer, DotDict
 
@@ -73,7 +70,7 @@ class NotebookSafety(object):
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.new_stmt_cache: Dict[int, ast.stmt] = {}
-        self.statement_cache: Dict[int, Dict[int, int]] = defaultdict(dict)
+        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
@@ -353,11 +350,6 @@ class NotebookSafety(object):
             dsym.update_obj_ref(obj)
 
     def safe_execute(self, cell: str, run_cell_func):
-        # try:
-        #     cell = black.format_file_contents(cell, fast=False, mode=black.FileMode())
-        # except:  # noqa
-        #     pass
-
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
 
@@ -420,7 +412,7 @@ class NotebookSafety(object):
         seen_stmts = set()
 
         def _finish_tracing_reset():
-            # do nothing; we just want to trigger the newly reenabled tracer
+            # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
             pass
 
         def _XuikX_after_stmt_hook(stmt_id):
@@ -431,7 +423,7 @@ class NotebookSafety(object):
             stmt = self.new_stmt_cache.get(stmt_id, None)
             if stmt is not None:
                 seen_stmts.add(stmt_id)
-                tracer(sys._getframe().f_back, 'after_stmt', stmt_id)
+                tracer(sys._getframe().f_back, TraceEvent.after_stmt, stmt)
 
         def _XuikX_before_stmt_hook(stmt_id):
             if stmt_id in seen_stmts:
@@ -441,10 +433,12 @@ class NotebookSafety(object):
                 prev_trace_stmt_in_cur_frame = self.trace_state.prev_trace_stmt_in_cur_frame
                 if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, ast.For):
                     seen_stmts.add(prev_trace_stmt_in_cur_frame.stmt_id)
-                    tracer(sys._getframe().f_back, 'after_stmt', prev_trace_stmt_in_cur_frame.stmt_id)
+                    tracer(sys._getframe().f_back, TraceEvent.after_stmt, prev_trace_stmt_in_cur_frame.stmt_node)
             trace_stmt = self.trace_state.traced_statements.get(stmt_id, None)
             if trace_stmt is None:
-                trace_stmt = TraceStatement(self, sys._getframe().f_back, stmt_id, self.new_stmt_cache[stmt_id], self.trace_state.cur_frame_scope)
+                trace_stmt = TraceStatement(
+                    self, sys._getframe().f_back, self.new_stmt_cache[stmt_id], self.trace_state.cur_frame_scope
+                )
                 self.trace_state.traced_statements[stmt_id] = trace_stmt
             self.trace_state.prev_trace_stmt_in_cur_frame = trace_stmt
             self.trace_state.prev_trace_stmt = trace_stmt
@@ -461,12 +455,11 @@ class NotebookSafety(object):
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
-                    # ComputeLinenoToStmtMapping(self.statement_cache[cell_counter()], self.new_stmt_cache),
                     StatementInserter(
-                        '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
-                        '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),
                         self.statement_cache[cell_counter()],
                         self.new_stmt_cache,
+                        '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
+                        '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),
                     ),
                     self.attr_trace_manager.ast_transformer,
                 )

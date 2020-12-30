@@ -21,10 +21,9 @@ logger = logging.getLogger(__name__)
 
 
 class TraceStatement(object):
-    def __init__(self, safety: 'NotebookSafety', frame: 'FrameType', stmt_id: int, stmt_node: 'ast.stmt', scope: 'Scope'):
+    def __init__(self, safety: 'NotebookSafety', frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
         self.safety = safety
         self.frame = frame
-        self.stmt_id = stmt_id
         self.stmt_node = stmt_node
         self.scope = scope
         self.class_scope: Optional[NamespaceScope] = None
@@ -44,6 +43,10 @@ class TraceStatement(object):
     def finished(self):
         return self._marked_finished
         # return self.marked_finished and isinstance(self.stmt_node, (ast.For, ast.Lambda))
+
+    @property
+    def stmt_id(self):
+        return id(self.stmt_node)
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:

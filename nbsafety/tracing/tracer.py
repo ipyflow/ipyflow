@@ -76,7 +76,10 @@ def make_tracer(safety: 'NotebookSafety'):
         if not frame.f_code.co_filename.startswith('<ipython-input'):
             return None
 
-        event = TraceEvent(evt)
+        if isinstance(evt, str):
+            event = TraceEvent(evt)
+        else:
+            event = evt
 
         if event == TraceEvent.line:
             return tracer
@@ -98,28 +101,23 @@ def make_tracer(safety: 'NotebookSafety'):
 
         cell_num, lineno = TraceState.get_position(frame)
 
-        try:
-            if event == TraceEvent.after_stmt:
-                stmt_id = extra
-            else:
-                stmt_id = safety.statement_cache[cell_num][lineno]
-            stmt_node = safety.new_stmt_cache[stmt_id]
-        except KeyError:
-            return tracer
+        if event == TraceEvent.after_stmt:
+            stmt_node = extra
+        else:
+            try:
+                stmt_node = safety.statement_cache[cell_num][lineno]
+            except KeyError:
+                return tracer
 
-        trace_stmt = state.traced_statements.get(stmt_id, None)
+        trace_stmt = state.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(safety, frame, stmt_id, stmt_node, state.cur_frame_scope)
-            state.traced_statements[stmt_id] = trace_stmt
-
-        # skip duped line events (can happen if we insert stmts in the ast, as for tracing reenabling)
-        if event == TraceEvent.line and state.prev_event == TraceEvent.line and trace_stmt is state.prev_trace_stmt:
-            return tracer
+            trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
+            state.traced_statements[id(stmt_node)] = trace_stmt
 
         if safety.config.store_history and logger.getEffectiveLevel() <= logging.WARNING:
             try:
                 source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
-                logger.warning(' %3d: %9s >>> %s (%s)', lineno, event, source[lineno-1], stmt_node)
+                logger.warning(' %3d: %9s >>> %s', lineno, event, source[lineno-1])
             except (KeyError, IndexError) as e:
                 logger.error('%s: cell %d, line %d', e, cell_num, lineno)
         if event == TraceEvent.call:

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 
-from nbsafety.analysis.lineno_stmt_map import compute_lineno_to_stmt_mapping
+from nbsafety.tracing.stmt_inserter import compute_lineno_to_stmt_mapping
 
 
 def test_for_loop():
@@ -32,9 +32,12 @@ for i in [
     lst = [a, b]
 """.strip()
     mapping = compute_lineno_to_stmt_mapping(code)
-    for i in range(1, 7):
-        assert isinstance(mapping[i], ast.For)
-    assert 7 not in mapping
+    # for i in range(1, 7):
+    #     assert isinstance(mapping[i], ast.For)
+    # assert 7 not in mapping
+    assert isinstance(mapping[1], ast.For)
+    for i in range(2, 8):
+        assert i not in mapping
     assert isinstance(mapping[8], ast.Assign)
     assert isinstance(mapping[9], ast.Assign)
     assert isinstance(mapping[10], ast.Assign)

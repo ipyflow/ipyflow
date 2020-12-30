@@ -18,6 +18,10 @@ def return_val(val, logger):
     return return_val_func
 
 
+# TODO: hook into safety.is_develop
+IS_DEVELOP = True
+
+
 def on_exception_default_to(recovery_func):
     def make_wrapper(original_func):
         @functools.wraps(original_func)
@@ -25,6 +29,9 @@ def on_exception_default_to(recovery_func):
             try:
                 return original_func(*args, **kwargs)
             except Exception as e:
-                return recovery_func(e, *args, **kwargs)
+                if IS_DEVELOP:
+                    raise e
+                else:
+                    return recovery_func(e, *args, **kwargs)
         return wrapped_func
     return make_wrapper

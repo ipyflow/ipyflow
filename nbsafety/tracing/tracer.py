@@ -22,7 +22,7 @@ def make_tracer(safety: 'NotebookSafety'):
     else:
         logger.setLevel(logging.ERROR)
 
-    # @on_exception_default_to(return_val(None, logger))
+    @on_exception_default_to(return_val(None, logger))
     def tracer(frame: 'FrameType', evt: str, extra):
         state = safety.trace_state  # we'll be using this a lot
 

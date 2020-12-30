@@ -33,8 +33,7 @@ class StatementInserter(ast.NodeTransformer):
             return None
         ret = ast.parse(self._append_stmt_template.format(stmt_id=id(stmt))).body[0]
         ast.copy_location(ret, stmt)
-        if hasattr(stmt, 'end_lineno'):
-            ret.lineno = stmt.end_lineno
+        ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
         self.skip_nodes.add(id(ret))
         return ret
 

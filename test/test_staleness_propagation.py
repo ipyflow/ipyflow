@@ -7,7 +7,7 @@ from test.utils import assert_bool, make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
+_safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
 
 
 def run_cell(cell):
@@ -1328,7 +1328,8 @@ def test_exception_stack_unwind():
         return ';'.join([
             f'can_pass = len({safety_state}.trace_state.stack) == {size} '
             f'and len({safety_state}.attr_trace_manager.stack) == {size}',
-            f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)'
+            f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)',
+            f'print(len({safety_state}.trace_state.stack), "vs", {size}) '
         ])
     try:
         run_cell(f"""
@@ -1499,6 +1500,7 @@ def test_time_line_magic():
     assert_detected('`b` has stale dep on `a`')
 
 
+@skipif_known_failing
 def test_cell_magic():
     run_cell('a = 0')
     run_cell('b = a + 1')

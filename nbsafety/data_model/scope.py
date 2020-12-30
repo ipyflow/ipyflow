@@ -151,7 +151,7 @@ class Scope(object):
             name, obj, deps, stmt_node, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, is_import=is_import, class_scope=class_scope
         )
-        # print(self, 'upsert', name, 'with deps', deps)
+        # print(self, 'upsert', name, 'with deps', deps, 'and children', list(dc.children_by_cell_position.values()))
         self._handle_aliases(old_id, old_dc, dc)
         dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
         return dc

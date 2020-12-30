@@ -15,9 +15,10 @@ from IPython.core.magic import register_cell_magic, register_line_magic
 
 from nbsafety.analysis import (
     compute_live_dead_symbol_refs,
-    compute_lineno_to_stmt_mapping,
-    get_symbols_for_references,
+    # compute_lineno_to_stmt_mapping,
+    ComputeLinenoToStmtMapping,
     compute_call_chain_live_symbols,
+    get_symbols_for_references,
 )
 from nbsafety.ipython_utils import (
     ast_transformer_context,
@@ -28,7 +29,7 @@ from nbsafety.ipython_utils import (
 from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState
+from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceState, TraceStatement
 from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.utils import ChainedNodeTransformer, DotDict
 
@@ -71,7 +72,8 @@ class NotebookSafety(object):
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
-        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = {}
+        self.new_stmt_cache: Dict[int, ast.stmt] = {}
+        self.statement_cache: Dict[int, Dict[int, int]] = defaultdict(dict)
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
@@ -284,7 +286,7 @@ class NotebookSafety(object):
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
             return False
-        self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
+        # self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
         symbols = self._check_cell_and_resolve_symbols(cell_ast)
         stale_symbols, live_symbols = symbols['stale'], symbols['live']
         if self._last_refused_code is None or cell != self._last_refused_code:
@@ -351,10 +353,10 @@ class NotebookSafety(object):
             dsym.update_obj_ref(obj)
 
     def safe_execute(self, cell: str, run_cell_func):
-        try:
-            cell = black.format_file_contents(cell, fast=False, mode=black.FileMode())
-        except:  # noqa
-            pass
+        # try:
+        #     cell = black.format_file_contents(cell, fast=False, mode=black.FileMode())
+        # except:  # noqa
+        #     pass
 
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = cell_counter()
@@ -415,18 +417,37 @@ class NotebookSafety(object):
         self.updated_symbols.clear()
         self.updated_scopes.clear()
         tracer = make_tracer(self)
-        seen_sites = set()
-        # stmts = {}
+        seen_stmts = set()
 
         def _finish_tracing_reset():
             # do nothing; we just want to trigger the newly reenabled tracer
             pass
 
-        def _XuikX_reenable_tracing(site_id, stmt_id):
-            if site_id in seen_sites:
+        def _XuikX_after_stmt_hook(stmt_id):
+            # if not self.trace_state.tracing_enabled:
+            #     return
+            if stmt_id in seen_stmts:
+                return
+            stmt = self.new_stmt_cache.get(stmt_id, None)
+            if stmt is not None:
+                seen_stmts.add(stmt_id)
+                tracer(sys._getframe().f_back, 'after_stmt', stmt_id)
+
+        def _XuikX_before_stmt_hook(stmt_id):
+            if stmt_id in seen_stmts:
                 return
             # logger.warning('reenable tracing: %s', site_id)
-            seen_sites.add(site_id)
+            if self.trace_state.prev_trace_stmt_in_cur_frame is not None:
+                prev_trace_stmt_in_cur_frame = self.trace_state.prev_trace_stmt_in_cur_frame
+                if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, ast.For):
+                    seen_stmts.add(prev_trace_stmt_in_cur_frame.stmt_id)
+                    tracer(sys._getframe().f_back, 'after_stmt', prev_trace_stmt_in_cur_frame.stmt_id)
+            trace_stmt = self.trace_state.traced_statements.get(stmt_id, None)
+            if trace_stmt is None:
+                trace_stmt = TraceStatement(self, sys._getframe().f_back, stmt_id, self.new_stmt_cache[stmt_id], self.trace_state.cur_frame_scope)
+                self.trace_state.traced_statements[stmt_id] = trace_stmt
+            self.trace_state.prev_trace_stmt_in_cur_frame = trace_stmt
+            self.trace_state.prev_trace_stmt = trace_stmt
             if not self.trace_state.tracing_enabled:
                 assert not self.trace_state.tracing_reset_pending
                 self.enable_tracing(tracer=tracer)
@@ -435,21 +456,25 @@ class NotebookSafety(object):
 
         self.enable_tracing(tracer=tracer)
 
-        setattr(builtins, _XuikX_reenable_tracing.__name__, _XuikX_reenable_tracing)
+        setattr(builtins, _XuikX_before_stmt_hook.__name__, _XuikX_before_stmt_hook)
+        setattr(builtins, _XuikX_after_stmt_hook.__name__, _XuikX_after_stmt_hook)
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
+                    # ComputeLinenoToStmtMapping(self.statement_cache[cell_counter()], self.new_stmt_cache),
                     StatementInserter(
-                        '{trace_enabler}({{site_id}}, {{stmt_id}})'.format(trace_enabler=_XuikX_reenable_tracing.__name__),
-                        cell_counter(),
-                        # original_stmts=stmts,
+                        '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
+                        '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),
+                        self.statement_cache[cell_counter()],
+                        self.new_stmt_cache,
                     ),
                     self.attr_trace_manager.ast_transformer,
                 )
             ]):
                 yield
         finally:
-            delattr(builtins, _XuikX_reenable_tracing.__name__)
+            delattr(builtins, _XuikX_before_stmt_hook.__name__)
+            delattr(builtins, _XuikX_after_stmt_hook.__name__)
             sys.settrace(None)
             self.trace_state.tracing_enabled = False
             # TODO: actually handle errors that occurred in our code while tracing
@@ -457,8 +482,8 @@ class NotebookSafety(object):
             self._reset_trace_state_hook()
 
     def _reset_trace_state_hook(self):
-        if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
-            self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
+        # if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
+        #     self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
         # this assert doesn't hold anymore now that tracing could be disabled inside of something
         # assert len(self.attr_trace_manager.stack) == 0
         self.attr_trace_manager.reset()  # should happen on finish_execution_hook, but since its idempotent do it again

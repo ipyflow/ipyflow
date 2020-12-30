@@ -21,9 +21,10 @@ logger = logging.getLogger(__name__)
 
 
 class TraceStatement(object):
-    def __init__(self, safety: 'NotebookSafety', frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
+    def __init__(self, safety: 'NotebookSafety', frame: 'FrameType', stmt_id: int, stmt_node: 'ast.stmt', scope: 'Scope'):
         self.safety = safety
         self.frame = frame
+        self.stmt_id = stmt_id
         self.stmt_node = stmt_node
         self.scope = scope
         self.class_scope: Optional[NamespaceScope] = None
@@ -192,6 +193,7 @@ class TraceStatement(object):
                     class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
                 )
             except KeyError:
+                logger.warning('keyerror for %s', lval_name)
                 pass
 
     def _gather_deep_ref_rval_dsyms(self):

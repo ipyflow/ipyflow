@@ -3,6 +3,7 @@ from enum import Enum
 
 
 class TraceEvent(Enum):
+    after_stmt = 'after_stmt'
     line = 'line'
     call = 'call'
     return_ = 'return'

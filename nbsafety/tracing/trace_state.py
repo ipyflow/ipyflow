@@ -33,12 +33,15 @@ class TraceState(object):
         self.tracing_reset_pending = False
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
-        if event not in (
-                TraceEvent.line, TraceEvent.return_
-        ) or self.prev_event in (
+        if event != TraceEvent.after_stmt:
+            if event not in (
+                # TraceEvent.line,
+                # TraceEvent.after_stmt,
+                TraceEvent.return_,
+            ) or self.prev_event in (
                 TraceEvent.call, TraceEvent.exception
-        ):
-            return
+            ):
+                return
 
         if event == TraceEvent.return_:
             prev_overall = self.prev_trace_stmt
@@ -47,22 +50,32 @@ class TraceState(object):
                 prev_overall.finished_execution_hook()
             return
 
-        # we'll be needing this
-        prev_this_frame = self.prev_trace_stmt_in_cur_frame
+        if event == TraceEvent.after_stmt:
+            # if isinstance(trace_stmt.stmt_node, ast.FunctionDef) and trace_stmt.stmt_node.name == 'g':
+            #     print('OK')
+            trace_stmt.finished_execution_hook()
 
-        if prev_this_frame is None or prev_this_frame.finished:
-            return
-
-        if isinstance(prev_this_frame.stmt_node, ast.ClassDef):
-            # classdefs are not finished until we reach the end of the class body
-            # we handle these with special logic
-            if self.prev_event == TraceEvent.return_:
-                if event == TraceEvent.line or prev_this_frame is not trace_stmt:
-                    # NOTE: in Python >= 3.8, it seems that prev_this_frame and trace_stmt would always point to the
-                    # same things due to how tracing is implemented, but we cannot rely on that for Python < 3.7
-                    prev_this_frame.finished_execution_hook()
-        elif prev_this_frame is not trace_stmt:
-            prev_this_frame.finished_execution_hook()
+        # if event == TraceEvent.after_stmt and not isinstance(trace_stmt.stmt_node, ast.ClassDef):
+        #     trace_stmt.finished_execution_hook()
+        #     return
+        #
+        # # we'll be needing this
+        # prev_this_frame = self.prev_trace_stmt_in_cur_frame
+        #
+        # if prev_this_frame is None or prev_this_frame.finished:
+        #     return
+        #
+        # if isinstance(prev_this_frame.stmt_node, ast.ClassDef):
+        #     # classdefs are not finished until we reach the end of the class body
+        #     # we handle these with special logic
+        #     if self.prev_event == TraceEvent.return_:
+        #         if event == TraceEvent.line or prev_this_frame is not trace_stmt:
+        #             # NOTE: in Python >= 3.8, it seems that prev_this_frame and trace_stmt would always point to the
+        #             # same things due to how tracing is implemented, but we cannot rely on that for Python < 3.7
+        #             prev_this_frame.finished_execution_hook()
+        # # elif prev_this_frame is not trace_stmt:
+        # #     prev_this_frame.finished_execution_hook()
+        #     # prev_this_frame.finished_execution_hook()
 
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
         # TODO: figure out a better way to determine if we're inside a lambda
@@ -105,9 +118,9 @@ class TraceState(object):
 
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
-        self.prev_trace_stmt = trace_stmt
-        if event == TraceEvent.line:
-            self.prev_trace_stmt_in_cur_frame = trace_stmt
+        # self.prev_trace_stmt = trace_stmt
+        # if event == TraceEvent.line:
+        #     self.prev_trace_stmt_in_cur_frame = trace_stmt
         if event == TraceEvent.call:
             self._handle_call_transition(trace_stmt)
         if event == TraceEvent.return_:

@@ -1,3 +1,4 @@
+astunparse
 ipykernel
 ipython
 jupyter

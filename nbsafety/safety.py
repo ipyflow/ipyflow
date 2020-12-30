@@ -399,8 +399,9 @@ class NotebookSafety(object):
         self.trace_state.tracing_enabled = True
         sys.settrace(tracer)
 
-    def disable_tracing(self):
-        assert self.trace_state.tracing_enabled
+    def disable_tracing(self, check_enabled=True):
+        if check_enabled:
+            assert self.trace_state.tracing_enabled
         self.trace_state.tracing_enabled = False
         sys.settrace(None)
 
@@ -431,7 +432,8 @@ class NotebookSafety(object):
             # logger.warning('reenable tracing: %s', site_id)
             if self.trace_state.prev_trace_stmt_in_cur_frame is not None:
                 prev_trace_stmt_in_cur_frame = self.trace_state.prev_trace_stmt_in_cur_frame
-                if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, ast.For):
+                # both of the following stmts should be processed when body is entered
+                if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If)):
                     seen_stmts.add(prev_trace_stmt_in_cur_frame.stmt_id)
                     tracer(sys._getframe().f_back, TraceEvent.after_stmt, prev_trace_stmt_in_cur_frame.stmt_node)
             trace_stmt = self.trace_state.traced_statements.get(stmt_id, None)
@@ -468,15 +470,12 @@ class NotebookSafety(object):
         finally:
             delattr(builtins, _XuikX_before_stmt_hook.__name__)
             delattr(builtins, _XuikX_after_stmt_hook.__name__)
-            sys.settrace(None)
-            self.trace_state.tracing_enabled = False
+            self.disable_tracing(check_enabled=False)
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state.error_occurred:
             self._reset_trace_state_hook()
 
     def _reset_trace_state_hook(self):
-        # if self.dependency_tracking_enabled and self.trace_state.prev_trace_stmt_in_cur_frame is not None:
-        #     self.trace_state.prev_trace_stmt_in_cur_frame.finished_execution_hook()
         # this assert doesn't hold anymore now that tracing could be disabled inside of something
         # assert len(self.attr_trace_manager.stack) == 0
         self.attr_trace_manager.reset()  # should happen on finish_execution_hook, but since its idempotent do it again

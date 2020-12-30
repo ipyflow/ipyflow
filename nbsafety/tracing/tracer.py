@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
+import astunparse
 import logging
 from typing import TYPE_CHECKING
-
-from IPython import get_ipython
 
 from nbsafety.tracing.recovery import on_exception_default_to, return_val
 from nbsafety.tracing.trace_stmt import TraceStatement
@@ -115,11 +114,9 @@ def make_tracer(safety: 'NotebookSafety'):
             state.traced_statements[id(stmt_node)] = trace_stmt
 
         if safety.config.store_history and logger.getEffectiveLevel() <= logging.WARNING:
-            try:
-                source = get_ipython().all_ns_refs[0]['In'][cell_num].strip().split('\n')
-                logger.warning(' %3d: %9s >>> %s', lineno, event, source[lineno-1])
-            except (KeyError, IndexError) as e:
-                logger.error('%s: cell %d, line %d', e, cell_num, lineno)
+            codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
+            codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
+            logger.warning(' %3d: %9s >>> %s', lineno, event, codeline)
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
                 state.call_depth -= 1

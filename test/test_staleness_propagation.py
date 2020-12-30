@@ -7,7 +7,8 @@ from test.utils import assert_bool, make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
+# _safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
+_safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell):
@@ -1698,7 +1699,7 @@ def test_augassign_does_not_overwrite():
     assert_detected('`z` depends on old value of `x`')
 
 
-if sys.version_info.minor >= 8:
+if sys.version_info >= (3, 8):
     def test_walrus_simple():
         run_cell("""
 if (x := 1) > 0:

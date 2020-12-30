@@ -310,6 +310,10 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
                 self.visit(node.iter)
             self._collect_simple_edges()
 
+    def visit_If(self, node):
+        # skip body here too
+        self.visit(node.test)
+
     def visit_FunctionDef_or_AsyncFunctionDef(self, node):
         with self.push_attributes(lval_symbols=[], rval_symbols=[]):
             self.lval_symbols.append(node.name)

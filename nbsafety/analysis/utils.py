@@ -95,5 +95,6 @@ def stmt_contains_lval(node: 'ast.stmt'):
         ast.For,
         ast.Import,
         ast.ImportFrom,
+        ast.With,
     ))
     return simple_contains_lval or ContainsNamedExprVisitor()(node)

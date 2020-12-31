@@ -1699,6 +1699,33 @@ def test_augassign_does_not_overwrite():
     assert_detected('`z` depends on old value of `x`')
 
 
+def test_context_manager():
+    run_cell("""
+from contextlib import contextmanager
+
+@contextmanager
+def foo():
+    yield 42
+""")
+    run_cell('with foo() as bar: x = bar + 7')
+    run_cell('bar = 43')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on old value of `bar`')
+
+
+def test_decorator():
+    run_cell('foo = lambda f: f')
+    run_cell("""
+@foo
+def bar(x):
+    return x + 42
+""")
+    run_cell('y = bar(7)')
+    run_cell('foo = lambda f: lambda x: f(x + 9)')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on call to `bar` which has stale decorator `@foo`')
+
+
 if sys.version_info >= (3, 8):
     def test_walrus_simple():
         run_cell("""

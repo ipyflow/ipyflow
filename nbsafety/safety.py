@@ -433,7 +433,7 @@ class NotebookSafety(object):
             if self.trace_state.prev_trace_stmt_in_cur_frame is not None:
                 prev_trace_stmt_in_cur_frame = self.trace_state.prev_trace_stmt_in_cur_frame
                 # both of the following stmts should be processed when body is entered
-                if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If)):
+                if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
                     seen_stmts.add(prev_trace_stmt_in_cur_frame.stmt_id)
                     tracer(sys._getframe().f_back, TraceEvent.after_stmt, prev_trace_stmt_in_cur_frame.stmt_node)
             trace_stmt = self.trace_state.traced_statements.get(stmt_id, None)

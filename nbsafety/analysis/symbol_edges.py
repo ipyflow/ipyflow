@@ -319,6 +319,7 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
             self.lval_symbols.append(node.name)
             with self.gather_rvals_context():
                 self.visit(node.args)
+                self.visit(node.decorator_list)
             self._collect_simple_edges()
 
     def visit_FunctionDef(self, node):

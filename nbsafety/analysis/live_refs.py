@@ -106,6 +106,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
 
     def visit_FunctionDef(self, node: ast.FunctionDef):
         self.generic_visit(node.args.defaults)
+        self.generic_visit(node.decorator_list)
         self.dead.add(node.name)
 
     def visit_Name(self, node):

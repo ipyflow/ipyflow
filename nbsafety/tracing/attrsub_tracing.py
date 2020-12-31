@@ -447,28 +447,6 @@ class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
         yield
         self.inside_attrsub_load_chain = old
 
-    def visit_If(self, node: 'ast.If'):
-        """
-        This is to handle a corner case where the condition has a constant.
-        E.g.:
-        ```
-        if True:
-            ...
-        else:
-            ...
-        ```
-        Somehow this messes up the line numbers for the tracer.
-        Workaround is to make the interpreter to extra work in the
-        test of the conditional.
-        """
-        with fast.location_of(node.test):
-            node.test = fast.Call(
-                func=fast.Name('bool', ast.Load()),
-                args=[node.test],
-                keywords=[]
-            )
-        return node
-
     def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
         return self.visit_Attribute_or_Subscript(node, call_context)
 

@@ -106,6 +106,8 @@ def make_tracer(safety: 'NotebookSafety'):
             try:
                 stmt_node = safety.statement_cache[cell_num][lineno]
             except KeyError:
+                if safety.is_develop:
+                    logger.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
                 return tracer
 
         trace_stmt = state.traced_statements.get(id(stmt_node), None)

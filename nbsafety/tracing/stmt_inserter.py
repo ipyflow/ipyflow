@@ -48,6 +48,10 @@ class StatementInserter(ast.NodeTransformer):
                         stmt_copy = copy.deepcopy(inner_node)
                         self.id_map[id(stmt_copy)] = stmt_copy
                         self.line_to_stmt_map[inner_node.lineno] = stmt_copy
+                        # workaround for python >= 3.8 wherein function calls seem
+                        # to yield trace frames that use the lineno of the first decorator
+                        for decorator in getattr(inner_node, 'decorator_list', []):
+                            self.line_to_stmt_map[decorator.lineno] = stmt_copy
                         prepend_stmt = self._get_parsed_prepend_stmt(stmt_copy)
                         if prepend_stmt is not None:
                             new_field.append(prepend_stmt)

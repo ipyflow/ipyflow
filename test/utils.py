@@ -32,11 +32,12 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
     def run_cell(code):
         get_ipython().run_cell_magic(safety_state[0].cell_magic_name, None, code)
 
+    store_history = kwargs.pop('store_history', False)
     setup_cells = kwargs.pop('setup_cells', [])
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        safety_state[0] = NotebookSafety(cell_magic_name='_SAFETY_CELL_MAGIC', **kwargs)
+        safety_state[0] = NotebookSafety(cell_magic_name='_SAFETY_CELL_MAGIC', store_history=store_history,  **kwargs)
         run_cell('import sys')
         run_cell('sys.path.append("./test")')
         run_cell('import logging')

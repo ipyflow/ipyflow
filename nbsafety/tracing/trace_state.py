@@ -7,7 +7,6 @@ from nbsafety.tracing.trace_events import TraceEvent
 
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Set, Tuple
-    from types import FrameType
     from nbsafety.data_model.scope import NamespaceScope
     from nbsafety.tracing.trace_stmt import TraceStatement
     from nbsafety.safety import NotebookSafety
@@ -95,8 +94,3 @@ class TraceState(object):
         if event == TraceEvent.return_:
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
-
-    @staticmethod
-    def get_position(frame: 'FrameType'):
-        cell_num = int(frame.f_code.co_filename.split('-')[2])
-        return cell_num, frame.f_lineno

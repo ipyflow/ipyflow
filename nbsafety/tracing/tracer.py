@@ -72,7 +72,9 @@ def make_tracer(safety: 'NotebookSafety'):
             # return None
 
         # notebook cells have filenames that appear as '<ipython-input...>'
-        if not frame.f_code.co_filename.startswith('<ipython-input'):
+        if frame.f_code.co_filename.startswith('<ipython-input'):
+            safety.maybe_set_name_to_cell_num_mapping(frame)
+        else:
             return None
 
         if isinstance(evt, str):
@@ -98,7 +100,7 @@ def make_tracer(safety: 'NotebookSafety'):
             if state.call_depth == 0:
                 return tracer
 
-        cell_num, lineno = TraceState.get_position(frame)
+        cell_num, lineno = safety.get_position(frame)
 
         if event == TraceEvent.after_stmt:
             stmt_node = extra
@@ -115,7 +117,7 @@ def make_tracer(safety: 'NotebookSafety'):
             trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
             state.traced_statements[id(stmt_node)] = trace_stmt
 
-        if safety.config.store_history and logger.getEffectiveLevel() <= logging.WARNING:
+        if logger.getEffectiveLevel() <= logging.WARNING:
             codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
             logger.warning(' %3d: %9s >>> %s', lineno, event, codeline)

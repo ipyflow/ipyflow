@@ -12,7 +12,6 @@ except ImportError:
 
 from nbsafety.analysis import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
-from nbsafety.ipython_utils import cell_counter
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
@@ -411,7 +410,7 @@ class NamespaceScope(Scope):
         val.containing_scope = self
 
     def refresh(self):
-        self.max_defined_timestamp = cell_counter()
+        self.max_defined_timestamp = self.safety.cell_counter()
 
     def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> 'Optional[NamespaceScope]':
         # TODO: test this properly

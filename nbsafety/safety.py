@@ -32,6 +32,7 @@ from nbsafety.utils import ChainedNodeTransformer, DotDict
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
+    from types import FrameType
     from nbsafety.data_model.data_symbol import DataSymbol
     CellId = Union[str, int]
 
@@ -92,6 +93,9 @@ class NotebookSafety(object):
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
+        self._cell_counter = 1
+        self._recorded_cell_name_to_cell_num = True
+        self._cell_name_to_cell_num_mapping: 'Dict[str, int]' = {}
         self.config = DotDict(dict(
             store_history=kwargs.pop('store_history', True),
             use_comm=use_comm,
@@ -109,6 +113,22 @@ class NotebookSafety(object):
     @property
     def is_develop(self) -> bool:
         return self.config.get('mode', SafetyRunMode.DEVELOP) == SafetyRunMode.DEVELOP
+
+    def cell_counter(self):
+        if self.config.store_history:
+            return cell_counter()
+        else:
+            return self._cell_counter
+
+    def get_position(self, frame: 'FrameType'):
+        cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
+        return cell_num, frame.f_lineno
+
+    def maybe_set_name_to_cell_num_mapping(self, frame: 'FrameType'):
+        if self._recorded_cell_name_to_cell_num:
+            return
+        self._recorded_cell_name_to_cell_num = True
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]] = self.cell_counter()
 
     def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
@@ -351,7 +371,7 @@ class NotebookSafety(object):
 
     def safe_execute(self, cell: str, run_cell_func):
         with save_number_of_currently_executing_cell():
-            self._last_execution_counter = cell_counter()
+            self._last_execution_counter = self.cell_counter()
 
             if self._active_cell_id is not None:
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
@@ -377,6 +397,8 @@ class NotebookSafety(object):
                 defined = self._check_cell_and_resolve_symbols(cell)['dead']
                 self._resync_symbols(defined)
             finally:
+                if not self.config.store_history:
+                    self._cell_counter += 1
                 if self.trace_state.error_occurred:
                     ret = _backup()
                 return ret
@@ -409,6 +431,7 @@ class NotebookSafety(object):
     def _tracing_context(self):
         self.updated_symbols.clear()
         self.updated_scopes.clear()
+        self._recorded_cell_name_to_cell_num = False
         tracer = make_tracer(self)
         seen_stmts = set()
 
@@ -458,7 +481,7 @@ class NotebookSafety(object):
             with ast_transformer_context([
                 ChainedNodeTransformer(
                     StatementInserter(
-                        self.statement_cache[cell_counter()],
+                        self.statement_cache[self.cell_counter()],
                         self.new_stmt_cache,
                         '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
                         '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),

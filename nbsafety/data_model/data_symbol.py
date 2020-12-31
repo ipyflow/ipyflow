@@ -6,7 +6,6 @@ import logging
 from typing import cast, TYPE_CHECKING
 import weakref
 
-from nbsafety.ipython_utils import cell_counter
 from nbsafety.data_model.update_protocol import UpdateProtocol
 
 if TYPE_CHECKING:
@@ -65,7 +64,7 @@ class DataSymbol(object):
         if self.is_function:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
 
-        self.defined_cell_num = cell_counter()
+        self.defined_cell_num = self.safety.cell_counter()
 
         # The notebook cell number this is required to have to not be considered stale
         self.required_cell_num = self.defined_cell_num
@@ -282,7 +281,7 @@ class DataSymbol(object):
 
     def refresh(self: 'DataSymbol'):
         self.fresher_ancestors = set()
-        self.defined_cell_num = cell_counter()
+        self.defined_cell_num = self.safety.cell_counter()
         self.namespace_stale_symbols = set()
 
     def _propagate_refresh_to_namespace_parents(self, seen: 'Set[DataSymbol]'):
@@ -294,15 +293,15 @@ class DataSymbol(object):
             containing_scope: 'NamespaceScope' = cast('NamespaceScope', self_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue
-            # if containing_scope.max_defined_timestamp == cell_counter():
+            # if containing_scope.max_defined_timestamp == self.safety.cell_counter():
             #     return
-            containing_scope.max_defined_timestamp = cell_counter()
+            containing_scope.max_defined_timestamp = self.safety.cell_counter()
             containing_namespace_obj_id = containing_scope.obj_id
             # print('containing namespaces:', self.safety.aliases[containing_namespace_obj_id])
             for alias in self.safety.aliases[containing_namespace_obj_id]:
                 alias.namespace_stale_symbols.discard(self)
                 if not alias.is_stale:
-                    alias.defined_cell_num = cell_counter()
+                    alias.defined_cell_num = self.safety.cell_counter()
                     alias.fresher_ancestors = set()
                 # print('working on', alias, '; stale?', alias.is_stale, alias.namespace_stale_symbols)
                 alias._propagate_refresh_to_namespace_parents(seen)

@@ -2,8 +2,6 @@
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.ipython_utils import cell_counter
-
 if TYPE_CHECKING:
     from typing import Set
     from nbsafety.data_model.data_symbol import DataSymbol
@@ -72,7 +70,7 @@ class UpdateProtocol(object):
                 continue
             # TODO: figure out what this is for again
             # self.safety.updated_scopes.add(containing_scope)
-            containing_scope.max_defined_timestamp = cell_counter()
+            containing_scope.max_defined_timestamp = self.safety.cell_counter()
             containing_namespace_obj_id = containing_scope.obj_id
             for alias in self.safety.aliases[containing_namespace_obj_id]:
                 alias.namespace_stale_symbols.discard(dsym)
@@ -130,7 +128,7 @@ class UpdateProtocol(object):
         if dsym not in self.safety.updated_symbols:
             if dsym.should_mark_stale(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
-                dsym.required_cell_num = cell_counter()
+                dsym.required_cell_num = self.safety.cell_counter()
                 self._propagate_staleness_to_namespace_parents(dsym, skip_seen_check=True)
                 self._propagate_staleness_to_namespace_children(dsym, skip_seen_check=True)
         for child in self._non_class_to_instance_children(dsym):

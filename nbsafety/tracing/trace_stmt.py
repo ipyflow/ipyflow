@@ -46,6 +46,9 @@ class TraceStatement(object):
     def stmt_id(self):
         return id(self.stmt_node)
 
+    def _contains_lval(self):
+        return stmt_contains_lval(self.stmt_node)
+
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
             symbol_edges, _ = get_symbol_edges(self.stmt_node)
@@ -263,7 +266,7 @@ class TraceStatement(object):
             # TODO: add mechanism for skipping namespace children in case of list append
             for mutated_sym in self.safety.aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
-        if stmt_contains_lval(self.stmt_node):
+        if self._contains_lval():
             self._make_lval_data_symbols()
         else:
             if len(self.safety.attr_trace_manager.saved_store_data) > 0 and self.safety.is_develop:

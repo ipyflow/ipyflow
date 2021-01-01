@@ -6,7 +6,6 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
-from nbsafety.analysis.mixins import VisitListsMixin
 
 if TYPE_CHECKING:
     from nbsafety.data_model.data_symbol import DataSymbol

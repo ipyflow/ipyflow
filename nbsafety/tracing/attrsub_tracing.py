@@ -535,7 +535,7 @@ class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
                     if not isinstance(sym, str):
                         break
                     statically_resolvable.append(ast.Str(sym))
-                statically_resolvable = ast.Tuple(elts=statically_resolvable, ctx=ast.Load())
+                statically_resolvable = fast.Tuple(elts=statically_resolvable, ctx=ast.Load())
                 with self.attrsub_load_context(False):
                     visited_maybe_kwarg = self.visit(maybe_kwarg)
                 argrecord_args = [visited_maybe_kwarg, statically_resolvable]
@@ -589,7 +589,7 @@ class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
             return node
 
         with fast.location_of(node):
-            return ast.Call(
+            return fast.Call(
                 func=fast.Name(self.end_tracer, ast.Load()),
                 args=[node, fast.NameConstant(True)],
                 keywords=[]
@@ -604,7 +604,7 @@ class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
             new_targets.append(self.visit(target))
         node.targets = cast('List[ast.expr]', new_targets)
         with fast.location_of(node.value):
-            node.value = ast.Call(
+            node.value = fast.Call(
                 func=fast.Name(self.literal_tracer, ast.Load()),
                 args=[node.value],
                 keywords=[],

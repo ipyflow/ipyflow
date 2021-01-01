@@ -39,9 +39,3 @@ class StatementMapper(ast.NodeVisitor):
                 for inner_node in field:
                     if isinstance(inner_node, ast.AST):
                         self.visit(inner_node)
-
-
-def compute_lineno_to_stmt_mapping(code: str) -> 'Dict[int, ast.stmt]':
-    mapper = StatementMapper({}, {})
-    mapper(ast.parse(code))
-    return mapper.line_to_stmt_map

@@ -1,7 +1,13 @@
 # -*- coding: utf-8 -*-
 import ast
 
-from nbsafety.tracing.stmt_mapper import compute_lineno_to_stmt_mapping
+from nbsafety.tracing.stmt_mapper import StatementMapper
+
+
+def compute_lineno_to_stmt_mapping(code: str) -> 'Dict[int, ast.stmt]':
+    mapper = StatementMapper({}, {})
+    mapper(ast.parse(code))
+    return mapper.line_to_stmt_map
 
 
 def test_for_loop():

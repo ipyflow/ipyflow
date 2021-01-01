@@ -58,6 +58,7 @@ def _safety_warning(node: 'DataSymbol'):
         f'`{node.readable_name}` defined in cell {node.defined_cell_num} may depend on '
         f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
         f'(latest update in cell {node.required_cell_num}).'
+        f'\n\n(Run cell again to override and execute anyway.)'
     )
 
 

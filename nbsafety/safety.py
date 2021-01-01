@@ -26,7 +26,14 @@ from nbsafety.ipython_utils import (
 from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceEvent, TraceState, TraceStatement
+from nbsafety.tracing import (
+    AttrSubTracingManager,
+    AttrSubTracingNodeTransformer,
+    make_tracer,
+    TraceEvent,
+    TraceState,
+    TraceStatement,
+)
 from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.tracing.stmt_mapper import StatementMapper
 from nbsafety.utils import ChainedNodeTransformer, DotDict
@@ -486,7 +493,7 @@ class NotebookSafety(object):
                         '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
                         '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),
                     ),
-                    self.attr_trace_manager.ast_transformer,
+                    AttrSubTracingNodeTransformer(*self.attr_trace_manager.tracer_func_names),
                 )
             ]):
                 yield

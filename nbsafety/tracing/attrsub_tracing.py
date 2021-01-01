@@ -92,26 +92,13 @@ class AttrSubTracingManager(object):
         self.active_scope = active_scope
         self.should_record_args = False
         self.trace_event_counter = trace_event_counter
-        self.attrsub_tracer_name = '_NBSAFETY_ATTR_TRACER'
-        self.end_tracer_name = '_NBSAFETY_ATTR_TRACER_END'
-        self.arg_recorder_name = '_NBSAFETY_ARG_RECORDER'
-        self.scope_pusher_name = '_NBSAFETY_SCOPE_PUSHER'
-        self.scope_popper_name = '_NBSAFETY_SCOPE_POPPER'
-        self.literal_tracer_name = '_NBSAFETY_LITERAL_TRACER'
-        setattr(builtins, self.attrsub_tracer_name, self.attrsub_tracer)
-        setattr(builtins, self.end_tracer_name, self.end_tracer)
-        setattr(builtins, self.arg_recorder_name, self.arg_recorder)
-        setattr(builtins, self.scope_pusher_name, self.scope_pusher)
-        setattr(builtins, self.scope_popper_name, self.scope_popper)
-        setattr(builtins, self.literal_tracer_name, self.literal_tracer)
-        self.ast_transformer = AttrSubTracingNodeTransformer(
-            self.attrsub_tracer_name,
-            self.end_tracer_name,
-            self.arg_recorder_name,
-            self.scope_pusher_name,
-            self.scope_popper_name,
-            self.literal_tracer_name
-        )
+        self.tracer_func_names: 'List[str]' = []
+        self.register_tracer_func('_NBSAFETY_ATTR_TRACER', self.attrsub_tracer)
+        self.register_tracer_func('_NBSAFETY_ATTR_TRACER_END', self.end_tracer)
+        self.register_tracer_func('_NBSAFETY_ARG_RECORDER', self.arg_recorder)
+        self.register_tracer_func('_NBSAFETY_SCOPE_PUSHER', self.scope_pusher)
+        self.register_tracer_func('_NBSAFETY_SCOPE_POPPER', self.scope_popper)
+        self.register_tracer_func('_NBSAFETY_LITERAL_TRACER', self.literal_tracer)
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
         self.deep_refs: Set[DeepRef] = set()
@@ -123,19 +110,14 @@ class AttrSubTracingManager(object):
         self.first_obj_id_in_chain: Optional[int] = None
         self.stack: AttrSubStack = []
 
+    def register_tracer_func(self, tracer_func_name: str, tracer_func):
+        self.tracer_func_names.append(tracer_func_name)
+        setattr(builtins, tracer_func_name, tracer_func)
+
     def __del__(self):
-        if hasattr(builtins, self.attrsub_tracer_name):
-            delattr(builtins, self.attrsub_tracer_name)
-        if hasattr(builtins, self.end_tracer_name):
-            delattr(builtins, self.end_tracer_name)
-        if hasattr(builtins, self.arg_recorder_name):
-            delattr(builtins, self.arg_recorder_name)
-        if hasattr(builtins, self.scope_pusher_name):
-            delattr(builtins, self.scope_pusher_name)
-        if hasattr(builtins, self.scope_popper_name):
-            delattr(builtins, self.scope_popper_name)
-        if hasattr(builtins, self.literal_tracer_name):
-            delattr(builtins, self.literal_tracer_name)
+        for func in self.tracer_func_names:
+            if hasattr(builtins, func):
+                delattr(builtins, func)
 
     def push_stack(self, new_scope: 'Scope'):
         self.stack.append((

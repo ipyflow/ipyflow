@@ -28,6 +28,7 @@ from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing import AttrSubTracingManager, make_tracer, TraceEvent, TraceState, TraceStatement
 from nbsafety.tracing.stmt_inserter import StatementInserter
+from nbsafety.tracing.stmt_mapper import StatementMapper
 from nbsafety.utils import ChainedNodeTransformer, DotDict
 
 if TYPE_CHECKING:
@@ -480,9 +481,11 @@ class NotebookSafety(object):
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
-                    StatementInserter(
+                    StatementMapper(
                         self.statement_cache[self.cell_counter()],
-                        self.new_stmt_cache,
+                        self.new_stmt_cache
+                    ),
+                    StatementInserter(
                         '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
                         '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),
                     ),

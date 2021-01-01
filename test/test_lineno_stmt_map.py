@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 
-from nbsafety.tracing.stmt_inserter import compute_lineno_to_stmt_mapping
+from nbsafety.tracing.stmt_mapper import compute_lineno_to_stmt_mapping
 
 
 def test_for_loop():

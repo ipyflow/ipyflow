@@ -439,6 +439,14 @@ class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
         self.scope_popper = scope_popper
         self.literal_tracer = literal_tracer
         self.inside_attrsub_load_chain = False
+        self.skip_nodes: 'Optional[Set[int]]' = None
+
+    def __call__(self, node: 'ast.AST', skip_nodes: 'Set[int]'):
+        self.skip_nodes = skip_nodes
+        ret_node = self.visit(node)
+        self.skip_nodes = None
+        return ret_node, ()
+
 
     @contextmanager
     def attrsub_load_context(self, override=True):

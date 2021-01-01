@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-# import pytest
-
-from test.utils import make_safety_fixture, skipif_known_failing
+from test.utils import make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -31,7 +29,6 @@ def test_simplest():
     assert updated_symbol_names() == ['a']
 
 
-@skipif_known_failing
 def test_dict_hierarchy():
     run_cell('d = {}')
     assert updated_symbol_names() == ['d']
@@ -41,12 +38,3 @@ def test_dict_hierarchy():
     assert updated_symbol_names() == sorted(['d[foo][bar]', 'd[foo]', 'd'])
     run_cell('d["foo"]["bar"] = 0')
     assert updated_symbol_names() == sorted(['d[foo][bar]', 'd[foo]', 'd'])
-
-
-def test_dict_hierarchy_new_protocol():
-    prev = _safety_state[0].config.get('use_new_update_protocol', False)
-    try:
-        _safety_state[0].config.use_new_update_protocol = True
-        test_dict_hierarchy()
-    finally:
-        _safety_state[0].config.use_new_update_protocol = prev

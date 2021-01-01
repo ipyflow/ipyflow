@@ -74,6 +74,7 @@ class NotebookSafety(object):
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.new_stmt_cache: Dict[int, ast.stmt] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+        self.seen_stmts: 'Set[int]' = set()
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
@@ -305,7 +306,6 @@ class NotebookSafety(object):
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
             return False
-        # self.statement_cache[cell_counter()] = compute_lineno_to_stmt_mapping(cell_ast)
         symbols = self._check_cell_and_resolve_symbols(cell_ast)
         stale_symbols, live_symbols = symbols['stale'], symbols['live']
         if self._last_refused_code is None or cell != self._last_refused_code:
@@ -435,32 +435,28 @@ class NotebookSafety(object):
         self.updated_scopes.clear()
         self._recorded_cell_name_to_cell_num = False
         tracer = make_tracer(self)
-        seen_stmts = set()
+        self.seen_stmts.clear()
 
         def _finish_tracing_reset():
             # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
             pass
 
-        def _XuikX_after_stmt_hook(stmt_id):
-            # if not self.trace_state.tracing_enabled:
-            #     return
-            if stmt_id in seen_stmts:
+        def _XuikX_after_stmt_hook(stmt_id, frame=None):
+            if stmt_id in self.seen_stmts:
                 return
             stmt = self.new_stmt_cache.get(stmt_id, None)
             if stmt is not None:
-                seen_stmts.add(stmt_id)
-                tracer(sys._getframe().f_back, TraceEvent.after_stmt, stmt)
+                tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
 
         def _XuikX_before_stmt_hook(stmt_id):
-            if stmt_id in seen_stmts:
+            if stmt_id in self.seen_stmts:
                 return
             # logger.warning('reenable tracing: %s', site_id)
             if self.trace_state.prev_trace_stmt_in_cur_frame is not None:
                 prev_trace_stmt_in_cur_frame = self.trace_state.prev_trace_stmt_in_cur_frame
                 # both of the following stmts should be processed when body is entered
                 if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
-                    seen_stmts.add(prev_trace_stmt_in_cur_frame.stmt_id)
-                    tracer(sys._getframe().f_back, TraceEvent.after_stmt, prev_trace_stmt_in_cur_frame.stmt_node)
+                    _XuikX_after_stmt_hook(prev_trace_stmt_in_cur_frame.stmt_id, frame=sys._getframe().f_back)
             trace_stmt = self.trace_state.traced_statements.get(stmt_id, None)
             if trace_stmt is None:
                 trace_stmt = TraceStatement(

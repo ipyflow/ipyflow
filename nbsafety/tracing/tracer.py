@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 from nbsafety.tracing.recovery import on_exception_default_to, return_val
 from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.tracing.trace_state import TraceState
 
 if TYPE_CHECKING:
     from types import FrameType

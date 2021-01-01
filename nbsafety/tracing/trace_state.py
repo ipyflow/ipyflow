@@ -32,21 +32,16 @@ class TraceState(object):
         self.tracing_reset_pending = False
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
-        if event != TraceEvent.after_stmt:
-            if event != TraceEvent.return_ or self.prev_event in (TraceEvent.call, TraceEvent.exception):
-                return
-
-        if event == TraceEvent.return_:
-            prev_overall = self.prev_trace_stmt
-            if prev_overall is not None and prev_overall is not self.stack[-1][0]:
-                # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
-                prev_overall.finished_execution_hook()
-            return
-
         if event == TraceEvent.after_stmt:
-            # if isinstance(trace_stmt.stmt_node, ast.FunctionDef) and trace_stmt.stmt_node.name == 'g':
-            #     print('OK')
             trace_stmt.finished_execution_hook()
+        elif event == TraceEvent.return_ and self.prev_event not in (TraceEvent.call, TraceEvent.exception):
+            # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
+            if self.prev_trace_stmt is not None:
+                self.prev_trace_stmt.finished_execution_hook()
+            # prev_overall = self.prev_trace_stmt
+            # if prev_overall is not None and prev_overall is not self.stack[-1][0]:
+            #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
+            #     prev_overall.finished_execution_hook()
 
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
         # TODO: figure out a better way to determine if we're inside a lambda

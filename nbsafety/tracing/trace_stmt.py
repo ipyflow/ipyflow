@@ -29,7 +29,6 @@ class TraceStatement(object):
         self.class_scope: Optional[NamespaceScope] = None
         self.call_point_deps: List[Set[DataSymbol]] = []
         self.lambda_call_point_deps_done_once = False
-        self._marked_finished = False
         self.call_seen = False
 
     @contextmanager
@@ -41,8 +40,7 @@ class TraceStatement(object):
 
     @property
     def finished(self):
-        return self._marked_finished
-        # return self.marked_finished and isinstance(self.stmt_node, (ast.For, ast.Lambda))
+        return self.stmt_id in self.safety.seen_stmts
 
     @property
     def stmt_id(self):
@@ -276,7 +274,7 @@ class TraceStatement(object):
         if self.finished:
             return
         # print('finishing stmt', self.stmt_node)
-        self._marked_finished = True
+        self.safety.seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
         self.safety.attr_trace_manager.reset()
         self.safety._namespace_gc()

@@ -1,22 +1,53 @@
 # -*- coding: utf-8 -*-
 import ast
 import builtins
-from contextlib import contextmanager
-from enum import Enum
 import logging
+import sys
 from typing import cast, TYPE_CHECKING
 
-from .recovery import on_exception_default_to, return_arg_at_index
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
-from nbsafety.utils import fast, SkipNodesMixin
+from nbsafety.tracing.mutation_event import MutationEvent
+from nbsafety.tracing.hooks import TracingHook
+from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index
+from nbsafety.tracing.sys_tracer import make_sys_tracer
+from nbsafety.tracing.trace_events import TraceEvent
+from nbsafety.tracing.trace_stmt import TraceStatement
+
+if TYPE_CHECKING:
+    from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from nbsafety.data_model.scope import Scope
+    from nbsafety.safety import NotebookSafety
+    SymbolRef = Union[str, AttrSubSymbolChain]
+    AttrSubVal = Union[str, int]
+    DeepRef = Tuple[int, Optional[str], Tuple[SymbolRef, ...]]
+    Mutation = Tuple[int, Tuple[SymbolRef, ...], MutationEvent]
+    RefCandidate = Optional[Tuple[int, int, Optional[str]]]
+    RecordedArgs = Set[Tuple[SymbolRef, int]]
+    DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
+    SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
+    LexicalCallNestingStack = List[Scope]
+    TraceStateStackFrame = Tuple[
+        TraceStatement,
+        bool,
+        List[SavedStoreData],
+        Set[DeepRef],
+        Set[Mutation],
+        List[DeepRefCandidate],
+        Scope,
+        Scope,
+        LexicalCallNestingStack,
+        bool,
+        List[bool],
+        NamespaceScope,
+        int,
+    ]
+    TraceStateStack = List[TraceStateStackFrame]
 
 
-class MutationEvent(Enum):
-    normal = 'normal'
-    list_append = 'list_append'
-    arg_mutate = 'argument_mutation'
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 ARG_MUTATION_EXCEPTED_MODULES = {
@@ -32,39 +63,6 @@ ARG_MUTATION_EXCEPTED_MODULES = {
     'sns',
     'widget',
 }
-
-
-if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Set, Tuple, Union
-    from ..safety import NotebookSafety
-    from nbsafety.data_model.scope import Scope
-    SymbolRef = Union[str, AttrSubSymbolChain]
-    AttrSubVal = Union[str, int]
-    DeepRef = Tuple[int, Optional[str], Tuple[SymbolRef, ...]]
-    Mutation = Tuple[int, Tuple[SymbolRef, ...], MutationEvent]
-    RefCandidate = Optional[Tuple[int, int, Optional[str]]]
-    RecordedArgs = Set[Tuple[SymbolRef, int]]
-    DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
-    SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    # TextualCallNestingStackFrame = Tuple[Scope, bool]
-    TextualCallNestingStack = List[Scope]
-    AttrSubStackFrame = Tuple[
-        List[SavedStoreData],
-        Set[DeepRef],
-        Set[Mutation],
-        List[DeepRefCandidate],
-        Scope,
-        Scope,
-        TextualCallNestingStack,
-        bool,
-        List[bool],
-        NamespaceScope,
-        int,
-    ]
-    AttrSubStack = List[AttrSubStackFrame]
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
 
 
 class ListLiteral(list):
@@ -84,41 +82,55 @@ def _make_weakrefable_literal(literal):
         return literal
 
 
-class AttrSubTracingManager(object):
+def _finish_tracing_reset():
+    # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
+    pass
+
+
+class TracingManager(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
+        self.tracer = make_sys_tracer(safety)
         self.cur_frame_original_scope = safety.global_scope
         self.active_scope = safety.global_scope
+        self.prev_event: Optional[TraceEvent] = None
+        self.prev_trace_stmt: Optional[TraceStatement] = None
+        self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
+        self.seen_stmts: 'Set[int]' = set()
+        self.inside_lambda = False
+        self.call_depth = 0
+        self.traced_statements: Dict[int, TraceStatement] = {}
+        self.stack: TraceStateStack = []
+        self.tracing_enabled = False
+        self.tracing_reset_pending = False
+
         self.should_record_args = False
-        self.tracer_func_names: 'List[str]' = []
-        self.register_tracer_func('_NBSAFETY_ATTR_TRACER', self.attrsub_tracer)
-        self.register_tracer_func('_NBSAFETY_ATTR_TRACER_END', self.end_tracer)
-        self.register_tracer_func('_NBSAFETY_ARG_RECORDER', self.arg_recorder)
-        self.register_tracer_func('_NBSAFETY_SCOPE_PUSHER', self.scope_pusher)
-        self.register_tracer_func('_NBSAFETY_SCOPE_POPPER', self.scope_popper)
-        self.register_tracer_func('_NBSAFETY_LITERAL_TRACER', self.literal_tracer)
+        self.register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
+        self.register_tracer_func(TracingHook.end_tracer, self.end_tracer)
+        self.register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
+        self.register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
+        self.register_tracer_func(TracingHook.scope_popper, self.scope_popper)
+        self.register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
+        self.register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
+        self.register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
         self.deep_refs: Set[DeepRef] = set()
         self.mutations: Set[Mutation] = set()
         self.deep_ref_candidates: List[DeepRefCandidate] = []
-        self.nested_call_stack: TextualCallNestingStack = []
+        self.nested_call_stack: LexicalCallNestingStack = []
         self.should_record_args_stack: List[bool] = []
         self.literal_namespace: Optional[NamespaceScope] = None
         self.first_obj_id_in_chain: Optional[int] = None
-        self.stack: AttrSubStack = []
 
-    def register_tracer_func(self, tracer_func_name: str, tracer_func):
-        self.tracer_func_names.append(tracer_func_name)
-        setattr(builtins, tracer_func_name, tracer_func)
+    def register_tracer_func(self, tracing_hook: 'TracingHook', tracer_func):
+        setattr(builtins, tracing_hook.value, tracer_func)
 
-    def __del__(self):
-        for func in self.tracer_func_names:
-            if hasattr(builtins, func):
-                delattr(builtins, func)
-
-    def push_stack(self, new_scope: 'Scope'):
+    def push_stack(self, trace_stmt: 'TraceStatement'):
+        new_scope = trace_stmt.get_post_call_scope()
         self.stack.append((
+            self.prev_trace_stmt_in_cur_frame,
+            self.inside_lambda,
             self.saved_store_data,
             self.deep_refs,
             self.mutations,
@@ -131,6 +143,10 @@ class AttrSubTracingManager(object):
             self.literal_namespace,
             self.first_obj_id_in_chain,
         ))
+        self.prev_trace_stmt_in_cur_frame = None
+        self.inside_lambda = not isinstance(trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        # TODO: figure out a better way to determine if we're inside a lambda
+        #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
         self.saved_store_data = []
         self.deep_refs = set()
         self.mutations = set()
@@ -145,6 +161,8 @@ class AttrSubTracingManager(object):
 
     def pop_stack(self):
         (
+            self.prev_trace_stmt_in_cur_frame,
+            self.inside_lambda,
             self.saved_store_data,
             self.deep_refs,
             self.mutations,
@@ -158,39 +176,60 @@ class AttrSubTracingManager(object):
             self.first_obj_id_in_chain,
         ) = self.stack.pop()
 
+    def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
+        if event == TraceEvent.after_stmt:
+            trace_stmt.finished_execution_hook()
+        elif event == TraceEvent.return_ and self.prev_event not in (TraceEvent.call, TraceEvent.exception):
+            # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
+            if self.prev_trace_stmt is not None:
+                self.prev_trace_stmt.finished_execution_hook()
+            # prev_overall = self.prev_trace_stmt
+            # if prev_overall is not None and prev_overall is not self.stack[-1][0]:
+            #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
+            #     prev_overall.finished_execution_hook()
+
+    def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
+        self.push_stack(trace_stmt)
+
+    def _handle_return_transition(self, trace_stmt: 'TraceStatement'):
+        inside_lambda = self.inside_lambda
+        cur_frame_scope = self.cur_frame_original_scope
+        self.pop_stack()
+        return_to_stmt = self.prev_trace_stmt_in_cur_frame
+        assert return_to_stmt is not None
+        if self.prev_event != TraceEvent.exception:
+            # exception events are followed by return events until we hit an except clause
+            # no need to track dependencies in this case
+            if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
+                return_to_stmt.class_scope = cast('NamespaceScope', cur_frame_scope)
+            elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
+                if not trace_stmt.lambda_call_point_deps_done_once:
+                    trace_stmt.lambda_call_point_deps_done_once = True
+                    return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
+
+    def state_transition_hook(
+            self,
+            event: 'TraceEvent',
+            trace_stmt: 'TraceStatement'
+    ):
+        self.safety.trace_event_counter[0] += 1
+
+        self._check_prev_stmt_done_executing_hook(event, trace_stmt)
+
+        if event == TraceEvent.call:
+            self._handle_call_transition(trace_stmt)
+        if event == TraceEvent.return_:
+            self._handle_return_transition(trace_stmt)
+        self.prev_event = event
+
     @staticmethod
     def debug_attribute_tracer(obj, attr, ctx):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def _try_to_resync_obj_ref(self, obj, obj_name):
-        if obj_name is None:
-            return
-        dsym = self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope.lookup_data_symbol_by_name_this_indentation(obj_name)
-        if dsym is None:
-            return
-        # namespace = self.safety.namespaces.get(dsym.cached_obj_id, None)
-        # if namespace is not None:
-        #     del self.safety.namespaces[dsym.cached_obj_id]
-        #     self.safety.namespaces[id(obj)] = namespace
-        #     namespace.update_obj_ref(obj)
-        # namespace = self.safety.namespaces.get(dsym.obj_id, None)
-        # if namespace is not None:
-        #     del self.safety.namespaces[dsym.obj_id]
-        #     self.safety.namespaces[id(obj)] = namespace
-        #     namespace.update_obj_ref(obj)
-        # self.safety.aliases[dsym.obj_id].discard(dsym)
-        # self.safety.aliases[dsym.cached_obj_id].discard(dsym)
-        # self.safety.aliases[id(obj)].add(dsym)
-        dsym.update_obj_ref(obj)
-        # dsym._refresh_cached_obj()
-
     @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
-        # print(obj_name, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope)
-        # self._try_to_resync_obj_ref(obj, obj_name)
-        # print(obj, attr_or_subscript, is_subscript, ctx)
-        if not self.safety.trace_state.tracing_enabled:
+        if not self.tracing_enabled:
             return obj
         should_record_args = False
         try:
@@ -215,7 +254,7 @@ class AttrSubTracingManager(object):
                         scope.scope_name = obj_name
                 else:
                     # print('no scope for class', obj.__class__)
-                    # if self.safety.trace_state.prev_trace_stmt.finished:
+                    # if self.prev_trace_stmt.finished:
                     #     # avoid creating new scopes if we already did this computation
                     #     self.active_scope = None
                     #     return obj
@@ -228,7 +267,7 @@ class AttrSubTracingManager(object):
                 if scope.parent_scope is None:
                     if (
                         obj_name is not None and
-                        obj_name not in self.safety.trace_state.prev_trace_stmt_in_cur_frame.frame.f_locals
+                        obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
                     ):
                         parent_scope = self.safety.global_scope
                     else:
@@ -236,11 +275,11 @@ class AttrSubTracingManager(object):
                     scope.parent_scope = parent_scope
 
             self.active_scope = scope
-            # if scope is None:  # or self.safety.trace_state.prev_trace_stmt.finished:
+            # if scope is None:  # or self.prev_trace_stmt.finished:
             #     if ctx in ('Store', 'AugStore'):
             #         self.active_scope = self.original_active_scope
             #     return obj
-            if scope is None or self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+            if scope is None or self.prev_trace_stmt_in_cur_frame.finished:
                 return obj
             elif ctx in ('Store', 'AugStore') and scope is not None:
                 self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
@@ -303,9 +342,9 @@ class AttrSubTracingManager(object):
     def end_tracer(self, obj, call_context):
         first_obj_id_in_chain = self.first_obj_id_in_chain
         self.first_obj_id_in_chain = None
-        if not self.safety.trace_state.tracing_enabled:
+        if not self.tracing_enabled:
             return obj
-        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+        if self.prev_trace_stmt_in_cur_frame.finished:
             self.active_scope = self.cur_frame_original_scope
             return obj
         if call_context and len(self.deep_ref_candidates) > 0:
@@ -334,9 +373,9 @@ class AttrSubTracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def arg_recorder(self, arg_obj, name):
-        if not self.safety.trace_state.tracing_enabled:
+        if not self.tracing_enabled:
             return arg_obj
-        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
+        if self.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
             return arg_obj
         if len(self.deep_ref_candidates) == 0:
             logger.error('Error: no associated symbol for recorded args; skipping recording')
@@ -350,9 +389,9 @@ class AttrSubTracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def scope_pusher(self, obj):
-        if not self.safety.trace_state.tracing_enabled:
+        if not self.tracing_enabled:
             return obj
-        # if self.safety.trace_state.prev_trace_stmt.finished:
+        # if self.prev_trace_stmt.finished:
         #     return obj
         self.nested_call_stack.append(self.active_scope)
         self.active_scope = self.cur_frame_original_scope
@@ -360,9 +399,9 @@ class AttrSubTracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def scope_popper(self, obj, should_pop_should_record_args_stack):
-        if not self.safety.trace_state.tracing_enabled:
+        if not self.tracing_enabled:
             return obj
-        # if self.safety.trace_state.prev_trace_stmt.finished:
+        # if self.prev_trace_stmt.finished:
         #     return obj
         self.active_scope = self.nested_call_stack.pop()
         if should_pop_should_record_args_stack:
@@ -372,21 +411,51 @@ class AttrSubTracingManager(object):
     @on_exception_default_to(return_arg_at_index(1, logger))
     def literal_tracer(self, literal):
         literal = _make_weakrefable_literal(literal)
-        if not self.safety.trace_state.tracing_enabled:
+        if not self.tracing_enabled:
             return literal
-        if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
+        if self.prev_trace_stmt_in_cur_frame.finished:
             return literal
         if isinstance(literal, (dict, list, tuple)):
             scope = NamespaceScope(
-                literal, self.safety, None, self.safety.trace_state.prev_trace_stmt_in_cur_frame.scope
+                literal, self.safety, None, self.prev_trace_stmt_in_cur_frame.scope
             )
             gen = literal.items() if isinstance(literal, dict) else enumerate(literal)
             for i, obj in gen:
                 scope.upsert_data_symbol_for_name(
-                    i, obj, set(), self.safety.trace_state.prev_trace_stmt_in_cur_frame.stmt_node, True
+                    i, obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, True
                 )
             self.literal_namespace = scope
         return literal
+
+    def after_stmt_tracer(self, stmt_id, frame=None):
+        if stmt_id in self.seen_stmts:
+            return
+        stmt = self.safety.new_stmt_cache.get(stmt_id, None)
+        if stmt is not None:
+            self.tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
+
+    def before_stmt_tracer(self, stmt_id):
+        if stmt_id in self.seen_stmts:
+            return
+        # logger.warning('reenable tracing: %s', site_id)
+        if self.prev_trace_stmt_in_cur_frame is not None:
+            prev_trace_stmt_in_cur_frame = self.prev_trace_stmt_in_cur_frame
+            # both of the following stmts should be processed when body is entered
+            if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
+                self.after_stmt_tracer(prev_trace_stmt_in_cur_frame.stmt_id, frame=sys._getframe().f_back)
+        trace_stmt = self.traced_statements.get(stmt_id, None)
+        if trace_stmt is None:
+            trace_stmt = TraceStatement(
+                self.safety, sys._getframe().f_back, self.safety.new_stmt_cache[stmt_id], self.cur_frame_original_scope
+            )
+            self.traced_statements[stmt_id] = trace_stmt
+        self.prev_trace_stmt_in_cur_frame = trace_stmt
+        self.prev_trace_stmt = trace_stmt
+        if not self.tracing_enabled:
+            assert not self.tracing_reset_pending
+            self.enable_tracing()
+            self.tracing_reset_pending = True
+            _finish_tracing_reset()  # trigger the tracer with a frame
 
     def reset(self):
         self.loaded_data_symbols = set()
@@ -401,192 +470,13 @@ class AttrSubTracingManager(object):
         # self.nested_call_stack = []
         # self.stmt_transition_hook()
 
+    def enable_tracing(self):
+        assert not self.tracing_enabled
+        self.tracing_enabled = True
+        sys.settrace(self.tracer)
 
-class AttrSubTracingNodeTransformer(SkipNodesMixin, ast.NodeTransformer):
-    def __init__(
-            self,
-            attrsub_tracer: str,
-            end_tracer: str,
-            arg_recorder: str,
-            scope_pusher: str,
-            scope_popper: str,
-            literal_tracer: str
-    ):
-        self.attrsub_tracer = attrsub_tracer
-        self.end_tracer = end_tracer
-        self.arg_recorder = arg_recorder
-        self.scope_pusher = scope_pusher
-        self.scope_popper = scope_popper
-        self.literal_tracer = literal_tracer
-        self.inside_attrsub_load_chain = False
-        self.skip_nodes: 'Optional[Set[int]]' = None
-
-    def __call__(self, node: 'ast.AST', skip_nodes: 'Set[int]'):
-        self.skip_nodes = skip_nodes
-        ret_node = self.visit(node)
-        self.skip_nodes = None
-        return ret_node, ()
-
-
-    @contextmanager
-    def attrsub_load_context(self, override=True):
-        old = self.inside_attrsub_load_chain
-        self.inside_attrsub_load_chain = override
-        yield
-        self.inside_attrsub_load_chain = old
-
-    def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
-        return self.visit_Attribute_or_Subscript(node, call_context)
-
-    def visit_Subscript(self, node: 'ast.Subscript', call_context=False):
-        return self.visit_Attribute_or_Subscript(node, call_context)
-
-    def visit_Attribute_or_Subscript(self, node: 'Union[ast.Attribute, ast.Subscript]', call_context=False):
-        with fast.location_of(node.value):
-            is_load = isinstance(node.ctx, ast.Load)
-            is_subscript = isinstance(node, ast.Subscript)
-            # TODO: expand beyond simple slices
-            if is_subscript:
-                sub_node = cast(ast.Subscript, node)
-                if isinstance(sub_node.slice, ast.Index):
-                    attr_or_sub = sub_node.slice.value  # type: ignore
-                    # ast.copy_location(attr_or_sub, sub_node.slice.value)
-                    # if isinstance(attr_or_sub, ast.Str):
-                    #     attr_or_sub = attr_or_sub.s
-                    # elif isinstance(attr_or_sub, ast.Num):
-                    #     attr_or_sub = attr_or_sub.n
-                    # else:
-                    #     logger.debug('unimpled index: %s', attr_or_sub)
-                    #     return node
-                elif isinstance(sub_node.slice, ast.Constant):
-                    # Python > 3.8 doesn't use ast.Index for constant slices
-                    attr_or_sub = sub_node.slice
-                else:
-                    logger.debug('unimpled slice: %s', sub_node.slice)
-                    return node
-                # elif isinstance(sub_node.slice, ast.Slice):
-                #     raise ValueError('unimpled slice: %s' % sub_node.slice)
-                # elif isinstance(sub_node.slice, ast.ExtSlice):
-                #     raise ValueError('unimpled slice: %s' % sub_node.slice)
-                # else:
-                #     raise ValueError('unexpected slice: %s' % sub_node.slice)
-            else:
-                attr_node = cast(ast.Attribute, node)
-                attr_or_sub = fast.Str(attr_node.attr)
-
-            extra_args: 'List[ast.AST]' = []
-            if isinstance(node.value, ast.Name):
-                extra_args = [fast.Str(node.value.id)]
-
-            with self.attrsub_load_context():
-                node.value = fast.Call(
-                    func=fast.Name(self.attrsub_tracer, ast.Load()),
-                    args=[
-                        self.visit(node.value),
-                        attr_or_sub,
-                        fast.NameConstant(is_subscript),
-                        fast.Str(node.ctx.__class__.__name__),
-                        fast.NameConstant(call_context),
-                    ] + extra_args,
-                    keywords=[]
-                )
-        # end fast.location_of(node.value)
-        if not self.inside_attrsub_load_chain and is_load:
-            with fast.location_of(node):
-                return fast.Call(
-                    func=fast.Name(self.end_tracer, ast.Load()),
-                    args=[node, fast.NameConstant(call_context)],
-                    keywords=[]
-                )
-        return node
-
-    def _get_replacement_args(self, args, should_record, keywords):
-        replacement_args = []
-        for arg in args:
-            if keywords:
-                maybe_kwarg = getattr(arg, 'value')
-            else:
-                maybe_kwarg = arg
-            chain = GetAttrSubSymbols()(maybe_kwarg)
-            statically_resolvable = []
-            with fast.location_of(maybe_kwarg):
-                for sym in chain.symbols:
-                    # TODO: only handles attributes properly; subscripts will break
-                    if not isinstance(sym, str):
-                        break
-                    statically_resolvable.append(ast.Str(sym))
-                statically_resolvable = fast.Tuple(elts=statically_resolvable, ctx=ast.Load())
-                with self.attrsub_load_context(False):
-                    visited_maybe_kwarg = self.visit(maybe_kwarg)
-                argrecord_args = [visited_maybe_kwarg, statically_resolvable]
-                if should_record:
-                    with self.attrsub_load_context(False):
-                        new_arg_value = cast(ast.expr, fast.Call(
-                            func=fast.Name(self.arg_recorder, ast.Load()),
-                            args=argrecord_args,
-                            keywords=[]
-                        ))
-                else:
-                    new_arg_value = visited_maybe_kwarg
-            if keywords:
-                setattr(arg, 'value', new_arg_value)
-            else:
-                arg = new_arg_value
-            replacement_args.append(arg)
-        return replacement_args
-
-    def visit_Call(self, node: ast.Call):
-        is_attrsub = False
-        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            is_attrsub = True
-            with self.attrsub_load_context():
-                node.func = self.visit_Attribute_or_Subscript(node.func, call_context=True)
-
-            # TODO: need a way to rewrite ast of attribute and subscript args,
-            #  and to process these separately from outer rewrite
-
-        node.args = self._get_replacement_args(node.args, is_attrsub, False)
-        node.keywords = self._get_replacement_args(node.keywords, is_attrsub, True)
-
-        # in order to ensure that the args are processed with appropriate active scope,
-        # we need to push current active scope before processing the args and pop after
-        # (pop happens on function return as opposed to in tracer)
-        with fast.location_of(node.func):
-            node.func = fast.Call(
-                func=fast.Name(self.scope_pusher, ast.Load()),
-                args=[node.func],
-                keywords=[],
-            )
-
-        with fast.location_of(node):
-            node = fast.Call(
-                func=fast.Name(self.scope_popper, ast.Load()),
-                args=[node, fast.NameConstant(is_attrsub)],
-                keywords=[]
-            )
-
-        if self.inside_attrsub_load_chain or not is_attrsub:
-            return node
-
-        with fast.location_of(node):
-            return fast.Call(
-                func=fast.Name(self.end_tracer, ast.Load()),
-                args=[node, fast.NameConstant(True)],
-                keywords=[]
-            )
-
-    def visit_Assign(self, node: ast.Assign):
-        if not isinstance(node.value, (ast.List, ast.Tuple)):
-            return self.generic_visit(node)
-
-        new_targets = []
-        for target in node.targets:
-            new_targets.append(self.visit(target))
-        node.targets = cast('List[ast.expr]', new_targets)
-        with fast.location_of(node.value):
-            node.value = fast.Call(
-                func=fast.Name(self.literal_tracer, ast.Load()),
-                args=[node.value],
-                keywords=[],
-            )
-        return node
+    def disable_tracing(self, check_enabled=True):
+        if check_enabled:
+            assert self.tracing_enabled
+        self.tracing_enabled = False
+        sys.settrace(None)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
-from nbsafety.tracing.attrsub_tracing import AttrSubTracingNodeTransformer
+from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
 
 
 PROGRAM = """
@@ -21,5 +21,5 @@ def test_ast_rewrite():
     """
     No asserts; just make sure we don't throw an error.
     """
-    rewriter = AttrSubTracingNodeTransformer('a', 'b', 'c', 'd', 'e', 'f')
+    rewriter = AstEavesdropper()
     assert rewriter.visit(ast.parse(PROGRAM)) is not None

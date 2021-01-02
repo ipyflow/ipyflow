@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def make_tracer(safety: 'NotebookSafety'):
+def make_sys_tracer(safety: 'NotebookSafety'):
     if safety.config.trace_messages_enabled:
         logger.setLevel(logging.WARNING)
     else:
@@ -22,7 +22,7 @@ def make_tracer(safety: 'NotebookSafety'):
 
     @on_exception_default_to(return_val(None, logger))
     def tracer(frame: 'FrameType', evt: str, extra):
-        state = safety.trace_state  # we'll be using this a lot
+        state = safety.trace_state_manager  # we'll be using this a lot
 
         if state.tracing_reset_pending:
             assert TraceEvent(evt) == TraceEvent.call
@@ -38,13 +38,12 @@ def make_tracer(safety: 'NotebookSafety'):
             while state.call_depth > call_depth:
                 state.call_depth -= 1
                 state.stack.pop()
-                safety.attr_trace_manager.pop_stack()
-            while len(safety.attr_trace_manager.nested_call_stack) > 0:
-                safety.attr_trace_manager.nested_call_stack.pop()
+            while len(state.nested_call_stack) > 0:
+                state.nested_call_stack.pop()
             if call_depth != state.call_depth:
                 # TODO: also check that the stacks agree with each other beyond just size
                 # logger.warning('reenable tracing failed: %d vs %d', call_depth, state.call_depth)
-                state.safety.disable_tracing()
+                state.disable_tracing()
             # else:
             #     logger.warning('reenable tracing: %d vs %d', call_depth, state.call_depth)
             return None
@@ -66,7 +65,7 @@ def make_tracer(safety: 'NotebookSafety'):
             # scopes_to_push.reverse()
             # scopes_to_push = scopes_to_push[state.call_depth-1:]
             # for scope in scopes_to_push:
-            #     state.safety.attr_trace_manager.push_stack(scope)
+            #     state.push_stack(scope)
             # state.call_depth = call_depth
             # return None
 
@@ -113,7 +112,7 @@ def make_tracer(safety: 'NotebookSafety'):
 
         trace_stmt = state.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_scope)
+            trace_stmt = TraceStatement(safety, frame, stmt_node, state.cur_frame_original_scope)
             state.traced_statements[id(stmt_node)] = trace_stmt
 
         if logger.getEffectiveLevel() <= logging.WARNING:
@@ -125,7 +124,7 @@ def make_tracer(safety: 'NotebookSafety'):
                 state.call_depth -= 1
                 if state.call_depth == 1:
                     state.call_depth = 0
-                state.safety.disable_tracing()
+                state.disable_tracing()
                 return None
             trace_stmt.call_seen = True
         elif event == TraceEvent.return_ and not state.tracing_enabled:

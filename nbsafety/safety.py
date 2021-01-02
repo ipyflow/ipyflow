@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import ast
-import builtins
 from collections import defaultdict
 from contextlib import contextmanager
 import inspect
 import logging
 import re
-import sys
 from typing import cast, TYPE_CHECKING
 
 from IPython import get_ipython
@@ -27,15 +25,12 @@ from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing import (
-    AttrSubTracingManager,
-    AttrSubTracingNodeTransformer,
-    make_tracer,
-    TraceEvent,
-    TraceState,
-    TraceStatement,
+    AstEavesdropper,
+    StatementInserter,
+    StatementMapper,
+    TracingHook,
+    TracingManager,
 )
-from nbsafety.tracing.stmt_inserter import StatementInserter
-from nbsafety.tracing.stmt_mapper import StatementMapper
 from nbsafety.utils import ChainedNodeTransformer, DotDict
 
 if TYPE_CHECKING:
@@ -72,38 +67,6 @@ def _safety_warning(node: 'DataSymbol'):
 class NotebookSafety(object):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
-        # Note: explicitly adding the types helps PyCharm's built-in code inspection
-        self.namespaces: Dict[int, NamespaceScope] = {}
-        self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        self.global_scope: Scope = Scope(self)
-        self.updated_symbols: Set[DataSymbol] = set()
-        self.updated_scopes: Set[NamespaceScope] = set()
-        self.garbage_namespace_obj_ids: Set[int] = set()
-        self.new_stmt_cache: Dict[int, ast.stmt] = {}
-        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-        self.seen_stmts: 'Set[int]' = set()
-        self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self.trace_event_counter: List[int] = [0]
-        self.stale_dependency_detected = False
-        self.trace_state: TraceState = TraceState(self)
-        self.attr_trace_manager = AttrSubTracingManager(self)
-        self.active_cell_position_idx = -1
-        self._last_execution_counter = 0
-        self._counters_by_cell_id: Dict[CellId, int] = {}
-        self._active_cell_id: Optional[str] = None
-        self._save_prev_trace_state_for_tests: bool = kwargs.pop('save_prev_trace_state_for_tests', False)
-        if self._save_prev_trace_state_for_tests:
-            self.prev_trace_state: Optional[TraceState] = None
-        if cell_magic_name is None:
-            self._cell_magic = None
-        else:
-            self._cell_magic = self._make_cell_magic(cell_magic_name)
-        self._line_magic = self._make_line_magic()
-        self._last_refused_code: Optional[str] = None
-        self._prev_cell_stale_symbols: Set[DataSymbol] = set()
-        self._cell_counter = 1
-        self._recorded_cell_name_to_cell_num = True
-        self._cell_name_to_cell_num_mapping: 'Dict[str, int]' = {}
         self.config = DotDict(dict(
             store_history=kwargs.pop('store_history', True),
             use_comm=use_comm,
@@ -115,6 +78,33 @@ class NotebookSafety(object):
             mode=kwargs.pop('mode', SafetyRunMode.DEVELOP),
             **kwargs
         ))
+        # Note: explicitly adding the types helps PyCharm's built-in code inspection
+        self.namespaces: Dict[int, NamespaceScope] = {}
+        self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        self.global_scope: Scope = Scope(self)
+        self.updated_symbols: Set[DataSymbol] = set()
+        self.updated_scopes: Set[NamespaceScope] = set()
+        self.garbage_namespace_obj_ids: Set[int] = set()
+        self.new_stmt_cache: Dict[int, ast.stmt] = {}
+        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+        self.statement_to_func_cell: Dict[int, DataSymbol] = {}
+        self.trace_event_counter: List[int] = [0]
+        self.stale_dependency_detected = False
+        self.trace_state_manager: 'TracingManager' = TracingManager(self)
+        self.active_cell_position_idx = -1
+        self._last_execution_counter = 0
+        self._counters_by_cell_id: Dict[CellId, int] = {}
+        self._active_cell_id: Optional[str] = None
+        if cell_magic_name is None:
+            self._cell_magic = None
+        else:
+            self._cell_magic = self._make_cell_magic(cell_magic_name)
+        self._line_magic = self._make_line_magic()
+        self._last_refused_code: Optional[str] = None
+        self._prev_cell_stale_symbols: Set[DataSymbol] = set()
+        self._cell_counter = 1
+        self._recorded_cell_name_to_cell_num = True
+        self._cell_name_to_cell_num_mapping: 'Dict[str, int]' = {}
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
@@ -413,65 +403,13 @@ class NotebookSafety(object):
         _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
-    def enable_tracing(self, tracer=None):
-        assert not self.trace_state.tracing_enabled
-        if tracer is None:
-            tracer = make_tracer(self)
-        self.trace_state.tracing_enabled = True
-        sys.settrace(tracer)
-
-    def disable_tracing(self, check_enabled=True):
-        if check_enabled:
-            assert self.trace_state.tracing_enabled
-        self.trace_state.tracing_enabled = False
-        sys.settrace(None)
-
     @contextmanager
     def _tracing_context(self):
         self.updated_symbols.clear()
         self.updated_scopes.clear()
         self._recorded_cell_name_to_cell_num = False
-        tracer = make_tracer(self)
-        self.seen_stmts.clear()
+        self.trace_state_manager.enable_tracing()
 
-        def _finish_tracing_reset():
-            # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
-            pass
-
-        def _XuikX_after_stmt_hook(stmt_id, frame=None):
-            if stmt_id in self.seen_stmts:
-                return
-            stmt = self.new_stmt_cache.get(stmt_id, None)
-            if stmt is not None:
-                tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
-
-        def _XuikX_before_stmt_hook(stmt_id):
-            if stmt_id in self.seen_stmts:
-                return
-            # logger.warning('reenable tracing: %s', site_id)
-            if self.trace_state.prev_trace_stmt_in_cur_frame is not None:
-                prev_trace_stmt_in_cur_frame = self.trace_state.prev_trace_stmt_in_cur_frame
-                # both of the following stmts should be processed when body is entered
-                if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
-                    _XuikX_after_stmt_hook(prev_trace_stmt_in_cur_frame.stmt_id, frame=sys._getframe().f_back)
-            trace_stmt = self.trace_state.traced_statements.get(stmt_id, None)
-            if trace_stmt is None:
-                trace_stmt = TraceStatement(
-                    self, sys._getframe().f_back, self.new_stmt_cache[stmt_id], self.trace_state.cur_frame_scope
-                )
-                self.trace_state.traced_statements[stmt_id] = trace_stmt
-            self.trace_state.prev_trace_stmt_in_cur_frame = trace_stmt
-            self.trace_state.prev_trace_stmt = trace_stmt
-            if not self.trace_state.tracing_enabled:
-                assert not self.trace_state.tracing_reset_pending
-                self.enable_tracing(tracer=tracer)
-                self.trace_state.tracing_reset_pending = True
-                _finish_tracing_reset()  # trigger the tracer with a frame
-
-        self.enable_tracing(tracer=tracer)
-
-        setattr(builtins, _XuikX_before_stmt_hook.__name__, _XuikX_before_stmt_hook)
-        setattr(builtins, _XuikX_after_stmt_hook.__name__, _XuikX_after_stmt_hook)
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
@@ -480,28 +418,23 @@ class NotebookSafety(object):
                         self.new_stmt_cache
                     ),
                     StatementInserter(
-                        '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=_XuikX_before_stmt_hook.__name__),
-                        '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=_XuikX_after_stmt_hook.__name__),
+                        '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=TracingHook.before_stmt_tracer.value),
+                        '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=TracingHook.after_stmt_tracer.value),
                     ),
-                    AttrSubTracingNodeTransformer(*self.attr_trace_manager.tracer_func_names),
+                    AstEavesdropper(),
                 )
             ]):
                 yield
         finally:
-            delattr(builtins, _XuikX_before_stmt_hook.__name__)
-            delattr(builtins, _XuikX_after_stmt_hook.__name__)
-            self.disable_tracing(check_enabled=False)
+            self.trace_state_manager.disable_tracing(check_enabled=False)
             # TODO: actually handle errors that occurred in our code while tracing
-            # if not self.trace_state.error_occurred:
+            # if not self.trace_state_manager.error_occurred:
             self._reset_trace_state_hook()
 
     def _reset_trace_state_hook(self):
         # this assert doesn't hold anymore now that tracing could be disabled inside of something
         # assert len(self.attr_trace_manager.stack) == 0
-        self.attr_trace_manager.reset()  # should happen on finish_execution_hook, but since its idempotent do it again
-        if self._save_prev_trace_state_for_tests:
-            self.prev_trace_state = self.trace_state
-        self.trace_state = TraceState(self)
+        self.trace_state_manager = TracingManager(self)
         self._gc()
 
     def _make_line_magic(self):

@@ -18,16 +18,13 @@ class TraceState(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.cur_frame_scope = safety.global_scope
+        self.prev_event: Optional[TraceEvent] = None
+        self.prev_trace_stmt: Optional[TraceStatement] = None
         self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
         self.inside_lambda = False
         self.call_depth = 0
         self.traced_statements: Dict[int, TraceStatement] = {}
         self.stack: List[Tuple[TraceStatement, bool]] = []
-        self.source: Optional[str] = None
-        self.prev_trace_stmt: Optional[TraceStatement] = None
-        self.prev_event: Optional[TraceEvent] = None
-        self.cur_cell_position_idx = -1
-        self.error_occurred = False
         self.tracing_enabled = False
         self.tracing_reset_pending = False
 

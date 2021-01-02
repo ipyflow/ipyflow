@@ -85,13 +85,11 @@ def _make_weakrefable_literal(literal):
 
 
 class AttrSubTracingManager(object):
-    def __init__(self, safety: 'NotebookSafety',
-                 active_scope: 'Scope', trace_event_counter: 'List[int]'):
+    def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
-        self.original_active_scope = active_scope
-        self.active_scope = active_scope
+        self.original_active_scope = safety.global_scope
+        self.active_scope = safety.global_scope
         self.should_record_args = False
-        self.trace_event_counter = trace_event_counter
         self.tracer_func_names: 'List[str]' = []
         self.register_tracer_func('_NBSAFETY_ATTR_TRACER', self.attrsub_tracer)
         self.register_tracer_func('_NBSAFETY_ATTR_TRACER_END', self.end_tracer)
@@ -290,7 +288,7 @@ class AttrSubTracingManager(object):
                     if isinstance(obj, list) and attr_or_subscript == 'append':
                         mutation_event = MutationEvent.list_append
                     self.deep_ref_candidates.append(
-                        ((self.trace_event_counter[0], obj_id, obj_name), mutation_event, set())
+                        ((self.safety.trace_event_counter[0], obj_id, obj_name), mutation_event, set())
                     )
                 elif data_sym is not None:
                     # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
@@ -312,7 +310,7 @@ class AttrSubTracingManager(object):
             return obj
         if call_context and len(self.deep_ref_candidates) > 0:
             (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
-            if evt_counter == self.trace_event_counter[0]:
+            if evt_counter == self.safety.trace_event_counter[0]:
                 if obj is None:
                     if mutation_event == MutationEvent.normal:
                         try:

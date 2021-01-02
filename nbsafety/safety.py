@@ -86,9 +86,7 @@ class NotebookSafety(object):
         self.trace_event_counter: List[int] = [0]
         self.stale_dependency_detected = False
         self.trace_state: TraceState = TraceState(self)
-        self.attr_trace_manager: AttrSubTracingManager = AttrSubTracingManager(
-            self, self.global_scope, self.trace_event_counter
-        )
+        self.attr_trace_manager = AttrSubTracingManager(self)
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[CellId, int] = {}
@@ -391,12 +389,6 @@ class NotebookSafety(object):
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')
 
-            def _backup():
-                # something went wrong silently (e.g. due to line magic); fall back to just executing the code
-                logger.warning('Something failed while attempting traced execution; '
-                               'falling back to uninstrumented execution.')
-                return run_cell_func(cell)
-
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
                 with self._tracing_context():
@@ -408,8 +400,6 @@ class NotebookSafety(object):
             finally:
                 if not self.config.store_history:
                     self._cell_counter += 1
-                if self.trace_state.error_occurred:
-                    ret = _backup()
                 return ret
 
     def _make_cell_magic(self, cell_magic_name):

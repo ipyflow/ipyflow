@@ -87,7 +87,7 @@ def _make_weakrefable_literal(literal):
 class AttrSubTracingManager(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
-        self.original_active_scope = safety.global_scope
+        self.cur_frame_original_scope = safety.global_scope
         self.active_scope = safety.global_scope
         self.should_record_args = False
         self.tracer_func_names: 'List[str]' = []
@@ -124,7 +124,7 @@ class AttrSubTracingManager(object):
             self.mutations,
             self.deep_ref_candidates,
             self.active_scope,
-            self.original_active_scope,
+            self.cur_frame_original_scope,
             self.nested_call_stack,
             self.should_record_args,
             self.should_record_args_stack,
@@ -135,7 +135,7 @@ class AttrSubTracingManager(object):
         self.deep_refs = set()
         self.mutations = set()
         self.deep_ref_candidates = []
-        self.original_active_scope = new_scope
+        self.cur_frame_original_scope = new_scope
         self.active_scope = new_scope
         self.should_record_args = False
         self.should_record_args_stack = []
@@ -150,7 +150,7 @@ class AttrSubTracingManager(object):
             self.mutations,
             self.deep_ref_candidates,
             self.active_scope,
-            self.original_active_scope,
+            self.cur_frame_original_scope,
             self.nested_call_stack,
             self.should_record_args,
             self.should_record_args_stack,
@@ -245,7 +245,7 @@ class AttrSubTracingManager(object):
             elif ctx in ('Store', 'AugStore') and scope is not None:
                 self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
                 # reset active scope here
-                self.active_scope = self.original_active_scope
+                self.active_scope = self.cur_frame_original_scope
             if ctx == 'Load':
                 # save off event counter and obj_id
                 # if event counter didn't change when we process the Call retval, and if the
@@ -306,7 +306,7 @@ class AttrSubTracingManager(object):
         if not self.safety.trace_state.tracing_enabled:
             return obj
         if self.safety.trace_state.prev_trace_stmt_in_cur_frame.finished:
-            self.active_scope = self.original_active_scope
+            self.active_scope = self.cur_frame_original_scope
             return obj
         if call_context and len(self.deep_ref_candidates) > 0:
             (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
@@ -329,7 +329,7 @@ class AttrSubTracingManager(object):
                 else:
                     self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
         # print('reset active scope from', self.active_scope, 'to', self.original_active_scope)
-        self.active_scope = self.original_active_scope
+        self.active_scope = self.cur_frame_original_scope
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
@@ -355,7 +355,7 @@ class AttrSubTracingManager(object):
         # if self.safety.trace_state.prev_trace_stmt.finished:
         #     return obj
         self.nested_call_stack.append(self.active_scope)
-        self.active_scope = self.original_active_scope
+        self.active_scope = self.cur_frame_original_scope
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
@@ -394,7 +394,7 @@ class AttrSubTracingManager(object):
         self.deep_refs = set()
         self.mutations = set()
         self.deep_ref_candidates = []
-        self.active_scope = self.original_active_scope
+        self.active_scope = self.cur_frame_original_scope
         self.should_record_args = False
         self.literal_namespace = None
         self.first_obj_id_in_chain = None

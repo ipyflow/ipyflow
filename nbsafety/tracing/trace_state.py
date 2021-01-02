@@ -39,17 +39,16 @@ class TraceState(object):
             # if prev_overall is not None and prev_overall is not self.stack[-1][0]:
             #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             #     prev_overall.finished_execution_hook()
-
+        
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
         # TODO: figure out a better way to determine if we're inside a lambda
         #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
-        inside_lambda = not isinstance(trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+        new_scope = trace_stmt.get_post_call_scope()
         self.stack.append((self.prev_trace_stmt_in_cur_frame, self.inside_lambda))
-        self.inside_lambda = inside_lambda
-        self.cur_frame_scope = trace_stmt.get_post_call_scope(self.cur_frame_scope)
-        logger.debug('entering scope %s', self.cur_frame_scope)
+        self.safety.attr_trace_manager.push_stack(new_scope)
+        self.cur_frame_scope = new_scope
+        self.inside_lambda = not isinstance(trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
         self.prev_trace_stmt_in_cur_frame = None
-        self.safety.attr_trace_manager.push_stack(self.cur_frame_scope)
 
     def _handle_return_transition(self, trace_stmt: 'TraceStatement'):
         logger.debug('leaving scope %s', self.cur_frame_scope)

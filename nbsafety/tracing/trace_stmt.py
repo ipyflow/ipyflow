@@ -67,7 +67,8 @@ class TraceStatement(object):
             #     assert not isinstance(name, AttrSubSymbolChain)
         return rval_data_symbols.union(*self.call_point_deps) | self.safety.attr_trace_manager.loaded_data_symbols
 
-    def get_post_call_scope(self, old_scope: 'Scope'):
+    def get_post_call_scope(self):
+        old_scope = self.safety.attr_trace_manager.cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately

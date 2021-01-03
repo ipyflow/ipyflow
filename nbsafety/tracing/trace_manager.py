@@ -18,7 +18,7 @@ from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
     from nbsafety.data_model.scope import Scope
     from nbsafety.safety import NotebookSafety
@@ -31,22 +31,6 @@ if TYPE_CHECKING:
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     LexicalCallNestingStack = List[Scope]
-    TraceStateStackFrame = Tuple[
-        TraceStatement,
-        bool,
-        List[SavedStoreData],
-        Set[DeepRef],
-        Set[Mutation],
-        List[DeepRefCandidate],
-        Scope,
-        Scope,
-        LexicalCallNestingStack,
-        bool,
-        List[bool],
-        NamespaceScope,
-        int,
-    ]
-    TraceStateStack = List[TraceStateStackFrame]
 
 
 logger = logging.getLogger(__name__)
@@ -94,16 +78,11 @@ class TracingManager(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.trace_event_counter = 0
-        self.cur_frame_original_scope = safety.global_scope
-        self.active_scope = safety.global_scope
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
-        self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
         self.seen_stmts: 'Set[int]' = set()
-        self.inside_lambda = False
         self.call_depth = 0
         self.traced_statements: Dict[int, TraceStatement] = {}
-        self.stack: TraceStateStack = []
         self.tracing_enabled = False
         self.tracing_reset_pending = False
 
@@ -115,70 +94,62 @@ class TracingManager(object):
         self._register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
         self._register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
         self._register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
-        self.loaded_data_symbols: Set[DataSymbol] = set()
-        self.saved_store_data: List[SavedStoreData] = []
-        self.deep_refs: Set[DeepRef] = set()
-        self.mutations: Set[Mutation] = set()
-        self.deep_ref_candidates: List[DeepRefCandidate] = []
-        self.nested_call_stack: LexicalCallNestingStack = []
-        self.should_record_args = False
-        self.should_record_args_stack: List[bool] = []
-        self.literal_namespace: Optional[NamespaceScope] = None
-        self.first_obj_id_in_chain: Optional[int] = None
+
+        self.stack: 'List[Tuple[Any, ...]]' = []
+        self._stack_item_names: 'Tuple[str, ...]' = ()
+        self._stack_item_initializers: 'Dict[str, Callable[[], Any]]' = {}
+        with self._register_stack_state():
+            # everything here should be copyable
+            self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
+            self.cur_frame_original_scope: 'Scope' = None  # this will be initialized properly after pushing stack
+            self.active_scope: 'Scope' = None  # as will this one
+            self.inside_lambda = False
+            self.loaded_data_symbols: Set[DataSymbol] = set()
+            self.saved_store_data: List[SavedStoreData] = []
+            self.deep_refs: Set[DeepRef] = set()
+            self.mutations: Set[Mutation] = set()
+            self.deep_ref_candidates: List[DeepRefCandidate] = []
+            self.nested_call_stack: LexicalCallNestingStack = []
+            self.should_record_args = False
+            self.should_record_args_stack: List[bool] = []
+            self.literal_namespace: Optional[NamespaceScope] = None
+            self.first_obj_id_in_chain: Optional[int] = None
+        self.cur_frame_original_scope = safety.global_scope
+        self.active_scope = safety.global_scope
 
     @staticmethod
     def _register_tracer_func(tracing_hook: 'TracingHook', tracer_func):
         setattr(builtins, tracing_hook.value, tracer_func)
 
+    @contextmanager
+    def _register_stack_state(self):
+        original_state = set(self.__dict__.keys())
+        yield
+        stack_item_names = tuple(self.__dict__.keys() - original_state)
+        for stack_item_name in stack_item_names:
+            stack_item = self.__dict__[stack_item_name]
+            if stack_item is None:
+                self._stack_item_initializers[stack_item_name] = lambda: None
+            elif isinstance(stack_item, bool):
+                init_val = bool(stack_item)
+                self._stack_item_initializers[stack_item_name] = lambda: init_val
+            else:
+                self._stack_item_initializers[stack_item_name] = type(stack_item)
+
     def push_stack(self, trace_stmt: 'TraceStatement'):
         new_scope = trace_stmt.get_post_call_scope()
-        self.stack.append((
-            self.prev_trace_stmt_in_cur_frame,
-            self.inside_lambda,
-            self.saved_store_data,
-            self.deep_refs,
-            self.mutations,
-            self.deep_ref_candidates,
-            self.active_scope,
-            self.cur_frame_original_scope,
-            self.nested_call_stack,
-            self.should_record_args,
-            self.should_record_args_stack,
-            self.literal_namespace,
-            self.first_obj_id_in_chain,
-        ))
-        self.prev_trace_stmt_in_cur_frame = None
+        self.stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_initializers))
+        for stack_item, initializer in self._stack_item_initializers.items():
+            self.__dict__[stack_item] = initializer()
         self.inside_lambda = not isinstance(trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
         # TODO: figure out a better way to determine if we're inside a lambda
         #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
-        self.saved_store_data = []
-        self.deep_refs = set()
-        self.mutations = set()
-        self.deep_ref_candidates = []
         self.cur_frame_original_scope = new_scope
         self.active_scope = new_scope
-        self.should_record_args = False
-        self.should_record_args_stack = []
-        self.nested_call_stack = []
-        self.literal_namespace = None
-        self.first_obj_id_in_chain = None
 
     def pop_stack(self):
-        (
-            self.prev_trace_stmt_in_cur_frame,
-            self.inside_lambda,
-            self.saved_store_data,
-            self.deep_refs,
-            self.mutations,
-            self.deep_ref_candidates,
-            self.active_scope,
-            self.cur_frame_original_scope,
-            self.nested_call_stack,
-            self.should_record_args,
-            self.should_record_args_stack,
-            self.literal_namespace,
-            self.first_obj_id_in_chain,
-        ) = self.stack.pop()
+        for stack_item_name, stack_item in zip(self._stack_item_initializers.keys(), self.stack.pop()):
+            self.__dict__[stack_item_name] = stack_item
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
         if event == TraceEvent.after_stmt:
@@ -461,18 +432,18 @@ class TracingManager(object):
             self.tracing_reset_pending = True
             _finish_tracing_reset()  # trigger the tracer with a frame
 
-    def reset(self):
+    def after_stmt_reset(self):
         self.loaded_data_symbols.clear()
-        self.saved_store_data = []
+        self.saved_store_data.clear()
         self.deep_refs.clear()
         self.mutations.clear()
-        self.deep_ref_candidates = []
+        self.deep_ref_candidates.clear()
+        self.nested_call_stack.clear()
+        self.should_record_args_stack.clear()
         self.active_scope = self.cur_frame_original_scope
         self.should_record_args = False
         self.literal_namespace = None
         self.first_obj_id_in_chain = None
-        self.nested_call_stack = []
-        self.should_record_args_stack = []
 
     def _enable_tracing(self):
         assert not self.tracing_enabled

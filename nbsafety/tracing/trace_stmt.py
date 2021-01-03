@@ -280,6 +280,6 @@ class TraceStatement(object):
         # print('finishing stmt', self.stmt_node)
         self.safety.tracing_manager.seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
-        self.safety.tracing_manager.reset()
+        self.safety.tracing_manager.after_stmt_reset()
         self.safety._namespace_gc()
         # self.safety._gc()

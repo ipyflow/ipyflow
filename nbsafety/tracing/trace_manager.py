@@ -104,7 +104,6 @@ class TracingManager(object):
         self.tracing_enabled = False
         self.tracing_reset_pending = False
 
-        self.should_record_args = False
         self._register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
         self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
         self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
@@ -119,6 +118,7 @@ class TracingManager(object):
         self.mutations: Set[Mutation] = set()
         self.deep_ref_candidates: List[DeepRefCandidate] = []
         self.nested_call_stack: LexicalCallNestingStack = []
+        self.should_record_args = False
         self.should_record_args_stack: List[bool] = []
         self.literal_namespace: Optional[NamespaceScope] = None
         self.first_obj_id_in_chain: Optional[int] = None

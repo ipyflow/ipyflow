@@ -459,17 +459,17 @@ class TracingManager(object):
             _finish_tracing_reset()  # trigger the tracer with a frame
 
     def reset(self):
-        self.loaded_data_symbols = set()
+        self.loaded_data_symbols.clear()
         self.saved_store_data = []
-        self.deep_refs = set()
-        self.mutations = set()
+        self.deep_refs.clear()
+        self.mutations.clear()
         self.deep_ref_candidates = []
         self.active_scope = self.cur_frame_original_scope
         self.should_record_args = False
         self.literal_namespace = None
         self.first_obj_id_in_chain = None
-        # self.nested_call_stack = []
-        # self.stmt_transition_hook()
+        self.nested_call_stack = []
+        self.should_record_args_stack = []
 
     def enable_tracing(self):
         assert not self.tracing_enabled

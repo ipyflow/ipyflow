@@ -127,9 +127,6 @@ def make_sys_tracer(safety: 'NotebookSafety'):
                 state.disable_tracing()
                 return None
             trace_stmt.call_seen = True
-        elif event == TraceEvent.return_ and not state.tracing_enabled:
-            state.tracing_enabled = True
-            return tracer
         state.state_transition_hook(event, trace_stmt)
         return tracer
     return tracer

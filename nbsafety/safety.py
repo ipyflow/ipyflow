@@ -28,7 +28,6 @@ from nbsafety.tracing import (
     AstEavesdropper,
     StatementInserter,
     StatementMapper,
-    TracingHook,
     TracingManager,
 )
 from nbsafety.utils import ChainedNodeTransformer, DotDict
@@ -80,18 +79,17 @@ class NotebookSafety(object):
             **kwargs
         ))
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
-        self.namespaces: Dict[int, NamespaceScope] = {}
-        self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        self.global_scope: Scope = Scope(self)
-        self.updated_symbols: Set[DataSymbol] = set()
-        self.updated_scopes: Set[NamespaceScope] = set()
-        self.garbage_namespace_obj_ids: Set[int] = set()
-        self.stmt_by_id: Dict[int, ast.stmt] = {}
-        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-        self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self.trace_event_counter: List[int] = [0]
+        self.namespaces: 'Dict[int, NamespaceScope]' = {}
+        self.aliases: 'Dict[int, Set[DataSymbol]]' = defaultdict(set)
+        self.global_scope: 'Scope' = Scope(self)
+        self.updated_symbols: 'Set[DataSymbol]' = set()
+        self.updated_scopes: 'Set[NamespaceScope]' = set()
+        self.garbage_namespace_obj_ids: 'Set[int]' = set()
+        self.stmt_by_id: 'Dict[int, ast.stmt]' = {}
+        self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
+        self.statement_to_func_cell: 'Dict[int, DataSymbol]' = {}
+        self.tracing_manager: 'TracingManager' = TracingManager(self)
         self.stale_dependency_detected = False
-        self.trace_state_manager: 'TracingManager' = TracingManager(self)
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
         self._counters_by_cell_id: Dict[CellId, int] = {}
@@ -419,7 +417,7 @@ class NotebookSafety(object):
         self.updated_symbols.clear()
         self.updated_scopes.clear()
         self._recorded_cell_name_to_cell_num = False
-        self.trace_state_manager.enable_tracing()
+        self.tracing_manager.enable_tracing()
 
         try:
             with ast_transformer_context([
@@ -434,7 +432,7 @@ class NotebookSafety(object):
             ]):
                 yield
         finally:
-            self.trace_state_manager.disable_tracing(check_enabled=False)
+            self.tracing_manager.disable_tracing(check_enabled=False)
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state_manager.error_occurred:
             self._reset_trace_state_hook()
@@ -442,7 +440,7 @@ class NotebookSafety(object):
     def _reset_trace_state_hook(self):
         # this assert doesn't hold anymore now that tracing could be disabled inside of something
         # assert len(self.attr_trace_manager.stack) == 0
-        self.trace_state_manager = TracingManager(self)
+        self.tracing_manager = TracingManager(self)
         self._gc()
 
     def _make_line_magic(self):

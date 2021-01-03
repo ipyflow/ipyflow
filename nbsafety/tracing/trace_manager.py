@@ -5,18 +5,20 @@ import logging
 import sys
 from typing import cast, TYPE_CHECKING
 
+import astunparse
+
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.hooks import TracingHook
-from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index
-from nbsafety.tracing.sys_tracer import make_sys_tracer
+from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from types import FrameType
     from nbsafety.data_model.scope import Scope
     from nbsafety.safety import NotebookSafety
     SymbolRef = Union[str, AttrSubSymbolChain]
@@ -90,7 +92,7 @@ def _finish_tracing_reset():
 class TracingManager(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
-        self.tracer = make_sys_tracer(safety)
+        self.trace_event_counter = 0
         self.cur_frame_original_scope = safety.global_scope
         self.active_scope = safety.global_scope
         self.prev_event: Optional[TraceEvent] = None
@@ -213,7 +215,7 @@ class TracingManager(object):
             event: 'TraceEvent',
             trace_stmt: 'TraceStatement'
     ):
-        self.safety.trace_event_counter[0] += 1
+        self.trace_event_counter += 1
 
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
@@ -328,7 +330,7 @@ class TracingManager(object):
                     if isinstance(obj, list) and attr_or_subscript == 'append':
                         mutation_event = MutationEvent.list_append
                     self.deep_ref_candidates.append(
-                        ((self.safety.trace_event_counter[0], obj_id, obj_name), mutation_event, set())
+                        ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
                     )
                 elif data_sym is not None:
                     # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
@@ -350,7 +352,7 @@ class TracingManager(object):
             return obj
         if call_context and len(self.deep_ref_candidates) > 0:
             (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
-            if evt_counter == self.safety.trace_event_counter[0]:
+            if evt_counter == self.trace_event_counter:
                 if obj is None:
                     if mutation_event == MutationEvent.normal:
                         try:
@@ -433,7 +435,7 @@ class TracingManager(object):
             return
         stmt = self.safety.stmt_by_id.get(stmt_id, None)
         if stmt is not None:
-            self.tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
+            self.sys_tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
 
     def before_stmt_tracer(self, stmt_id):
         if stmt_id in self.seen_stmts:
@@ -474,10 +476,118 @@ class TracingManager(object):
     def enable_tracing(self):
         assert not self.tracing_enabled
         self.tracing_enabled = True
-        sys.settrace(self.tracer)
+        sys.settrace(self.sys_tracer)
 
     def disable_tracing(self, check_enabled=True):
         if check_enabled:
             assert self.tracing_enabled
         self.tracing_enabled = False
         sys.settrace(None)
+
+    @on_exception_default_to(return_val(None, logger))
+    def sys_tracer(self, frame: 'FrameType', evt: 'Union[str, TraceEvent]', extra):
+        if isinstance(evt, str):
+            event = TraceEvent(evt)
+        else:
+            event = evt
+
+        if self.tracing_reset_pending:
+            assert event == TraceEvent.call
+            self.tracing_reset_pending = False
+            call_depth = 0
+            while frame is not None:
+                if frame.f_code.co_filename.startswith('<ipython-input'):
+                    call_depth += 1
+                frame = frame.f_back
+            # put us back in a good self given weird way notebook executes code
+            if call_depth == 1 and self.call_depth == 0:
+                self.call_depth = 1
+            while self.call_depth > call_depth:
+                self.call_depth -= 1
+                self.stack.pop()
+            while len(self.nested_call_stack) > 0:
+                self.nested_call_stack.pop()
+            if call_depth != self.call_depth:
+                # TODO: also check that the stacks agree with each other beyond just size
+                # logger.warning('reenable tracing failed: %d vs %d', call_depth, self.call_depth)
+                self.disable_tracing()
+            # else:
+            #     logger.warning('reenable tracing: %d vs %d', call_depth, self.call_depth)
+            return None
+            # TODO: eventually we'd like to reenable tracing even when the call depth isn't mismatched
+            # scopes_to_push = []
+            # while frame is not None:
+            #     if frame.f_code.co_filename.startswith('<ipython-input'):
+            #         call_depth += 1
+            #         fun_name = frame.f_code.co_name
+            #         if fun_name == '<module>':
+            #             if self.call_depth == 0:
+            #                 self.call_depth = 1
+            #             break
+            #         cell_num, lineno = TraceState.get_position(frame)
+            #         stmt_node = safety.selfment_cache[cell_num][lineno]
+            #         func_cell = self.safety.selfment_to_func_cell[id(stmt_node)]
+            #         scopes_to_push.append(func_cell.call_scope)
+            #     frame = frame.f_back
+            # scopes_to_push.reverse()
+            # scopes_to_push = scopes_to_push[self.call_depth-1:]
+            # for scope in scopes_to_push:
+            #     self.push_stack(scope)
+            # self.call_depth = call_depth
+            # return None
+
+        # notebook cells have filenames that appear as '<ipython-input...>'
+        if frame.f_code.co_filename.startswith('<ipython-input'):
+            self.safety.maybe_set_name_to_cell_num_mapping(frame)
+        else:
+            return None
+
+        if event == TraceEvent.line:
+            return self.sys_tracer
+
+        if event not in (TraceEvent.return_, TraceEvent.after_stmt) and not self.tracing_enabled:
+            return None
+
+        # IPython quirk -- every line in outer scope apparently wrapped in lambda
+        # We want to skip the outer 'call' and 'return' for these
+        if event == TraceEvent.call:
+            self.call_depth += 1
+            if self.call_depth == 1:
+                return self.sys_tracer
+
+        if event == TraceEvent.return_:
+            self.call_depth -= 1
+            if self.call_depth == 0:
+                return self.sys_tracer
+
+        cell_num, lineno = self.safety.get_position(frame)
+
+        if event == TraceEvent.after_stmt:
+            stmt_node = extra
+        else:
+            try:
+                stmt_node = self.safety.statement_cache[cell_num][lineno]
+            except KeyError:
+                if self.safety.is_develop:
+                    logger.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
+                return self.sys_tracer
+
+        trace_stmt = self.traced_statements.get(id(stmt_node), None)
+        if trace_stmt is None:
+            trace_stmt = TraceStatement(self.safety, frame, stmt_node, self.cur_frame_original_scope)
+            self.traced_statements[id(stmt_node)] = trace_stmt
+
+        if self.safety.config.trace_messages_enabled:
+            codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
+            codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
+            logger.warning(' %3d: %9s >>> %s', lineno, event, codeline)
+        if event == TraceEvent.call:
+            if trace_stmt.call_seen:
+                self.call_depth -= 1
+                if self.call_depth == 1:
+                    self.call_depth = 0
+                self.disable_tracing()
+                return None
+            trace_stmt.call_seen = True
+        self.state_transition_hook(event, trace_stmt)
+        return self.sys_tracer

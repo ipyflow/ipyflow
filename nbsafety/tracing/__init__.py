@@ -6,4 +6,3 @@ from .stmt_mapper import StatementMapper
 from .trace_manager import TracingManager
 from .trace_events import TraceEvent
 from .trace_stmt import TraceStatement
-from .sys_tracer import make_sys_tracer

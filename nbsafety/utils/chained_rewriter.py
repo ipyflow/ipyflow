@@ -1,4 +1,9 @@
 import ast
+import logging
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class ChainedNodeTransformer(ast.NodeTransformer):
@@ -10,6 +15,10 @@ class ChainedNodeTransformer(ast.NodeTransformer):
 
     def visit(self, node: 'ast.AST'):
         prev_outputs = ()
-        for transformer in self.chained:
-            node, prev_outputs = transformer(node, *prev_outputs)
+        for step, transformer in enumerate(self.chained):
+            try:
+                node, prev_outputs = transformer(node, *prev_outputs)
+            except Exception as e:
+                logger.warning("exception during ast rewriting step %d: %s" % (step + 1, e))
+                raise e
         return node

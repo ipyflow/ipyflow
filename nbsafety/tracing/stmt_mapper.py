@@ -13,6 +13,10 @@ class StatementMapper(ast.NodeVisitor):
         self.traversal: 'List[ast.AST]' = []
 
     def __call__(self, node: 'ast.AST'):
+        # for some bizarre reason we need to visit once to clear empty nodes apparently
+        self.visit(node)
+        self.traversal.clear()
+        
         self.visit(node)
         orig_traversal = self.traversal
         self.traversal = []

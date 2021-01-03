@@ -18,7 +18,7 @@ class ChainedNodeTransformer(ast.NodeTransformer):
             transformers: 'Tuple[Callable[[ast.AST, Tuple[Any, ...]], Tuple[ast.AST, Tuple[Any, ...]]], ...]'
     ):
         self.safety = safety
-        self.chained = tuple(transformers)
+        self.chained = transformers
 
     def visit(self, node: 'ast.AST'):
         prev_outputs: 'Tuple[Any, ...]' = ()

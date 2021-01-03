@@ -417,22 +417,21 @@ class NotebookSafety(object):
         self.updated_symbols.clear()
         self.updated_scopes.clear()
         self._recorded_cell_name_to_cell_num = False
-        self.tracing_manager.enable_tracing()
 
         try:
-            with ast_transformer_context([
-                ChainedNodeTransformer(
-                    self,
-                    (
-                        StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
-                        StatementInserter(),
-                        AstEavesdropper(),
+            with self.tracing_manager.tracing_context():
+                with ast_transformer_context([
+                    ChainedNodeTransformer(
+                        self,
+                        (
+                            StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
+                            StatementInserter(),
+                            AstEavesdropper(),
+                        )
                     )
-                )
-            ]):
-                yield
+                ]):
+                    yield
         finally:
-            self.tracing_manager.disable_tracing(check_enabled=False)
             # TODO: actually handle errors that occurred in our code while tracing
             # if not self.trace_state_manager.error_occurred:
             self._reset_trace_state_hook()

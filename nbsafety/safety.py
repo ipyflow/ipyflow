@@ -85,7 +85,7 @@ class NotebookSafety(object):
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
-        self.new_stmt_cache: Dict[int, ast.stmt] = {}
+        self.stmt_by_id: Dict[int, ast.stmt] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.trace_event_counter: List[int] = [0]
@@ -413,14 +413,8 @@ class NotebookSafety(object):
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
-                    StatementMapper(
-                        self.statement_cache[self.cell_counter()],
-                        self.new_stmt_cache
-                    ),
-                    StatementInserter(
-                        '{before_stmt_hook}({{stmt_id}})'.format(before_stmt_hook=TracingHook.before_stmt_tracer.value),
-                        '{after_stmt_hook}({{stmt_id}})'.format(after_stmt_hook=TracingHook.after_stmt_tracer.value),
-                    ),
+                    StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
+                    StatementInserter(),
                     AstEavesdropper(),
                 )
             ]):

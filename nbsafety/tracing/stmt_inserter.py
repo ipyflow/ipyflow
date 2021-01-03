@@ -1,14 +1,16 @@
 import ast
 from typing import cast, TYPE_CHECKING
 
+from nbsafety.tracing.hooks import TracingHook
+
 if TYPE_CHECKING:
     from typing import Dict, Optional, Set
 
 
 class StatementInserter(ast.NodeTransformer):
-    def __init__(self, prepend_stmt_template: 'Optional[str]' = None, append_stmt_template: 'Optional[str]' = None):
-        self._prepend_stmt_template = prepend_stmt_template
-        self._append_stmt_template = append_stmt_template
+    def __init__(self):
+        self._prepend_stmt_template = '{}({{stmt_id}})'.format(TracingHook.before_stmt_tracer.value)
+        self._append_stmt_template = '{}({{stmt_id}})'.format(TracingHook.after_stmt_tracer.value)
         self._orig_to_copy_mapping: 'Dict[int, ast.AST]' = {}
         self.skip_nodes: 'Set[int]' = set()
 

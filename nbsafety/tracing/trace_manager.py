@@ -105,14 +105,14 @@ class TracingManager(object):
         self.tracing_reset_pending = False
 
         self.should_record_args = False
-        self.register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
-        self.register_tracer_func(TracingHook.end_tracer, self.end_tracer)
-        self.register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
-        self.register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
-        self.register_tracer_func(TracingHook.scope_popper, self.scope_popper)
-        self.register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
-        self.register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
-        self.register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
+        self._register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
+        self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
+        self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
+        self._register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
+        self._register_tracer_func(TracingHook.scope_popper, self.scope_popper)
+        self._register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
+        self._register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
+        self._register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
         self.loaded_data_symbols: Set[DataSymbol] = set()
         self.saved_store_data: List[SavedStoreData] = []
         self.deep_refs: Set[DeepRef] = set()
@@ -123,7 +123,8 @@ class TracingManager(object):
         self.literal_namespace: Optional[NamespaceScope] = None
         self.first_obj_id_in_chain: Optional[int] = None
 
-    def register_tracer_func(self, tracing_hook: 'TracingHook', tracer_func):
+    @staticmethod
+    def _register_tracer_func(tracing_hook: 'TracingHook', tracer_func):
         setattr(builtins, tracing_hook.value, tracer_func)
 
     def push_stack(self, trace_stmt: 'TraceStatement'):
@@ -430,7 +431,7 @@ class TracingManager(object):
     def after_stmt_tracer(self, stmt_id, frame=None):
         if stmt_id in self.seen_stmts:
             return
-        stmt = self.safety.new_stmt_cache.get(stmt_id, None)
+        stmt = self.safety.stmt_by_id.get(stmt_id, None)
         if stmt is not None:
             self.tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
 
@@ -446,7 +447,7 @@ class TracingManager(object):
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(
-                self.safety, sys._getframe().f_back, self.safety.new_stmt_cache[stmt_id], self.cur_frame_original_scope
+                self.safety, sys._getframe().f_back, self.safety.stmt_by_id[stmt_id], self.cur_frame_original_scope
             )
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt

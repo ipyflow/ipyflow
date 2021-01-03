@@ -95,7 +95,7 @@ class TracingManager(object):
         self._register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
         self._register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
 
-        self.stack: 'List[Tuple[Any, ...]]' = []
+        self._stack: 'List[Tuple[Any, ...]]' = []
         self._stack_item_names: 'Tuple[str, ...]' = ()
         self._stack_item_initializers: 'Dict[str, Callable[[], Any]]' = {}
         with self._register_stack_state():
@@ -136,9 +136,9 @@ class TracingManager(object):
             else:
                 self._stack_item_initializers[stack_item_name] = type(stack_item)
 
-    def push_stack(self, trace_stmt: 'TraceStatement'):
+    def _push_stack(self, trace_stmt: 'TraceStatement'):
         new_scope = trace_stmt.get_post_call_scope()
-        self.stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_initializers))
+        self._stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_initializers))
         for stack_item, initializer in self._stack_item_initializers.items():
             self.__dict__[stack_item] = initializer()
         self.inside_lambda = not isinstance(trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
@@ -147,8 +147,8 @@ class TracingManager(object):
         self.cur_frame_original_scope = new_scope
         self.active_scope = new_scope
 
-    def pop_stack(self):
-        for stack_item_name, stack_item in zip(self._stack_item_initializers.keys(), self.stack.pop()):
+    def _pop_stack(self):
+        for stack_item_name, stack_item in zip(self._stack_item_initializers.keys(), self._stack.pop()):
             self.__dict__[stack_item_name] = stack_item
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
@@ -163,13 +163,10 @@ class TracingManager(object):
             #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             #     prev_overall.finished_execution_hook()
 
-    def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
-        self.push_stack(trace_stmt)
-
     def _handle_return_transition(self, trace_stmt: 'TraceStatement'):
         inside_lambda = self.inside_lambda
         cur_frame_scope = self.cur_frame_original_scope
-        self.pop_stack()
+        self._pop_stack()
         return_to_stmt = self.prev_trace_stmt_in_cur_frame
         assert return_to_stmt is not None
         if self.prev_event != TraceEvent.exception:
@@ -192,7 +189,7 @@ class TracingManager(object):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
         if event == TraceEvent.call:
-            self._handle_call_transition(trace_stmt)
+            self._push_stack(trace_stmt)
         if event == TraceEvent.return_:
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
@@ -477,7 +474,7 @@ class TracingManager(object):
             self.call_depth = 1
         while self.call_depth > call_depth:
             self.call_depth -= 1
-            self.stack.pop()
+            self._stack.pop()
         while len(self.nested_call_stack) > 0:
             self.nested_call_stack.pop()
         if call_depth != self.call_depth:

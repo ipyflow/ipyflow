@@ -69,6 +69,7 @@ class NotebookSafety(object):
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
         self.config = DotDict(dict(
             store_history=kwargs.pop('store_history', True),
+            test_context=kwargs.pop('test_context', False),
             use_comm=use_comm,
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             backwards_cell_staleness_propagation=True,
@@ -105,6 +106,7 @@ class NotebookSafety(object):
         self._cell_counter = 1
         self._recorded_cell_name_to_cell_num = True
         self._cell_name_to_cell_num_mapping: 'Dict[str, int]' = {}
+        self._ast_transformer_raised: 'Optional[Exception]' = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
@@ -112,11 +114,20 @@ class NotebookSafety(object):
     def is_develop(self) -> bool:
         return self.config.get('mode', SafetyRunMode.DEVELOP) == SafetyRunMode.DEVELOP
 
+    @property
+    def is_test(self) -> bool:
+        return self.config.get('test_context', False)
+
     def cell_counter(self):
         if self.config.store_history:
             return cell_counter()
         else:
             return self._cell_counter
+
+    def set_ast_transformer_raised(self, new_val: 'Optional[Exception]' = None) -> 'Optional[Exception]':
+        ret = self._ast_transformer_raised
+        self._ast_transformer_raised = new_val
+        return ret
 
     def get_position(self, frame: 'FrameType'):
         cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
@@ -413,9 +424,12 @@ class NotebookSafety(object):
         try:
             with ast_transformer_context([
                 ChainedNodeTransformer(
-                    StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
-                    StatementInserter(),
-                    AstEavesdropper(),
+                    self,
+                    (
+                        StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
+                        StatementInserter(),
+                        AstEavesdropper(),
+                    )
                 )
             ]):
                 yield

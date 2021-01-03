@@ -1726,6 +1726,17 @@ def bar(x):
     assert_detected('`y` depends on call to `bar` which has stale decorator `@foo`')
 
 
+def test_magics_dont_break_things():
+    run_cell("""
+%time dummy = 0
+x = 0
+y = x + 1
+""")
+    run_cell('x = 42')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on old value `x`')
+
+
 if sys.version_info >= (3, 8):
     def test_walrus_simple():
         run_cell("""

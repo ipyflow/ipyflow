@@ -43,6 +43,7 @@ def make_sys_tracer(safety: 'NotebookSafety'):
             if call_depth != state.call_depth:
                 # TODO: also check that the stacks agree with each other beyond just size
                 # logger.warning('reenable tracing failed: %d vs %d', call_depth, state.call_depth)
+                print('disable tracing')
                 state.disable_tracing()
             # else:
             #     logger.warning('reenable tracing: %d vs %d', call_depth, state.call_depth)

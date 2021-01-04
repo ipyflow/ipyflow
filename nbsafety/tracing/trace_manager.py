@@ -2,6 +2,7 @@
 import ast
 import builtins
 from contextlib import contextmanager
+import itertools
 import logging
 import sys
 from typing import cast, TYPE_CHECKING
@@ -96,14 +97,12 @@ class TracingManager(object):
         self._register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
 
         self._stack: 'List[Tuple[Any, ...]]' = []
-        self._stack_item_names: 'Tuple[str, ...]' = ()
         self._stack_item_initializers: 'Dict[str, Callable[[], Any]]' = {}
+        self._stack_items_with_manual_initialization: 'Set[str]' = set()
+        self._registering_stack_state_context = False
         with self._register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
-            self.cur_frame_original_scope: 'Scope' = None  # this will be initialized properly after pushing stack
-            self.active_scope: 'Scope' = None  # as will this one
-            self.inside_lambda = False
             self.loaded_data_symbols: Set[DataSymbol] = set()
             self.saved_store_data: List[SavedStoreData] = []
             self.deep_refs: Set[DeepRef] = set()
@@ -114,8 +113,14 @@ class TracingManager(object):
             self.should_record_args_stack: List[bool] = []
             self.literal_namespace: Optional[NamespaceScope] = None
             self.first_obj_id_in_chain: Optional[int] = None
-        self.cur_frame_original_scope = safety.global_scope
-        self.active_scope = safety.global_scope
+            with self._needing_manual_initialization():
+                self.cur_frame_original_scope = safety.global_scope
+                self.active_scope = safety.global_scope
+                self.inside_lambda = False
+
+    @property
+    def _stack_item_names(self):
+        return itertools.chain(self._stack_item_initializers.keys(), self._stack_items_with_manual_initialization)
 
     @staticmethod
     def _register_tracer_func(tracing_hook: 'TracingHook', tracer_func):
@@ -123,10 +128,12 @@ class TracingManager(object):
 
     @contextmanager
     def _register_stack_state(self):
+        self._registering_stack_state_context = True
         original_state = set(self.__dict__.keys())
         yield
-        stack_item_names = tuple(self.__dict__.keys() - original_state)
-        for stack_item_name in stack_item_names:
+        self._registering_stack_state_context = False
+        stack_item_names = set(self.__dict__.keys() - original_state)
+        for stack_item_name in stack_item_names - self._stack_items_with_manual_initialization:
             stack_item = self.__dict__[stack_item_name]
             if stack_item is None:
                 self._stack_item_initializers[stack_item_name] = lambda: None
@@ -136,19 +143,43 @@ class TracingManager(object):
             else:
                 self._stack_item_initializers[stack_item_name] = type(stack_item)
 
-    def _push_stack(self, trace_stmt: 'TraceStatement'):
-        new_scope = trace_stmt.get_post_call_scope()
-        self._stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_initializers))
+    @contextmanager
+    def _needing_manual_initialization(self):
+        assert self._registering_stack_state_context
+        original_state = set(self.__dict__.keys())
+        yield
+        self._stack_items_with_manual_initialization = set(self.__dict__.keys() - original_state)
+
+    @contextmanager
+    def _push_stack(self):
+        self._stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_names))
         for stack_item, initializer in self._stack_item_initializers.items():
             self.__dict__[stack_item] = initializer()
-        self.inside_lambda = not isinstance(trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-        # TODO: figure out a better way to determine if we're inside a lambda
-        #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
-        self.cur_frame_original_scope = new_scope
-        self.active_scope = new_scope
+        for stack_item in self._stack_items_with_manual_initialization:
+            del self.__dict__[stack_item]
+        yield
+        uninitialized_items = []
+        for stack_item in self._stack_items_with_manual_initialization:
+            if stack_item not in self.__dict__:
+                uninitialized_items.append(stack_item)
+        if len(uninitialized_items) > 0:
+            raise ValueError(
+                "Stack items %s requiring manual initialization where not initialized" % uninitialized_items
+            )
+
+    def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
+        new_scope = trace_stmt.get_post_call_scope()
+        with self._push_stack():
+            # TODO: figure out a better way to determine if we're inside a lambda
+            #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
+            self.inside_lambda = not isinstance(
+                trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            )
+            self.cur_frame_original_scope = new_scope
+            self.active_scope = new_scope
 
     def _pop_stack(self):
-        for stack_item_name, stack_item in zip(self._stack_item_initializers.keys(), self._stack.pop()):
+        for stack_item_name, stack_item in zip(self._stack_item_names, self._stack.pop()):
             self.__dict__[stack_item_name] = stack_item
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
@@ -189,7 +220,7 @@ class TracingManager(object):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
         if event == TraceEvent.call:
-            self._push_stack(trace_stmt)
+            self._handle_call_transition(trace_stmt)
         if event == TraceEvent.return_:
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
@@ -429,7 +460,7 @@ class TracingManager(object):
             self.tracing_reset_pending = True
             _finish_tracing_reset()  # trigger the tracer with a frame
 
-    def after_stmt_reset(self):
+    def after_stmt_reset_hook(self):
         self.loaded_data_symbols.clear()
         self.saved_store_data.clear()
         self.deep_refs.clear()

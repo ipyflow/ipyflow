@@ -164,7 +164,7 @@ class TracingManager(object):
                 uninitialized_items.append(stack_item)
         if len(uninitialized_items) > 0:
             raise ValueError(
-                "Stack items %s requiring manual initialization where not initialized" % uninitialized_items
+                "Stack item(s) %s requiring manual initialization were not initialized" % uninitialized_items
             )
 
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):

@@ -356,7 +356,8 @@ class NotebookSafety(object):
                 containing_obj = containing_scope._obj_ref()
                 # TODO: handle dict case too
                 if isinstance(containing_obj, list) and containing_obj[-1] is obj:
-                    new_alias_sym = containing_scope.upsert_data_symbol_for_name(
+                    # new_alias_sym = containing_scope.upsert_data_symbol_for_name(
+                    containing_scope.upsert_data_symbol_for_name(
                         len(containing_obj) - 1,
                         obj,
                         set(alias.parents),
@@ -364,7 +365,7 @@ class NotebookSafety(object):
                         is_subscript=True,
                         propagate=False
                     )
-                    self.aliases[id(obj)].add(new_alias_sym)
+                    # self.aliases[id(obj)].add(new_alias_sym)
             self.aliases[dsym.cached_obj_id].discard(dsym)
             self.aliases[dsym.obj_id].discard(dsym)
             self.aliases[id(obj)].add(dsym)

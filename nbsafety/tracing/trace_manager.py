@@ -318,8 +318,6 @@ class TracingManager(object):
                         data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
                         scope.put(attr_or_subscript, data_sym)
                         # print('put', data_sym, 'in', scope.full_namespace_path)
-                        # FIXME: DataSymbols should probably register themselves with the alias manager at creation
-                        self.safety.aliases[id(obj_attr_or_sub)].add(data_sym)
                     elif data_sym.obj_id != id(obj_attr_or_sub):
                         data_sym.update_obj_ref(obj_attr_or_sub)
                 except:

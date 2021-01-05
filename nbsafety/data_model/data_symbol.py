@@ -78,6 +78,8 @@ class DataSymbol(object):
         # Will never be stale if no_warning is True
         self.disable_warnings = False
 
+        self.safety.aliases[id(obj)].add(self)
+
     def __repr__(self) -> str:
         return f'<{self.readable_name}>'
 
@@ -171,13 +173,9 @@ class DataSymbol(object):
         for self_children in self.children_by_cell_position.values():
             for child in self_children:
                 child.parents.discard(self)
-        self_aliases = self.safety.aliases.get(self.cached_obj_id, None)
-        if self_aliases is not None:
-            self_aliases.discard(self)
-            if len(self_aliases) == 0:
-                # kill the alias but leave the namespace
-                # namespace needs to stick around to properly handle the staleness propagation protocol
-                self.safety.aliases.pop(self.cached_obj_id, None)
+        # kill the alias but leave the namespace
+        # namespace needs to stick around to properly handle the staleness propagation protocol
+        self._handle_aliases(readd=False)
 
     # def update_type(self, new_type):
     #     self.symbol_type = new_type
@@ -195,8 +193,18 @@ class DataSymbol(object):
             old_ns = self.safety.namespaces.get(self.cached_obj_id, None)
             if old_ns is not None:
                 old_ns.update_obj_ref(obj)
+            self._handle_aliases()
         if refresh_cached:
             self._refresh_cached_obj()
+
+    def _handle_aliases(self, readd=True):
+        old_aliases = self.safety.aliases.get(self.cached_obj_id, None)
+        if old_aliases is not None:
+            old_aliases.discard(self)
+            if len(old_aliases) == 0:
+                del self.safety.aliases[self.cached_obj_id]
+        if readd:
+            self.safety.aliases[self.obj_id].add(self)
 
     def _update_obj_ref_inner(self, obj):
         tombstone = False

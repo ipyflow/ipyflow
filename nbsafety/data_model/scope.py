@@ -151,7 +151,6 @@ class Scope(object):
             overwrite=overwrite, is_function_def=is_function_def, is_import=is_import, class_scope=class_scope
         )
         # print(self, 'upsert', name, 'with deps', deps, 'and children', list(dc.children_by_cell_position.values()))
-        self._handle_aliases(old_id, old_dc, dc)
         dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
         return dc
 
@@ -219,22 +218,6 @@ class Scope(object):
         dc = DataSymbol(name, symbol_type, obj, self, self.safety, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
         self.put(name, dc)
         return dc, old_dc, old_id
-
-    def _handle_aliases(
-            self,
-            old_id: 'Optional[int]',
-            old_dc: 'Optional[DataSymbol]',
-            dc: 'DataSymbol',
-    ):
-        if old_id == dc.obj_id and old_dc is dc:
-            return
-        if old_id is not None and old_dc is not None:
-            old_alias_dcs = self.safety.aliases.get(old_id, None)
-            if old_alias_dcs is not None:
-                old_alias_dcs.discard(old_dc)
-                if len(old_alias_dcs) == 0:
-                    del self.safety.aliases[old_id]
-        self.safety.aliases[dc.obj_id].add(dc)
 
     @property
     def is_global(self):

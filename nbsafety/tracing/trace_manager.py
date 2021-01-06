@@ -428,12 +428,13 @@ class TracingManager(object):
             self.literal_namespace = scope
         return literal
 
-    def after_stmt_tracer(self, stmt_id, frame=None):
+    def after_stmt_tracer(self, stmt_id, frame=None, ret_expr=None):
         if stmt_id in self.seen_stmts:
-            return
+            return ret_expr
         stmt = self.safety.stmt_by_id.get(stmt_id, None)
         if stmt is not None:
             self._sys_tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
+        return ret_expr
 
     def before_stmt_tracer(self, stmt_id):
         if stmt_id in self.seen_stmts:

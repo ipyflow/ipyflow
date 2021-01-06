@@ -98,7 +98,7 @@ class NotebookSafety(object):
             self._cell_magic = None
         else:
             self._cell_magic = self._make_cell_magic(cell_magic_name)
-        self._line_magic = self._make_line_magic()
+        # self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
         self._cell_counter = 1
@@ -421,13 +421,14 @@ class NotebookSafety(object):
 
         try:
             with self.tracing_manager.tracing_context():
+                eavesdropper = AstEavesdropper()
                 with ast_transformer_context([
                     ChainedNodeTransformer(
                         self,
                         (
                             StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
-                            StatementInserter(),
-                            AstEavesdropper(),
+                            StatementInserter(eavesdropper),
+                            eavesdropper,
                         )
                     )
                 ]):

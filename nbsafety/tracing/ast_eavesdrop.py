@@ -19,14 +19,11 @@ logger.setLevel(logging.WARNING)
 class AstEavesdropper(SkipNodesMixin, ast.NodeTransformer):
     def __init__(self):
         self.inside_attrsub_load_chain = False
-        self.skip_nodes: 'Optional[Set[int]]' = None
+        self.skip_nodes: 'Set[int]' = set()
 
     def __call__(self, node: 'ast.AST', skip_nodes: 'Set[int]'):
         self.skip_nodes = skip_nodes
-        ret_node = self.visit(node)
-        self.skip_nodes = None
-        return ret_node, ()
-
+        return self.visit(node)
 
     @contextmanager
     def attrsub_load_context(self, override=True):

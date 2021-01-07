@@ -32,7 +32,7 @@ class StatementMapper(ast.NodeVisitor):
                 # to yield trace frames that use the lineno of the first decorator
                 for decorator in getattr(nc, 'decorator_list', []):
                     self.line_to_stmt_map[decorator.lineno] = nc
-        return node, (orig_to_copy_mapping,)
+        return node, orig_to_copy_mapping
 
     def visit(self, node):
         self.traversal.append(node)

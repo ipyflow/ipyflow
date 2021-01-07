@@ -12,6 +12,6 @@ class CommonEqualityMixin(object):
 
 class SkipNodesMixin(ast.NodeTransformer):
     def visit(self, node: 'ast.AST') -> 'ast.AST':
-        if id(node) in (getattr(self, 'skip_nodes', None) or []):
+        if id(node) in getattr(self, 'skip_nodes', []):
             return node
         return super().visit(node)

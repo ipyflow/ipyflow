@@ -24,13 +24,8 @@ from nbsafety.ipython_utils import (
 from nbsafety import line_magics
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.tracing import (
-    AstEavesdropper,
-    StatementInserter,
-    StatementMapper,
-    TracingManager,
-)
-from nbsafety.utils import ChainedNodeTransformer, DotDict
+from nbsafety.tracing import SafetyAstRewriter, TracingManager
+from nbsafety.utils import DotDict
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
@@ -421,17 +416,7 @@ class NotebookSafety(object):
 
         try:
             with self.tracing_manager.tracing_context():
-                eavesdropper = AstEavesdropper()
-                with ast_transformer_context([
-                    ChainedNodeTransformer(
-                        self,
-                        (
-                            StatementMapper(self.statement_cache[self.cell_counter()], self.stmt_by_id),
-                            StatementInserter(eavesdropper),
-                            eavesdropper,
-                        )
-                    )
-                ]):
+                with ast_transformer_context([SafetyAstRewriter(self)]):
                     yield
         finally:
             # TODO: actually handle errors that occurred in our code while tracing

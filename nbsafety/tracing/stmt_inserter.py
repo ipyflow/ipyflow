@@ -9,17 +9,16 @@ if TYPE_CHECKING:
 
 
 class StatementInserter(ast.NodeTransformer):
-    def __init__(self, eavesdropper: 'ast.NodeTransformer'):
+    def __init__(self, eavesdropper: 'ast.NodeTransformer', orig_to_copy_mapping: 'Dict[int, ast.AST]'):
         self._eavesdropper = eavesdropper
+        self._orig_to_copy_mapping = orig_to_copy_mapping
         self._prepend_stmt_template = '{}({{stmt_id}})'.format(TracingHook.before_stmt_tracer.value)
         self._append_stmt_template = '{}({{stmt_id}})'.format(TracingHook.after_stmt_tracer.value)
-        self._orig_to_copy_mapping: 'Dict[int, ast.AST]' = {}
         self.skip_nodes: 'Set[int]' = set()
 
-    def __call__(self, node: 'ast.AST', orig_to_copy_mapping: 'Dict[int, ast.AST]'):
-        self._orig_to_copy_mapping = orig_to_copy_mapping
+    def __call__(self, node: 'ast.AST'):
         ret_node = self.visit(node)
-        return ret_node, (self.skip_nodes,)
+        return ret_node, self.skip_nodes
 
     def _get_parsed_prepend_stmt(self, stmt: 'ast.stmt') -> 'ast.stmt':
         with fast.location_of(stmt):

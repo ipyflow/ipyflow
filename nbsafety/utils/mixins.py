@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import ast
 
 
 class CommonEqualityMixin(object):
@@ -8,10 +7,3 @@ class CommonEqualityMixin(object):
 
     def __ne__(self, other):
         return not (self == other)
-
-
-class SkipNodesMixin(ast.NodeTransformer):
-    def visit(self, node: 'ast.AST') -> 'ast.AST':
-        if id(node) in getattr(self, 'skip_nodes', []):
-            return node
-        return super().visit(node)

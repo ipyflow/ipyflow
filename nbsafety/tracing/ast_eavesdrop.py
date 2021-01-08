@@ -6,24 +6,25 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import GetAttrSubSymbols
 from nbsafety.tracing.hooks import TracingHook
-from nbsafety.utils import fast, SkipNodesMixin
+from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Set, Union
+    from typing import List, Set, Union
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class AstEavesdropper(SkipNodesMixin, ast.NodeTransformer):
+class AstEavesdropper(ast.NodeTransformer):
     def __init__(self):
         self.inside_attrsub_load_chain = False
         self.skip_nodes: 'Set[int]' = set()
 
-    def __call__(self, node: 'ast.AST', skip_nodes: 'Set[int]'):
-        self.skip_nodes = skip_nodes
-        return self.visit(node)
+    def visit(self, node: 'ast.AST'):
+        if id(node) in self.skip_nodes:
+            return node
+        return super().visit(node)
 
     @contextmanager
     def attrsub_load_context(self, override=True):

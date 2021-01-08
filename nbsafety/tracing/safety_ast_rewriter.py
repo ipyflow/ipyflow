@@ -26,7 +26,8 @@ class SafetyAstRewriter(ast.NodeTransformer):
             eavesdropper = AstEavesdropper()
             inserter = StatementInserter(eavesdropper, orig_to_copy_mapping)
             step, (node, skip_nodes) = '<insert stmts>', inserter(node)
-            step, node = '<ast eavesdrop>', eavesdropper(node, skip_nodes)
+            eavesdropper.skip_nodes = skip_nodes
+            step, node = '<ast eavesdrop>', eavesdropper.visit(node)
         except Exception as e:
             self.safety.set_ast_transformer_raised(e)
             logger.warning("exception during ast rewriting step %s: %s" % (step, e))

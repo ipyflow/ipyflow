@@ -1,5 +1,6 @@
 import ast
 import logging
+import traceback
 from typing import TYPE_CHECKING
 
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
@@ -19,17 +20,16 @@ class SafetyAstRewriter(ast.NodeTransformer):
         self.safety = safety
 
     def visit(self, node: 'ast.AST'):
-        step = '<init>'
         try:
             mapper = StatementMapper(self.safety.statement_cache[self.safety.cell_counter()], self.safety.stmt_by_id)
-            step, (node, orig_to_copy_mapping) = '<create ast mappings>', mapper(node)
+            node, orig_to_copy_mapping = mapper(node)
             eavesdropper = AstEavesdropper()
             inserter = StatementInserter(eavesdropper, orig_to_copy_mapping)
-            step, (node, skip_nodes) = '<insert stmts>', inserter(node)
-            eavesdropper.skip_nodes = skip_nodes
-            step, node = '<ast eavesdrop>', eavesdropper.visit(node)
+            node, skip_nodes = inserter(node)
+            eavesdropper.skip_nodes |= skip_nodes
+            node = eavesdropper.visit(node)
         except Exception as e:
             self.safety.set_ast_transformer_raised(e)
-            logger.warning("exception during ast rewriting step %s: %s" % (step, e))
+            traceback.print_exc()
             raise e
         return node

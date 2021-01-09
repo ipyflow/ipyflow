@@ -172,7 +172,7 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node):
             return fast.Call(
                 func=fast.Name(TracingHook.end_tracer.value, ast.Load()),
-                args=[fast.Constant(id(self._orig_to_copy_mapping[orig_node_id])), node, fast.NameConstant(True)],
+                args=[fast.Num(id(self._orig_to_copy_mapping[orig_node_id])), node, fast.NameConstant(True)],
                 keywords=[]
             )
 

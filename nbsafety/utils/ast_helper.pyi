@@ -3,10 +3,12 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any
+    from typing import Any, Optional
     import ast
 
 class FastAst:
+    _LOCATION_OF_NODE: 'Optional[ast.AST]' = None
+
     @staticmethod
     def location_of(*args, **kwargs) -> 'Any': ...
 

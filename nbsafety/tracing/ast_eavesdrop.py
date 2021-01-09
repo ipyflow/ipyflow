@@ -5,6 +5,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import GetAttrSubSymbols
+from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.hooks import TracingHook
 from nbsafety.utils import fast
 
@@ -20,6 +21,9 @@ class AstEavesdropper(ast.NodeTransformer):
     def __init__(self, orig_to_copy_mapping: 'Dict[int, ast.AST]'):
         self._orig_to_copy_mapping = orig_to_copy_mapping
         self._inside_attrsub_load_chain = False
+
+    def _emit_func(self):
+        return fast.Name(EMIT_EVENT, ast.Load())
 
     def visit(self, node: 'ast.AST'):
         ret = super().visit(node)
@@ -94,9 +98,9 @@ class AstEavesdropper(ast.NodeTransformer):
         if not self._inside_attrsub_load_chain and is_load:
             with fast.location_of(node):
                 return fast.Call(
-                    func=fast.Name(TracingHook.end_tracer.value, ast.Load()),
-                    args=[fast.Num(id(self._orig_to_copy_mapping[id(node)])), node, fast.NameConstant(call_context)],
-                    keywords=[]
+                    func=self._emit_func(),
+                    args=[TraceEvent.after_attrsub_chain.to_ast(), fast.Num(id(self._orig_to_copy_mapping[id(node)]))],
+                    keywords=[fast.kw('obj', node), fast.kw('call_context', fast.NameConstant(call_context))],
                 )
         return node
 
@@ -171,9 +175,9 @@ class AstEavesdropper(ast.NodeTransformer):
 
         with fast.location_of(node):
             return fast.Call(
-                func=fast.Name(TracingHook.end_tracer.value, ast.Load()),
-                args=[fast.Num(id(self._orig_to_copy_mapping[orig_node_id])), node, fast.NameConstant(True)],
-                keywords=[]
+                func=self._emit_func(),
+                args=[TraceEvent.after_attrsub_chain.to_ast(), fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))],
+                keywords=[fast.kw('obj', node), fast.kw('call_context', fast.NameConstant(True))],
             )
 
     def visit_Assign(self, node: ast.Assign):

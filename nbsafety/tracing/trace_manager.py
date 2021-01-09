@@ -15,7 +15,7 @@ from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.hooks import TracingHook
 from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
-from nbsafety.tracing.trace_events import TraceEvent
+from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
@@ -88,8 +88,9 @@ class TracingManager(object):
         self.tracing_enabled = False
         self.tracing_reset_pending = False
 
+        setattr(builtins, EMIT_EVENT, self._emit_event)
         self._register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
-        self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
+        # self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
         self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
         self._register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
         self._register_tracer_func(TracingHook.scope_popper, self.scope_popper)
@@ -230,6 +231,13 @@ class TracingManager(object):
     def debug_attribute_tracer(obj, attr, ctx):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
+
+    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Dict[str, Any]'):
+        event = TraceEvent(evt)
+        if event == TraceEvent.after_attrsub_chain:
+            return self.end_tracer(orig_node_id, kwargs['obj'], kwargs['call_context'])
+        else:
+            raise ValueError('Unsupported event: %s' % event)
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):

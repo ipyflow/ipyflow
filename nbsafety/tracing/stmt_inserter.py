@@ -18,12 +18,12 @@ class StatementInserter(ast.NodeTransformer):
         with fast.location_of(stmt):
             return fast.parse(self._prepend_stmt_template.format(stmt_id=id(stmt))).body[0]
 
-    def _get_parsed_append_stmt(self, stmt: 'ast.stmt', ret_expr: 'ast.Expr' = None) -> 'ast.stmt':
+    def _get_parsed_append_stmt(self, stmt: 'ast.stmt', ret_expr: 'ast.expr' = None) -> 'ast.stmt':
         with fast.location_of(stmt):
             ret = cast('ast.Expr', fast.parse(self._append_stmt_template.format(stmt_id=id(stmt))).body[0])
             if ret_expr is not None:
                 ret_value = cast('ast.Call', ret.value)
-                ret_value.keywords = [fast.keyword(arg='ret_expr', value=ret_expr)]
+                ret_value.keywords = [fast.kw(arg='ret_expr', value=ret_expr)]
         ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
         return ret
 

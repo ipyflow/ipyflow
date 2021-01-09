@@ -13,6 +13,9 @@ class FastAst:
     def location_of(*args, **kwargs) -> 'Any': ...
 
     @staticmethod
+    def kw(arg: str, value: 'ast.expr') -> 'ast.keyword': ...
+
+    @staticmethod
     def parse(*args, **kwargs) -> 'ast.Module': ...
 
     @staticmethod

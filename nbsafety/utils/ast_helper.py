@@ -19,6 +19,10 @@ class FastAst(object):
         yield
         _LOCATION_OF_NODE = old_location_of_node
 
+    @staticmethod
+    def kw(arg, value):
+        return FastAst.keyword(arg=arg, value=value)
+
 
 def _make_func(func_name):
     def ctor(*args, **kwargs):

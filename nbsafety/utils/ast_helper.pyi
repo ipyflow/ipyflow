@@ -26,7 +26,7 @@ class FastAst:
     @staticmethod
     def keyword(*args, **kwargs) -> 'ast.keyword': ...
 
-    if sys.version_info <= (3, 8):
+    if sys.version_info <= (3, 7):
         @staticmethod
         def Num(*args, **kwargs) -> 'ast.Num': ...
         @staticmethod

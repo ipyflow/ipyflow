@@ -25,10 +25,11 @@ if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety
     SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
-    DeepRef = Tuple[int, Optional[str], Tuple[SymbolRef, ...]]
-    Mutation = Tuple[int, Tuple[SymbolRef, ...], MutationEvent]
+    RecordedArg = Tuple[AttrSubSymbolChain, int]
+    RecordedArgs = Set[RecordedArg]
+    DeepRef = Tuple[int, Optional[str], Tuple[RecordedArg, ...]]
+    Mutation = Tuple[int, Tuple[RecordedArg, ...], MutationEvent]
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
-    RecordedArgs = Set[Tuple[SymbolRef, int]]
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     LexicalCallNestingStack = List[Scope]
@@ -340,7 +341,7 @@ class TracingManager(object):
                 self.should_record_args = should_record_args
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def end_tracer(self, obj, call_context):
+    def end_tracer(self, orig_node_id_: int, obj, call_context):
         first_obj_id_in_chain = self.first_obj_id_in_chain
         self.first_obj_id_in_chain = None
         if not self.tracing_enabled:
@@ -431,7 +432,7 @@ class TracingManager(object):
     def after_stmt_tracer(self, stmt_id, frame=None, ret_expr=None):
         if stmt_id in self.seen_stmts:
             return ret_expr
-        stmt = self.safety.stmt_by_id.get(stmt_id, None)
+        stmt = self.safety.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
             self._sys_tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
         return ret_expr
@@ -448,7 +449,7 @@ class TracingManager(object):
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(
-                self.safety, sys._getframe().f_back, self.safety.stmt_by_id[stmt_id], self.cur_frame_original_scope
+                self.safety, sys._getframe().f_back, self.safety.ast_node_by_id[stmt_id], self.cur_frame_original_scope
             )
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt

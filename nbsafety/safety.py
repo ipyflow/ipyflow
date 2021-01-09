@@ -80,7 +80,7 @@ class NotebookSafety(object):
         self.updated_symbols: 'Set[DataSymbol]' = set()
         self.updated_scopes: 'Set[NamespaceScope]' = set()
         self.garbage_namespace_obj_ids: 'Set[int]' = set()
-        self.stmt_by_id: 'Dict[int, ast.stmt]' = {}
+        self.ast_node_by_id: 'Dict[int, ast.AST]' = {}
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.statement_to_func_cell: 'Dict[int, DataSymbol]' = {}
         self.tracing_manager: 'TracingManager' = TracingManager(self)

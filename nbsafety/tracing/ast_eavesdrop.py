@@ -9,7 +9,7 @@ from nbsafety.tracing.hooks import TracingHook
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import List, Set, Union
+    from typing import Dict, List, Set, Union
 
 
 logger = logging.getLogger(__name__)
@@ -17,8 +17,9 @@ logger.setLevel(logging.WARNING)
 
 
 class AstEavesdropper(ast.NodeTransformer):
-    def __init__(self):
-        self.inside_attrsub_load_chain = False
+    def __init__(self, orig_to_copy_mapping: 'Dict[int, ast.AST]'):
+        self._orig_to_copy_mapping = orig_to_copy_mapping
+        self._inside_attrsub_load_chain = False
 
     def visit(self, node: 'ast.AST'):
         ret = super().visit(node)
@@ -29,10 +30,10 @@ class AstEavesdropper(ast.NodeTransformer):
 
     @contextmanager
     def attrsub_load_context(self, override=True):
-        old = self.inside_attrsub_load_chain
-        self.inside_attrsub_load_chain = override
+        old = self._inside_attrsub_load_chain
+        self._inside_attrsub_load_chain = override
         yield
-        self.inside_attrsub_load_chain = old
+        self._inside_attrsub_load_chain = old
 
     def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
         return self.visit_Attribute_or_Subscript(node, call_context)
@@ -90,11 +91,11 @@ class AstEavesdropper(ast.NodeTransformer):
                     keywords=[]
                 )
         # end fast.location_of(node.value)
-        if not self.inside_attrsub_load_chain and is_load:
+        if not self._inside_attrsub_load_chain and is_load:
             with fast.location_of(node):
                 return fast.Call(
                     func=fast.Name(TracingHook.end_tracer.value, ast.Load()),
-                    args=[node, fast.NameConstant(call_context)],
+                    args=[fast.Constant(id(self._orig_to_copy_mapping[id(node)])), node, fast.NameConstant(call_context)],
                     keywords=[]
                 )
         return node
@@ -135,6 +136,7 @@ class AstEavesdropper(ast.NodeTransformer):
         return replacement_args
 
     def visit_Call(self, node: ast.Call):
+        orig_node_id = id(node)
         is_attrsub = False
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             is_attrsub = True
@@ -164,13 +166,13 @@ class AstEavesdropper(ast.NodeTransformer):
                 keywords=[]
             )
 
-        if self.inside_attrsub_load_chain or not is_attrsub:
+        if self._inside_attrsub_load_chain or not is_attrsub:
             return node
 
         with fast.location_of(node):
             return fast.Call(
                 func=fast.Name(TracingHook.end_tracer.value, ast.Load()),
-                args=[node, fast.NameConstant(True)],
+                args=[fast.Constant(id(self._orig_to_copy_mapping[orig_node_id])), node, fast.NameConstant(True)],
                 keywords=[]
             )
 

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import ast
+
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
+from nbsafety.utils import KeyDict
 
 
 PROGRAM = """
@@ -21,5 +23,5 @@ def test_ast_rewrite():
     """
     No asserts; just make sure we don't throw an error.
     """
-    rewriter = AstEavesdropper()
+    rewriter = AstEavesdropper(KeyDict())
     assert rewriter.visit(ast.parse(PROGRAM)) is not None

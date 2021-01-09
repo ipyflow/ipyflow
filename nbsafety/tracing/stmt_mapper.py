@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 
 class StatementMapper(ast.NodeVisitor):
-    def __init__(self, line_to_stmt_map: 'Dict[int, ast.stmt]', id_map: 'Dict[int, ast.stmt]'):
+    def __init__(self, line_to_stmt_map: 'Dict[int, ast.stmt]', id_map: 'Dict[int, ast.AST]'):
         self.line_to_stmt_map = line_to_stmt_map
         self.id_map = id_map
         self.traversal: 'List[ast.AST]' = []
@@ -25,8 +25,8 @@ class StatementMapper(ast.NodeVisitor):
         orig_to_copy_mapping = {}
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
+            self.id_map[id(nc)] = nc
             if isinstance(nc, ast.stmt):
-                self.id_map[id(nc)] = nc
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem
                 # to yield trace frames that use the lineno of the first decorator

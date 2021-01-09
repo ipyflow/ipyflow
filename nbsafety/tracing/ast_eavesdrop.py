@@ -19,12 +19,13 @@ logger.setLevel(logging.WARNING)
 class AstEavesdropper(ast.NodeTransformer):
     def __init__(self):
         self.inside_attrsub_load_chain = False
-        self.skip_nodes: 'Set[int]' = set()
 
     def visit(self, node: 'ast.AST'):
-        if id(node) in self.skip_nodes:
-            return node
-        return super().visit(node)
+        ret = super().visit(node)
+        if isinstance(node, ast.stmt):
+            # we haven't inserted statements yet, and StatementInserter needs the previous ids to be identical
+            assert ret is node
+        return ret
 
     @contextmanager
     def attrsub_load_context(self, override=True):

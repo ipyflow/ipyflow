@@ -22,12 +22,11 @@ class SafetyAstRewriter(ast.NodeTransformer):
     def visit(self, node: 'ast.AST'):
         try:
             mapper = StatementMapper(self.safety.statement_cache[self.safety.cell_counter()], self.safety.stmt_by_id)
-            node, orig_to_copy_mapping = mapper(node)
-            eavesdropper = AstEavesdropper()
-            inserter = StatementInserter(eavesdropper, orig_to_copy_mapping)
-            node, skip_nodes = inserter(node)
-            eavesdropper.skip_nodes |= skip_nodes
-            node = eavesdropper.visit(node)
+            orig_to_copy_mapping = mapper(node)
+            # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
+            # modifies existing ones), since StatementInserter relies on being able to map these
+            node = AstEavesdropper().visit(node)
+            node = StatementInserter(orig_to_copy_mapping).visit(node)
         except Exception as e:
             self.safety.set_ast_transformer_raised(e)
             traceback.print_exc()

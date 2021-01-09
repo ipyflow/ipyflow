@@ -51,7 +51,9 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
             run_cell(setup_cell)
         yield  # yield to execution of the actual test
         # ensure each test didn't give failures during ast transformation
-        assert safety_state[0].set_ast_transformer_raised(None) is None
+        exc = safety_state[0].set_ast_transformer_raised(None)
+        if exc is not None:
+            raise exc
         get_ipython().reset()  # reset ipython state
 
     return init_or_reset_dependency_graph, safety_state, run_cell

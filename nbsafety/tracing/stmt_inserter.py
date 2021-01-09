@@ -9,22 +9,14 @@ if TYPE_CHECKING:
 
 
 class StatementInserter(ast.NodeTransformer):
-    def __init__(self, eavesdropper: 'ast.NodeTransformer', orig_to_copy_mapping: 'Dict[int, ast.AST]'):
-        self._eavesdropper = eavesdropper
+    def __init__(self, orig_to_copy_mapping: 'Dict[int, ast.AST]'):
         self._orig_to_copy_mapping = orig_to_copy_mapping
         self._prepend_stmt_template = '{}({{stmt_id}})'.format(TracingHook.before_stmt_tracer.value)
         self._append_stmt_template = '{}({{stmt_id}})'.format(TracingHook.after_stmt_tracer.value)
-        self.skip_nodes: 'Set[int]' = set()
-
-    def __call__(self, node: 'ast.AST'):
-        ret_node = self.visit(node)
-        return ret_node, self.skip_nodes
 
     def _get_parsed_prepend_stmt(self, stmt: 'ast.stmt') -> 'ast.stmt':
         with fast.location_of(stmt):
-            ret = fast.parse(self._prepend_stmt_template.format(stmt_id=id(stmt))).body[0]
-        self.skip_nodes.add(id(ret))
-        return ret
+            return fast.parse(self._prepend_stmt_template.format(stmt_id=id(stmt))).body[0]
 
     def _get_parsed_append_stmt(self, stmt: 'ast.stmt', ret_expr: 'ast.Expr' = None) -> 'ast.stmt':
         with fast.location_of(stmt):
@@ -33,7 +25,6 @@ class StatementInserter(ast.NodeTransformer):
                 ret_value = cast('ast.Call', ret.value)
                 ret_value.keywords = [fast.keyword(arg='ret_expr', value=ret_expr)]
         ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
-        self.skip_nodes.add(id(ret))
         return ret
 
     def visit(self, node):
@@ -50,9 +41,7 @@ class StatementInserter(ast.NodeTransformer):
                             val = inner_node.value
                             while isinstance(val, ast.Expr):
                                 val = val.value
-                            new_field.append(
-                                self._get_parsed_append_stmt(stmt_copy, ret_expr=self._eavesdropper.visit(val))
-                            )
+                            new_field.append(self._get_parsed_append_stmt(stmt_copy, ret_expr=val))
                         else:
                             new_field.append(self.visit(inner_node))
                             if not isinstance(inner_node, ast.Return):

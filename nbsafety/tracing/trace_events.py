@@ -10,6 +10,7 @@ EMIT_EVENT = '_X5ix_NBSAFETY_EVT_EMIT'
 class TraceEvent(Enum):
     after_stmt = 'after_stmt'
     after_attrsub_chain = 'after_attrsub_chain'
+    argument = 'argument'
 
     line = 'line'
     call = 'call'

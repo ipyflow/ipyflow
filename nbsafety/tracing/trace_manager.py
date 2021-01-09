@@ -21,6 +21,7 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
+    from nbsafety.analysis import AttrSubChainType
     from nbsafety.data_model.scope import Scope
     from nbsafety.safety import NotebookSafety
     SymbolRef = Union[str, AttrSubSymbolChain]
@@ -91,7 +92,7 @@ class TracingManager(object):
         setattr(builtins, EMIT_EVENT, self._emit_event)
         self._register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
         # self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
-        self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
+        # self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
         self._register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
         self._register_tracer_func(TracingHook.scope_popper, self.scope_popper)
         self._register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
@@ -235,7 +236,9 @@ class TracingManager(object):
     def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Dict[str, Any]'):
         event = TraceEvent(evt)
         if event == TraceEvent.after_attrsub_chain:
-            return self.end_tracer(orig_node_id, kwargs['obj'], kwargs['call_context'])
+            return self.end_tracer(kwargs['obj'], kwargs['call_context'])
+        elif event == TraceEvent.argument:
+            return self.arg_recorder(kwargs['obj'], kwargs['chain'])
         else:
             raise ValueError('Unsupported event: %s' % event)
 
@@ -349,7 +352,7 @@ class TracingManager(object):
                 self.should_record_args = should_record_args
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def end_tracer(self, orig_node_id_: int, obj, call_context):
+    def end_tracer(self, obj: 'Any', call_context: bool):
         first_obj_id_in_chain = self.first_obj_id_in_chain
         self.first_obj_id_in_chain = None
         if not self.tracing_enabled:
@@ -382,7 +385,7 @@ class TracingManager(object):
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def arg_recorder(self, arg_obj, name):
+    def arg_recorder(self, arg_obj: 'Any', chain: 'AttrSubChainType'):
         if not self.tracing_enabled:
             return arg_obj
         if self.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
@@ -392,7 +395,7 @@ class TracingManager(object):
             return arg_obj
 
         arg_obj_id = id(arg_obj)
-        recorded_arg = AttrSubSymbolChain(name)
+        recorded_arg = AttrSubSymbolChain(chain)
         self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
         return arg_obj

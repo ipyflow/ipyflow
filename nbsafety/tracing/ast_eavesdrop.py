@@ -25,6 +25,11 @@ class AstEavesdropper(ast.NodeTransformer):
     def _emit_func(self):
         return fast.Name(EMIT_EVENT, ast.Load())
 
+    def _get_copy_id_ast(self, orig_node_id: 'Union[int, ast.AST]'):
+        if not isinstance(orig_node_id, int):
+            orig_node_id = id(orig_node_id)
+        return fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))
+
     def visit(self, node: 'ast.AST'):
         ret = super().visit(node)
         if isinstance(node, ast.stmt):
@@ -99,7 +104,7 @@ class AstEavesdropper(ast.NodeTransformer):
             with fast.location_of(node):
                 return fast.Call(
                     func=self._emit_func(),
-                    args=[TraceEvent.after_attrsub_chain.to_ast(), fast.Num(id(self._orig_to_copy_mapping[id(node)]))],
+                    args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(node)],
                     keywords=[fast.kw('obj', node), fast.kw('call_context', fast.NameConstant(call_context))],
                 )
         return node
@@ -122,13 +127,12 @@ class AstEavesdropper(ast.NodeTransformer):
                 statically_resolvable = fast.Tuple(elts=statically_resolvable, ctx=ast.Load())
                 with self.attrsub_load_context(False):
                     visited_maybe_kwarg = self.visit(maybe_kwarg)
-                argrecord_args = [visited_maybe_kwarg, statically_resolvable]
                 if should_record:
                     with self.attrsub_load_context(False):
                         new_arg_value = cast(ast.expr, fast.Call(
-                            func=fast.Name(TracingHook.arg_recorder.value, ast.Load()),
-                            args=argrecord_args,
-                            keywords=[]
+                            func=self._emit_func(),
+                            args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(arg)],
+                            keywords=[fast.kw('obj', visited_maybe_kwarg), fast.kw('chain', statically_resolvable)],
                         ))
                 else:
                     new_arg_value = visited_maybe_kwarg
@@ -176,7 +180,7 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node):
             return fast.Call(
                 func=self._emit_func(),
-                args=[TraceEvent.after_attrsub_chain.to_ast(), fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))],
+                args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(orig_node_id)],
                 keywords=[fast.kw('obj', node), fast.kw('call_context', fast.NameConstant(True))],
             )
 

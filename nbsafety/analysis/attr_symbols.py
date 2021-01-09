@@ -5,7 +5,7 @@ from typing import cast, Union, TYPE_CHECKING
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import List, Tuple, Union
+    from typing import List, Sequence, Tuple, Union
     from nbsafety.types import SupportedIndexType
 
 
@@ -23,8 +23,12 @@ class CallPoint(CommonEqualityMixin):
         return self.symbol + '(...)'
 
 
+if TYPE_CHECKING:
+    AttrSubChainType = Sequence[Union[SupportedIndexType, CallPoint]]
+
+
 class AttrSubSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols: 'Union[List[Union[SupportedIndexType, CallPoint]], Tuple[Union[SupportedIndexType, CallPoint]]]'):
+    def __init__(self, symbols: 'Sequence[Union[SupportedIndexType, CallPoint]]'):
         # FIXME: each symbol should distinguish between attribute and subscript
         self.symbols: 'Tuple[Union[SupportedIndexType, CallPoint], ...]' = tuple(symbols)
         self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))

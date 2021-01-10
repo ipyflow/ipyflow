@@ -193,7 +193,7 @@ class TracingManager(object):
             # exception events are followed by return events until we hit an except clause
             # no need to track dependencies in this case
             if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
-                return_to_stmt.class_scope = cast('NamespaceScope', cur_frame_scope)
+                return_to_stmt.class_scope = cast(NamespaceScope, cur_frame_scope)
             elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
                 if not trace_stmt.lambda_call_point_deps_done_once:
                     trace_stmt.lambda_call_point_deps_done_once = True

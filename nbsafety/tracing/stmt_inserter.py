@@ -20,9 +20,9 @@ class StatementInserter(ast.NodeTransformer):
 
     def _get_parsed_append_stmt(self, stmt: 'ast.stmt', ret_expr: 'ast.expr' = None) -> 'ast.stmt':
         with fast.location_of(stmt):
-            ret = cast('ast.Expr', fast.parse(self._append_stmt_template.format(stmt_id=id(stmt))).body[0])
+            ret = cast(ast.Expr, fast.parse(self._append_stmt_template.format(stmt_id=id(stmt))).body[0])
             if ret_expr is not None:
-                ret_value = cast('ast.Call', ret.value)
+                ret_value = cast(ast.Call, ret.value)
                 ret_value.keywords = fast.kwargs(ret_expr=ret_expr)
         ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
         return ret
@@ -35,7 +35,7 @@ class StatementInserter(ast.NodeTransformer):
                 new_field = []
                 for inner_node in field:
                     if isinstance(inner_node, ast.stmt):
-                        stmt_copy = cast('ast.stmt', self._orig_to_copy_mapping[id(inner_node)])
+                        stmt_copy = cast(ast.stmt, self._orig_to_copy_mapping[id(inner_node)])
                         new_field.append(self._get_parsed_prepend_stmt(stmt_copy))
                         if isinstance(inner_node, ast.Expr):
                             val = inner_node.value

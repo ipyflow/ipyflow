@@ -222,9 +222,9 @@ class TracingManager(object):
     def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
         event = TraceEvent(evt)
         if event == TraceEvent.before_stmt:
-            return self.before_stmt_tracer(orig_node_id)
+            return self.before_stmt_tracer(orig_node_id, sys._getframe().f_back)
         elif event == TraceEvent.after_stmt:
-            return self.after_stmt_tracer(orig_node_id, ret_expr=kwargs.get('ret_expr', None))
+            return self.after_stmt_tracer(orig_node_id, sys._getframe().f_back, ret_expr=kwargs.get('ret_expr', None))
         elif event == TraceEvent.attrsub:
             return self.attrsub_tracer(
                 kwargs['obj'],
@@ -249,37 +249,38 @@ class TracingManager(object):
 
     def _get_namespace_for_obj(self, obj: 'Any', obj_name: 'Optional[str]' = None) -> 'NamespaceScope':
         obj_id = id(obj)
-        scope = self.safety.namespaces.get(obj_id, None)
+        ns = self.safety.namespaces.get(obj_id, None)
         # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
-        if scope is None:
-            class_scope = self.safety.namespaces.get(id(obj.__class__), None)
-            if class_scope is not None:
-                # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
-                scope = class_scope.clone(obj)
-                if obj_name is not None:
-                    scope.scope_name = obj_name
+        if ns is not None:
+            return ns
+        class_scope = self.safety.namespaces.get(id(obj.__class__), None)
+        if class_scope is not None:
+            # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
+            ns = class_scope.clone(obj)
+            if obj_name is not None:
+                ns.scope_name = obj_name
+        else:
+            # print('no scope for class', obj.__class__)
+            # if self.prev_trace_stmt.finished:
+            #     # avoid creating new scopes if we already did this computation
+            #     self.active_scope = None
+            #     return obj
+            try:
+                scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
+            except (TypeError, StopIteration):
+                scope_name = '<unknown namespace>'
+            ns = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
+        # FIXME: brittle strategy for determining parent scope of obj
+        if ns.parent_scope is None:
+            if (
+                    obj_name is not None and
+                    obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
+            ):
+                parent_scope = self.safety.global_scope
             else:
-                # print('no scope for class', obj.__class__)
-                # if self.prev_trace_stmt.finished:
-                #     # avoid creating new scopes if we already did this computation
-                #     self.active_scope = None
-                #     return obj
-                try:
-                    scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
-                except (TypeError, StopIteration):
-                    scope_name = '<unknown namespace>'
-                scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
-            # FIXME: brittle strategy for determining parent scope of obj
-            if scope.parent_scope is None:
-                if (
-                        obj_name is not None and
-                        obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
-                ):
-                    parent_scope = self.safety.global_scope
-                else:
-                    parent_scope = self.active_scope
-                scope.parent_scope = parent_scope
-        return scope
+                parent_scope = self.active_scope
+            ns.parent_scope = parent_scope
+        return ns
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
@@ -457,15 +458,15 @@ class TracingManager(object):
             self.literal_namespace = scope
         return literal
 
-    def after_stmt_tracer(self, stmt_id, frame=None, ret_expr=None):
+    def after_stmt_tracer(self, stmt_id: int, frame: 'FrameType', ret_expr: 'Optional[Any]' = None):
         if stmt_id in self.seen_stmts:
             return ret_expr
         stmt = self.safety.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
-            self._sys_tracer(frame or sys._getframe().f_back.f_back, TraceEvent.after_stmt, stmt)
+            self._sys_tracer(frame, TraceEvent.after_stmt, stmt)
         return ret_expr
 
-    def before_stmt_tracer(self, stmt_id):
+    def before_stmt_tracer(self, stmt_id: int, frame: 'FrameType'):
         if stmt_id in self.seen_stmts:
             return
         # logger.warning('reenable tracing: %s', site_id)
@@ -473,12 +474,12 @@ class TracingManager(object):
             prev_trace_stmt_in_cur_frame = self.prev_trace_stmt_in_cur_frame
             # both of the following stmts should be processed when body is entered
             if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
-                self.after_stmt_tracer(prev_trace_stmt_in_cur_frame.stmt_id, frame=sys._getframe().f_back.f_back)
+                self.after_stmt_tracer(prev_trace_stmt_in_cur_frame.stmt_id, frame)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(
                 self.safety,
-                sys._getframe().f_back.f_back,
+                frame,
                 cast(ast.stmt, self.safety.ast_node_by_id[stmt_id]),
                 self.cur_frame_original_scope
             )

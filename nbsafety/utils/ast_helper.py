@@ -23,6 +23,10 @@ class FastAst(object):
     def kw(arg, value):
         return FastAst.keyword(arg=arg, value=value)
 
+    @staticmethod
+    def kwargs(**kwargs):
+        return [FastAst.keyword(arg=arg, value=value) for arg, value in kwargs.items()]
+
 
 def _make_func(func_name):
     def ctor(*args, **kwargs):

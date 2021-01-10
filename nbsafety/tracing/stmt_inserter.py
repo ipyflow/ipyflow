@@ -1,7 +1,7 @@
 import ast
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.tracing.hooks import TracingHook
+from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
@@ -11,8 +11,8 @@ if TYPE_CHECKING:
 class StatementInserter(ast.NodeTransformer):
     def __init__(self, orig_to_copy_mapping: 'Dict[int, ast.AST]'):
         self._orig_to_copy_mapping = orig_to_copy_mapping
-        self._prepend_stmt_template = '{}({{stmt_id}})'.format(TracingHook.before_stmt_tracer.value)
-        self._append_stmt_template = '{}({{stmt_id}})'.format(TracingHook.after_stmt_tracer.value)
+        self._prepend_stmt_template = '{}("{}", {{stmt_id}})'.format(EMIT_EVENT, TraceEvent.before_stmt.value)
+        self._append_stmt_template = '{}("{}", {{stmt_id}})'.format(EMIT_EVENT, TraceEvent.after_stmt.value)
 
     def _get_parsed_prepend_stmt(self, stmt: 'ast.stmt') -> 'ast.stmt':
         with fast.location_of(stmt):
@@ -23,7 +23,7 @@ class StatementInserter(ast.NodeTransformer):
             ret = cast('ast.Expr', fast.parse(self._append_stmt_template.format(stmt_id=id(stmt))).body[0])
             if ret_expr is not None:
                 ret_value = cast('ast.Call', ret.value)
-                ret_value.keywords = [fast.kw(arg='ret_expr', value=ret_expr)]
+                ret_value.keywords = fast.kwargs(ret_expr=ret_expr)
         ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
         return ret
 

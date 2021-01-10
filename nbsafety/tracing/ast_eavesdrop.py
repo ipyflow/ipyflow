@@ -4,9 +4,7 @@ from contextlib import contextmanager
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.analysis.attr_symbols import GetAttrSubSymbols
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
-from nbsafety.tracing.hooks import TracingHook
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
@@ -83,21 +81,21 @@ class AstEavesdropper(ast.NodeTransformer):
                 attr_node = cast(ast.Attribute, node)
                 attr_or_sub = fast.Str(attr_node.attr)
 
-            extra_args: 'List[ast.AST]' = []
+            extra_args: 'List[ast.keyword]' = []
             if isinstance(node.value, ast.Name):
-                extra_args = [fast.Str(node.value.id)]
+                extra_args = fast.kwargs(name=fast.Str(node.value.id))
 
             with self.attrsub_load_context():
                 node.value = fast.Call(
-                    func=fast.Name(TracingHook.attrsub_tracer.value, ast.Load()),
-                    args=[
-                             self.visit(node.value),
-                             attr_or_sub,
-                             fast.NameConstant(is_subscript),
-                             fast.Str(node.ctx.__class__.__name__),
-                             fast.NameConstant(call_context),
-                         ] + extra_args,
-                    keywords=[]
+                    func=self._emit_func(),
+                    args=[TraceEvent.attrsub.to_ast(), self._get_copy_id_ast(node.value)],
+                    keywords=fast.kwargs(
+                        obj=self.visit(node.value),
+                        attr_or_sub=attr_or_sub,
+                        is_subscript=fast.NameConstant(is_subscript),
+                        ctx=fast.Str(node.ctx.__class__.__name__),
+                        call_context=fast.NameConstant(call_context),
+                    ) + extra_args
                 )
         # end fast.location_of(node.value)
         if not self._inside_attrsub_load_chain and is_load:
@@ -105,7 +103,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 return fast.Call(
                     func=self._emit_func(),
                     args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(node)],
-                    keywords=[fast.kw('obj', node), fast.kw('call_context', fast.NameConstant(call_context))],
+                    keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(call_context)),
                 )
         return node
 
@@ -124,7 +122,7 @@ class AstEavesdropper(ast.NodeTransformer):
                         new_arg_value = cast(ast.expr, fast.Call(
                             func=self._emit_func(),
                             args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
-                            keywords=[fast.kw('obj', visited_maybe_kwarg)],
+                            keywords=fast.kwargs(obj=visited_maybe_kwarg),
                         ))
                 else:
                     new_arg_value = visited_maybe_kwarg
@@ -163,7 +161,7 @@ class AstEavesdropper(ast.NodeTransformer):
             node.func = fast.Call(
                 func=self._emit_func(),
                 args=[TraceEvent.enter_arg_list.to_ast(), self._get_copy_id_ast(node.func)],
-                keywords=[fast.kw('obj', node.func)],
+                keywords=fast.kwargs(obj=node.func),
             )
 
         # f(a, b, ..., c) -> trace(f(a, b, ..., c), 'exit argument list')
@@ -171,11 +169,11 @@ class AstEavesdropper(ast.NodeTransformer):
             node = fast.Call(
                 func=self._emit_func(),
                 args=[TraceEvent.exit_arg_list.to_ast(), self._get_copy_id_ast(node)],
-                keywords=[
-                    fast.kw('obj', node),
-                    fast.kw('is_attrsub', fast.NameConstant(is_attrsub)),
-                    fast.kw('inside_chain', fast.NameConstant(self._inside_attrsub_load_chain))
-                ],
+                keywords=fast.kwargs(
+                    obj=node,
+                    is_attrsub=fast.NameConstant(is_attrsub),
+                    inside_chain=fast.NameConstant(self._inside_attrsub_load_chain),
+                ),
             )
 
         if self._inside_attrsub_load_chain or not is_attrsub:
@@ -185,7 +183,7 @@ class AstEavesdropper(ast.NodeTransformer):
             return fast.Call(
                 func=self._emit_func(),
                 args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(orig_node_id)],
-                keywords=[fast.kw('obj', node), fast.kw('call_context', fast.NameConstant(True))],
+                keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(True)),
             )
 
     def visit_Assign(self, node: ast.Assign):
@@ -198,8 +196,8 @@ class AstEavesdropper(ast.NodeTransformer):
         node.targets = cast('List[ast.expr]', new_targets)
         with fast.location_of(node.value):
             node.value = fast.Call(
-                func=fast.Name(TracingHook.literal_tracer.value, ast.Load()),
-                args=[node.value],
-                keywords=[],
+                func=self._emit_func(),
+                args=[TraceEvent.literal.to_ast(), self._get_copy_id_ast(node.value)],
+                keywords=fast.kwargs(obj=node.value),
             )
         return node

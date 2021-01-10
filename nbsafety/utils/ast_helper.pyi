@@ -3,7 +3,7 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Any, Dict, List, Optional
     import ast
 
 class FastAst:
@@ -14,6 +14,9 @@ class FastAst:
 
     @staticmethod
     def kw(arg: str, value: 'ast.expr') -> 'ast.keyword': ...
+
+    @staticmethod
+    def kwargs(**kwargs: 'ast.expr') -> 'List[ast.keyword]': ...
 
     @staticmethod
     def parse(*args, **kwargs) -> 'ast.Module': ...

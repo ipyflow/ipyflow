@@ -13,7 +13,6 @@ from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.mutation_event import MutationEvent
-from nbsafety.tracing.hooks import TracingHook
 from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stmt import TraceStatement
@@ -89,14 +88,6 @@ class TracingManager(object):
         self.tracing_reset_pending = False
 
         setattr(builtins, EMIT_EVENT, self._emit_event)
-        self._register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
-        # self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
-        # self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
-        # self._register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
-        # self._register_tracer_func(TracingHook.scope_popper, self.scope_popper)
-        self._register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
-        self._register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
-        self._register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
 
         self._stack: 'List[Tuple[Any, ...]]' = []
         self._stack_item_initializers: 'Dict[str, Callable[[], Any]]' = {}
@@ -123,10 +114,6 @@ class TracingManager(object):
     @property
     def _stack_item_names(self):
         return itertools.chain(self._stack_item_initializers.keys(), self._stack_items_with_manual_initialization)
-
-    @staticmethod
-    def _register_tracer_func(tracing_hook: 'TracingHook', tracer_func):
-        setattr(builtins, tracing_hook.value, tracer_func)
 
     @contextmanager
     def _register_stack_state(self):
@@ -232,9 +219,22 @@ class TracingManager(object):
         logger.debug('%s attr %s of obj %s', ctx, attr, obj)
         return obj
 
-    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Dict[str, Any]'):
+    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
         event = TraceEvent(evt)
-        if event == TraceEvent.after_attrsub_chain:
+        if event == TraceEvent.before_stmt:
+            return self.before_stmt_tracer(orig_node_id)
+        elif event == TraceEvent.after_stmt:
+            return self.after_stmt_tracer(orig_node_id, ret_expr=kwargs.get('ret_expr', None))
+        elif event == TraceEvent.attrsub:
+            return self.attrsub_tracer(
+                kwargs['obj'],
+                kwargs['attr_or_sub'],
+                kwargs['is_subscript'],
+                kwargs['ctx'],
+                kwargs['call_context'],
+                obj_name=kwargs.get('name', None),
+            )
+        elif event == TraceEvent.after_attrsub_chain:
             return self.end_tracer(kwargs['obj'], kwargs['call_context'])
         elif event == TraceEvent.argument:
             return self.arg_recorder(kwargs['obj'], self.safety.ast_node_by_id[orig_node_id])
@@ -242,6 +242,8 @@ class TracingManager(object):
             return self.enter_argument_list(kwargs['obj'])
         elif event == TraceEvent.exit_arg_list:
             return self.exit_argument_list(kwargs['obj'], kwargs['is_attrsub'], kwargs['inside_chain'])
+        elif event == TraceEvent.literal:
+            return self.literal_tracer(kwargs['obj'])
         else:
             raise ValueError('Unsupported event: %s' % event)
 
@@ -460,7 +462,7 @@ class TracingManager(object):
             return ret_expr
         stmt = self.safety.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
-            self._sys_tracer(frame or sys._getframe().f_back, TraceEvent.after_stmt, stmt)
+            self._sys_tracer(frame or sys._getframe().f_back.f_back, TraceEvent.after_stmt, stmt)
         return ret_expr
 
     def before_stmt_tracer(self, stmt_id):
@@ -471,11 +473,14 @@ class TracingManager(object):
             prev_trace_stmt_in_cur_frame = self.prev_trace_stmt_in_cur_frame
             # both of the following stmts should be processed when body is entered
             if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
-                self.after_stmt_tracer(prev_trace_stmt_in_cur_frame.stmt_id, frame=sys._getframe().f_back)
+                self.after_stmt_tracer(prev_trace_stmt_in_cur_frame.stmt_id, frame=sys._getframe().f_back.f_back)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(
-                self.safety, sys._getframe().f_back, self.safety.ast_node_by_id[stmt_id], self.cur_frame_original_scope
+                self.safety,
+                sys._getframe().f_back.f_back,
+                cast(ast.stmt, self.safety.ast_node_by_id[stmt_id]),
+                self.cur_frame_original_scope
             )
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt

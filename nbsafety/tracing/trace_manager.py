@@ -92,8 +92,8 @@ class TracingManager(object):
         self._register_tracer_func(TracingHook.attrsub_tracer, self.attrsub_tracer)
         # self._register_tracer_func(TracingHook.end_tracer, self.end_tracer)
         # self._register_tracer_func(TracingHook.arg_recorder, self.arg_recorder)
-        self._register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
-        self._register_tracer_func(TracingHook.scope_popper, self.scope_popper)
+        # self._register_tracer_func(TracingHook.scope_pusher, self.scope_pusher)
+        # self._register_tracer_func(TracingHook.scope_popper, self.scope_popper)
         self._register_tracer_func(TracingHook.literal_tracer, self.literal_tracer)
         self._register_tracer_func(TracingHook.before_stmt_tracer, self.before_stmt_tracer)
         self._register_tracer_func(TracingHook.after_stmt_tracer, self.after_stmt_tracer)
@@ -238,8 +238,46 @@ class TracingManager(object):
             return self.end_tracer(kwargs['obj'], kwargs['call_context'])
         elif event == TraceEvent.argument:
             return self.arg_recorder(kwargs['obj'], self.safety.ast_node_by_id[orig_node_id])
+        elif event == TraceEvent.enter_arg_list:
+            return self.enter_argument_list(kwargs['obj'])
+        elif event == TraceEvent.exit_arg_list:
+            return self.exit_argument_list(kwargs['obj'], kwargs['is_attrsub'], kwargs['inside_chain'])
         else:
             raise ValueError('Unsupported event: %s' % event)
+
+    def _get_namespace_for_obj(self, obj: 'Any', obj_name: 'Optional[str]' = None) -> 'NamespaceScope':
+        obj_id = id(obj)
+        scope = self.safety.namespaces.get(obj_id, None)
+        # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
+        if scope is None:
+            class_scope = self.safety.namespaces.get(id(obj.__class__), None)
+            if class_scope is not None:
+                # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
+                scope = class_scope.clone(obj)
+                if obj_name is not None:
+                    scope.scope_name = obj_name
+            else:
+                # print('no scope for class', obj.__class__)
+                # if self.prev_trace_stmt.finished:
+                #     # avoid creating new scopes if we already did this computation
+                #     self.active_scope = None
+                #     return obj
+                try:
+                    scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
+                except (TypeError, StopIteration):
+                    scope_name = '<unknown namespace>'
+                scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
+            # FIXME: brittle strategy for determining parent scope of obj
+            if scope.parent_scope is None:
+                if (
+                        obj_name is not None and
+                        obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
+                ):
+                    parent_scope = self.safety.global_scope
+                else:
+                    parent_scope = self.active_scope
+                scope.parent_scope = parent_scope
+        return scope
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
@@ -257,37 +295,8 @@ class TracingManager(object):
                     return obj
             elif not isinstance(attr_or_subscript, (str, int)):
                 return obj
-            scope = self.safety.namespaces.get(obj_id, None)
-            # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
-            if scope is None:
-                class_scope = self.safety.namespaces.get(id(obj.__class__), None)
-                if class_scope is not None and not is_subscript:
-                    # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
-                    scope = class_scope.clone(obj)
-                    if obj_name is not None:
-                        scope.scope_name = obj_name
-                else:
-                    # print('no scope for class', obj.__class__)
-                    # if self.prev_trace_stmt.finished:
-                    #     # avoid creating new scopes if we already did this computation
-                    #     self.active_scope = None
-                    #     return obj
-                    try:
-                        scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
-                    except (TypeError, StopIteration):
-                        scope_name = '<unknown namespace>'
-                    scope = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
-                # FIXME: brittle strategy for determining parent scope of obj
-                if scope.parent_scope is None:
-                    if (
-                        obj_name is not None and
-                        obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
-                    ):
-                        parent_scope = self.safety.global_scope
-                    else:
-                        parent_scope = self.active_scope
-                    scope.parent_scope = parent_scope
 
+            scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
             self.active_scope = scope
             # if scope is None:  # or self.prev_trace_stmt.finished:
             #     if ctx in ('Store', 'AugStore'):
@@ -404,7 +413,7 @@ class TracingManager(object):
         return arg_obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def scope_pusher(self, obj):
+    def enter_argument_list(self, obj):
         if not self.tracing_enabled:
             return obj
         # if self.prev_trace_stmt.finished:
@@ -414,7 +423,7 @@ class TracingManager(object):
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def scope_popper(self, obj, should_pop_should_record_args_stack):
+    def exit_argument_list(self, obj: 'Any', should_pop_should_record_args_stack: bool, inside_chain: bool):
         if not self.tracing_enabled:
             return obj
         # if self.prev_trace_stmt.finished:
@@ -422,6 +431,9 @@ class TracingManager(object):
         self.active_scope = self.nested_call_stack.pop()
         if should_pop_should_record_args_stack:
             self.should_record_args = self.should_record_args_stack.pop()
+        if inside_chain:
+            # TODO: I don't think any test exercises this atm
+            self.active_scope = self._get_namespace_for_obj(obj)
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))

@@ -150,20 +150,32 @@ class AstEavesdropper(ast.NodeTransformer):
         node.keywords = self._get_replacement_args(node.keywords, is_attrsub, True)
 
         # in order to ensure that the args are processed with appropriate active scope,
-        # we need to push current active scope before processing the args and pop after
-        # (pop happens on function return as opposed to in tracer)
+        # we need to make sure not to use the active namespace scope on args (in the case
+        # of a function call on an ast.Attribute).
+        #
+        # We do so by emitting an "enter argument list", whose handler pushes the current active
+        # scope while we process each argument. The "end argument list" event will then restore
+        # the active scope.
+        #
+        # This effectively rewrites function calls as follows:
+        # f(a, b, ..., c) -> trace(f, 'enter argument list')(a, b, ..., c)
         with fast.location_of(node.func):
             node.func = fast.Call(
-                func=fast.Name(TracingHook.scope_pusher.value, ast.Load()),
-                args=[node.func],
-                keywords=[],
+                func=self._emit_func(),
+                args=[TraceEvent.enter_arg_list.to_ast(), self._get_copy_id_ast(node.func)],
+                keywords=[fast.kw('obj', node.func)],
             )
 
+        # f(a, b, ..., c) -> trace(f(a, b, ..., c), 'exit argument list')
         with fast.location_of(node):
             node = fast.Call(
-                func=fast.Name(TracingHook.scope_popper.value, ast.Load()),
-                args=[node, fast.NameConstant(is_attrsub)],
-                keywords=[]
+                func=self._emit_func(),
+                args=[TraceEvent.exit_arg_list.to_ast(), self._get_copy_id_ast(node)],
+                keywords=[
+                    fast.kw('obj', node),
+                    fast.kw('is_attrsub', fast.NameConstant(is_attrsub)),
+                    fast.kw('inside_chain', fast.NameConstant(self._inside_attrsub_load_chain))
+                ],
             )
 
         if self._inside_attrsub_load_chain or not is_attrsub:

@@ -11,6 +11,8 @@ class TraceEvent(Enum):
     after_stmt = 'after_stmt'
     after_attrsub_chain = 'after_attrsub_chain'
     argument = 'argument'
+    enter_arg_list = 'enter_arg_list'
+    exit_arg_list = 'exit_arg_list'
 
     line = 'line'
     call = 'call'

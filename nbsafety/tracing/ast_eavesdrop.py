@@ -109,30 +109,22 @@ class AstEavesdropper(ast.NodeTransformer):
                 )
         return node
 
-    def _get_replacement_args(self, args, should_record, keywords):
+    def _get_replacement_args(self, args, should_record: bool, keywords: bool):
         replacement_args = []
         for arg in args:
             if keywords:
                 maybe_kwarg = getattr(arg, 'value')
             else:
                 maybe_kwarg = arg
-            chain = GetAttrSubSymbols()(maybe_kwarg)
-            statically_resolvable = []
             with fast.location_of(maybe_kwarg):
-                for sym in chain.symbols:
-                    # TODO: only handles attributes properly; subscripts will break
-                    if not isinstance(sym, str):
-                        break
-                    statically_resolvable.append(ast.Str(sym))
-                statically_resolvable = fast.Tuple(elts=statically_resolvable, ctx=ast.Load())
                 with self.attrsub_load_context(False):
                     visited_maybe_kwarg = self.visit(maybe_kwarg)
                 if should_record:
                     with self.attrsub_load_context(False):
                         new_arg_value = cast(ast.expr, fast.Call(
                             func=self._emit_func(),
-                            args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(arg)],
-                            keywords=[fast.kw('obj', visited_maybe_kwarg), fast.kw('chain', statically_resolvable)],
+                            args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
+                            keywords=[fast.kw('obj', visited_maybe_kwarg)],
                         ))
                 else:
                     new_arg_value = visited_maybe_kwarg

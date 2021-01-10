@@ -9,7 +9,7 @@ from typing import cast, TYPE_CHECKING
 
 import astunparse
 
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.mutation_event import MutationEvent
@@ -21,7 +21,6 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
-    from nbsafety.analysis import AttrSubChainType
     from nbsafety.data_model.scope import Scope
     from nbsafety.safety import NotebookSafety
     SymbolRef = Union[str, AttrSubSymbolChain]
@@ -238,7 +237,7 @@ class TracingManager(object):
         if event == TraceEvent.after_attrsub_chain:
             return self.end_tracer(kwargs['obj'], kwargs['call_context'])
         elif event == TraceEvent.argument:
-            return self.arg_recorder(kwargs['obj'], kwargs['chain'])
+            return self.arg_recorder(kwargs['obj'], self.safety.ast_node_by_id[orig_node_id])
         else:
             raise ValueError('Unsupported event: %s' % event)
 
@@ -385,17 +384,21 @@ class TracingManager(object):
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def arg_recorder(self, arg_obj: 'Any', chain: 'AttrSubChainType'):
+    def arg_recorder(self, arg_obj: 'Any', arg_node: 'ast.AST'):
         if not self.tracing_enabled:
             return arg_obj
         if self.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
+            return arg_obj
+        if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
             return arg_obj
         if len(self.deep_ref_candidates) == 0:
             logger.error('Error: no associated symbol for recorded args; skipping recording')
             return arg_obj
 
         arg_obj_id = id(arg_obj)
-        recorded_arg = AttrSubSymbolChain(chain)
+        # TODO: we should be able to get the actual data symbol during live tracing,
+        #  instead of trying to resolve from an attrsub chain determined via analysis
+        recorded_arg = GetAttrSubSymbols()(arg_node)
         self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
         return arg_obj

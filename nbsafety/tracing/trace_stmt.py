@@ -236,10 +236,7 @@ class TraceStatement(object):
 
             mutation_arg_dsyms = set()
             for arg, _ in mutation_args:
-                if isinstance(arg, str):
-                    mutation_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
-                elif isinstance(arg, AttrSubSymbolChain):
-                    mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
+                mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
             mutation_arg_dsyms.discard(None)
 
             # NOTE: this next block is necessary to ensure that we add the argument as a namespace child

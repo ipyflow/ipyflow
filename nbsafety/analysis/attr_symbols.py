@@ -23,10 +23,6 @@ class CallPoint(CommonEqualityMixin):
         return self.symbol + '(...)'
 
 
-if TYPE_CHECKING:
-    AttrSubChainType = Sequence[Union[SupportedIndexType, CallPoint]]
-
-
 class AttrSubSymbolChain(CommonEqualityMixin):
     def __init__(self, symbols: 'Sequence[Union[SupportedIndexType, CallPoint]]'):
         # FIXME: each symbol should distinguish between attribute and subscript
@@ -44,7 +40,7 @@ class GetAttrSubSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, int, Tuple[Union[str, int], ...], CallPoint]] = []
 
-    def __call__(self, node: 'Union[ast.Attribute, ast.Subscript, ast.Call]') -> 'AttrSubSymbolChain':
+    def __call__(self, node: 'Union[ast.Attribute, ast.Subscript, ast.Call, ast.Name]') -> 'AttrSubSymbolChain':
         self.visit(node)
         self.symbol_chain.reverse()
         return AttrSubSymbolChain(self.symbol_chain)

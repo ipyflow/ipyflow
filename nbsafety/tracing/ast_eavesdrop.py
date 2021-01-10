@@ -204,11 +204,11 @@ class AstEavesdropper(ast.NodeTransformer):
                 func=self._emitter_ast(),
                 args=[TraceEvent.before_literal.to_ast(), self._get_copy_id_ast(orig_node_value)],
                 keywords=[],
-            ), node.value], ctx=ast.Load())
+            ), node.value], ast.Load())
             slc: 'Union[ast.Constant, ast.Num, ast.Index]' = fast.Num(1)
             if sys.version_info < (3, 9):
                 slc = fast.Index(slc)
-            node.value = fast.Subscript(node.value, slc, ctx=ast.Load())
+            node.value = fast.Subscript(node.value, slc, ast.Load())
             node.value = fast.Call(
                 func=self._emitter_ast(),
                 args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(orig_node_value)],

@@ -214,35 +214,32 @@ class TracingManager(object):
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
 
-    @staticmethod
-    def debug_attribute_tracer(obj, attr, ctx):
-        logger.debug('%s attr %s of obj %s', ctx, attr, obj)
-        return obj
-
     def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
         event = TraceEvent(evt)
         if event == TraceEvent.before_stmt:
             return self.before_stmt_tracer(orig_node_id, sys._getframe().f_back)
         elif event == TraceEvent.after_stmt:
             return self.after_stmt_tracer(orig_node_id, sys._getframe().f_back, ret_expr=kwargs.get('ret_expr', None))
-        elif event == TraceEvent.attrsub:
+        elif event in (TraceEvent.attribute, TraceEvent.subscript):
             return self.attrsub_tracer(
                 kwargs['obj'],
                 kwargs['attr_or_sub'],
-                kwargs['is_subscript'],
                 kwargs['ctx'],
                 kwargs['call_context'],
+                is_subscript=event == TraceEvent.subscript,
                 obj_name=kwargs.get('name', None),
             )
         elif event == TraceEvent.after_attrsub_chain:
             return self.end_tracer(kwargs['obj'], kwargs['call_context'])
         elif event == TraceEvent.argument:
             return self.arg_recorder(kwargs['obj'], self.safety.ast_node_by_id[orig_node_id])
-        elif event == TraceEvent.enter_arg_list:
-            return self.enter_argument_list(kwargs['obj'])
-        elif event == TraceEvent.exit_arg_list:
-            return self.exit_argument_list(kwargs['obj'], kwargs['is_attrsub'], kwargs['inside_chain'])
-        elif event == TraceEvent.literal:
+        elif event == TraceEvent.before_arg_list:
+            return self.before_argument_list(kwargs['obj'])
+        elif event == TraceEvent.after_arg_list:
+            return self.after_argument_list(kwargs['obj'], kwargs['is_attrsub'], kwargs['inside_chain'])
+        elif event == TraceEvent.before_literal:
+            pass
+        elif event == TraceEvent.after_literal:
             return self.literal_tracer(kwargs['obj'])
         else:
             raise ValueError('Unsupported event: %s' % event)
@@ -283,7 +280,9 @@ class TracingManager(object):
         return ns
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def attrsub_tracer(self, obj, attr_or_subscript, is_subscript, ctx, call_context, obj_name=None):
+    def attrsub_tracer(
+            self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: 'Optional[str]'
+    ):
         if not self.tracing_enabled:
             return obj
         should_record_args = False
@@ -416,7 +415,7 @@ class TracingManager(object):
         return arg_obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def enter_argument_list(self, obj):
+    def before_argument_list(self, obj):
         if not self.tracing_enabled:
             return obj
         # if self.prev_trace_stmt.finished:
@@ -426,7 +425,7 @@ class TracingManager(object):
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def exit_argument_list(self, obj: 'Any', should_pop_should_record_args_stack: bool, inside_chain: bool):
+    def after_argument_list(self, obj: 'Any', should_pop_should_record_args_stack: bool, inside_chain: bool):
         if not self.tracing_enabled:
             return obj
         # if self.prev_trace_stmt.finished:

@@ -32,7 +32,7 @@ def func():
     assert dead == {'x', 'y'}
 
 
-if sys.version_info.minor >= 8:
+if sys.version_info >= (3, 8):
     def test_walrus():
         live, dead = compute_live_dead_symbol_refs("""
 if (y := (x := x + 1) + 1) > 0:

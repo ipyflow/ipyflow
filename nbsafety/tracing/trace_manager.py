@@ -166,6 +166,7 @@ class TracingManager(object):
             )
             self.cur_frame_original_scope = new_scope
             self.active_scope = new_scope
+        self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _pop_stack(self):
         for stack_item_name, stack_item in zip(self._stack_item_names, self._stack.pop()):
@@ -179,7 +180,7 @@ class TracingManager(object):
             if self.prev_trace_stmt is not None:
                 self.prev_trace_stmt.finished_execution_hook()
             # prev_overall = self.prev_trace_stmt
-            # if prev_overall is not None and prev_overall is not self.stack[-1][0]:
+            # if prev_overall is not None and prev_overall is not self._stack[-1][0]:
             #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             #     prev_overall.finished_execution_hook()
 

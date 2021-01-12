@@ -19,7 +19,7 @@ def return_val(val, logger):
 
 
 # TODO: hook into safety.is_develop
-IS_DEVELOP = True
+IS_DEVELOP = False
 
 
 def on_exception_default_to(recovery_func):

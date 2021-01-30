@@ -182,6 +182,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.visit(gen.iter)
             with self.kill_context():
                 self.visit(gen.target)
+        # visit the elt at the end to ensure we don't add it to live vars if it was one of the generator targets
+        self.visit(node.elt)
 
     def visit_Lambda(self, node):
         with self.kill_context():

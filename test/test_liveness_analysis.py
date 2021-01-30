@@ -32,6 +32,20 @@ def func():
     assert dead == {'x', 'y'}
 
 
+def test_comprehension_with_killed_elt():
+    live, dead = compute_live_dead_symbol_refs('[x for y in range(10) for x in range(11)]')
+    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
+    assert live == {'range'}
+    assert dead == {'x', 'y'}
+
+
+def test_comprehension_with_live_elt():
+    live, dead = compute_live_dead_symbol_refs('[x for y in range(10) for _ in range(11)]')
+    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
+    assert live == {'x', 'range'}
+    assert dead == {'y', '_'}
+
+
 if sys.version_info >= (3, 8):
     def test_walrus():
         live, dead = compute_live_dead_symbol_refs("""

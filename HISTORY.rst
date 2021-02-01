@@ -204,3 +204,9 @@ History
 -------------------
 * Propagate freshness to namespace children;
 * Make jupyterlab a requirement;
+
+0.0.57 (2021-12-01)
+-------------------
+* Various tracing improvements;
+* Various analysis improvements;
+* Fix for stack unwinding bug during trace reenabling;

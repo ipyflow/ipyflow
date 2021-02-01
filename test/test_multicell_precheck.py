@@ -11,14 +11,14 @@ logging.basicConfig(level=logging.ERROR)
 _safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
 
 
-def run_cell(cell, cell_id=None):
+def run_cell(cell, cell_id=None, **kwargs):
     """Mocks the `change active cell` portion of the comm protocol"""
     if cell_id is not None:
         _safety_state[0].handle({
             'type': 'change_active_cell',
             'active_cell_id': cell_id
         })
-    run_cell_(cell)
+    run_cell_(cell, **kwargs)
 
 
 def test_simple():
@@ -45,7 +45,7 @@ def test_refresh_after_exception_fixed():
         2: 'logging.info(y)',
     }
     run_cell(cells[0], 0)
-    run_cell(cells[2], 2)
+    run_cell(cells[2], 2, ignore_exceptions=True)
     run_cell(cells[1], 1)
     response = _safety_state[0].check_and_link_multiple_cells(cells)
     assert response['fresh_cells'] == [2]
@@ -160,7 +160,7 @@ def test_fresh_after_import():
         1: 'import numpy as np'
     }
     for idx, cell in cells.items():
-        run_cell(cell, idx)
+        run_cell(cell, idx, ignore_exceptions=True)
     response = _safety_state[0].check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [0]

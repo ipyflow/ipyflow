@@ -11,13 +11,13 @@ logging.basicConfig(level=logging.ERROR)
 _safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
 
 
-def run_cell(cell):
+def run_cell(cell, **kwargs):
     # print()
     # print('*******************************************')
     # print('running', cell)
     # print('*******************************************')
     # print()
-    run_cell_(cell)
+    run_cell_(cell, **kwargs)
 
 
 def stale_detected():
@@ -1327,10 +1327,9 @@ def test_exception_stack_unwind():
 
     def assert_stack_size(size):
         return ';'.join([
-            f'can_pass = len({safety_state}.trace_state.stack) == {size} '
-            f'and len({safety_state}.attr_trace_manager.stack) == {size}',
+            f'can_pass = len({safety_state}.tracing_manager._stack) == {size}',
             f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)',
-            f'print(len({safety_state}.trace_state.stack), "vs", {size}) '
+            f'print(len({safety_state}.tracing_manager._stack), "vs", {size})'
         ])
     try:
         run_cell(f"""

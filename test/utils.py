@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 import os
+import sys
 from typing import TYPE_CHECKING
 
 from IPython import get_ipython
 import pytest
 
+from nbsafety.run_mode import SafetyRunMode
 from nbsafety.safety import NotebookSafety
 
 if TYPE_CHECKING:
@@ -29,8 +31,13 @@ def assert_bool(val, msg=''):
 def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]], Any]':
     safety_state: List[Optional[NotebookSafety]] = [None]
 
-    def run_cell(code):
+    def run_cell(code, ignore_exceptions=False):
         get_ipython().run_cell_magic(safety_state[0].cell_magic_name, None, code)
+        try:
+            if not ignore_exceptions and getattr(sys, 'last_value', None) is not None:
+                raise sys.last_value
+        finally:
+            sys.last_value = None
 
     store_history = kwargs.pop('store_history', False)
     test_context = kwargs.pop('test_context', True)
@@ -42,6 +49,7 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
             cell_magic_name='_SAFETY_CELL_MAGIC',
             store_history=store_history,
             test_context=test_context,
+            mode=SafetyRunMode.DEVELOP,
             **kwargs
         )
         run_cell('import sys')

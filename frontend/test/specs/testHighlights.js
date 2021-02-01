@@ -19,19 +19,19 @@ describe('(Python) cell highlights', function () {
             var printCodeCell = nbsafetyPO.runCodeCellByIndex(2);
             nbsafetyPO.runCodeCellByIndex(3);
             expect(refresherCodeCell).toHaveClass('refresher-input-cell');
-            expect(refresherCodeCell).toHaveClass('stale-output-cell');
+            expect(refresherCodeCell).toHaveClass('fresh-cell');
             expect(printCodeCell).toHaveClass('stale-cell');
-            expect(printCodeCell).toHaveClass('stale-output-cell');
+            expect(printCodeCell).toHaveClass('fresh-cell');
 
             nbsafetyPO.runCodeCellByIndex(1);
             expect(refresherCodeCell).not.toHaveClass('refresher-input-cell');
-            expect(refresherCodeCell).not.toHaveClass('stale-output-cell');
+            expect(refresherCodeCell).not.toHaveClass('fresh-cell');
             expect(printCodeCell).not.toHaveClass('stale-cell');
-            expect(printCodeCell).toHaveClass('stale-output-cell');
+            expect(printCodeCell).toHaveClass('fresh-cell');
 
             nbsafetyPO.runCodeCellByIndex(2);
             expect(printCodeCell).not.toHaveClass('stale-cell');
-            expect(printCodeCell).not.toHaveClass('stale-output-cell');
+            expect(printCodeCell).not.toHaveClass('fresh-cell');
         });
     });
 
@@ -45,9 +45,9 @@ describe('(Python) cell highlights', function () {
             var lastInChain = nbsafetyPO.runCodeCellByIndex(4);
             nbsafetyPO.runCodeCellByIndex(5);
             expect(refresherCodeCell).toHaveClass('refresher-input-cell');
-            expect(refresherCodeCell).toHaveClass('stale-output-cell');
+            expect(refresherCodeCell).toHaveClass('fresh-cell');
             expect(lastInChain).toHaveClass('stale-cell');
-            expect(lastInChain).toHaveClass('stale-output-cell');
+            expect(lastInChain).toHaveClass('fresh-cell');
 
             var linkedStale = nbsafetyPO.getInputCollapserChildByIndex(4);
             var linkedRefresher = nbsafetyPO.getInputCollapserChildByIndex(1);

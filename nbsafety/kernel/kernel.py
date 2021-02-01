@@ -10,7 +10,7 @@ class SafeKernel(IPythonKernel):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._safety = NotebookSafety(use_comm=True, mode=SafetyRunMode.PRODUCTION)
+        self._safety = NotebookSafety(use_comm=True)
 
     def do_execute(self, code, silent, store_history=False, user_expressions=None, allow_stdin=False):
         super_ = super()

@@ -70,7 +70,7 @@ class NotebookSafety(object):
             track_dependencies=True,
             naive_refresher_computation=False,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
-            mode=kwargs.pop('mode', SafetyRunMode.DEVELOP),
+            mode=SafetyRunMode.get(),
             **kwargs
         ))
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
@@ -105,7 +105,7 @@ class NotebookSafety(object):
 
     @property
     def is_develop(self) -> bool:
-        return self.config.get('mode', SafetyRunMode.DEVELOP) == SafetyRunMode.DEVELOP
+        return self.config.get('mode', SafetyRunMode.PRODUCTION) == SafetyRunMode.DEVELOP
 
     @property
     def is_test(self) -> bool:

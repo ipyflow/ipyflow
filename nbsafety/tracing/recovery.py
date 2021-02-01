@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import functools
 
+from nbsafety.run_mode import SafetyRunMode
+
 
 def return_arg_at_index(index, logger):
     def return_arg_func(exc, *args, **kwargs):
@@ -18,10 +20,6 @@ def return_val(val, logger):
     return return_val_func
 
 
-# TODO: hook into safety.is_develop
-IS_DEVELOP = True
-
-
 def on_exception_default_to(recovery_func):
     def make_wrapper(original_func):
         @functools.wraps(original_func)
@@ -29,7 +27,7 @@ def on_exception_default_to(recovery_func):
             try:
                 return original_func(*args, **kwargs)
             except Exception as e:
-                if IS_DEVELOP:
+                if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
                     raise e
                 else:
                     return recovery_func(e, *args, **kwargs)

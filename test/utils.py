@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from IPython import get_ipython
 import pytest
@@ -29,6 +29,7 @@ def assert_bool(val, msg=''):
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
 def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]], Any]':
+    os.environ[SafetyRunMode.DEVELOP.value] = '1'
     safety_state: List[Optional[NotebookSafety]] = [None]
 
     def run_cell(code, ignore_exceptions=False):
@@ -49,7 +50,6 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
             cell_magic_name='_SAFETY_CELL_MAGIC',
             store_history=store_history,
             test_context=test_context,
-            mode=SafetyRunMode.DEVELOP,
             **kwargs
         )
         run_cell('import sys')

@@ -24,7 +24,8 @@ def test_stack_on_tracing_reenable():
 x = 42
 
 def fake_func(y):
-    return 7
+    z = 9
+    return z
 
 new_xs = [fake_func(x) for _ in range(5)]
 

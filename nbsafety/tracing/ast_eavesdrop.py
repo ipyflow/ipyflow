@@ -76,6 +76,17 @@ class AstEavesdropper(ast.NodeTransformer):
             #     raise ValueError('unexpected slice: %s' % sub_node.slice)
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
+    def _maybe_emit_after_chain_evt(self, node, call_context, orig_node_id=None):
+        if self._inside_attrsub_load_chain or (not call_context and not isinstance(node.ctx, ast.Load)):
+            return node
+
+        with fast.location_of(node):
+            return fast.Call(
+                func=self._emitter_ast(),
+                args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
+                keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(call_context)),
+            )
+
     def visit_Attribute_or_Subscript(
             self,
             node: 'Union[ast.Attribute, ast.Subscript]',
@@ -103,18 +114,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 )
         # end fast.location_of(node.value)
 
-        if self._inside_attrsub_load_chain or not isinstance(node.ctx, ast.Load):
-            return node
-
-        # if we were not marked as inside a chain, then we shouldn't be in a call context
-        assert not call_context
-
-        with fast.location_of(node):
-            return fast.Call(
-                func=self._emitter_ast(),
-                args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(node)],
-                keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(call_context)),
-            )
+        return self._maybe_emit_after_chain_evt(node, call_context=call_context)
 
     def _get_replacement_args(self, args, should_record: bool, keywords: bool):
         replacement_args = []
@@ -188,15 +188,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 ),
             )
 
-        if self._inside_attrsub_load_chain or not is_attrsub:
-            return node
-
-        with fast.location_of(node):
-            return fast.Call(
-                func=self._emitter_ast(),
-                args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(orig_node_id)],
-                keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(True)),
-            )
+        return self._maybe_emit_after_chain_evt(node, call_context=True, orig_node_id=orig_node_id)
 
     def visit_Assign(self, node: ast.Assign):
         if not isinstance(node.value, (ast.List, ast.Tuple)):

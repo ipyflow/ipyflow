@@ -8,6 +8,7 @@ from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.tracing.stmt_mapper import StatementMapper
 
 if TYPE_CHECKING:
+    # avoid circular imports
     from nbsafety.safety import NotebookSafety
 
 

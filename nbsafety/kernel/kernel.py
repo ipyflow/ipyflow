@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ipykernel.ipkernel import IPythonKernel
 from nbsafety.version import __version__
-from nbsafety.safety import NotebookSafety, SafetyRunMode
+from nbsafety.safety import NotebookSafety
 
 
 class SafeKernel(IPythonKernel):

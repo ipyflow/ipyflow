@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from IPython import get_ipython
 import pytest

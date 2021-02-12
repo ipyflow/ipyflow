@@ -4,14 +4,15 @@ import logging
 import sys
 from typing import cast, TYPE_CHECKING
 
+from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.data_model.scope import Scope
+
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 
 if TYPE_CHECKING:
-    from nbsafety.data_model.data_symbol import DataSymbol
-    from nbsafety.data_model.scope import Scope
-    from nbsafety.types import SymbolRef
     from typing import Set, Tuple
+    from nbsafety.types import SymbolRef
 
 logger = logging.getLogger(__name__)
 

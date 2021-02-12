@@ -7,14 +7,15 @@ from typing import TYPE_CHECKING
 from nbsafety.analysis import (
     AttrSubSymbolChain, get_symbol_edges, stmt_contains_lval
 )
-from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.data_model.scope import NamespaceScope, Scope
 from nbsafety.tracing.mutation_event import MutationEvent
 
 if TYPE_CHECKING:
     from types import FrameType
     from typing import List, Optional, Set
-    from nbsafety.data_model.data_symbol import DataSymbol
-    from nbsafety.data_model.scope import Scope
+
+    # avoid circular imports
     from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)

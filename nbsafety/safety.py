@@ -22,6 +22,7 @@ from nbsafety.ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from nbsafety import line_magics
+from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing import SafetyAstRewriter, TracingManager
@@ -30,7 +31,6 @@ from nbsafety.utils import DotDict
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
     from types import FrameType
-    from nbsafety.data_model.data_symbol import DataSymbol
     CellId = Union[str, int]
 
 logger = logging.getLogger(__name__)

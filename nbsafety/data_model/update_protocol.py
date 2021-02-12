@@ -4,6 +4,8 @@ from typing import cast, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Set
+
+    # avoid circular imports
     from nbsafety.data_model.data_symbol import DataSymbol
     from nbsafety.data_model.scope import NamespaceScope
     from nbsafety.safety import NotebookSafety

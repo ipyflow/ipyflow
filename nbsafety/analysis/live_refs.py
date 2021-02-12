@@ -8,7 +8,7 @@ from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixi
 
 if TYPE_CHECKING:
     from typing import List, Optional, Set, Tuple, Union
-    from ..types import SymbolRef
+    from nbsafety.types import SymbolRef
 
 logger = logging.getLogger(__name__)
 

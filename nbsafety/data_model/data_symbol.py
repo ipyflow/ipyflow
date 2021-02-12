@@ -11,6 +11,8 @@ from nbsafety.data_model.update_protocol import UpdateProtocol
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Set, Union
     import ast
+
+    # avoid circular imports
     from nbsafety.safety import NotebookSafety
     from nbsafety.data_model.scope import Scope, NamespaceScope
 

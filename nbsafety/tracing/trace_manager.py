@@ -11,7 +11,7 @@ import astunparse
 
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
-from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.scope import NamespaceScope, Scope
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
@@ -20,8 +20,6 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
-    from nbsafety.data_model.scope import Scope
-    from nbsafety.safety import NotebookSafety
     SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
     RecordedArg = Tuple[AttrSubSymbolChain, int]
@@ -32,6 +30,9 @@ if TYPE_CHECKING:
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     LexicalCallNestingStack = List[Scope]
+
+    # avoid circular imports
+    from nbsafety.safety import NotebookSafety
 
 
 logger = logging.getLogger(__name__)

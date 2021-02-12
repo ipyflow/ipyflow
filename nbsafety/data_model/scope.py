@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ast
 import inspect
 import itertools
 from typing import TYPE_CHECKING
@@ -15,9 +16,10 @@ from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
-    import ast
-    from nbsafety.safety import NotebookSafety
     from nbsafety.types import SupportedIndexType
+
+    # avoid circular imports
+    from nbsafety.safety import NotebookSafety
 
 
 class Scope(object):

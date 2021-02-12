@@ -36,9 +36,14 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
         get_ipython().run_cell_magic(safety_state[0].cell_magic_name, None, code)
         try:
             if not ignore_exceptions and getattr(sys, 'last_value', None) is not None:
-                raise sys.last_value
+                last_tb = getattr(sys, 'last_traceback', None)
+                if last_tb is not None:
+                    if last_tb.tb_frame.f_back is None:
+                        # then this was raised from non-test code (no idea why)
+                        raise sys.last_value
         finally:
             sys.last_value = None
+            sys.last_traceback = None
 
     store_history = kwargs.pop('store_history', False)
     test_context = kwargs.pop('test_context', True)

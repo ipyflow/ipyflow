@@ -44,44 +44,45 @@ class AstEavesdropper(ast.NodeTransformer):
         self._inside_attrsub_load_chain = old
 
     def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
-        return self.visit_Attribute_or_Subscript(node, call_context)
+        with fast.location_of(node.value):
+            attr_node = cast(ast.Attribute, node)
+            attr_or_sub = fast.Str(attr_node.attr)
+        return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
     def visit_Subscript(self, node: 'ast.Subscript', call_context=False):
-        return self.visit_Attribute_or_Subscript(node, call_context)
-
-    def visit_Attribute_or_Subscript(self, node: 'Union[ast.Attribute, ast.Subscript]', call_context=False):
         with fast.location_of(node.value):
-            is_load = isinstance(node.ctx, ast.Load)
-            is_subscript = isinstance(node, ast.Subscript)
             # TODO: expand beyond simple slices
-            if is_subscript:
-                sub_node = cast(ast.Subscript, node)
-                if isinstance(sub_node.slice, ast.Index):
-                    attr_or_sub = sub_node.slice.value  # type: ignore
-                    # ast.copy_location(attr_or_sub, sub_node.slice.value)
-                    # if isinstance(attr_or_sub, ast.Str):
-                    #     attr_or_sub = attr_or_sub.s
-                    # elif isinstance(attr_or_sub, ast.Num):
-                    #     attr_or_sub = attr_or_sub.n
-                    # else:
-                    #     logger.debug('unimpled index: %s', attr_or_sub)
-                    #     return node
-                elif isinstance(sub_node.slice, ast.Constant):
-                    # Python > 3.8 doesn't use ast.Index for constant slices
-                    attr_or_sub = sub_node.slice
-                else:
-                    logger.debug('unimpled slice: %s', sub_node.slice)
-                    return node
-                # elif isinstance(sub_node.slice, ast.Slice):
-                #     raise ValueError('unimpled slice: %s' % sub_node.slice)
-                # elif isinstance(sub_node.slice, ast.ExtSlice):
-                #     raise ValueError('unimpled slice: %s' % sub_node.slice)
+            if isinstance(node.slice, ast.Index):
+                attr_or_sub = node.slice.value  # type: ignore
+                # ast.copy_location(attr_or_sub, sub_node.slice.value)
+                # if isinstance(attr_or_sub, ast.Str):
+                #     attr_or_sub = attr_or_sub.s
+                # elif isinstance(attr_or_sub, ast.Num):
+                #     attr_or_sub = attr_or_sub.n
                 # else:
-                #     raise ValueError('unexpected slice: %s' % sub_node.slice)
+                #     logger.debug('unimpled index: %s', attr_or_sub)
+                #     return node
+            elif isinstance(node.slice, ast.Constant):
+                # Python > 3.8 doesn't use ast.Index for constant slices
+                attr_or_sub = node.slice
             else:
-                attr_node = cast(ast.Attribute, node)
-                attr_or_sub = fast.Str(attr_node.attr)
+                logger.debug('unimpled slice: %s', node.slice)
+                return node
+            # elif isinstance(sub_node.slice, ast.Slice):
+            #     raise ValueError('unimpled slice: %s' % sub_node.slice)
+            # elif isinstance(sub_node.slice, ast.ExtSlice):
+            #     raise ValueError('unimpled slice: %s' % sub_node.slice)
+            # else:
+            #     raise ValueError('unexpected slice: %s' % sub_node.slice)
+        return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
+    def visit_Attribute_or_Subscript(
+            self,
+            node: 'Union[ast.Attribute, ast.Subscript]',
+            attr_or_sub: 'ast.expr',
+            call_context: bool = False
+    ):
+        with fast.location_of(node.value):
             extra_args: 'List[ast.keyword]' = []
             if isinstance(node.value, ast.Name):
                 extra_args = fast.kwargs(name=fast.Str(node.value.id))
@@ -90,7 +91,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 node.value = fast.Call(
                     func=self._emitter_ast(),
                     args=[
-                        TraceEvent.subscript.to_ast() if is_subscript else TraceEvent.attribute.to_ast(),
+                        TraceEvent.subscript.to_ast() if isinstance(node, ast.Subscript) else TraceEvent.attribute.to_ast(),
                         self._get_copy_id_ast(node.value)
                     ],
                     keywords=fast.kwargs(
@@ -101,14 +102,19 @@ class AstEavesdropper(ast.NodeTransformer):
                     ) + extra_args
                 )
         # end fast.location_of(node.value)
-        if not self._inside_attrsub_load_chain and is_load:
-            with fast.location_of(node):
-                return fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(node)],
-                    keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(call_context)),
-                )
-        return node
+
+        if self._inside_attrsub_load_chain or not isinstance(node.ctx, ast.Load):
+            return node
+
+        # if we were not marked as inside a chain, then we shouldn't be in a call context
+        assert not call_context
+
+        with fast.location_of(node):
+            return fast.Call(
+                func=self._emitter_ast(),
+                args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(node)],
+                keywords=fast.kwargs(obj=node, call_context=fast.NameConstant(call_context)),
+            )
 
     def _get_replacement_args(self, args, should_record: bool, keywords: bool):
         replacement_args = []
@@ -142,7 +148,10 @@ class AstEavesdropper(ast.NodeTransformer):
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             is_attrsub = True
             with self.attrsub_load_context():
-                node.func = self.visit_Attribute_or_Subscript(node.func, call_context=True)
+                if isinstance(node.func, ast.Attribute):
+                    node.func = self.visit_Attribute(node.func, call_context=True)
+                else:
+                    node.func = self.visit_Subscript(node.func, call_context=True)
 
             # TODO: need a way to rewrite ast of attribute and subscript args,
             #  and to process these separately from outer rewrite

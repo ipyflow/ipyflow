@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    LexicalCallNestingStack = List[Scope]
+    LexicalCallNestingStack = List[Tuple[Scope, Optional[int]]]
 
     # avoid circular imports
     from nbsafety.safety import NotebookSafety
@@ -365,36 +365,37 @@ class TracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def end_tracer(self, obj: 'Any', call_context: bool):
-        first_obj_id_in_chain = self.first_obj_id_in_chain
-        self.first_obj_id_in_chain = None
-        if not self.tracing_enabled:
-            return obj
-        if self.prev_trace_stmt_in_cur_frame.finished:
+        try:
+            if not self.tracing_enabled:
+                return obj
+            if self.prev_trace_stmt_in_cur_frame.finished:
+                return obj
+            if self.first_obj_id_in_chain is None:
+                return obj
+            if call_context and len(self.deep_ref_candidates) > 0:
+                (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
+                if evt_counter == self.trace_event_counter:
+                    if obj is None:
+                        if mutation_event == MutationEvent.normal:
+                            try:
+                                top_level_sym = next(iter(self.safety.aliases[self.first_obj_id_in_chain]))
+                                if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
+                                    # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
+                                    #  with np.random.seed?
+                                    for recorded_arg, _ in recorded_args:
+                                        if len(recorded_arg.symbols) > 0:
+                                            # only make this an arg mutation event if it looks like there's an arg to mutate
+                                            mutation_event = MutationEvent.arg_mutate
+                                            break
+                            except:
+                                pass
+                        self.mutations.add((obj_id, tuple(recorded_args), mutation_event))
+                    else:
+                        self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
+        finally:
+            self.first_obj_id_in_chain = None
             self.active_scope = self.cur_frame_original_scope
             return obj
-        if call_context and len(self.deep_ref_candidates) > 0:
-            (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
-            if evt_counter == self.trace_event_counter:
-                if obj is None:
-                    if mutation_event == MutationEvent.normal:
-                        try:
-                            top_level_sym = next(iter(self.safety.aliases[first_obj_id_in_chain]))
-                            if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
-                                # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
-                                #  with np.random.seed?
-                                for recorded_arg, _ in recorded_args:
-                                    if len(recorded_arg.symbols) > 0:
-                                        # only make this an arg mutation event if it looks like there's an arg to mutate
-                                        mutation_event = MutationEvent.arg_mutate
-                                        break
-                        except:
-                            pass
-                    self.mutations.add((obj_id, tuple(recorded_args), mutation_event))
-                else:
-                    self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
-        # print('reset active scope from', self.active_scope, 'to', self.original_active_scope)
-        self.active_scope = self.cur_frame_original_scope
-        return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def arg_recorder(self, arg_obj: 'Any', arg_node: 'ast.AST'):
@@ -422,7 +423,7 @@ class TracingManager(object):
             return obj
         # if self.prev_trace_stmt.finished:
         #     return obj
-        self.nested_call_stack.append(self.active_scope)
+        self.nested_call_stack.append((self.active_scope, self.first_obj_id_in_chain))
         self.active_scope = self.cur_frame_original_scope
         return obj
 
@@ -432,7 +433,7 @@ class TracingManager(object):
             return obj
         # if self.prev_trace_stmt.finished:
         #     return obj
-        self.active_scope = self.nested_call_stack.pop()
+        self.active_scope, self.first_obj_id_in_chain = self.nested_call_stack.pop()
         if should_pop_should_record_args_stack:
             self.should_record_args = self.should_record_args_stack.pop()
         if inside_chain:

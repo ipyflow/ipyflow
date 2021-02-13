@@ -63,6 +63,11 @@ class DictLiteral(dict):
 
 
 def _make_weakrefable_literal(literal):
+    """
+    Python dict / list / tuple can't be used in weakrefs,
+    but we can force it for dict / list (but not tuple
+    unfortunately) by wrapping them.
+    """
     if type(literal) == list:
         return ListLiteral(literal)
     elif type(literal) == dict:
@@ -97,8 +102,14 @@ class TracingManager(object):
         with self._register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
+            ############################################################
+            # old state:
             self.loaded_data_symbols: Set[DataSymbol] = set()
             self.saved_store_data: List[SavedStoreData] = []
+            ############################################################
+            # new state:
+            # just something that maps orig_node_id to data symbol?
+            ############################################################
             self.deep_refs: Set[DeepRef] = set()
             self.mutations: Set[Mutation] = set()
             self.deep_ref_candidates: List[DeepRefCandidate] = []
@@ -322,6 +333,8 @@ class TracingManager(object):
                     attr_or_subscript, is_subscript=is_subscript
                 )
                 try:
+                    # TODO: ideally we shouldn't actually access the attr / subscript
+                    #  in case such accesses are not idempotent, as it will happen again
                     obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
                         obj, attr_or_subscript, is_subscript
                     )

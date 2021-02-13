@@ -200,7 +200,6 @@ class AstEavesdropper(ast.NodeTransformer):
             new_targets.append(self.visit(target))
         node.targets = cast('List[ast.expr]', new_targets)
         with fast.location_of(node.value):
-            # TODO: replace 42 with start literal tracer
             node.value = fast.Tuple([fast.Call(
                 func=self._emitter_ast(),
                 args=[TraceEvent.before_literal.to_ast(), self._get_copy_id_ast(orig_node_value)],

@@ -29,11 +29,11 @@ class AstEavesdropper(ast.NodeTransformer):
             orig_node_id = id(orig_node_id)
         return fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))
 
-    def _make_tuple_event_for(self, node: 'ast.AST', event: 'TraceEvent', **kwargs):
+    def _make_tuple_event_for(self, node: 'ast.AST', event: 'TraceEvent', orig_node_id=None, **kwargs):
         with fast.location_of(node):
             tuple_node = fast.Tuple([fast.Call(
                 func=self._emitter_ast(),
-                args=[event.to_ast(), self._get_copy_id_ast(node)],
+                args=[event.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
                 keywords=[] if len(kwargs) == 0 else fast.kwargs(**kwargs),
             ), node], ast.Load())
             slc: 'Union[ast.Constant, ast.Num, ast.Index]' = fast.Num(1)
@@ -105,6 +105,7 @@ class AstEavesdropper(ast.NodeTransformer):
             attr_or_sub: 'ast.expr',
             call_context: bool = False
     ):
+        orig_node_id = id(node)
         with fast.location_of(node.value):
             extra_args: 'List[ast.keyword]' = []
             if isinstance(node.value, ast.Name):
@@ -126,7 +127,14 @@ class AstEavesdropper(ast.NodeTransformer):
                 )
         # end fast.location_of(node.value)
 
-        return self._maybe_emit_after_chain_evt(node, call_context=call_context)
+        if not self._inside_attrsub_load_chain
+            if isinstance(node.ctx, ast.Load):
+                node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
+            else:
+                # TODO: handle Stores and AugStores
+                pass
+
+        return self._maybe_emit_after_chain_evt(node, call_context=call_context, orig_node_id=orig_node_id)
 
     def _get_replacement_args(self, args, keywords: bool):
         replacement_args = []
@@ -154,6 +162,7 @@ class AstEavesdropper(ast.NodeTransformer):
     def visit_Call(self, node: ast.Call):
         orig_node_id = id(node)
         orig_node_func_id = id(node.func)
+
         with self.attrsub_load_context():
             if isinstance(node.func, ast.Attribute):
                 node.func = self.visit_Attribute(node.func, call_context=True)
@@ -192,6 +201,9 @@ class AstEavesdropper(ast.NodeTransformer):
                 args=[TraceEvent.after_arg_list.to_ast(), self._get_copy_id_ast(node)],
                 keywords=fast.kwargs(obj=node),
             )
+
+        if not self._inside_attrsub_load_chain:
+            node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
 
         return self._maybe_emit_after_chain_evt(node, call_context=True, orig_node_id=orig_node_id)
 

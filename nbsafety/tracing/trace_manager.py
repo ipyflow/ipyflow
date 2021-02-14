@@ -240,6 +240,8 @@ class TracingManager(object):
                 is_subscript=event == TraceEvent.subscript,
                 obj_name=kwargs.get('name', None),
             )
+        elif event == TraceEvent.before_symbol:
+            pass
         elif event == TraceEvent.after_attrsub_chain:
             return self.end_tracer(kwargs['obj'], kwargs['call_context'])
         elif event == TraceEvent.argument:

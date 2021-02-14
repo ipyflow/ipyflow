@@ -127,7 +127,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 )
         # end fast.location_of(node.value)
 
-        if not self._inside_attrsub_load_chain
+        if not self._inside_attrsub_load_chain:
             if isinstance(node.ctx, ast.Load):
                 node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
             else:

@@ -29,6 +29,18 @@ class AstEavesdropper(ast.NodeTransformer):
             orig_node_id = id(orig_node_id)
         return fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))
 
+    def _make_tuple_event_for(self, node: 'ast.AST', event: 'TraceEvent', **kwargs):
+        with fast.location_of(node):
+            tuple_node = fast.Tuple([fast.Call(
+                func=self._emitter_ast(),
+                args=[event.to_ast(), self._get_copy_id_ast(node)],
+                keywords=[] if len(kwargs) == 0 else fast.kwargs(**kwargs),
+            ), node], ast.Load())
+            slc: 'Union[ast.Constant, ast.Num, ast.Index]' = fast.Num(1)
+            if sys.version_info < (3, 9):
+                slc = fast.Index(slc)
+            return fast.Subscript(tuple_node, slc, ast.Load())
+
     def visit(self, node: 'ast.AST'):
         ret = super().visit(node)
         if isinstance(node, ast.stmt):
@@ -116,7 +128,7 @@ class AstEavesdropper(ast.NodeTransformer):
 
         return self._maybe_emit_after_chain_evt(node, call_context=call_context)
 
-    def _get_replacement_args(self, args, should_record: bool, keywords: bool):
+    def _get_replacement_args(self, args, keywords: bool):
         replacement_args = []
         for arg in args:
             if keywords:
@@ -126,15 +138,12 @@ class AstEavesdropper(ast.NodeTransformer):
             with fast.location_of(maybe_kwarg):
                 with self.attrsub_load_context(False):
                     visited_maybe_kwarg = self.visit(maybe_kwarg)
-                if should_record:
-                    with self.attrsub_load_context(False):
-                        new_arg_value = cast(ast.expr, fast.Call(
-                            func=self._emitter_ast(),
-                            args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
-                            keywords=fast.kwargs(obj=visited_maybe_kwarg),
-                        ))
-                else:
-                    new_arg_value = visited_maybe_kwarg
+                with self.attrsub_load_context(False):
+                    new_arg_value = cast(ast.expr, fast.Call(
+                        func=self._emitter_ast(),
+                        args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
+                        keywords=fast.kwargs(obj=visited_maybe_kwarg),
+                    ))
             if keywords:
                 setattr(arg, 'value', new_arg_value)
             else:
@@ -144,21 +153,20 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call):
         orig_node_id = id(node)
-        is_attrsub = False
-        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            # TODO: node.func could also be an ast.Call, and ideally we should handle this in the chain too
-            is_attrsub = True
-            with self.attrsub_load_context():
-                if isinstance(node.func, ast.Attribute):
-                    node.func = self.visit_Attribute(node.func, call_context=True)
-                else:
-                    node.func = self.visit_Subscript(node.func, call_context=True)
+        orig_node_func_id = id(node.func)
+        with self.attrsub_load_context():
+            if isinstance(node.func, ast.Attribute):
+                node.func = self.visit_Attribute(node.func, call_context=True)
+            elif isinstance(node.func, ast.Subscript):
+                node.func = self.visit_Subscript(node.func, call_context=True)
+            else:
+                node.func = self.visit(node.func)
 
-            # TODO: need a way to rewrite ast of attribute and subscript args,
-            #  and to process these separately from outer rewrite
+        # TODO: need a way to rewrite ast of subscript args,
+        #  and to process these separately from outer rewrite
 
-        node.args = self._get_replacement_args(node.args, is_attrsub, False)
-        node.keywords = self._get_replacement_args(node.keywords, is_attrsub, True)
+        node.args = self._get_replacement_args(node.args, False)
+        node.keywords = self._get_replacement_args(node.keywords, True)
 
         # in order to ensure that the args are processed with appropriate active scope,
         # we need to make sure not to use the active namespace scope on args (in the case
@@ -173,7 +181,7 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node.func):
             node.func = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.before_arg_list.to_ast(), self._get_copy_id_ast(node.func)],
+                args=[TraceEvent.before_arg_list.to_ast(), self._get_copy_id_ast(orig_node_func_id)],
                 keywords=fast.kwargs(obj=node.func),
             )
 
@@ -182,11 +190,7 @@ class AstEavesdropper(ast.NodeTransformer):
             node = fast.Call(
                 func=self._emitter_ast(),
                 args=[TraceEvent.after_arg_list.to_ast(), self._get_copy_id_ast(node)],
-                keywords=fast.kwargs(
-                    obj=node,
-                    is_attrsub=fast.NameConstant(is_attrsub),
-                    inside_chain=fast.NameConstant(self._inside_attrsub_load_chain),
-                ),
+                keywords=fast.kwargs(obj=node),
             )
 
         return self._maybe_emit_after_chain_evt(node, call_context=True, orig_node_id=orig_node_id)
@@ -195,24 +199,15 @@ class AstEavesdropper(ast.NodeTransformer):
         if not isinstance(node.value, (ast.List, ast.Tuple)):
             return self.generic_visit(node)
 
-        orig_node_value = id(node.value)
         new_targets = []
         for target in node.targets:
             new_targets.append(self.visit(target))
         node.targets = cast('List[ast.expr]', new_targets)
         with fast.location_of(node.value):
-            node.value = fast.Tuple([fast.Call(
-                func=self._emitter_ast(),
-                args=[TraceEvent.before_literal.to_ast(), self._get_copy_id_ast(orig_node_value)],
-                keywords=[],
-            ), node.value], ast.Load())
-            slc: 'Union[ast.Constant, ast.Num, ast.Index]' = fast.Num(1)
-            if sys.version_info < (3, 9):
-                slc = fast.Index(slc)
-            node.value = fast.Subscript(node.value, slc, ast.Load())
+            subscripted_node_value = self._make_tuple_event_for(node.value, TraceEvent.before_literal)
             node.value = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(orig_node_value)],
-                keywords=fast.kwargs(obj=node.value),
+                args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(node.value)],
+                keywords=fast.kwargs(obj=subscripted_node_value),
             )
         return node

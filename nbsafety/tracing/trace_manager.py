@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    LexicalCallNestingStack = List[Tuple[Scope, Optional[int]]]
+    LexicalCallNestingStack = List[Optional[int]]
 
     # avoid circular imports
     from nbsafety.safety import NotebookSafety
@@ -114,8 +114,6 @@ class TracingManager(object):
             self.mutations: Set[Mutation] = set()
             self.deep_ref_candidates: List[DeepRefCandidate] = []
             self.nested_call_stack: LexicalCallNestingStack = []
-            self.should_record_args = False
-            self.should_record_args_stack: List[bool] = []
             self.literal_namespace: Optional[NamespaceScope] = None
             self.first_obj_id_in_chain: Optional[int] = None
             with self._needing_manual_initialization():
@@ -249,7 +247,7 @@ class TracingManager(object):
         elif event == TraceEvent.before_arg_list:
             return self.before_argument_list(kwargs['obj'])
         elif event == TraceEvent.after_arg_list:
-            return self.after_argument_list(kwargs['obj'], kwargs['is_attrsub'], kwargs['inside_chain'])
+            return self.after_argument_list(kwargs['obj'])
         elif event == TraceEvent.before_literal:
             pass
         elif event == TraceEvent.after_literal:
@@ -296,92 +294,81 @@ class TracingManager(object):
     def attrsub_tracer(
             self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: 'Optional[str]'
     ):
-        if not self.tracing_enabled:
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return obj
-        should_record_args = False
-        try:
-            if obj is None:
-                return None
-            obj_id = id(obj)
-            if self.first_obj_id_in_chain is None:
-                self.first_obj_id_in_chain = obj_id
-            if isinstance(attr_or_subscript, tuple):
-                if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
-                    return obj
-            elif not isinstance(attr_or_subscript, (str, int)):
+        if obj is None:
+            return None
+        obj_id = id(obj)
+        if self.first_obj_id_in_chain is None:
+            self.first_obj_id_in_chain = obj_id
+        if isinstance(attr_or_subscript, tuple):
+            if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
                 return obj
+        elif not isinstance(attr_or_subscript, (str, int)):
+            return obj
 
-            scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
-            self.active_scope = scope
-            # if scope is None:  # or self.prev_trace_stmt.finished:
-            #     if ctx in ('Store', 'AugStore'):
-            #         self.active_scope = self.original_active_scope
-            #     return obj
-            if scope is None or self.prev_trace_stmt_in_cur_frame.finished:
-                return obj
-            elif ctx in ('Store', 'AugStore') and scope is not None:
-                self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
-                # reset active scope here
-                self.active_scope = self.cur_frame_original_scope
-            if ctx == 'Load':
-                # save off event counter and obj_id
-                # if event counter didn't change when we process the Call retval, and if the
-                # retval is None, this is a likely signal that we have a mutation
-                # TODO: this strategy won't work if the arguments themselves lead to traced function calls
-                # print('looking for', attr_or_subscript)
-                data_sym = scope.lookup_data_symbol_by_name_this_indentation(
-                    attr_or_subscript, is_subscript=is_subscript
-                )
-                try:
-                    # TODO: ideally we shouldn't actually access the attr / subscript
-                    #  in case such accesses are not idempotent, as it will happen again
-                    obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
-                        obj, attr_or_subscript, is_subscript
-                    )
-                    if data_sym is None:
-                        symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-                        data_sym = DataSymbol(
-                            attr_or_subscript,
-                            symbol_type,
-                            obj_attr_or_sub,
-                            scope,
-                            self.safety,
-                            stmt_node=None,
-                            parents=None,
-                            refresh_cached_obj=True,
-                            implicit=True,
-                        )
-                        # this is to prevent refs to the scope object from being considered as stale if we just load it
-                        data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
-                        scope.put(attr_or_subscript, data_sym)
-                        # print('put', data_sym, 'in', scope.full_namespace_path)
-                    elif data_sym.obj_id != id(obj_attr_or_sub):
-                        data_sym.update_obj_ref(obj_attr_or_sub)
-                except:
-                    pass
-                if call_context:
-                    should_record_args = True
-                    mutation_event = MutationEvent.normal
-                    if isinstance(obj, list) and attr_or_subscript == 'append':
-                        mutation_event = MutationEvent.list_append
-                    self.deep_ref_candidates.append(
-                        ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
-                    )
-                elif data_sym is not None:
-                    # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
-                    self.loaded_data_symbols.add(data_sym)
+        scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
+        self.active_scope = scope
+        if ctx in ('Store', 'AugStore'):
+            # TODO: emit an 'end of chain' event here instead
+            self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
+            # reset active scope here
+            self.first_obj_id_in_chain = None
+            self.active_scope = self.cur_frame_original_scope
             return obj
-        finally:
-            if call_context:
-                self.should_record_args_stack.append(self.should_record_args)
-                self.should_record_args = should_record_args
+
+        assert ctx == 'Load'
+        data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+            attr_or_subscript, is_subscript=is_subscript
+        )
+        try:
+            # TODO: ideally we shouldn't actually access the attr / subscript
+            #  in case such accesses are not idempotent, as it will happen again
+            obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
+                obj, attr_or_subscript, is_subscript
+            )
+            if data_sym is None:
+                symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
+                data_sym = DataSymbol(
+                    attr_or_subscript,
+                    symbol_type,
+                    obj_attr_or_sub,
+                    scope,
+                    self.safety,
+                    stmt_node=None,
+                    parents=None,
+                    refresh_cached_obj=True,
+                    implicit=True,
+                )
+                # this is to prevent refs to the scope object from being considered as stale if we just load it
+                data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
+                scope.put(attr_or_subscript, data_sym)
+                # print('put', data_sym, 'in', scope.full_namespace_path)
+            elif data_sym.obj_id != id(obj_attr_or_sub):
+                data_sym.update_obj_ref(obj_attr_or_sub)
+        except:
+            pass
+        if call_context:
+            mutation_event = MutationEvent.normal
+            if isinstance(obj, list) and attr_or_subscript == 'append':
+                mutation_event = MutationEvent.list_append
+            # save off event counter and obj_id
+            # if event counter didn't change when we process the Call retval, and if the
+            # retval is None, this is a likely signal that we have a mutation
+            # TODO: this strategy won't work if the arguments themselves lead to traced function calls
+            #  to cope, put DeepRefCandidates (or equivalent) in the lexical stack?
+            self.deep_ref_candidates.append(
+                ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
+            )
+        elif data_sym is not None:
+            # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
+            self.loaded_data_symbols.add(data_sym)
+        return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def end_tracer(self, obj: 'Any', call_context: bool):
         try:
-            if not self.tracing_enabled:
-                return obj
-            if self.prev_trace_stmt_in_cur_frame.finished:
+            if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
                 return obj
             if self.first_obj_id_in_chain is None:
                 return obj
@@ -412,9 +399,7 @@ class TracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def arg_recorder(self, arg_obj: 'Any', arg_node: 'ast.AST'):
-        if not self.tracing_enabled:
-            return arg_obj
-        if self.prev_trace_stmt_in_cur_frame.finished or not self.should_record_args:
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return arg_obj
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
             return arg_obj
@@ -432,26 +417,19 @@ class TracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def before_argument_list(self, obj):
-        if not self.tracing_enabled:
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return obj
-        # if self.prev_trace_stmt.finished:
-        #     return obj
-        self.nested_call_stack.append((self.active_scope, self.first_obj_id_in_chain))
+        self.nested_call_stack.append(self.first_obj_id_in_chain)
         self.active_scope = self.cur_frame_original_scope
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def after_argument_list(self, obj: 'Any', should_pop_should_record_args_stack: bool, inside_chain: bool):
-        if not self.tracing_enabled:
+    def after_argument_list(self, obj: 'Any'):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return obj
-        # if self.prev_trace_stmt.finished:
-        #     return obj
-        self.active_scope, self.first_obj_id_in_chain = self.nested_call_stack.pop()
-        if should_pop_should_record_args_stack:
-            self.should_record_args = self.should_record_args_stack.pop()
-        if inside_chain:
-            # TODO: I don't think any test exercises this atm
-            self.active_scope = self._get_namespace_for_obj(obj)
+        # no need to reset active scope here;
+        # that will happen in the 'after chain' handler
+        self.first_obj_id_in_chain = self.nested_call_stack.pop()
         return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
@@ -514,9 +492,7 @@ class TracingManager(object):
         self.mutations.clear()
         self.deep_ref_candidates.clear()
         self.nested_call_stack.clear()
-        self.should_record_args_stack.clear()
         self.active_scope = self.cur_frame_original_scope
-        self.should_record_args = False
         self.literal_namespace = None
         self.first_obj_id_in_chain = None
 

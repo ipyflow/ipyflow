@@ -27,7 +27,7 @@ class AttrSubSymbolChain(CommonEqualityMixin):
     def __init__(self, symbols: 'Sequence[Union[SupportedIndexType, CallPoint]]'):
         # FIXME: each symbol should distinguish between attribute and subscript
         self.symbols: 'Tuple[Union[SupportedIndexType, CallPoint], ...]' = tuple(symbols)
-        self.call_points = tuple(filter(lambda x: isinstance(x, CallPoint), self.symbols))
+        self.call_points = tuple(sym for sym in self.symbols if isinstance(sym, CallPoint))
 
     def __hash__(self):
         return hash(self.symbols)
@@ -61,6 +61,7 @@ class GetAttrSubSymbols(ast.NodeVisitor):
         elif isinstance(node.func, ast.Name):
             self.symbol_chain.append(CallPoint(node.func.id))
         elif isinstance(node.func, ast.Call):
+            # TODO: handle this case too, e.g. f.g()().h
             pass
         else:
             raise TypeError('invalid type for node.func %s' % node.func)

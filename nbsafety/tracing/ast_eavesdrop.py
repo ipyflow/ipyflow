@@ -146,6 +146,7 @@ class AstEavesdropper(ast.NodeTransformer):
         orig_node_id = id(node)
         is_attrsub = False
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
+            # TODO: node.func could also be an ast.Call, and ideally we should handle this in the chain too
             is_attrsub = True
             with self.attrsub_load_context():
                 if isinstance(node.func, ast.Attribute):

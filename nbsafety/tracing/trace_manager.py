@@ -227,13 +227,15 @@ class TracingManager(object):
 
     def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
         event = TraceEvent(evt)
+        ret = kwargs.get('ret', None)
+        new_ret = None
         if event == TraceEvent.before_stmt:
-            return self.before_stmt_tracer(orig_node_id, sys._getframe().f_back)
+            new_ret = self.before_stmt_tracer(orig_node_id, sys._getframe().f_back)
         elif event == TraceEvent.after_stmt:
-            return self.after_stmt_tracer(orig_node_id, sys._getframe().f_back, ret_expr=kwargs.get('ret_expr', None))
+            new_ret = self.after_stmt_tracer(orig_node_id, sys._getframe().f_back, ret_expr=kwargs.get('ret_expr', None))
         elif event in (TraceEvent.attribute, TraceEvent.subscript):
-            return self.attrsub_tracer(
-                kwargs['obj'],
+            new_ret = self.attrsub_tracer(
+                ret,
                 kwargs['attr_or_sub'],
                 kwargs['ctx'],
                 kwargs['call_context'],
@@ -243,19 +245,22 @@ class TracingManager(object):
         elif event == TraceEvent.before_symbol:
             pass
         elif event == TraceEvent.after_attrsub_chain:
-            return self.end_tracer(kwargs['obj'], kwargs['call_context'])
+            new_ret = self.end_tracer(ret, kwargs['call_context'])
         elif event == TraceEvent.argument:
-            return self.arg_recorder(kwargs['obj'], self.safety.ast_node_by_id[orig_node_id])
+            new_ret = self.arg_recorder(ret, self.safety.ast_node_by_id[orig_node_id])
         elif event == TraceEvent.before_arg_list:
-            return self.before_argument_list(kwargs['obj'])
+            new_ret = self.before_argument_list(ret)
         elif event == TraceEvent.after_arg_list:
-            return self.after_argument_list(kwargs['obj'])
+            new_ret = self.after_argument_list(ret)
         elif event == TraceEvent.before_literal:
             pass
         elif event == TraceEvent.after_literal:
-            return self.literal_tracer(kwargs['obj'])
+            new_ret = self.literal_tracer(ret)
         else:
             raise ValueError('Unsupported event: %s' % event)
+        if new_ret is not None:
+            ret = new_ret
+        return ret
 
     def _get_namespace_for_obj(self, obj: 'Any', obj_name: 'Optional[str]' = None) -> 'NamespaceScope':
         obj_id = id(obj)
@@ -297,17 +302,17 @@ class TracingManager(object):
             self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: 'Optional[str]'
     ):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return obj
+            return
         if obj is None:
-            return None
+            return
         obj_id = id(obj)
         if self.first_obj_id_in_chain is None:
             self.first_obj_id_in_chain = obj_id
         if isinstance(attr_or_subscript, tuple):
             if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
-                return obj
+                return
         elif not isinstance(attr_or_subscript, (str, int)):
-            return obj
+            return
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         self.active_scope = scope
@@ -317,7 +322,7 @@ class TracingManager(object):
             # reset active scope here
             self.first_obj_id_in_chain = None
             self.active_scope = self.cur_frame_original_scope
-            return obj
+            return
 
         assert ctx == 'Load'
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
@@ -365,15 +370,14 @@ class TracingManager(object):
         elif data_sym is not None:
             # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
             self.loaded_data_symbols.add(data_sym)
-        return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def end_tracer(self, obj: 'Any', call_context: bool):
         try:
             if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-                return obj
+                return
             if self.first_obj_id_in_chain is None:
-                return obj
+                return
             if call_context and len(self.deep_ref_candidates) > 0:
                 (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
                 if evt_counter == self.trace_event_counter:
@@ -397,17 +401,16 @@ class TracingManager(object):
         finally:
             self.first_obj_id_in_chain = None
             self.active_scope = self.cur_frame_original_scope
-            return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def arg_recorder(self, arg_obj: 'Any', arg_node: 'ast.AST'):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return arg_obj
+            return
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
-            return arg_obj
+            return
         if len(self.deep_ref_candidates) == 0:
             logger.error('Error: no associated symbol for recorded args; skipping recording')
-            return arg_obj
+            return
 
         arg_obj_id = id(arg_obj)
         # TODO: we should be able to get the actual data symbol during live tracing,
@@ -415,24 +418,20 @@ class TracingManager(object):
         recorded_arg = GetAttrSubSymbols()(arg_node)
         self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
-        return arg_obj
-
     @on_exception_default_to(return_arg_at_index(1, logger))
     def before_argument_list(self, obj):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return obj
+            return
         self.nested_call_stack.append(self.first_obj_id_in_chain)
         self.active_scope = self.cur_frame_original_scope
-        return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def after_argument_list(self, obj: 'Any'):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return obj
+            return
         # no need to reset active scope here;
         # that will happen in the 'after chain' handler
         self.first_obj_id_in_chain = self.nested_call_stack.pop()
-        return obj
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def literal_tracer(self, literal):

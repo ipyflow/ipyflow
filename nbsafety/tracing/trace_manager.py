@@ -121,7 +121,6 @@ class TracingManager(object):
                 self.active_scope = safety.global_scope
                 self.inside_lambda = False
 
-    @property
     def _stack_item_names(self):
         return itertools.chain(self._stack_item_initializers.keys(), self._stack_items_with_manual_initialization)
 
@@ -151,7 +150,7 @@ class TracingManager(object):
 
     @contextmanager
     def _push_stack(self):
-        self._stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_names))
+        self._stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_names()))
         for stack_item, initializer in self._stack_item_initializers.items():
             self.__dict__[stack_item] = initializer()
         for stack_item in self._stack_items_with_manual_initialization:
@@ -179,7 +178,7 @@ class TracingManager(object):
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _pop_stack(self):
-        for stack_item_name, stack_item in zip(self._stack_item_names, self._stack.pop()):
+        for stack_item_name, stack_item in zip(self._stack_item_names(), self._stack.pop()):
             self.__dict__[stack_item_name] = stack_item
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):

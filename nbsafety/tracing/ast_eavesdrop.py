@@ -9,7 +9,7 @@ from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Set, Union
+    from typing import Dict, List, Optional, Set, Union
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ logger.setLevel(logging.WARNING)
 class AstEavesdropper(ast.NodeTransformer):
     def __init__(self, orig_to_copy_mapping: 'Dict[int, ast.AST]'):
         self._orig_to_copy_mapping = orig_to_copy_mapping
-        self._inside_attrsub_load_chain = False
+        self._top_level_node_for_symbol: 'Optional[ast.AST]' = None
 
     def _emitter_ast(self):
         return fast.Name(EMIT_EVENT, ast.Load())
@@ -49,11 +49,19 @@ class AstEavesdropper(ast.NodeTransformer):
         return ret
 
     @contextmanager
-    def attrsub_load_context(self, override=True):
-        old = self._inside_attrsub_load_chain
-        self._inside_attrsub_load_chain = override
+    def attrsub_load_context(self, top_level_node: 'Optional[ast.AST]'):
+        old = self._top_level_node_for_symbol
+        if old is None or top_level_node is None:
+            # entering context when we are already inside chain is a no-op,
+            # but we can specify a context of not being in chain if we are
+            # inside one (in order to support arguments)
+            self._top_level_node_for_symbol = top_level_node
         yield
-        self._inside_attrsub_load_chain = old
+        self._top_level_node_for_symbol = old
+
+    @property
+    def _inside_attrsub_load_chain(self):
+        return self._top_level_node_for_symbol is not None
 
     def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
         with fast.location_of(node.value):
@@ -111,7 +119,7 @@ class AstEavesdropper(ast.NodeTransformer):
             if isinstance(node.value, ast.Name):
                 extra_args = fast.kwargs(name=fast.Str(node.value.id))
 
-            with self.attrsub_load_context():
+            with self.attrsub_load_context(node):
                 node.value = fast.Call(
                     func=self._emitter_ast(),
                     args=[
@@ -123,16 +131,15 @@ class AstEavesdropper(ast.NodeTransformer):
                         attr_or_sub=attr_or_sub,
                         ctx=fast.Str(node.ctx.__class__.__name__),
                         call_context=fast.NameConstant(call_context),
+                        top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol)
                     ) + extra_args
                 )
         # end fast.location_of(node.value)
 
-        if not self._inside_attrsub_load_chain:
-            if isinstance(node.ctx, ast.Load):
-                node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
-            else:
-                # TODO: handle Stores and AugStores
-                pass
+        if not self._inside_attrsub_load_chain and isinstance(node.ctx, ast.Load):
+            node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
+            # for stores, there will necessarily be an 'Attribute' or 'Subscript' event
+            # so we handle these 'end symbol' events right after
 
         return self._maybe_emit_after_chain_evt(node, call_context=call_context, orig_node_id=orig_node_id)
 
@@ -144,9 +151,9 @@ class AstEavesdropper(ast.NodeTransformer):
             else:
                 maybe_kwarg = arg
             with fast.location_of(maybe_kwarg):
-                with self.attrsub_load_context(False):
+                with self.attrsub_load_context(None):
                     visited_maybe_kwarg = self.visit(maybe_kwarg)
-                with self.attrsub_load_context(False):
+                with self.attrsub_load_context(None):
                     new_arg_value = cast(ast.expr, fast.Call(
                         func=self._emitter_ast(),
                         args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
@@ -163,7 +170,7 @@ class AstEavesdropper(ast.NodeTransformer):
         orig_node_id = id(node)
         orig_node_func_id = id(node.func)
 
-        with self.attrsub_load_context():
+        with self.attrsub_load_context(node):
             if isinstance(node.func, ast.Attribute):
                 node.func = self.visit_Attribute(node.func, call_context=True)
             elif isinstance(node.func, ast.Subscript):

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    LexicalCallNestingStack = List[Optional[int]]
+    LexicalCallNestingStack = List[Tuple[Optional[int], Optional[DataSymbol]]]
 
     # avoid circular imports
     from nbsafety.safety import NotebookSafety
@@ -101,21 +101,22 @@ class TracingManager(object):
         self._registering_stack_state_context = False
         with self._register_stack_state():
             # everything here should be copyable
-            self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
+            self.prev_trace_stmt_in_cur_frame: 'Optional[TraceStatement]' = None
             ############################################################
             # old state:
-            self.loaded_data_symbols: Set[DataSymbol] = set()
-            self.saved_store_data: List[SavedStoreData] = []
+            self.loaded_data_symbols: 'Set[DataSymbol]' = set()
+            self.saved_store_data: 'List[SavedStoreData]' = []
             ############################################################
             # new state:
             # just something that maps orig_node_id to data symbol?
             ############################################################
-            self.deep_refs: Set[DeepRef] = set()
-            self.mutations: Set[Mutation] = set()
-            self.deep_ref_candidates: List[DeepRefCandidate] = []
-            self.nested_call_stack: LexicalCallNestingStack = []
-            self.literal_namespace: Optional[NamespaceScope] = None
-            self.first_obj_id_in_chain: Optional[int] = None
+            self.saved_load_symbol: 'Optional[DataSymbol]' = None
+            self.deep_refs: 'Set[DeepRef]' = set()
+            self.mutations: 'Set[Mutation]' = set()
+            self.deep_ref_candidates: 'List[DeepRefCandidate]' = []
+            self.nested_call_stack: 'LexicalCallNestingStack' = []
+            self.literal_namespace: 'Optional[NamespaceScope]' = None
+            self.first_obj_id_in_chain: 'Optional[int]' = None
             with self._needing_manual_initialization():
                 self.cur_frame_original_scope = safety.global_scope
                 self.active_scope = safety.global_scope
@@ -227,11 +228,13 @@ class TracingManager(object):
     def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
         event = TraceEvent(evt)
         ret = kwargs.get('ret', None)
+        frame = kwargs.get('frame', sys._getframe().f_back)
+        kwargs['frame'] = frame
         new_ret = None
         if event == TraceEvent.before_stmt:
-            new_ret = self.before_stmt_tracer(orig_node_id, sys._getframe().f_back)
+            new_ret = self.before_stmt_tracer(orig_node_id, frame)  # type: ignore
         elif event == TraceEvent.after_stmt:
-            new_ret = self.after_stmt_tracer(orig_node_id, sys._getframe().f_back, ret_expr=kwargs.get('ret_expr', None))
+            new_ret = self.after_stmt_tracer(orig_node_id, frame, ret_expr=kwargs.get('ret_expr', None))
         elif event in (TraceEvent.attribute, TraceEvent.subscript):
             new_ret = self.attrsub_tracer(
                 ret,
@@ -241,6 +244,8 @@ class TracingManager(object):
                 is_subscript=event == TraceEvent.subscript,
                 obj_name=kwargs.get('name', None),
             )
+            if kwargs['ctx'] != 'Load':
+                self._emit_event(TraceEvent.after_attrsub_chain.value, kwargs['top_level_node_id'], **kwargs)
         elif event == TraceEvent.before_symbol:
             pass
         elif event == TraceEvent.after_attrsub_chain:
@@ -275,10 +280,6 @@ class TracingManager(object):
                 ns.scope_name = obj_name
         else:
             # print('no scope for class', obj.__class__)
-            # if self.prev_trace_stmt.finished:
-            #     # avoid creating new scopes if we already did this computation
-            #     self.active_scope = None
-            #     return obj
             try:
                 scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
             except (TypeError, StopIteration):
@@ -315,15 +316,11 @@ class TracingManager(object):
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         self.active_scope = scope
-        if ctx in ('Store', 'AugStore'):
-            # TODO: emit an 'end of chain' event here instead
+        if ctx != 'Load':
+            assert ctx in ('Store', 'AugStore')
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
-            # reset active scope here
-            self.first_obj_id_in_chain = None
-            self.active_scope = self.cur_frame_original_scope
             return
 
-        assert ctx == 'Load'
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
             attr_or_subscript, is_subscript=is_subscript
         )
@@ -367,8 +364,7 @@ class TracingManager(object):
                 ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
             )
         elif data_sym is not None:
-            # TODO: if we have a.b.c, will this consider a.b loaded as well as a.b.c? This is bad if so.
-            self.loaded_data_symbols.add(data_sym)
+            self.saved_load_symbol = data_sym
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def end_tracer(self, obj: 'Any', call_context: bool):
@@ -377,6 +373,8 @@ class TracingManager(object):
                 return
             if self.first_obj_id_in_chain is None:
                 return
+            if self.saved_load_symbol is not None:
+                self.loaded_data_symbols.add(self.saved_load_symbol)
             if call_context and len(self.deep_ref_candidates) > 0:
                 (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
                 if evt_counter == self.trace_event_counter:
@@ -398,6 +396,7 @@ class TracingManager(object):
                     else:
                         self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
         finally:
+            self.saved_load_symbol = None
             self.first_obj_id_in_chain = None
             self.active_scope = self.cur_frame_original_scope
 
@@ -421,8 +420,10 @@ class TracingManager(object):
     def before_argument_list(self, obj):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
-        self.nested_call_stack.append(self.first_obj_id_in_chain)
+        self.nested_call_stack.append((self.first_obj_id_in_chain, self.saved_load_symbol))
         self.active_scope = self.cur_frame_original_scope
+        self.first_obj_id_in_chain = None
+        self.saved_load_symbol = None
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def after_argument_list(self, obj: 'Any'):
@@ -430,7 +431,7 @@ class TracingManager(object):
             return
         # no need to reset active scope here;
         # that will happen in the 'after chain' handler
-        self.first_obj_id_in_chain = self.nested_call_stack.pop()
+        self.first_obj_id_in_chain, self.saved_load_symbol = self.nested_call_stack.pop()
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def literal_tracer(self, literal):
@@ -459,7 +460,7 @@ class TracingManager(object):
             self._sys_tracer(frame, TraceEvent.after_stmt, stmt)
         return ret_expr
 
-    def before_stmt_tracer(self, stmt_id: int, frame: 'FrameType'):
+    def before_stmt_tracer(self, stmt_id: int, frame: 'FrameType') -> None:
         if stmt_id in self.seen_stmts:
             return
         # logger.warning('reenable tracing: %s', site_id)

@@ -96,26 +96,9 @@ class AstEavesdropper(ast.NodeTransformer):
             #     raise ValueError('unexpected slice: %s' % sub_node.slice)
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
-    def _maybe_emit_after_chain_evt(self, node, call_context, orig_node_id=None):
-        if self._inside_attrsub_load_chain or (not call_context and not isinstance(node.ctx, ast.Load)):
-            # for stores, there will necessarily be an 'Attribute' or 'Subscript' event
-            # so we handle these 'end symbol' events right after
-            return node
-
-        ctx = getattr(node, 'ctx', ast.Load())
-
-        with fast.location_of(node):
-            return fast.Call(
-                func=self._emitter_ast(),
-                args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
-                keywords=fast.kwargs(
-                    ret=node,
-                    call_context=fast.NameConstant(call_context),
-                    ctx=fast.Str(ctx.__class__.__name__)
-                ),
-            )
-
-    def _maybe_wrap_symbol_in_before_after_tracing(self, node, orig_node_id=None, begin_kwargs=None, end_kwargs=None):
+    def _maybe_wrap_symbol_in_before_after_tracing(
+            self, node, call_context=False, orig_node_id=None, begin_kwargs=None, end_kwargs=None
+    ):
         if self._inside_attrsub_load_chain:
             return node
         orig_node = node
@@ -135,14 +118,15 @@ class AstEavesdropper(ast.NodeTransformer):
                 end_ret = orig_node.value
             end_kwargs['ret'] = end_ret
             end_kwargs['ctx'] = fast.Str(ctx.__class__.__name__)
+            end_kwargs['call_context'] = fast.NameConstant(call_context)
             node = fast.Call(
                 func=self._emitter_ast(),
                 args=[
-                    TraceEvent.after_attrsub_chain.to_ast(),
+                    TraceEvent.after_complex_symbol.to_ast(),
                     fast.Call(
                         # this will return the node id
                         func=self._emitter_ast(),
-                        args=[TraceEvent.before_symbol.to_ast(), self._get_copy_id_ast(orig_node_id)],
+                        args=[TraceEvent.before_complex_symbol.to_ast(), self._get_copy_id_ast(orig_node_id)],
                         keywords=fast.kwargs(**begin_kwargs),
                     )
                 ],
@@ -170,6 +154,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     )
                     return orig_node
                 node.ctx = ast.Store()
+        # end location_of(node)
         return node
 
     def visit_Attribute_or_Subscript(
@@ -201,10 +186,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 )
         # end fast.location_of(node.value)
 
-        if not self._inside_attrsub_load_chain and isinstance(node.ctx, ast.Load):
-            node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
-
-        return self._maybe_emit_after_chain_evt(node, call_context=call_context, orig_node_id=orig_node_id)
+        return self._maybe_wrap_symbol_in_before_after_tracing(node, orig_node_id=orig_node_id)
 
     def _get_replacement_args(self, args, keywords: bool):
         replacement_args = []
@@ -272,10 +254,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 keywords=fast.kwargs(ret=node),
             )
 
-        if not self._inside_attrsub_load_chain:
-            node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
-
-        return self._maybe_emit_after_chain_evt(node, call_context=True, orig_node_id=orig_node_id)
+        return self._maybe_wrap_symbol_in_before_after_tracing(node, call_context=True, orig_node_id=orig_node_id)
 
     def visit_Assign(self, node: ast.Assign):
         if not isinstance(node.value, (ast.List, ast.Tuple)):

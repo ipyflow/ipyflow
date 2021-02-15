@@ -14,8 +14,8 @@ class TraceEvent(Enum):
     attribute = 'attribute'
     subscript = 'subscript'
 
-    before_symbol = 'before_symbol'
-    after_attrsub_chain = 'after_attrsub_chain'
+    before_complex_symbol = 'before_complex_symbol'
+    after_complex_symbol = 'after_complex_symbol'
 
     before_arg_list = 'enter_arg_list'
     after_arg_list = 'exit_arg_list'

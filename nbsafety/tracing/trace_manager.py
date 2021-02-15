@@ -81,20 +81,6 @@ def _finish_tracing_reset():
     pass
 
 
-class _NBSafetySettable:
-    """
-    For helping to set ast.Name while still supporting symbol tracing
-    """
-    def __init__(self, frame: 'FrameType'):
-        object.__setattr__(self, '_frame', frame)
-
-    def __getattr__(self, key: str) -> 'Any':
-        return self.__getattribute__('_frame').f_locals[key]
-
-    def __setattr__(self, key: str, value: 'Any') -> None:
-        self.__getattribute__('_frame').f_locals[key] = value
-
-
 class TracingManager(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
@@ -246,9 +232,9 @@ class TracingManager(object):
         kwargs['frame'] = frame
         new_ret = None
         if event == TraceEvent.before_stmt:
-            new_ret = self.before_stmt_tracer(orig_node_id, frame)  # type: ignore
+            new_ret = self.before_stmt(orig_node_id, frame)  # type: ignore
         elif event == TraceEvent.after_stmt:
-            new_ret = self.after_stmt_tracer(orig_node_id, frame, ret_expr=kwargs.get('ret_expr', None))
+            new_ret = self.after_stmt(orig_node_id, frame, ret_expr=kwargs.get('ret_expr', None))
         elif event in (TraceEvent.attribute, TraceEvent.subscript):
             new_ret = self.attrsub_tracer(
                 ret,
@@ -258,14 +244,10 @@ class TracingManager(object):
                 is_subscript=event == TraceEvent.subscript,
                 obj_name=kwargs.get('name', None),
             )
-            if kwargs['ctx'] != 'Load':
-                self._emit_event(TraceEvent.after_attrsub_chain.value, kwargs['top_level_node_id'], **kwargs)
-        elif event == TraceEvent.before_symbol:
-            new_ret = self.before_symbol_tracer(ret)
-        elif event == TraceEvent.after_attrsub_chain:
-            new_ret = self.end_tracer(ret, kwargs['call_context'])
-            if ret is None and kwargs['ctx'] != 'Load':
-                ret = _NBSafetySettable(frame)
+        elif event == TraceEvent.before_complex_symbol:
+            new_ret = self.before_complex_symbol(ret)
+        elif event == TraceEvent.after_complex_symbol:
+            new_ret = self.after_complex_symbol(ret, kwargs['call_context'])
         elif event == TraceEvent.argument:
             new_ret = self.arg_recorder(ret, self.safety.ast_node_by_id[orig_node_id])
         elif event == TraceEvent.before_arg_list:
@@ -315,7 +297,7 @@ class TracingManager(object):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(
-            self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: 'Optional[str]'
+        self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: 'Optional[str]'
     ):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
@@ -383,11 +365,11 @@ class TracingManager(object):
             self.saved_load_symbol = data_sym
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def before_symbol_tracer(self, node_id: int):
+    def before_complex_symbol(self, node_id: int):
         return
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def end_tracer(self, obj: 'Any', call_context: bool):
+    def after_complex_symbol(self, obj: 'Any', call_context: bool):
         try:
             if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
                 return
@@ -472,7 +454,7 @@ class TracingManager(object):
             self.literal_namespace = scope
         return literal
 
-    def after_stmt_tracer(self, stmt_id: int, frame: 'FrameType', ret_expr: 'Optional[Any]' = None):
+    def after_stmt(self, stmt_id: int, frame: 'FrameType', ret_expr: 'Optional[Any]' = None):
         if stmt_id in self.seen_stmts:
             return ret_expr
         stmt = self.safety.ast_node_by_id.get(stmt_id, None)
@@ -480,7 +462,7 @@ class TracingManager(object):
             self._sys_tracer(frame, TraceEvent.after_stmt, stmt)
         return ret_expr
 
-    def before_stmt_tracer(self, stmt_id: int, frame: 'FrameType') -> None:
+    def before_stmt(self, stmt_id: int, frame: 'FrameType') -> None:
         if stmt_id in self.seen_stmts:
             return
         # logger.warning('reenable tracing: %s', site_id)
@@ -488,7 +470,7 @@ class TracingManager(object):
             prev_trace_stmt_in_cur_frame = self.prev_trace_stmt_in_cur_frame
             # both of the following stmts should be processed when body is entered
             if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
-                self.after_stmt_tracer(prev_trace_stmt_in_cur_frame.stmt_id, frame)
+                self.after_stmt(prev_trace_stmt_in_cur_frame.stmt_id, frame)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(

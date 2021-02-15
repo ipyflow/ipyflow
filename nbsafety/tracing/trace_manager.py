@@ -11,7 +11,7 @@ import astunparse
 
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
-from nbsafety.data_model.scope import NamespaceScope, Scope
+from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
@@ -79,6 +79,20 @@ def _make_weakrefable_literal(literal):
 def _finish_tracing_reset():
     # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
     pass
+
+
+class _NBSafetySettable:
+    """
+    For helping to set ast.Name while still supporting symbol tracing
+    """
+    def __init__(self, frame: 'FrameType'):
+        object.__setattr__(self, '_frame', frame)
+
+    def __getattr__(self, key: str) -> 'Any':
+        return self.__getattribute__('_frame').f_locals[key]
+
+    def __setattr__(self, key: str, value: 'Any') -> None:
+        self.__getattribute__('_frame').f_locals[key] = value
 
 
 class TracingManager(object):
@@ -247,9 +261,11 @@ class TracingManager(object):
             if kwargs['ctx'] != 'Load':
                 self._emit_event(TraceEvent.after_attrsub_chain.value, kwargs['top_level_node_id'], **kwargs)
         elif event == TraceEvent.before_symbol:
-            pass
+            new_ret = self.before_symbol_tracer(ret)
         elif event == TraceEvent.after_attrsub_chain:
             new_ret = self.end_tracer(ret, kwargs['call_context'])
+            if ret is None and kwargs['ctx'] != 'Load':
+                ret = _NBSafetySettable(frame)
         elif event == TraceEvent.argument:
             new_ret = self.arg_recorder(ret, self.safety.ast_node_by_id[orig_node_id])
         elif event == TraceEvent.before_arg_list:
@@ -367,6 +383,10 @@ class TracingManager(object):
             self.saved_load_symbol = data_sym
 
     @on_exception_default_to(return_arg_at_index(1, logger))
+    def before_symbol_tracer(self, node_id: int):
+        return
+
+    @on_exception_default_to(return_arg_at_index(1, logger))
     def end_tracer(self, obj: 'Any', call_context: bool):
         try:
             if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
@@ -417,7 +437,7 @@ class TracingManager(object):
         self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def before_argument_list(self, obj):
+    def before_argument_list(self, _):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         self.nested_call_stack.append((self.first_obj_id_in_chain, self.saved_load_symbol))
@@ -426,7 +446,7 @@ class TracingManager(object):
         self.saved_load_symbol = None
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def after_argument_list(self, obj: 'Any'):
+    def after_argument_list(self, _):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         # no need to reset active scope here;

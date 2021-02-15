@@ -98,20 +98,85 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def _maybe_emit_after_chain_evt(self, node, call_context, orig_node_id=None):
         if self._inside_attrsub_load_chain or (not call_context and not isinstance(node.ctx, ast.Load)):
+            # for stores, there will necessarily be an 'Attribute' or 'Subscript' event
+            # so we handle these 'end symbol' events right after
             return node
+
+        ctx = getattr(node, 'ctx', ast.Load())
 
         with fast.location_of(node):
             return fast.Call(
                 func=self._emitter_ast(),
                 args=[TraceEvent.after_attrsub_chain.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
-                keywords=fast.kwargs(ret=node, call_context=fast.NameConstant(call_context)),
+                keywords=fast.kwargs(
+                    ret=node,
+                    call_context=fast.NameConstant(call_context),
+                    ctx=fast.Str(ctx.__class__.__name__)
+                ),
             )
 
+    def _maybe_wrap_symbol_in_before_after_tracing(self, node, orig_node_id=None, begin_kwargs=None, end_kwargs=None):
+        if self._inside_attrsub_load_chain:
+            return node
+        orig_node = node
+        orig_node_id = orig_node_id or id(orig_node)
+        begin_kwargs = begin_kwargs or {}
+        end_kwargs = end_kwargs or {}
+
+        ctx = getattr(orig_node, 'ctx', ast.Load())
+        is_load = isinstance(ctx, ast.Load)
+
+        with fast.location_of(node):
+            begin_kwargs['ret'] = self._get_copy_id_ast(orig_node_id)
+            end_ret = fast.Constant(None)
+            if is_load:
+                end_ret = orig_node
+            elif isinstance(orig_node, (ast.Attribute, ast.Subscript)):
+                end_ret = orig_node.value
+            end_kwargs['ret'] = end_ret
+            end_kwargs['ctx'] = fast.Str(ctx.__class__.__name__)
+            node = fast.Call(
+                func=self._emitter_ast(),
+                args=[
+                    TraceEvent.after_attrsub_chain.to_ast(),
+                    fast.Call(
+                        # this will return the node id
+                        func=self._emitter_ast(),
+                        args=[TraceEvent.before_symbol.to_ast(), self._get_copy_id_ast(orig_node_id)],
+                        keywords=fast.kwargs(**begin_kwargs),
+                    )
+                ],
+                keywords=fast.kwargs(**end_kwargs),
+            )
+            if not is_load:
+                if isinstance(orig_node, ast.Name):
+                    node = fast.Attribute(
+                        value=node,
+                        attr=orig_node.id,
+                    )
+                elif isinstance(orig_node, ast.Attribute):
+                    node = fast.Attribute(
+                        value=node,
+                        attr=orig_node.attr,
+                    )
+                elif isinstance(orig_node, ast.Subscript):
+                    node = fast.Subscript(
+                        value=node,
+                        slice=orig_node.slice,
+                    )
+                else:
+                    logger.error(
+                        'Symbol tracing stores unsupported for node %s with type %s', orig_node, type(orig_node)
+                    )
+                    return orig_node
+                node.ctx = ast.Store()
+        return node
+
     def visit_Attribute_or_Subscript(
-            self,
-            node: 'Union[ast.Attribute, ast.Subscript]',
-            attr_or_sub: 'ast.expr',
-            call_context: bool = False
+        self,
+        node: 'Union[ast.Attribute, ast.Subscript]',
+        attr_or_sub: 'ast.expr',
+        call_context: bool = False
     ):
         orig_node_id = id(node)
         with fast.location_of(node.value):
@@ -138,8 +203,6 @@ class AstEavesdropper(ast.NodeTransformer):
 
         if not self._inside_attrsub_load_chain and isinstance(node.ctx, ast.Load):
             node = self._make_tuple_event_for(node, TraceEvent.before_symbol, orig_node_id=orig_node_id)
-            # for stores, there will necessarily be an 'Attribute' or 'Subscript' event
-            # so we handle these 'end symbol' events right after
 
         return self._maybe_emit_after_chain_evt(node, call_context=call_context, orig_node_id=orig_node_id)
 

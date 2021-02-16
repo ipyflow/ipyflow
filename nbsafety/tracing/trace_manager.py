@@ -2,7 +2,6 @@
 import ast
 import builtins
 from contextlib import contextmanager
-import itertools
 import logging
 import sys
 from typing import cast, TYPE_CHECKING
@@ -15,10 +14,11 @@ from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
+from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+    from typing import Any, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
     SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     RefCandidate = Optional[Tuple[int, int, Optional[str]]]
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    LexicalCallNestingStack = List[Tuple[Optional[int], Optional[DataSymbol]]]
 
     # avoid circular imports
     from nbsafety.safety import NotebookSafety
@@ -81,7 +80,7 @@ def _finish_tracing_reset():
     pass
 
 
-class TracingManager(object):
+class TraceManager(object):
     def __init__(self, safety: 'NotebookSafety'):
         self.safety = safety
         self.trace_event_counter = 0
@@ -95,11 +94,8 @@ class TracingManager(object):
 
         setattr(builtins, EMIT_EVENT, self._emit_event)
 
-        self._stack: 'List[Tuple[Any, ...]]' = []
-        self._stack_item_initializers: 'Dict[str, Callable[[], Any]]' = {}
-        self._stack_items_with_manual_initialization: 'Set[str]' = set()
-        self._registering_stack_state_context = False
-        with self._register_stack_state():
+        self.call_stack: 'TraceStack' = self._make_stack()
+        with self.call_stack.register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: 'Optional[TraceStatement]' = None
             ############################################################
@@ -110,65 +106,27 @@ class TracingManager(object):
             # new state:
             # just something that maps orig_node_id to data symbol?
             ############################################################
-            self.saved_load_symbol: 'Optional[DataSymbol]' = None
             self.deep_refs: 'Set[DeepRef]' = set()
             self.mutations: 'Set[Mutation]' = set()
             self.deep_ref_candidates: 'List[DeepRefCandidate]' = []
-            self.nested_call_stack: 'LexicalCallNestingStack' = []
             self.literal_namespace: 'Optional[NamespaceScope]' = None
-            self.first_obj_id_in_chain: 'Optional[int]' = None
-            with self._needing_manual_initialization():
+
+            with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope = safety.global_scope
                 self.active_scope = safety.global_scope
                 self.inside_lambda = False
 
-    def _stack_item_names(self):
-        return itertools.chain(self._stack_item_initializers.keys(), self._stack_items_with_manual_initialization)
+            self.lexical_call_stack: 'TraceStack' = self._make_stack()
+            with self.lexical_call_stack.register_stack_state():
+                self.first_obj_id_in_chain: 'Optional[int]' = None
+                self.saved_load_symbol: 'Optional[DataSymbol]' = None
 
-    @contextmanager
-    def _register_stack_state(self):
-        self._registering_stack_state_context = True
-        original_state = set(self.__dict__.keys())
-        yield
-        self._registering_stack_state_context = False
-        stack_item_names = set(self.__dict__.keys() - original_state)
-        for stack_item_name in stack_item_names - self._stack_items_with_manual_initialization:
-            stack_item = self.__dict__[stack_item_name]
-            if stack_item is None:
-                self._stack_item_initializers[stack_item_name] = lambda: None
-            elif isinstance(stack_item, bool):
-                init_val = bool(stack_item)
-                self._stack_item_initializers[stack_item_name] = lambda: init_val
-            else:
-                self._stack_item_initializers[stack_item_name] = type(stack_item)
-
-    @contextmanager
-    def _needing_manual_initialization(self):
-        assert self._registering_stack_state_context
-        original_state = set(self.__dict__.keys())
-        yield
-        self._stack_items_with_manual_initialization = set(self.__dict__.keys() - original_state)
-
-    @contextmanager
-    def _push_stack(self):
-        self._stack.append(tuple(self.__dict__[stack_item] for stack_item in self._stack_item_names()))
-        for stack_item, initializer in self._stack_item_initializers.items():
-            self.__dict__[stack_item] = initializer()
-        for stack_item in self._stack_items_with_manual_initialization:
-            del self.__dict__[stack_item]
-        yield
-        uninitialized_items = []
-        for stack_item in self._stack_items_with_manual_initialization:
-            if stack_item not in self.__dict__:
-                uninitialized_items.append(stack_item)
-        if len(uninitialized_items) > 0:
-            raise ValueError(
-                "Stack item(s) %s requiring manual initialization were not initialized" % uninitialized_items
-            )
+    def _make_stack(self):
+        return TraceStack(self)
 
     def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
         new_scope = trace_stmt.get_post_call_scope()
-        with self._push_stack():
+        with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda
             #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
             self.inside_lambda = not isinstance(
@@ -177,10 +135,6 @@ class TracingManager(object):
             self.cur_frame_original_scope = new_scope
             self.active_scope = new_scope
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
-
-    def _pop_stack(self):
-        for stack_item_name, stack_item in zip(self._stack_item_names(), self._stack.pop()):
-            self.__dict__[stack_item_name] = stack_item
 
     def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
         if event == TraceEvent.after_stmt:
@@ -197,7 +151,7 @@ class TracingManager(object):
     def _handle_return_transition(self, trace_stmt: 'TraceStatement'):
         inside_lambda = self.inside_lambda
         cur_frame_scope = self.cur_frame_original_scope
-        self._pop_stack()
+        self.call_stack.pop()
         return_to_stmt = self.prev_trace_stmt_in_cur_frame
         assert return_to_stmt is not None
         if self.prev_event != TraceEvent.exception:
@@ -422,10 +376,9 @@ class TracingManager(object):
     def before_argument_list(self, _):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
-        self.nested_call_stack.append((self.first_obj_id_in_chain, self.saved_load_symbol))
+        with self.lexical_call_stack.push():
+            pass
         self.active_scope = self.cur_frame_original_scope
-        self.first_obj_id_in_chain = None
-        self.saved_load_symbol = None
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def after_argument_list(self, _):
@@ -433,7 +386,7 @@ class TracingManager(object):
             return
         # no need to reset active scope here;
         # that will happen in the 'after chain' handler
-        self.first_obj_id_in_chain, self.saved_load_symbol = self.nested_call_stack.pop()
+        self.lexical_call_stack.pop()
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def literal_tracer(self, literal):
@@ -494,7 +447,7 @@ class TracingManager(object):
         self.deep_refs.clear()
         self.mutations.clear()
         self.deep_ref_candidates.clear()
-        self.nested_call_stack.clear()
+        self.lexical_call_stack.clear()
         self.active_scope = self.cur_frame_original_scope
         self.literal_namespace = None
         self.first_obj_id_in_chain = None
@@ -539,8 +492,8 @@ class TracingManager(object):
         # top level, we need to clear the stack, since we won't
         # catch the return event
         self.call_depth = 0
-        self._stack = []
-        self.nested_call_stack = []
+        self.call_stack.clear()
+        self.lexical_call_stack.clear()
         if self.safety.config.trace_messages_enabled:
             logger.warning('reenable tracing >>>')
 

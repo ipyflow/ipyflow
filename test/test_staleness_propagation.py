@@ -1327,9 +1327,9 @@ def test_exception_stack_unwind():
 
     def assert_stack_size(size):
         return ';'.join([
-            f'can_pass = len({safety_state}.tracing_manager._stack) == {size}',
+            f'can_pass = len({safety_state}.tracing_manager.call_stack) == {size}',
             f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)',
-            f'print(len({safety_state}.tracing_manager._stack), "vs", {size})'
+            f'print(len({safety_state}.tracing_manager.call_stack), "vs", {size})'
         ])
     try:
         run_cell(f"""

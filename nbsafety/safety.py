@@ -25,7 +25,7 @@ from nbsafety import line_magics
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.tracing import SafetyAstRewriter, TracingManager
+from nbsafety.tracing import SafetyAstRewriter, TraceManager
 from nbsafety.utils import DotDict
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ class NotebookSafety(object):
         self.ast_node_by_id: 'Dict[int, ast.AST]' = {}
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.statement_to_func_cell: 'Dict[int, DataSymbol]' = {}
-        self.tracing_manager: 'TracingManager' = TracingManager(self)
+        self.tracing_manager: 'TraceManager' = TraceManager(self)
         self.stale_dependency_detected = False
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
@@ -426,7 +426,7 @@ class NotebookSafety(object):
     def _reset_trace_state_hook(self):
         # this assert doesn't hold anymore now that tracing could be disabled inside of something
         # assert len(self.attr_trace_manager.stack) == 0
-        self.tracing_manager = TracingManager(self)
+        self.tracing_manager = TraceManager(self)
         self._gc()
 
     def _make_line_magic(self):

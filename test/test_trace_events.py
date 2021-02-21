@@ -62,4 +62,24 @@ def test_recorded_events_simple():
         TraceEvent.after_arg_list,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt
-    ]
+    ], 'unexpected events; got %s' % RECORDED_EVENTS
+
+
+def test_recorded_events_two_stmts():
+    assert RECORDED_EVENTS == []
+    run_cell('x = [1, 2, 3]')
+    run_cell('logging.info(x)')
+    assert RECORDED_EVENTS == [
+        TraceEvent.before_stmt,
+        TraceEvent.before_literal,
+        TraceEvent.after_literal,
+        TraceEvent.after_stmt,
+        TraceEvent.before_stmt,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.before_arg_list,
+        TraceEvent.argument,
+        TraceEvent.after_arg_list,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.after_stmt
+    ], 'unexpected events; got %s' % RECORDED_EVENTS

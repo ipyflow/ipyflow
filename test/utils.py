@@ -48,6 +48,7 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, Any]':
     store_history = kwargs.pop('store_history', False)
     test_context = kwargs.pop('test_context', True)
     setup_cells = kwargs.pop('setup_cells', [])
+    extra_fixture = kwargs.pop('extra_fixture', None)
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
@@ -63,7 +64,11 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, Any]':
         run_cell('import logging')
         for setup_cell in setup_cells:
             run_cell(setup_cell)
-        yield  # yield to execution of the actual test
+        # yield to execution of the actual test
+        if extra_fixture is not None:
+            yield from extra_fixture()
+        else:
+            yield
         # ensure each test didn't give failures during ast transformation
         exc = nbs().set_ast_transformer_raised(None)
         if exc is not None:

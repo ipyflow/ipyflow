@@ -89,6 +89,7 @@ class BaseTraceManager(singletons.TraceManager):
     def __init__(self):
         super().__init__()
         self.tracing_enabled = False
+        self.tracing_reset_pending = False
 
     def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
         event = TraceEvent(evt) if isinstance(evt, str) else evt
@@ -131,7 +132,17 @@ class BaseTraceManager(singletons.TraceManager):
             delattr(builtins, EMIT_EVENT)
             self._disable_tracing(check_enabled=False)
 
+    def _attempt_to_reenable_tracing(self, frame: FrameType):
+        return NotImplemented
+
     def _sys_tracer(self, frame: FrameType, evt: str, *_, **__):
+        if self.tracing_reset_pending:
+            assert evt == 'call', 'expected call; got event %s' % evt
+            self._attempt_to_reenable_tracing(frame)
+            return None
+        if evt == 'line' or not frame.f_code.co_filename.startswith('<ipython-input'):
+            return None
+
         return self._emit_event(evt, 0, _frame=frame)
 
 
@@ -154,7 +165,6 @@ class TraceManager(BaseTraceManager):
         self.seen_stmts: Set[int] = set()
         self.call_depth = 0
         self.traced_statements: Dict[int, TraceStatement] = {}
-        self.tracing_reset_pending = False
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -520,10 +530,6 @@ class TraceManager(BaseTraceManager):
         stmt_node: Optional[ast.stmt] = None,
         **__
     ):
-        if self.tracing_reset_pending:
-            assert event == TraceEvent.call
-            self._attempt_to_reenable_tracing(frame)
-            return None
 
         # notebook cells have filenames that appear as '<ipython-input...>'
         if frame.f_code.co_filename.startswith('<ipython-input'):

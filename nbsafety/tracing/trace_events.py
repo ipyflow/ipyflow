@@ -17,8 +17,8 @@ class TraceEvent(Enum):
     before_complex_symbol = 'before_complex_symbol'
     after_complex_symbol = 'after_complex_symbol'
 
-    before_arg_list = 'enter_arg_list'
-    after_arg_list = 'exit_arg_list'
+    before_arg_list = 'before_arg_list'
+    after_arg_list = 'after_arg_list'
     argument = 'argument'
 
     before_literal = 'before_literal'

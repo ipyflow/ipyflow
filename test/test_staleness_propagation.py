@@ -8,7 +8,7 @@ from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
+# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
 _safety_fixture, run_cell_ = make_safety_fixture()
 
 
@@ -1621,7 +1621,7 @@ def f(p):
 
 
 def test_tracing_disable_with_nested_calls():
-    run_cell('%safety trace_messages enable')
+    # run_cell('%safety trace_messages enable')
     run_cell('y = 0')
     run_cell("""
 def f():

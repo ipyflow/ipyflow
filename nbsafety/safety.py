@@ -126,8 +126,12 @@ class NotebookSafety(singletons.NotebookSafety):
         return ret
 
     def get_position(self, frame: FrameType):
-        cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
-        return cell_num, frame.f_lineno
+        try:
+            cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
+            return cell_num, frame.f_lineno
+        except KeyError as e:
+            print(frame.f_code.co_filename)
+            raise e
 
     def maybe_set_name_to_cell_num_mapping(self, frame: FrameType):
         if self._recorded_cell_name_to_cell_num:

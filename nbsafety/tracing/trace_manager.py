@@ -5,7 +5,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import sys
-from typing import cast, Final, TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 import astunparse
 
@@ -84,7 +84,7 @@ def _finish_tracing_reset():
 
 class BaseTraceManager(singletons.TraceManager):
 
-    EVENT_HANDLERS: Final[Dict[TraceEvent, List[Callable[..., Any]]]] = defaultdict(list)
+    EVENT_HANDLERS: Dict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
 
     def __init__(self):
         super().__init__()
@@ -132,8 +132,7 @@ class BaseTraceManager(singletons.TraceManager):
             self._disable_tracing(check_enabled=False)
 
     def _sys_tracer(self, frame: FrameType, evt: str, *_, **__):
-        kwargs = {'_frame': frame}
-        return self._emit_event(evt, 0, **kwargs)
+        return self._emit_event(evt, 0, _frame=frame)
 
 
 def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
@@ -531,9 +530,6 @@ class TraceManager(BaseTraceManager):
             self.safety.maybe_set_name_to_cell_num_mapping(frame)
         else:
             return None
-
-        if event == TraceEvent.line:
-            return self._sys_tracer
 
         if event not in (TraceEvent.return_, TraceEvent.after_stmt) and not self.tracing_enabled:
             logger.warning('skip %s', event)

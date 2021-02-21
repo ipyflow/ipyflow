@@ -23,7 +23,7 @@ class StatementInserter(ast.NodeTransformer):
             ret = cast(ast.Expr, fast.parse(self._append_stmt_template.format(stmt_id=id(stmt))).body[0])
             if ret_expr is not None:
                 ret_value = cast(ast.Call, ret.value)
-                ret_value.keywords = fast.kwargs(ret_expr=ret_expr)
+                ret_value.keywords = fast.kwargs(ret=ret_expr)
         ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
         return ret
 

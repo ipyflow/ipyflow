@@ -167,7 +167,7 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node.value):
             extra_args: List[ast.keyword] = []
             if isinstance(node.value, ast.Name):
-                extra_args = fast.kwargs(name=fast.Str(node.value.id))
+                extra_args = fast.kwargs(obj_name=fast.Str(node.value.id))
 
             with self.attrsub_load_context(node):
                 node.value = fast.Call(
@@ -178,7 +178,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     ],
                     keywords=fast.kwargs(
                         ret=self.visit(node.value),
-                        attr_or_sub=attr_or_sub,
+                        attr_or_subscript=attr_or_sub,
                         ctx=fast.Str(node.ctx.__class__.__name__),
                         call_context=fast.NameConstant(call_context),
                         top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol)

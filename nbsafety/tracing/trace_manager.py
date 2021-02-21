@@ -5,7 +5,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import sys
-from typing import cast, TYPE_CHECKING
+from typing import cast, Final, TYPE_CHECKING
 
 import astunparse
 
@@ -13,8 +13,8 @@ from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety import singletons
+from nbsafety.run_mode import SafetyRunMode
 from nbsafety.tracing.mutation_event import MutationEvent
-from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
@@ -84,20 +84,64 @@ def _finish_tracing_reset():
 
 class BaseTraceManager(singletons.TraceManager):
 
-    EVENT_HANDLERS: Dict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
+    EVENT_HANDLERS: Final[Dict[TraceEvent, List[Callable[..., Any]]]] = defaultdict(list)
 
-    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: Any):
-        event = TraceEvent(evt)
-        frame = kwargs.get('frame', sys._getframe().f_back)
-        kwargs['frame'] = frame
+    def __init__(self):
+        super().__init__()
+        self.tracing_enabled = False
+
+    def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
+        event = TraceEvent(evt) if isinstance(evt, str) else evt
+        frame = kwargs.get('_frame', sys._getframe().f_back)
+        kwargs['_frame'] = frame
         for handler in self.EVENT_HANDLERS[event]:  # type: ignore
-            kwargs['ret'] = handler(self, event, orig_node_id, frame, **kwargs)
-        return kwargs['ret']
+            try:
+                new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
+            except Exception as exc:
+                if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
+                    raise exc
+                else:
+                    logger.warning('Exception occurred: %s' % exc)
+                new_ret = None
+            if new_ret is not None:
+                kwargs['ret'] = new_ret
+        return kwargs.get('ret', None)
+
+    def _make_stack(self):
+        return TraceStack(self)
+
+    def _enable_tracing(self):
+        assert not self.tracing_enabled
+        self.tracing_enabled = True
+        sys.settrace(self._sys_tracer)
+
+    def _disable_tracing(self, check_enabled=True):
+        if check_enabled:
+            assert self.tracing_enabled
+        self.tracing_enabled = False
+        sys.settrace(None)
+
+    @contextmanager
+    def tracing_context(self):
+        try:
+            setattr(builtins, EMIT_EVENT, self._emit_event)
+            self._enable_tracing()
+            yield
+        finally:
+            delattr(builtins, EMIT_EVENT)
+            self._disable_tracing(check_enabled=False)
+
+    def _sys_tracer(self, frame: FrameType, evt: str, *_, **__):
+        kwargs = {'_frame': frame}
+        return self._emit_event(evt, 0, **kwargs)
 
 
-def register_handler(event: TraceEvent):
+def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
+    events = event if isinstance(event, tuple) else (event,)
+
     def _inner_registrar(handler):
-        BaseTraceManager.EVENT_HANDLERS[event].append(handler)
+        for evt in events:
+            BaseTraceManager.EVENT_HANDLERS[evt].append(handler)
         return handler
     return _inner_registrar
 
@@ -111,10 +155,9 @@ class TraceManager(BaseTraceManager):
         self.seen_stmts: Set[int] = set()
         self.call_depth = 0
         self.traced_statements: Dict[int, TraceStatement] = {}
-        self.tracing_enabled = False
         self.tracing_reset_pending = False
 
-        self.call_stack: 'TraceStack' = self._make_stack()
+        self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
@@ -144,9 +187,6 @@ class TraceManager(BaseTraceManager):
     @property
     def safety(self) -> NotebookSafety:
         return singletons.nbs()
-
-    def _make_stack(self):
-        return TraceStack(self)
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
@@ -203,45 +243,6 @@ class TraceManager(BaseTraceManager):
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
 
-    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: Any):
-        event = TraceEvent(evt)
-        ret = kwargs.get('ret', None)
-        frame = kwargs.get('frame', sys._getframe().f_back)
-        kwargs['frame'] = frame
-        new_ret = None
-        if event == TraceEvent.before_stmt:
-            new_ret = self.before_stmt(orig_node_id, frame)  # type: ignore
-        elif event == TraceEvent.after_stmt:
-            new_ret = self.after_stmt(orig_node_id, frame, ret_expr=kwargs.get('ret_expr', None))
-        elif event in (TraceEvent.attribute, TraceEvent.subscript):
-            new_ret = self.attrsub_tracer(
-                ret,
-                kwargs['attr_or_sub'],
-                kwargs['ctx'],
-                kwargs['call_context'],
-                is_subscript=event == TraceEvent.subscript,
-                obj_name=kwargs.get('name', None),
-            )
-        elif event == TraceEvent.before_complex_symbol:
-            new_ret = self.before_complex_symbol(ret)
-        elif event == TraceEvent.after_complex_symbol:
-            new_ret = self.after_complex_symbol(ret, kwargs['call_context'])
-        elif event == TraceEvent.argument:
-            new_ret = self.arg_recorder(ret, self.safety.ast_node_by_id[orig_node_id])
-        # elif event == TraceEvent.before_arg_list:
-        #     new_ret = self.before_argument_list(ret)
-        elif event == TraceEvent.after_arg_list:
-            new_ret = self.after_argument_list(ret)
-        elif event == TraceEvent.before_literal:
-            pass
-        elif event == TraceEvent.after_literal:
-            new_ret = self.literal_tracer(ret)
-        else:
-            new_ret = super()._emit_event(evt, orig_node_id, **kwargs)
-        if new_ret is not None:
-            ret = new_ret
-        return ret
-
     def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
         obj_id = id(obj)
         ns = self.safety.namespaces.get(obj_id, None)
@@ -273,14 +274,25 @@ class TraceManager(BaseTraceManager):
             ns.parent_scope = parent_scope
         return ns
 
-    @on_exception_default_to(return_arg_at_index(1, logger))
+    @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     def attrsub_tracer(
-        self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: Optional[str]
+        self,
+        obj: Any,
+        _node_id: int,
+        _frame_: FrameType,
+        event: TraceEvent,
+        *_,
+        attr_or_subscript,
+        ctx: str,
+        call_context: bool,
+        obj_name: Optional[str] = None,
+        **__
     ):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         if obj is None:
             return
+        is_subscript = (event == TraceEvent.subscript)
         obj_id = id(obj)
         if self.first_obj_id_in_chain is None:
             self.first_obj_id_in_chain = obj_id
@@ -341,12 +353,8 @@ class TraceManager(BaseTraceManager):
         elif data_sym is not None:
             self.saved_load_symbol = data_sym
 
-    @on_exception_default_to(return_arg_at_index(1, logger))
-    def before_complex_symbol(self, node_id: int):
-        return
-
-    @on_exception_default_to(return_arg_at_index(1, logger))
-    def after_complex_symbol(self, obj: Any, call_context: bool):
+    @register_handler(TraceEvent.after_complex_symbol)
+    def after_complex_symbol(self, obj: Any, *_, call_context: bool, **__):
         try:
             if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
                 return
@@ -364,7 +372,7 @@ class TraceManager(BaseTraceManager):
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
                                     # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
                                     #  with np.random.seed?
-                                    for recorded_arg, _ in recorded_args:
+                                    for recorded_arg, _recorded_arg_id in recorded_args:
                                         if len(recorded_arg.symbols) > 0:
                                             # only make this an arg mutation event if it looks like there's an arg to mutate
                                             mutation_event = MutationEvent.arg_mutate
@@ -379,10 +387,11 @@ class TraceManager(BaseTraceManager):
             self.first_obj_id_in_chain = None
             self.active_scope = self.cur_frame_original_scope
 
-    @on_exception_default_to(return_arg_at_index(1, logger))
-    def arg_recorder(self, arg_obj: Any, arg_node: ast.AST):
+    @register_handler(TraceEvent.argument)
+    def arg_recorder(self, arg_obj: Any, arg_node_id: int, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
+        arg_node = self.safety.ast_node_by_id.get(arg_node_id, None)
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
             return
         if len(self.deep_ref_candidates) == 0:
@@ -396,7 +405,6 @@ class TraceManager(BaseTraceManager):
         self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
     @register_handler(TraceEvent.before_arg_list)
-    @on_exception_default_to(return_arg_at_index(1, logger))
     def before_argument_list(self, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
@@ -404,16 +412,16 @@ class TraceManager(BaseTraceManager):
             pass
         self.active_scope = self.cur_frame_original_scope
 
-    @on_exception_default_to(return_arg_at_index(1, logger))
-    def after_argument_list(self, _):
+    @register_handler(TraceEvent.after_arg_list)
+    def after_argument_list(self, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         # no need to reset active scope here;
         # that will happen in the 'after chain' handler
         self.lexical_call_stack.pop()
 
-    @on_exception_default_to(return_arg_at_index(1, logger))
-    def literal_tracer(self, literal):
+    @register_handler(TraceEvent.after_literal)
+    def after_literal(self, literal: Any, *_, **__):
         literal = _make_weakrefable_literal(literal)
         if not self.tracing_enabled:
             return literal
@@ -431,15 +439,17 @@ class TraceManager(BaseTraceManager):
             self.literal_namespace = scope
         return literal
 
-    def after_stmt(self, stmt_id: int, frame: FrameType, ret_expr: Optional[Any] = None):
+    @register_handler(TraceEvent.after_stmt)
+    def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:
             return ret_expr
         stmt = self.safety.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
-            self._sys_tracer(frame, TraceEvent.after_stmt, stmt)
+            self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
         return ret_expr
 
-    def before_stmt(self, stmt_id: int, frame: FrameType) -> None:
+    @register_handler(TraceEvent.before_stmt)
+    def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
         if stmt_id in self.seen_stmts:
             return
         # logger.warning('reenable tracing: %s', site_id)
@@ -447,7 +457,7 @@ class TraceManager(BaseTraceManager):
             prev_trace_stmt_in_cur_frame = self.prev_trace_stmt_in_cur_frame
             # both of the following stmts should be processed when body is entered
             if isinstance(prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)):
-                self.after_stmt(prev_trace_stmt_in_cur_frame.stmt_id, frame)
+                self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(
@@ -475,27 +485,6 @@ class TraceManager(BaseTraceManager):
         self.literal_namespace = None
         self.first_obj_id_in_chain = None
 
-    def _enable_tracing(self):
-        assert not self.tracing_enabled
-        self.tracing_enabled = True
-        sys.settrace(self._sys_tracer)
-
-    def _disable_tracing(self, check_enabled=True):
-        if check_enabled:
-            assert self.tracing_enabled
-        self.tracing_enabled = False
-        sys.settrace(None)
-
-    @contextmanager
-    def tracing_context(self):
-        try:
-            setattr(builtins, EMIT_EVENT, self._emit_event)
-            self._enable_tracing()
-            yield
-        finally:
-            delattr(builtins, EMIT_EVENT)
-            self._disable_tracing(check_enabled=False)
-
     def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
         if self.safety.is_develop:
             assert self.tracing_reset_pending, 'expected tracing reset to be pending!'
@@ -522,13 +511,17 @@ class TraceManager(BaseTraceManager):
         if self.safety.settings.trace_messages_enabled:
             logger.warning('reenable tracing >>>')
 
-    @on_exception_default_to(return_val(None, logger))
-    def _sys_tracer(self, frame: FrameType, evt: Union[str, TraceEvent], extra):
-        if isinstance(evt, str):
-            event = TraceEvent(evt)
-        else:
-            event = evt
-
+    @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
+    def handle_sys_events(
+        self,
+        _ret: None,
+        _node_id: int,
+        frame: FrameType,
+        event: TraceEvent,
+        *_,
+        stmt_node: Optional[ast.stmt] = None,
+        **__
+    ):
         if self.tracing_reset_pending:
             assert event == TraceEvent.call
             self._attempt_to_reenable_tracing(frame)
@@ -562,7 +555,7 @@ class TraceManager(BaseTraceManager):
         cell_num, lineno = self.safety.get_position(frame)
 
         if event == TraceEvent.after_stmt:
-            stmt_node = extra
+            assert stmt_node is not None
         else:
             try:
                 stmt_node = self.safety.statement_cache[cell_num][lineno]

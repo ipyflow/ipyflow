@@ -395,7 +395,6 @@ class TraceManager(BaseTraceManager):
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
             return
         if len(self.deep_ref_candidates) == 0:
-            logger.error('Error: no associated symbol for recorded args; skipping recording')
             return
 
         arg_obj_id = id(arg_obj)

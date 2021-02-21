@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 import logging
 from typing import cast, TYPE_CHECKING
@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
-    def __init__(self, init_killed: 'Optional[Set[str]]' = None):
-        self.live: 'Set[SymbolRef]' = set()
+    def __init__(self, init_killed: Optional[Set[str]] = None):
+        self.live: Set[SymbolRef] = set()
         if init_killed is None:
-            self.dead: 'Set[SymbolRef]' = set()
+            self.dead: Set[SymbolRef] = set()
         else:
             self.dead = cast('Set[SymbolRef]', init_killed)
         self.in_kill_context = False
@@ -49,7 +49,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
     def args_context(self):
         return self.push_attributes(skip_simple_names=False)
 
-    def _add_attrsub_to_live_if_eligible(self, ref: 'AttrSubSymbolChain'):
+    def _add_attrsub_to_live_if_eligible(self, ref: AttrSubSymbolChain):
         if ref in self.dead:
             return
         if len(ref.symbols) == 0:
@@ -92,7 +92,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self.visit_Assign_impl([], node.value, aug_assign_target=node.target)
 
     def visit_Assign_target(
-            self, target_node: 'Union[ast.Attribute, ast.Name, ast.Subscript, ast.Tuple, ast.List, ast.expr]'
+        self, target_node: Union[ast.Attribute, ast.Name, ast.Subscript, ast.Tuple, ast.List, ast.expr]
     ):
         if isinstance(target_node, ast.Name):
             self.dead.add(target_node.id)
@@ -197,9 +197,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
 
 
 def compute_live_dead_symbol_refs(
-        code: 'Union[ast.Module, List[ast.stmt], str]',
-        init_killed: 'Optional[Set[str]]' = None
-) -> 'Tuple[Set[SymbolRef], Set[SymbolRef]]':
+        code: Union[ast.Module, List[ast.stmt], str],
+        init_killed: Optional[Set[str]] = None
+) -> Tuple[Set[SymbolRef], Set[SymbolRef]]:
     if init_killed is None:
         init_killed = set()
     if isinstance(code, str):

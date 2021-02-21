@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import logging
 
 from .utils import make_safety_fixture

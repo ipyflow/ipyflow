@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import sys
 
 from nbsafety.kernel.install import main

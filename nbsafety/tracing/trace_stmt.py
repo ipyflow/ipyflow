@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-from __future__ import annotations
+# -*- coding: future_annotations -*-
 import ast
 from contextlib import contextmanager
 import logging
@@ -24,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class TraceStatement(object):
-    def __init__(self, frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
+    def __init__(self, frame: FrameType, stmt_node: ast.stmt, scope: Scope):
         self.frame = frame
         self.stmt_node = stmt_node
         self.scope = scope

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 from ipykernel.ipkernel import IPythonKernel
 from nbsafety.version import __version__
 from nbsafety.safety import NotebookSafety

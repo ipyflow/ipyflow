@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 from .symbol_edges import get_assignment_lval_and_rval_symbol_refs, get_symbol_edges
 from .attr_symbols import AttrSubSymbolChain, CallPoint, get_attrsub_symbol_chain
 from .live_refs import compute_live_dead_symbol_refs

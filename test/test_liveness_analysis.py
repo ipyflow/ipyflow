@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 import sys
 # from .utils import skipif_known_failing

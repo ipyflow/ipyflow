@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
       stale dependencies now. Multiple variables should be separated with spaces."""
 
 
-def show_deps(safety: 'NotebookSafety', line: 'List[str]'):
+def show_deps(safety: NotebookSafety, line: List[str]):
     if len(line) == 1:
         print("Usage: %safety show_dependency <variable_name> <variable_name2> ...")
         return
@@ -53,7 +53,7 @@ def show_deps(safety: 'NotebookSafety', line: 'List[str]'):
             print("Cannot find DataSymbol", data_sym_name)
 
 
-def show_stale(safety: 'NotebookSafety', line: 'List[str]'):
+def show_stale(safety: NotebookSafety, line: List[str]):
     if len(line) < 2 or line[1] == 'global':
         dsym_sets: Any = [safety.global_scope.all_data_symbols_this_indentation()]
     elif line[1] == 'all':
@@ -74,14 +74,14 @@ def show_stale(safety: 'NotebookSafety', line: 'List[str]'):
         print("DataSymbols with stale dependencies are:", [str(n) for n in stale_set])
 
 
-def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):
+def trace_messages(safety: NotebookSafety, line: List[str]):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")
         return
     safety.settings.trace_messages_enabled = (line[1].lower().startswith("enable"))
 
 
-def remove_dep(safety: 'NotebookSafety', line: 'List[str]'):
+def remove_dep(safety: NotebookSafety, line: List[str]):
     if len(line) != 3:
         print("Usage: %safety remove_dependency <parent_name> <child_name>")
         return
@@ -101,7 +101,7 @@ def remove_dep(safety: 'NotebookSafety', line: 'List[str]'):
     child_data_sym.parents.remove(parent_data_sym)
 
 
-def add_dep(safety: 'NotebookSafety', line: 'List[str]'):
+def add_dep(safety: NotebookSafety, line: List[str]):
     if len(line) != 3:
         print("Usage: %safety add_dependency <parent_name> <child_name>")
         return
@@ -120,7 +120,7 @@ def add_dep(safety: 'NotebookSafety', line: 'List[str]'):
     child_data_sym.parents.add(parent_data_sym)
 
 
-def turn_off_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
+def turn_off_warnings_for(safety: NotebookSafety, line: List[str]):
     if len(line) <= 1:
         print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
         return
@@ -133,7 +133,7 @@ def turn_off_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
             print("Cannot find DataSymbol", data_sym_name)
 
 
-def turn_on_warnings_for(safety: 'NotebookSafety', line: 'List[str]'):
+def turn_on_warnings_for(safety: NotebookSafety, line: List[str]):
     if len(line) <= 1:
         print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
         return

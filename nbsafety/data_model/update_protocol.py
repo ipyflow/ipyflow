@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import logging
 from typing import cast, TYPE_CHECKING
 
@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 
 class UpdateProtocol(object):
     def __init__(
-            self,
-            safety: 'NotebookSafety',
-            updated_sym: 'DataSymbol',
-            new_deps: 'Set[DataSymbol]',
-            mutated: bool
+        self,
+        safety: NotebookSafety,
+        updated_sym: DataSymbol,
+        new_deps: Set[DataSymbol],
+        mutated: bool
     ):
         self.safety = safety
         self.updated_sym = updated_sym
@@ -56,7 +56,7 @@ class UpdateProtocol(object):
                 for updated_sym_alias in self.safety.aliases.get(updated_sym.obj_id, []):
                     updated_sym_alias.refresh()
 
-    def _collect_updated_symbols(self, dsym: 'DataSymbol', skip_aliases=False):
+    def _collect_updated_symbols(self, dsym: DataSymbol, skip_aliases=False):
         if dsym.is_import:
             return
         if skip_aliases:
@@ -67,7 +67,7 @@ class UpdateProtocol(object):
             if dsym_alias.is_import or dsym_alias in self.seen:
                 continue
             self.seen.add(dsym_alias)
-            containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym_alias.containing_scope)
+            containing_scope: NamespaceScope = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue
             # TODO: figure out what this is for again
@@ -79,11 +79,11 @@ class UpdateProtocol(object):
                 # print('discard stale', dsym, 'from', alias, 'namespace, has fresher ancestors:', alias.fresher_ancestors)
                 self._collect_updated_symbols(alias)
 
-    def _propagate_staleness_to_namespace_parents(self, dsym: 'DataSymbol', skip_seen_check=False):
+    def _propagate_staleness_to_namespace_parents(self, dsym: DataSymbol, skip_seen_check=False):
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)
-        containing_scope: 'NamespaceScope' = cast('NamespaceScope', dsym.containing_scope)
+        containing_scope: NamespaceScope = cast('NamespaceScope', dsym.containing_scope)
         if containing_scope is None or not containing_scope.is_namespace_scope:
             return
         for containing_alias in self.safety.aliases[containing_scope.obj_id]:
@@ -112,7 +112,7 @@ class UpdateProtocol(object):
                         continue
                 yield child
 
-    def _propagate_staleness_to_namespace_children(self, dsym: 'DataSymbol', skip_seen_check=False):
+    def _propagate_staleness_to_namespace_children(self, dsym: DataSymbol, skip_seen_check=False):
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)
@@ -123,7 +123,7 @@ class UpdateProtocol(object):
             # print('propagate from', dsym, 'to namespace child', ns_child)
             self._propagate_staleness_to_deps(ns_child)
 
-    def _propagate_staleness_to_deps(self, dsym: 'DataSymbol', skip_seen_check=False):
+    def _propagate_staleness_to_deps(self, dsym: DataSymbol, skip_seen_check=False):
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)

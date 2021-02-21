@@ -1,4 +1,4 @@
-from __future__ import annotations
+# -*- coding: future_annotations -*-
 from typing import TYPE_CHECKING
 
 from traitlets.config.configurable import SingletonConfigurable

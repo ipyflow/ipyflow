@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 from collections import defaultdict
 from contextlib import contextmanager
@@ -45,7 +45,7 @@ _SAFETY_LINE_MAGIC = 'safety'
 _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
 
 
-def _safety_warning(node: 'DataSymbol'):
+def _safety_warning(node: DataSymbol):
     if not node.is_stale:
         raise ValueError('Expected node with stale ancestor; got %s' % node)
     if node.defined_cell_num < 1:
@@ -78,15 +78,15 @@ class NotebookSafety(singletons.NotebookSafety):
             **kwargs
         ))
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
-        self.namespaces: 'Dict[int, NamespaceScope]' = {}
-        self.aliases: 'Dict[int, Set[DataSymbol]]' = defaultdict(set)
-        self.global_scope: 'Scope' = Scope()
-        self.updated_symbols: 'Set[DataSymbol]' = set()
-        self.updated_scopes: 'Set[NamespaceScope]' = set()
-        self.garbage_namespace_obj_ids: 'Set[int]' = set()
-        self.ast_node_by_id: 'Dict[int, ast.AST]' = {}
-        self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
-        self.statement_to_func_cell: 'Dict[int, DataSymbol]' = {}
+        self.namespaces: Dict[int, NamespaceScope] = {}
+        self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        self.global_scope: Scope = Scope()
+        self.updated_symbols: Set[DataSymbol] = set()
+        self.updated_scopes: Set[NamespaceScope] = set()
+        self.garbage_namespace_obj_ids: Set[int] = set()
+        self.ast_node_by_id: Dict[int, ast.AST] = {}
+        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+        self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.stale_dependency_detected = False
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
@@ -101,8 +101,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
         self._cell_counter = 1
         self._recorded_cell_name_to_cell_num = True
-        self._cell_name_to_cell_num_mapping: 'Dict[str, int]' = {}
-        self._ast_transformer_raised: 'Optional[Exception]' = None
+        self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
+        self._ast_transformer_raised: Optional[Exception] = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
@@ -120,16 +120,16 @@ class NotebookSafety(singletons.NotebookSafety):
         else:
             return self._cell_counter
 
-    def set_ast_transformer_raised(self, new_val: 'Optional[Exception]' = None) -> 'Optional[Exception]':
+    def set_ast_transformer_raised(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
         ret = self._ast_transformer_raised
         self._ast_transformer_raised = new_val
         return ret
 
-    def get_position(self, frame: 'FrameType'):
+    def get_position(self, frame: FrameType):
         cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
         return cell_num, frame.f_lineno
 
-    def maybe_set_name_to_cell_num_mapping(self, frame: 'FrameType'):
+    def maybe_set_name_to_cell_num_mapping(self, frame: FrameType):
         if self._recorded_cell_name_to_cell_num:
             return
         self._recorded_cell_name_to_cell_num = True
@@ -170,14 +170,14 @@ class NotebookSafety(singletons.NotebookSafety):
             logger.error('Unsupported request type for request %s' % request)
 
     def check_and_link_multiple_cells(
-            self,
-            cells_by_id: 'Dict[CellId, str]',
-            order_index_by_cell_id: 'Optional[Dict[CellId, int]]' = None
-    ) -> 'Dict[str, Any]':
+        self,
+        cells_by_id: Dict[CellId, str],
+        order_index_by_cell_id: Optional[Dict[CellId, int]] = None
+    ) -> Dict[str, Any]:
         stale_cells = set()
         fresh_cells = []
-        stale_symbols_by_cell_id: 'Dict[CellId, Set[DataSymbol]]' = {}
-        killing_cell_ids_for_symbol: 'Dict[DataSymbol, Set[CellId]]' = defaultdict(set)
+        stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
+        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
             if (order_index_by_cell_id is not None and
                     order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx):
@@ -195,8 +195,8 @@ class NotebookSafety(singletons.NotebookSafety):
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
             except SyntaxError:
                 continue
-        stale_links: 'Dict[CellId, Set[CellId]]' = defaultdict(set)
-        refresher_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
+        stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
+        refresher_links: Dict[CellId, List[CellId]] = defaultdict(list)
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             if self.settings.get('naive_refresher_computation', False):
@@ -238,12 +238,12 @@ class NotebookSafety(singletons.NotebookSafety):
         }
 
     def _naive_compute_refresher_cells(
-            self,
-            stale_cell_id: 'CellId',
-            stale_symbols: 'Set[DataSymbol]',
-            cells_by_id: 'Dict[CellId, str]',
-            order_index_by_cell_id: 'Optional[Dict[CellId, int]]' = None
-    ) -> 'Set[CellId]':
+        self,
+        stale_cell_id: CellId,
+        stale_symbols: Set[DataSymbol],
+        cells_by_id: Dict[CellId, str],
+        order_index_by_cell_id: Optional[Dict[CellId, int]] = None
+    ) -> Set[CellId]:
         refresher_cell_ids: Set[CellId] = set()
         stale_cell_content = cells_by_id[stale_cell_id]
         for cell_id, cell_content in cells_by_id.items():
@@ -272,7 +272,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def _get_max_defined_cell_num_for_symbols(self, symbols: 'Set[DataSymbol]') -> int:
+    def _get_max_defined_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
         max_defined_cell_num = -1
         for dsym in symbols:
             max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
@@ -282,9 +282,9 @@ class NotebookSafety(singletons.NotebookSafety):
         return max_defined_cell_num
 
     def _check_cell_and_resolve_symbols(
-            self,
-            cell: 'Union[ast.Module, str]'
-    ) -> 'Dict[str, Set[DataSymbol]]':
+        self,
+        cell: Union[ast.Module, str]
+    ) -> Dict[str, Set[DataSymbol]]:
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
@@ -336,7 +336,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._last_refused_code = None
         return False
 
-    def _resync_symbols(self, symbols: 'Set[DataSymbol]'):
+    def _resync_symbols(self, symbols: Set[DataSymbol]):
         for dsym in symbols:
             if not dsym.containing_scope.is_global:
                 continue
@@ -509,7 +509,7 @@ class NotebookSafety(singletons.NotebookSafety):
             if dsym.is_garbage:
                 dsym.collect_self_garbage()
 
-    def retrieve_namespace_attr_or_sub(self, obj: 'Any', attr_or_sub: 'Union[str, int]', is_subscript: bool):
+    def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: Union[str, int], is_subscript: bool):
         try:
             if is_subscript:
                 # TODO: more complete list of things that are checkable

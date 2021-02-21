@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 from contextlib import contextmanager
 import logging
@@ -17,31 +17,31 @@ logger.setLevel(logging.WARNING)
 
 
 class AstEavesdropper(ast.NodeTransformer):
-    def __init__(self, orig_to_copy_mapping: 'Dict[int, ast.AST]'):
+    def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST]):
         self._orig_to_copy_mapping = orig_to_copy_mapping
-        self._top_level_node_for_symbol: 'Optional[ast.AST]' = None
+        self._top_level_node_for_symbol: Optional[ast.AST] = None
 
     def _emitter_ast(self):
         return fast.Name(EMIT_EVENT, ast.Load())
 
-    def _get_copy_id_ast(self, orig_node_id: 'Union[int, ast.AST]'):
+    def _get_copy_id_ast(self, orig_node_id: Union[int, ast.AST]):
         if not isinstance(orig_node_id, int):
             orig_node_id = id(orig_node_id)
         return fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))
 
-    def _make_tuple_event_for(self, node: 'ast.AST', event: 'TraceEvent', orig_node_id=None, **kwargs):
+    def _make_tuple_event_for(self, node: ast.AST, event: TraceEvent, orig_node_id=None, **kwargs):
         with fast.location_of(node):
             tuple_node = fast.Tuple([fast.Call(
                 func=self._emitter_ast(),
                 args=[event.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
                 keywords=[] if len(kwargs) == 0 else fast.kwargs(**kwargs),
             ), node], ast.Load())
-            slc: 'Union[ast.Constant, ast.Num, ast.Index]' = fast.Num(1)
+            slc: Union[ast.Constant, ast.Num, ast.Index] = fast.Num(1)
             if sys.version_info < (3, 9):
                 slc = fast.Index(slc)
             return fast.Subscript(tuple_node, slc, ast.Load())
 
-    def visit(self, node: 'ast.AST'):
+    def visit(self, node: ast.AST):
         ret = super().visit(node)
         if isinstance(node, ast.stmt):
             # we haven't inserted statements yet, and StatementInserter needs the previous ids to be identical
@@ -49,7 +49,7 @@ class AstEavesdropper(ast.NodeTransformer):
         return ret
 
     @contextmanager
-    def attrsub_load_context(self, top_level_node: 'Optional[ast.AST]'):
+    def attrsub_load_context(self, top_level_node: Optional[ast.AST]):
         old = self._top_level_node_for_symbol
         if old is None or top_level_node is None:
             # entering context when we are already inside chain is a no-op,
@@ -63,13 +63,13 @@ class AstEavesdropper(ast.NodeTransformer):
     def _inside_attrsub_load_chain(self):
         return self._top_level_node_for_symbol is not None
 
-    def visit_Attribute(self, node: 'ast.Attribute', call_context=False):
+    def visit_Attribute(self, node: ast.Attribute, call_context=False):
         with fast.location_of(node.value):
             attr_node = cast(ast.Attribute, node)
             attr_or_sub = fast.Str(attr_node.attr)
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
-    def visit_Subscript(self, node: 'ast.Subscript', call_context=False):
+    def visit_Subscript(self, node: ast.Subscript, call_context=False):
         with fast.location_of(node.value):
             # TODO: expand beyond simple slices
             if isinstance(node.slice, ast.Index):
@@ -159,13 +159,13 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def visit_Attribute_or_Subscript(
         self,
-        node: 'Union[ast.Attribute, ast.Subscript]',
-        attr_or_sub: 'ast.expr',
+        node: Union[ast.Attribute, ast.Subscript],
+        attr_or_sub: ast.expr,
         call_context: bool = False
     ):
         orig_node_id = id(node)
         with fast.location_of(node.value):
-            extra_args: 'List[ast.keyword]' = []
+            extra_args: List[ast.keyword] = []
             if isinstance(node.value, ast.Name):
                 extra_args = fast.kwargs(name=fast.Str(node.value.id))
 

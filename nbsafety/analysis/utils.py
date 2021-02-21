@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 import logging
 import sys
@@ -18,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 
 def get_symbols_for_references(
-        symbol_refs: 'Set[SymbolRef]',
-        scope: 'Scope',
-        only_add_successful_resolutions: bool = False,
-) -> 'Tuple[Set[DataSymbol], Set[DataSymbol]]':
+    symbol_refs: Set[SymbolRef],
+    scope: Scope,
+    only_add_successful_resolutions: bool = False,
+) -> Tuple[Set[DataSymbol], Set[DataSymbol]]:
     symbols = set()
     called_symbols = set()
     for symbol_ref in symbol_refs:
@@ -42,7 +42,7 @@ def get_symbols_for_references(
     return symbols, called_symbols
 
 
-def compute_call_chain_live_symbols(live: 'Set[DataSymbol]'):
+def compute_call_chain_live_symbols(live: Set[DataSymbol]):
     seen = set()
     worklist = list(live)
     while len(worklist) > 0:
@@ -68,7 +68,7 @@ class ContainsNamedExprVisitor(ast.NodeVisitor):
     def __init__(self):
         self.contains_named_expr = False
 
-    def __call__(self, node: 'ast.stmt') -> bool:
+    def __call__(self, node: ast.stmt) -> bool:
         if sys.version_info.minor < 8:
             return False
         self.visit(node)
@@ -77,13 +77,13 @@ class ContainsNamedExprVisitor(ast.NodeVisitor):
     def visit_NamedExpr(self, node):
         self.contains_named_expr = True
 
-    def generic_visit(self, node: 'ast.AST'):
+    def generic_visit(self, node: ast.AST):
         if self.contains_named_expr:
             return
         super().generic_visit(node)
 
 
-def stmt_contains_lval(node: 'ast.stmt'):
+def stmt_contains_lval(node: ast.stmt):
     # TODO: expand to method calls, etc.
     simple_contains_lval = isinstance(node, (
         ast.Assign,

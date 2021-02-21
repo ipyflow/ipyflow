@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import sys
 
 # Remove the CWD from sys.path while we load stuff.

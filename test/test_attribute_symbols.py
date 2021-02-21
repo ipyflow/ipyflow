@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 
 from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, CallPoint as Cp

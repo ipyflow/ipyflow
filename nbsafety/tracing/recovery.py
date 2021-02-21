@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import functools
 
 from nbsafety.run_mode import SafetyRunMode

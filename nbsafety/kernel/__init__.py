@@ -1,3 +1,3 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 
 from .kernel import SafeKernel

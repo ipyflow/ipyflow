@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 from typing import TYPE_CHECKING
 from collections import deque
@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from typing import Deque, Dict, Optional, Tuple, Union
 
 
-def compute_lineno_to_stmt_mapping(node: 'Union[str, ast.AST]') -> 'Dict[int, ast.stmt]':
+def compute_lineno_to_stmt_mapping(node: Union[str, ast.AST]) -> Dict[int, ast.stmt]:
     line_to_stmt_map = {}
     if isinstance(node, str):
         node = ast.parse(node)

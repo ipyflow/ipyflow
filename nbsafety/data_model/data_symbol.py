@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-from __future__ import annotations
+# -*- coding: future_annotations -*-
 import ast
 from collections import defaultdict
 from enum import Enum
@@ -32,14 +31,14 @@ class DataSymbolType(Enum):
 class DataSymbol(object):
     def __init__(
         self,
-        name: 'Union[str, int]',
-        symbol_type: 'DataSymbolType',
-        obj: 'Any',
-        containing_scope: 'Scope',
-        stmt_node: 'Optional[ast.AST]' = None,
-        parents: 'Optional[Set[DataSymbol]]' = None,
-        refresh_cached_obj=False,
-        implicit=False,
+        name: Union[str, int],
+        symbol_type: DataSymbolType,
+        obj: Any,
+        containing_scope: Scope,
+        stmt_node: Optional[ast.AST] = None,
+        parents: Optional[Set[DataSymbol]] = None,
+        refresh_cached_obj: bool = False,
+        implicit: bool = False,
     ):
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
@@ -119,20 +118,20 @@ class DataSymbol(object):
     def is_implicit(self):
         return self._implicit
 
-    def _get_obj(self) -> 'Any':
+    def _get_obj(self) -> Any:
         if self._has_weakref:
             return self._obj_ref()
         else:
             return self._obj_ref
 
-    def _get_cached_obj(self) -> 'Any':
+    def _get_cached_obj(self) -> Any:
         if self._cached_has_weakref:
             return self.cached_obj_ref()
         else:
             return self.cached_obj_ref
 
     def shallow_clone(self, new_obj, new_containing_scope, symbol_type):
-        return self.__class__(self.name, symbol_type, new_obj, new_containing_scope, self.safety)
+        return self.__class__(self.name, symbol_type, new_obj, new_containing_scope)
 
     @property
     def obj_id(self):
@@ -267,7 +266,7 @@ class DataSymbol(object):
         return True
 
     def update_deps(
-            self, new_deps: 'Set[DataSymbol]', overwrite=True, mutated=False, propagate=True
+        self, new_deps: Set[DataSymbol], overwrite=True, mutated=False, propagate=True
     ):
         # skip updates for imported symbols
         if self.is_import:
@@ -293,18 +292,18 @@ class DataSymbol(object):
         self._refresh_cached_obj()
         self.safety.updated_symbols.add(self)
 
-    def refresh(self: 'DataSymbol'):
+    def refresh(self: DataSymbol):
         self.fresher_ancestors = set()
         self.defined_cell_num = self.safety.cell_counter()
         self.namespace_stale_symbols = set()
 
-    def _propagate_refresh_to_namespace_parents(self, seen: 'Set[DataSymbol]'):
+    def _propagate_refresh_to_namespace_parents(self, seen: Set[DataSymbol]):
         if self in seen:
             return
         # print('refresh propagate', self)
         seen.add(self)
         for self_alias in self.safety.aliases[self.obj_id]:
-            containing_scope: 'NamespaceScope' = cast('NamespaceScope', self_alias.containing_scope)
+            containing_scope: NamespaceScope = cast('NamespaceScope', self_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue
             # if containing_scope.max_defined_timestamp == self.safety.cell_counter():

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 from contextlib import contextmanager
 from typing import Sequence, TYPE_CHECKING
@@ -15,7 +15,7 @@ class SkipUnboundArgsMixin(ast.NodeVisitor):
 
 
 class VisitListsMixin(ast.NodeVisitor):
-    def generic_visit(self, node: 'Union[ast.AST, Sequence[ast.AST]]'):
+    def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]):
         if node is None:
             return
         elif isinstance(node, Sequence):

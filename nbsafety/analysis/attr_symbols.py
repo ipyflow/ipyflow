@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 from typing import cast, Union, TYPE_CHECKING
 
@@ -24,9 +24,9 @@ class CallPoint(CommonEqualityMixin):
 
 
 class AttrSubSymbolChain(CommonEqualityMixin):
-    def __init__(self, symbols: 'Sequence[Union[SupportedIndexType, CallPoint]]'):
+    def __init__(self, symbols: Sequence[Union[SupportedIndexType, CallPoint]]):
         # FIXME: each symbol should distinguish between attribute and subscript
-        self.symbols: 'Tuple[Union[SupportedIndexType, CallPoint], ...]' = tuple(symbols)
+        self.symbols: Tuple[Union[SupportedIndexType, CallPoint], ...] = tuple(symbols)
         self.call_points = tuple(sym for sym in self.symbols if isinstance(sym, CallPoint))
 
     def __hash__(self):
@@ -40,7 +40,7 @@ class GetAttrSubSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, int, Tuple[Union[str, int], ...], CallPoint]] = []
 
-    def __call__(self, node: 'Union[ast.Attribute, ast.Subscript, ast.Call, ast.Name]') -> 'AttrSubSymbolChain':
+    def __call__(self, node: Union[ast.Attribute, ast.Subscript, ast.Call, ast.Name]) -> AttrSubSymbolChain:
         self.visit(node)
         self.symbol_chain.reverse()
         return AttrSubSymbolChain(self.symbol_chain)

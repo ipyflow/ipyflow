@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 from nbsafety._version import get_versions
 __version__ = get_versions()['version']
 del get_versions

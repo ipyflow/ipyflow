@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 
 from nbsafety.tracing.stmt_mapper import StatementMapper

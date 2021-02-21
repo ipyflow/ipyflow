@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import ast
 from collections import defaultdict
 import logging
@@ -165,7 +165,7 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.to_add_set, temp = temp, self.to_add_set
         self.to_add_set.append(tuple(temp))
 
-    def generic_visit(self, node: 'Union[ast.AST, Sequence[ast.AST]]'):
+    def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]):
         # The purpose of this is to make sure we call our visit_expr method if we see an expr
         if node is None:
             return
@@ -346,13 +346,13 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         with self.gather_rvals_context():
             self.visit(node.context_expr)
 
-    def visit_Import(self, node: 'ast.Import'):
+    def visit_Import(self, node: ast.Import):
         self.visit_Import_or_ImportFrom(node)
 
-    def visit_ImportFrom(self, node: 'ast.ImportFrom'):
+    def visit_ImportFrom(self, node: ast.ImportFrom):
         self.visit_Import_or_ImportFrom(node)
 
-    def visit_Import_or_ImportFrom(self, node: 'Union[ast.Import, ast.ImportFrom]'):
+    def visit_Import_or_ImportFrom(self, node: Union[ast.Import, ast.ImportFrom]):
         with self.push_attributes(lval_symbols=[], rval_symbols=[]):
             for name in node.names:
                 if name.asname is None:
@@ -373,13 +373,13 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.rval_symbols.extend(rvals_to_extend)
 
 
-def get_assignment_lval_and_rval_symbol_refs(node: 'Union[str, ast.AST]'):
+def get_assignment_lval_and_rval_symbol_refs(node: Union[str, ast.AST]):
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     yield from GetSymbolEdges()(node)
 
 
-def get_symbol_edges(node: 'Union[str, ast.AST]'):
+def get_symbol_edges(node: Union[str, ast.AST]):
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     visitor = GetSymbolEdges()

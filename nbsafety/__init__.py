@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 
 # Jupyter Extension points
 def _jupyter_nbextension_paths():

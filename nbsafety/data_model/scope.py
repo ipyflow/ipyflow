@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-from __future__ import annotations
+# -*- coding: future_annotations -*-
 import ast
 import inspect
 import itertools
@@ -28,9 +27,9 @@ class Scope:
     GLOBAL_SCOPE_NAME = '<module>'
 
     def __init__(
-            self,
-            scope_name: str = GLOBAL_SCOPE_NAME,
-            parent_scope: 'Optional[Scope]' = None,
+        self,
+        scope_name: str = GLOBAL_SCOPE_NAME,
+        parent_scope: Optional[Scope] = None,
     ):
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
@@ -65,30 +64,30 @@ class Scope:
             return self.parent_scope.non_namespace_parent_scope
         return self.parent_scope
 
-    def make_child_scope(self, scope_name, obj_id=None) -> 'Scope':
+    def make_child_scope(self, scope_name, obj_id=None) -> Scope:
         if obj_id is None:
             return Scope(scope_name, parent_scope=self)
         else:
             return NamespaceScope(obj_id, scope_name, parent_scope=self)
 
-    def put(self, name: 'SupportedIndexType', val: DataSymbol):
+    def put(self, name: SupportedIndexType, val: DataSymbol):
         self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
-    def lookup_data_symbol_by_name_this_indentation(self, name) -> 'Optional[DataSymbol]':
+    def lookup_data_symbol_by_name_this_indentation(self, name) -> Optional[DataSymbol]:
         return self._data_symbol_by_name.get(name, None)
 
     def all_data_symbols_this_indentation(self):
         return self._data_symbol_by_name.values()
 
-    def lookup_data_symbol_by_name(self, name) -> 'Optional[DataSymbol]':
+    def lookup_data_symbol_by_name(self, name) -> Optional[DataSymbol]:
         ret = self.lookup_data_symbol_by_name_this_indentation(name)
         if ret is None and self.non_namespace_parent_scope is not None:
             ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name)
         return ret
 
     @staticmethod
-    def _get_name_to_obj_mapping(obj, dc) -> 'Dict[SupportedIndexType, Any]':
+    def _get_name_to_obj_mapping(obj, dc) -> Dict[SupportedIndexType, Any]:
         if obj is None:
             return get_ipython().ns_table['user_global']
         elif dc is not None and dc.is_subscript:
@@ -140,18 +139,18 @@ class Scope:
         return dsym, next_dsym, success
 
     def upsert_data_symbol_for_name(
-            self,
-            name: 'Union[str, int]',
-            obj: 'Any',
-            deps: 'Set[DataSymbol]',
-            stmt_node: 'ast.AST',
-            is_subscript,
-            overwrite=True,
-            is_function_def=False,
-            is_import=False,
-            class_scope: 'Optional[Scope]' = None,
-            propagate=True
-    ) -> 'DataSymbol':
+        self,
+        name: Union[str, int],
+        obj: Any,
+        deps: Set[DataSymbol],
+        stmt_node: ast.AST,
+        is_subscript: bool,
+        overwrite: bool = True,
+        is_function_def: bool = False,
+        is_import: bool = False,
+        class_scope: Optional[Scope] = None,
+        propagate: bool = True
+    ) -> DataSymbol:
         dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps, stmt_node, is_subscript,
             overwrite=overwrite, is_function_def=is_function_def, is_import=is_import, class_scope=class_scope
@@ -162,16 +161,16 @@ class Scope:
 
     def _upsert_data_symbol_for_name_inner(
             self,
-            name: 'Union[str, int]',
-            obj: 'Any',
-            deps: 'Set[DataSymbol]',
-            stmt_node: 'ast.AST',
-            is_subscript,
-            overwrite=True,
-            is_function_def=False,
-            is_import=False,
-            class_scope: 'Optional[Scope]' = None,
-    ) -> 'Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]':
+            name: Union[str, int],
+            obj: Any,
+            deps: Set[DataSymbol],
+            stmt_node: ast.AST,
+            is_subscript: bool,
+            overwrite: bool = True,
+            is_function_def: bool = False,
+            is_import: bool = False,
+            class_scope: Optional[Scope] = None,
+    ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]:
         # print(self, 'upsert', name)
         assert not (class_scope is not None and (is_function_def or is_import))
         symbol_type = DataSymbolType.DEFAULT
@@ -244,7 +243,7 @@ class Scope:
         return self.parent_scope.global_scope
 
     @property
-    def full_path(self) -> 'Tuple[str, ...]':
+    def full_path(self) -> Tuple[str, ...]:
         path = (self.scope_name,)
         if self.is_global:
             return path
@@ -267,14 +266,14 @@ class Scope:
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, dc: 'DataSymbol') -> str:
+    def make_namespace_qualified_name(self, dc: DataSymbol) -> str:
         return str(dc.name)
 
 
 class NamespaceScope(Scope):
     # TODO: support (multiple) inheritance by allowing
     #  NamespaceScopes from classes to clone their parent class's NamespaceScopes
-    def __init__(self, obj: 'Any', *args, **kwargs):
+    def __init__(self, obj: Any, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
@@ -333,7 +332,7 @@ class NamespaceScope(Scope):
         else:
             return self._data_symbol_by_name
 
-    def clone(self, obj: 'Any'):
+    def clone(self, obj: Any):
         cloned = NamespaceScope(obj, self.safety)
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
@@ -343,7 +342,7 @@ class NamespaceScope(Scope):
         self.child_clones.append(cloned)
         return cloned
 
-    def make_namespace_qualified_name(self, dc: 'DataSymbol'):
+    def make_namespace_qualified_name(self, dc: DataSymbol):
         path = self.full_namespace_path
         name = str(dc.name)
         if path:
@@ -368,7 +367,7 @@ class NamespaceScope(Scope):
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
 
-    def all_data_symbols_this_indentation(self, exclude_class=False, is_subscript=None) -> 'Iterable[DataSymbol]':
+    def all_data_symbols_this_indentation(self, exclude_class=False, is_subscript=None) -> Iterable[DataSymbol]:
         if is_subscript is None:
             dsym_collections_to_chain: List[Iterable] = [
                 self._data_symbol_by_name.values(), self._subscript_data_symbol_by_name.values()
@@ -393,7 +392,7 @@ class NamespaceScope(Scope):
     def num_symbols(self):
         return self.num_dotted_symbols + self.num_subscript_symbols
 
-    def put(self, name: 'SupportedIndexType', val: DataSymbol):
+    def put(self, name: SupportedIndexType, val: DataSymbol):
         if val.is_subscript:
             self._subscript_data_symbol_by_name[name] = val
         else:
@@ -405,7 +404,7 @@ class NamespaceScope(Scope):
     def refresh(self):
         self.max_defined_timestamp = self.safety.cell_counter()
 
-    def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> 'Optional[NamespaceScope]':
+    def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> Optional[NamespaceScope]:
         # TODO: test this properly
         ret = None
         if self.namespace_parent_scope is not None:
@@ -419,7 +418,7 @@ class NamespaceScope(Scope):
             return None
 
     @property
-    def namespace_parent_scope(self) -> 'Optional[NamespaceScope]':
+    def namespace_parent_scope(self) -> Optional[NamespaceScope]:
         if self.parent_scope is not None and isinstance(self.parent_scope, NamespaceScope):
             return self.parent_scope
         return None

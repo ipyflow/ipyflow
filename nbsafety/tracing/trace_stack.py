@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 import itertools
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -11,11 +11,11 @@ if TYPE_CHECKING:
 
 
 class TraceStack:
-    def __init__(self, manager: 'TraceManager'):
+    def __init__(self, manager: TraceManager):
         self._manager = manager
-        self._stack: 'List[Tuple[Any, ...]]' = []
-        self._stack_item_initializers: 'Dict[str, Callable[[], Any]]' = {}
-        self._stack_items_with_manual_initialization: 'Set[str]' = set()
+        self._stack: List[Tuple[Any, ...]] = []
+        self._stack_item_initializers: Dict[str, Callable[[], Any]] = {}
+        self._stack_items_with_manual_initialization: Set[str] = set()
         self._registering_stack_state_context = False
 
     def _stack_item_names(self):

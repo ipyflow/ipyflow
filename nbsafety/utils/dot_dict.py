@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+# -*- coding: future_annotations -*-
 
 # ref: https://gist.github.com/golobor/397b5099d42da476a4e6
 class DotDict(dict):

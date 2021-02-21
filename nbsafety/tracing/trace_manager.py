@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-from __future__ import annotations
+# -*- coding: future_annotations -*-
 import ast
 import builtins
 from collections import defaultdict
@@ -85,9 +84,9 @@ def _finish_tracing_reset():
 
 class BaseTraceManager(singletons.TraceManager):
 
-    EVENT_HANDLERS: 'Dict[TraceEvent, List[Callable[..., Any]]]' = defaultdict(list)
+    EVENT_HANDLERS: Dict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
 
-    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
+    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: Any):
         event = TraceEvent(evt)
         frame = kwargs.get('frame', sys._getframe().f_back)
         kwargs['frame'] = frame
@@ -109,7 +108,7 @@ class TraceManager(BaseTraceManager):
         self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
-        self.seen_stmts: 'Set[int]' = set()
+        self.seen_stmts: Set[int] = set()
         self.call_depth = 0
         self.traced_statements: Dict[int, TraceStatement] = {}
         self.tracing_enabled = False
@@ -118,29 +117,29 @@ class TraceManager(BaseTraceManager):
         self.call_stack: 'TraceStack' = self._make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
-            self.prev_trace_stmt_in_cur_frame: 'Optional[TraceStatement]' = None
+            self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             ############################################################
             # old state:
-            self.loaded_data_symbols: 'Set[DataSymbol]' = set()
-            self.saved_store_data: 'List[SavedStoreData]' = []
+            self.loaded_data_symbols: Set[DataSymbol] = set()
+            self.saved_store_data: List[SavedStoreData] = []
             ############################################################
             # new state:
             # just something that maps orig_node_id to data symbol?
             ############################################################
-            self.deep_refs: 'Set[DeepRef]' = set()
-            self.mutations: 'Set[Mutation]' = set()
-            self.deep_ref_candidates: 'List[DeepRefCandidate]' = []
-            self.literal_namespace: 'Optional[NamespaceScope]' = None
+            self.deep_refs: Set[DeepRef] = set()
+            self.mutations: Set[Mutation] = set()
+            self.deep_ref_candidates: List[DeepRefCandidate] = []
+            self.literal_namespace: Optional[NamespaceScope] = None
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope = self.safety.global_scope
                 self.active_scope = self.safety.global_scope
                 self.inside_lambda = False
 
-            self.lexical_call_stack: 'TraceStack' = self._make_stack()
+            self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
-                self.first_obj_id_in_chain: 'Optional[int]' = None
-                self.saved_load_symbol: 'Optional[DataSymbol]' = None
+                self.first_obj_id_in_chain: Optional[int] = None
+                self.saved_load_symbol: Optional[DataSymbol] = None
 
     @property
     def safety(self) -> NotebookSafety:
@@ -149,7 +148,7 @@ class TraceManager(BaseTraceManager):
     def _make_stack(self):
         return TraceStack(self)
 
-    def _handle_call_transition(self, trace_stmt: 'TraceStatement'):
+    def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
         with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda
@@ -161,7 +160,7 @@ class TraceManager(BaseTraceManager):
             self.active_scope = new_scope
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
-    def _check_prev_stmt_done_executing_hook(self, event: 'TraceEvent', trace_stmt: 'TraceStatement'):
+    def _check_prev_stmt_done_executing_hook(self, event: TraceEvent, trace_stmt: TraceStatement):
         if event == TraceEvent.after_stmt:
             trace_stmt.finished_execution_hook()
         elif event == TraceEvent.return_ and self.prev_event not in (TraceEvent.call, TraceEvent.exception):
@@ -173,7 +172,7 @@ class TraceManager(BaseTraceManager):
             #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             #     prev_overall.finished_execution_hook()
 
-    def _handle_return_transition(self, trace_stmt: 'TraceStatement'):
+    def _handle_return_transition(self, trace_stmt: TraceStatement):
         inside_lambda = self.inside_lambda
         cur_frame_scope = self.cur_frame_original_scope
         self.call_stack.pop()
@@ -190,9 +189,9 @@ class TraceManager(BaseTraceManager):
                     return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
 
     def state_transition_hook(
-            self,
-            event: 'TraceEvent',
-            trace_stmt: 'TraceStatement'
+        self,
+        event: TraceEvent,
+        trace_stmt: TraceStatement
     ):
         self.trace_event_counter += 1
 
@@ -204,7 +203,7 @@ class TraceManager(BaseTraceManager):
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
 
-    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
+    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: Any):
         event = TraceEvent(evt)
         ret = kwargs.get('ret', None)
         frame = kwargs.get('frame', sys._getframe().f_back)
@@ -243,7 +242,7 @@ class TraceManager(BaseTraceManager):
             ret = new_ret
         return ret
 
-    def _get_namespace_for_obj(self, obj: 'Any', obj_name: 'Optional[str]' = None) -> 'NamespaceScope':
+    def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
         obj_id = id(obj)
         ns = self.safety.namespaces.get(obj_id, None)
         # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
@@ -265,8 +264,8 @@ class TraceManager(BaseTraceManager):
         # FIXME: brittle strategy for determining parent scope of obj
         if ns.parent_scope is None:
             if (
-                    obj_name is not None and
-                    obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
+                obj_name is not None and
+                obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
             ):
                 parent_scope = self.safety.global_scope
             else:
@@ -276,7 +275,7 @@ class TraceManager(BaseTraceManager):
 
     @on_exception_default_to(return_arg_at_index(1, logger))
     def attrsub_tracer(
-        self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: 'Optional[str]'
+        self, obj, attr_or_subscript, ctx: str, call_context: bool, is_subscript: bool, obj_name: Optional[str]
     ):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
@@ -347,7 +346,7 @@ class TraceManager(BaseTraceManager):
         return
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def after_complex_symbol(self, obj: 'Any', call_context: bool):
+    def after_complex_symbol(self, obj: Any, call_context: bool):
         try:
             if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
                 return
@@ -381,7 +380,7 @@ class TraceManager(BaseTraceManager):
             self.active_scope = self.cur_frame_original_scope
 
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def arg_recorder(self, arg_obj: 'Any', arg_node: 'ast.AST'):
+    def arg_recorder(self, arg_obj: Any, arg_node: ast.AST):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
@@ -432,7 +431,7 @@ class TraceManager(BaseTraceManager):
             self.literal_namespace = scope
         return literal
 
-    def after_stmt(self, stmt_id: int, frame: 'FrameType', ret_expr: 'Optional[Any]' = None):
+    def after_stmt(self, stmt_id: int, frame: FrameType, ret_expr: Optional[Any] = None):
         if stmt_id in self.seen_stmts:
             return ret_expr
         stmt = self.safety.ast_node_by_id.get(stmt_id, None)
@@ -440,7 +439,7 @@ class TraceManager(BaseTraceManager):
             self._sys_tracer(frame, TraceEvent.after_stmt, stmt)
         return ret_expr
 
-    def before_stmt(self, stmt_id: int, frame: 'FrameType') -> None:
+    def before_stmt(self, stmt_id: int, frame: FrameType) -> None:
         if stmt_id in self.seen_stmts:
             return
         # logger.warning('reenable tracing: %s', site_id)
@@ -497,7 +496,7 @@ class TraceManager(BaseTraceManager):
             delattr(builtins, EMIT_EVENT)
             self._disable_tracing(check_enabled=False)
 
-    def _attempt_to_reenable_tracing(self, frame: 'FrameType') -> None:
+    def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
         if self.safety.is_develop:
             assert self.tracing_reset_pending, 'expected tracing reset to be pending!'
             assert self.call_depth > 0, 'expected managed call depth > 0, got %d' % self.call_depth
@@ -524,7 +523,7 @@ class TraceManager(BaseTraceManager):
             logger.warning('reenable tracing >>>')
 
     @on_exception_default_to(return_val(None, logger))
-    def _sys_tracer(self, frame: 'FrameType', evt: 'Union[str, TraceEvent]', extra):
+    def _sys_tracer(self, frame: FrameType, evt: Union[str, TraceEvent], extra):
         if isinstance(evt, str):
             event = TraceEvent(evt)
         else:

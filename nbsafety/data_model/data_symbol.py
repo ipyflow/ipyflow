@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import ast
 from collections import defaultdict
 from enum import Enum
@@ -7,6 +8,7 @@ from typing import cast, TYPE_CHECKING
 import weakref
 
 from nbsafety.data_model.update_protocol import UpdateProtocol
+from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Set, Union
@@ -29,16 +31,15 @@ class DataSymbolType(Enum):
 
 class DataSymbol(object):
     def __init__(
-            self,
-            name: 'Union[str, int]',
-            symbol_type: 'DataSymbolType',
-            obj: 'Any',
-            containing_scope: 'Scope',
-            safety: 'NotebookSafety',
-            stmt_node: 'Optional[ast.AST]' = None,
-            parents: 'Optional[Set[DataSymbol]]' = None,
-            refresh_cached_obj=False,
-            implicit=False,
+        self,
+        name: 'Union[str, int]',
+        symbol_type: 'DataSymbolType',
+        obj: 'Any',
+        containing_scope: 'Scope',
+        stmt_node: 'Optional[ast.AST]' = None,
+        parents: 'Optional[Set[DataSymbol]]' = None,
+        refresh_cached_obj=False,
+        implicit=False,
     ):
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
@@ -54,7 +55,6 @@ class DataSymbol(object):
         if refresh_cached_obj:
             self._refresh_cached_obj()
         self.containing_scope = containing_scope
-        self.safety = safety
         self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
         if parents is None:
@@ -90,6 +90,10 @@ class DataSymbol(object):
 
     def __hash__(self):
         return hash(self.full_path)
+
+    @property
+    def safety(self) -> NotebookSafety:
+        return nbs()
 
     @property
     def readable_name(self) -> str:

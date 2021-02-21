@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import ast
 import inspect
 import itertools
@@ -13,6 +14,7 @@ except ImportError:
 
 from nbsafety.analysis import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
+from nbsafety.singletons import nbs, nbs_check_init
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
@@ -22,16 +24,14 @@ if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety
 
 
-class Scope(object):
+class Scope:
     GLOBAL_SCOPE_NAME = '<module>'
 
     def __init__(
             self,
-            safety: 'NotebookSafety',
             scope_name: str = GLOBAL_SCOPE_NAME,
             parent_scope: 'Optional[Scope]' = None,
     ):
-        self.safety = safety
         self.scope_name = scope_name
         self.parent_scope = parent_scope  # None iff this is the global scope
         self._data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
@@ -41,6 +41,10 @@ class Scope(object):
 
     def __str__(self):
         return str(self.full_path)
+
+    @property
+    def safety(self) -> NotebookSafety:
+        return nbs()
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
@@ -63,9 +67,9 @@ class Scope(object):
 
     def make_child_scope(self, scope_name, obj_id=None) -> 'Scope':
         if obj_id is None:
-            return Scope(self.safety, scope_name, parent_scope=self)
+            return Scope(scope_name, parent_scope=self)
         else:
-            return NamespaceScope(obj_id, self.safety, scope_name, parent_scope=self)
+            return NamespaceScope(obj_id, scope_name, parent_scope=self)
 
     def put(self, name: 'SupportedIndexType', val: DataSymbol):
         self._data_symbol_by_name[name] = val
@@ -217,7 +221,7 @@ class Scope(object):
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
                 deps.add(old_dc)
-        dc = DataSymbol(name, symbol_type, obj, self, self.safety, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
+        dc = DataSymbol(name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
         self.put(name, dc)
         return dc, old_dc, old_id
 
@@ -317,7 +321,11 @@ class NamespaceScope(Scope):
 
     def _obj_reference_expired_callback(self, *_):
         self._tombstone = True
-        self.safety.garbage_namespace_obj_ids.add(self.obj_id)
+        safety = nbs_check_init()
+        if safety is None:
+            # can happen e.g. if program is exiting
+            return
+        safety.garbage_namespace_obj_ids.add(self.obj_id)
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:

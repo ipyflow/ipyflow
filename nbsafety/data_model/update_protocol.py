@@ -96,12 +96,12 @@ class UpdateProtocol(object):
     def _non_class_to_instance_children(self, dsym):
         if self.updated_sym is dsym:
             for dep_introduced_pos, dsym_children in dsym.children_by_cell_position.items():
-                if not self.safety.config.get('backwards_cell_staleness_propagation', True) and dep_introduced_pos <= self.safety.active_cell_position_idx:
+                if not self.safety.settings.get('backwards_cell_staleness_propagation', True) and dep_introduced_pos <= self.safety.active_cell_position_idx:
                     continue
                 yield from dsym_children
             return
         for dep_introduced_pos, dsym_children in dsym.children_by_cell_position.items():
-            if not self.safety.config.get('backwards_cell_staleness_propagation', True) and dep_introduced_pos <= self.safety.active_cell_position_idx:
+            if not self.safety.settings.get('backwards_cell_staleness_propagation', True) and dep_introduced_pos <= self.safety.active_cell_position_idx:
                 continue
             for child in dsym_children:
                 # Next, complicated check to avoid propagating along a class -> instance edge.

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from test.utils import make_safety_fixture
+from .utils import make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
-_safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
+# _safety_fixture, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
+_safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell, **kwargs):

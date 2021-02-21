@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import ast
 import builtins
+from collections import defaultdict
 from contextlib import contextmanager
 import logging
 import sys
@@ -11,6 +13,7 @@ import astunparse
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
+from nbsafety import singletons
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.recovery import on_exception_default_to, return_arg_at_index, return_val
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
@@ -18,7 +21,7 @@ from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Optional, Set, Tuple, Union
+    from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
     SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
@@ -80,9 +83,29 @@ def _finish_tracing_reset():
     pass
 
 
-class TraceManager(object):
-    def __init__(self, safety: 'NotebookSafety'):
-        self.safety = safety
+class BaseTraceManager(singletons.TraceManager):
+
+    EVENT_HANDLERS: 'Dict[TraceEvent, List[Callable[..., Any]]]' = defaultdict(list)
+
+    def _emit_event(self, evt: str, orig_node_id: int, **kwargs: 'Any'):
+        event = TraceEvent(evt)
+        frame = kwargs.get('frame', sys._getframe().f_back)
+        kwargs['frame'] = frame
+        for handler in self.EVENT_HANDLERS[event]:  # type: ignore
+            kwargs['ret'] = handler(self, event, orig_node_id, frame, **kwargs)
+        return kwargs['ret']
+
+
+def register_handler(event: TraceEvent):
+    def _inner_registrar(handler):
+        BaseTraceManager.EVENT_HANDLERS[event].append(handler)
+        return handler
+    return _inner_registrar
+
+
+class TraceManager(BaseTraceManager):
+    def __init__(self):
+        super().__init__()
         self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
@@ -91,8 +114,6 @@ class TraceManager(object):
         self.traced_statements: Dict[int, TraceStatement] = {}
         self.tracing_enabled = False
         self.tracing_reset_pending = False
-
-        setattr(builtins, EMIT_EVENT, self._emit_event)
 
         self.call_stack: 'TraceStack' = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -112,14 +133,18 @@ class TraceManager(object):
             self.literal_namespace: 'Optional[NamespaceScope]' = None
 
             with self.call_stack.needing_manual_initialization():
-                self.cur_frame_original_scope = safety.global_scope
-                self.active_scope = safety.global_scope
+                self.cur_frame_original_scope = self.safety.global_scope
+                self.active_scope = self.safety.global_scope
                 self.inside_lambda = False
 
             self.lexical_call_stack: 'TraceStack' = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.first_obj_id_in_chain: 'Optional[int]' = None
                 self.saved_load_symbol: 'Optional[DataSymbol]' = None
+
+    @property
+    def safety(self) -> NotebookSafety:
+        return singletons.nbs()
 
     def _make_stack(self):
         return TraceStack(self)
@@ -204,8 +229,8 @@ class TraceManager(object):
             new_ret = self.after_complex_symbol(ret, kwargs['call_context'])
         elif event == TraceEvent.argument:
             new_ret = self.arg_recorder(ret, self.safety.ast_node_by_id[orig_node_id])
-        elif event == TraceEvent.before_arg_list:
-            new_ret = self.before_argument_list(ret)
+        # elif event == TraceEvent.before_arg_list:
+        #     new_ret = self.before_argument_list(ret)
         elif event == TraceEvent.after_arg_list:
             new_ret = self.after_argument_list(ret)
         elif event == TraceEvent.before_literal:
@@ -213,7 +238,7 @@ class TraceManager(object):
         elif event == TraceEvent.after_literal:
             new_ret = self.literal_tracer(ret)
         else:
-            raise ValueError('Unsupported event: %s' % event)
+            new_ret = super()._emit_event(evt, orig_node_id, **kwargs)
         if new_ret is not None:
             ret = new_ret
         return ret
@@ -236,7 +261,7 @@ class TraceManager(object):
                 scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
             except (TypeError, StopIteration):
                 scope_name = '<unknown namespace>'
-            ns = NamespaceScope(obj, self.safety, scope_name, parent_scope=None)
+            ns = NamespaceScope(obj, scope_name, parent_scope=None)
         # FIXME: brittle strategy for determining parent scope of obj
         if ns.parent_scope is None:
             if (
@@ -289,7 +314,6 @@ class TraceManager(object):
                     symbol_type,
                     obj_attr_or_sub,
                     scope,
-                    self.safety,
                     stmt_node=None,
                     parents=None,
                     refresh_cached_obj=True,
@@ -372,8 +396,9 @@ class TraceManager(object):
         recorded_arg = GetAttrSubSymbols()(arg_node)
         self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
+    @register_handler(TraceEvent.before_arg_list)
     @on_exception_default_to(return_arg_at_index(1, logger))
-    def before_argument_list(self, _):
+    def before_argument_list(self, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         with self.lexical_call_stack.push():
@@ -397,7 +422,7 @@ class TraceManager(object):
             return literal
         if isinstance(literal, (dict, list, tuple)):
             scope = NamespaceScope(
-                literal, self.safety, None, self.prev_trace_stmt_in_cur_frame.scope
+                literal, None, self.prev_trace_stmt_in_cur_frame.scope
             )
             gen = literal.items() if isinstance(literal, dict) else enumerate(literal)
             for i, obj in gen:
@@ -427,7 +452,6 @@ class TraceManager(object):
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
             trace_stmt = TraceStatement(
-                self.safety,
                 frame,
                 cast(ast.stmt, self.safety.ast_node_by_id[stmt_id]),
                 self.cur_frame_original_scope
@@ -466,9 +490,11 @@ class TraceManager(object):
     @contextmanager
     def tracing_context(self):
         try:
+            setattr(builtins, EMIT_EVENT, self._emit_event)
             self._enable_tracing()
             yield
         finally:
+            delattr(builtins, EMIT_EVENT)
             self._disable_tracing(check_enabled=False)
 
     def _attempt_to_reenable_tracing(self, frame: 'FrameType') -> None:
@@ -494,7 +520,7 @@ class TraceManager(object):
         self.call_depth = 0
         self.call_stack.clear()
         self.lexical_call_stack.clear()
-        if self.safety.config.trace_messages_enabled:
+        if self.safety.settings.trace_messages_enabled:
             logger.warning('reenable tracing >>>')
 
     @on_exception_default_to(return_val(None, logger))
@@ -548,16 +574,16 @@ class TraceManager(object):
 
         trace_stmt = self.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(self.safety, frame, stmt_node, self.cur_frame_original_scope)
+            trace_stmt = TraceStatement(frame, stmt_node, self.cur_frame_original_scope)
             self.traced_statements[id(stmt_node)] = trace_stmt
 
-        if self.safety.config.trace_messages_enabled:
+        if self.safety.settings.trace_messages_enabled:
             codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
             logger.warning(' %3d: %10s >>> %s', lineno, event, codeline)
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
-                if self.safety.config.trace_messages_enabled:
+                if self.safety.settings.trace_messages_enabled:
                     logger.warning(' disable tracing >>>')
                 self._disable_tracing()
                 return None

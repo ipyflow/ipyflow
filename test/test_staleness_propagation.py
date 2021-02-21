@@ -2,13 +2,14 @@
 import logging
 import sys
 
-from test.utils import assert_bool, make_safety_fixture, skipif_known_failing
+from nbsafety.singletons import nbs
+from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
-_safety_fixture, _safety_state, run_cell_ = make_safety_fixture()
+# _safety_fixture, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
+_safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell, **kwargs):
@@ -21,7 +22,7 @@ def run_cell(cell, **kwargs):
 
 
 def stale_detected():
-    return _safety_state[0].test_and_clear_detected_flag()
+    return nbs().test_and_clear_detected_flag()
 
 
 def assert_detected(msg=''):
@@ -1319,22 +1320,21 @@ logging.info(x)
 
 def test_exception_stack_unwind():
     import builtins
-    safety_state = '_safety_state'
     test_passed = 'test_passed'
-    setattr(builtins, safety_state, _safety_state[0])
     setattr(builtins, test_passed, True)
     test_passed = "'" + test_passed + "'"
 
     def assert_stack_size(size):
         return ';'.join([
-            f'can_pass = len({safety_state}.tracing_manager.call_stack) == {size}',
+            f'can_pass = len(TraceManager.instance().call_stack) == {size}',
             f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)',
-            f'print(len({safety_state}.tracing_manager.call_stack), "vs", {size})'
+            f'print(len(TraceManager.instance().call_stack), "vs", {size})'
         ])
     try:
         run_cell(f"""
 import builtins
 import numpy as np
+from nbsafety.singletons import TraceManager
 {assert_stack_size(0)}
 def f():
     {assert_stack_size(1)}
@@ -1351,10 +1351,7 @@ def f():
 f()
 {assert_stack_size(0)}
 """)
-    finally:
-        delattr(builtins, safety_state)
-    test_passed = test_passed.strip("'")
-    try:
+        test_passed = test_passed.strip("'")
         assert getattr(builtins, test_passed), 'unexpected stack size somewhere'
     finally:
         delattr(builtins, test_passed)

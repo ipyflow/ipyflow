@@ -78,7 +78,7 @@ def trace_messages(safety: 'NotebookSafety', line: 'List[str]'):
     if len(line) != 2:
         print("Usage: %safety trace_messages [enabled|disabled] ...")
         return
-    safety.config.trace_messages_enabled = (line[1].lower().startswith("enable"))
+    safety.settings.trace_messages_enabled = (line[1].lower().startswith("enable"))
 
 
 def remove_dep(safety: 'NotebookSafety', line: 'List[str]'):

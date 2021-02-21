@@ -1,17 +1,18 @@
 # -*- coding: utf-8 -*-
 import logging
 
+from nbsafety.singletons import nbs
 from .utils import assert_bool, make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, _safety_state, run_cell_ = make_safety_fixture(setup_cells=['from nbsafety.utils import DotDict'])
+_safety_fixture, run_cell_ = make_safety_fixture(setup_cells=['from nbsafety.utils import DotDict'])
 run_cell = run_cell_
 
 
 def stale_detected():
-    return _safety_state[0].test_and_clear_detected_flag()
+    return nbs().test_and_clear_detected_flag()
 
 
 def assert_detected(msg=''):
@@ -23,7 +24,7 @@ def assert_not_detected(msg=''):
 
 
 def lookup_symbol(val):
-    safety = _safety_state[0]
+    safety = nbs()
     val_id = id(val)
     if val_id not in safety.aliases:
         return None

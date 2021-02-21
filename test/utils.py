@@ -8,9 +8,10 @@ import pytest
 
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.safety import NotebookSafety
+from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Any, List, Optional, Tuple
+    from typing import Any, Tuple
 
 
 def should_skip_known_failing(reason='this test tests unimpled functionality'):
@@ -28,12 +29,11 @@ def assert_bool(val, msg=''):
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
-def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]], Any]':
+def make_safety_fixture(**kwargs) -> 'Tuple[Any, Any]':
     os.environ[SafetyRunMode.DEVELOP.value] = '1'
-    safety_state: List[Optional[NotebookSafety]] = [None]
 
     def run_cell(code, ignore_exceptions=False):
-        get_ipython().run_cell_magic(safety_state[0].cell_magic_name, None, code)
+        get_ipython().run_cell_magic(nbs().cell_magic_name, None, code)
         try:
             if not ignore_exceptions and getattr(sys, 'last_value', None) is not None:
                 last_tb = getattr(sys, 'last_traceback', None)
@@ -51,7 +51,8 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        safety_state[0] = NotebookSafety(
+        NotebookSafety.clear_instance()
+        NotebookSafety.instance(
             cell_magic_name='_SAFETY_CELL_MAGIC',
             store_history=store_history,
             test_context=test_context,
@@ -64,9 +65,10 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, List[Optional[NotebookSafety]],
             run_cell(setup_cell)
         yield  # yield to execution of the actual test
         # ensure each test didn't give failures during ast transformation
-        exc = safety_state[0].set_ast_transformer_raised(None)
+        exc = nbs().set_ast_transformer_raised(None)
         if exc is not None:
             raise exc
         get_ipython().reset()  # reset ipython state
 
-    return init_or_reset_dependency_graph, safety_state, run_cell
+    return init_or_reset_dependency_graph, run_cell
+

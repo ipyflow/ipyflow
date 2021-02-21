@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 import ast
 from contextlib import contextmanager
 import logging
@@ -9,6 +10,7 @@ from nbsafety.analysis import (
 )
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope, Scope
+from nbsafety.singletons import nbs, TraceManager
 from nbsafety.tracing.mutation_event import MutationEvent
 
 if TYPE_CHECKING:
@@ -22,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class TraceStatement(object):
-    def __init__(self, safety: 'NotebookSafety', frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
-        self.safety = safety
+    def __init__(self, frame: 'FrameType', stmt_node: 'ast.stmt', scope: 'Scope'):
         self.frame = frame
         self.stmt_node = stmt_node
         self.scope = scope
@@ -31,6 +32,10 @@ class TraceStatement(object):
         self.call_point_deps: List[Set[DataSymbol]] = []
         self.lambda_call_point_deps_done_once = False
         self.call_seen = False
+
+    @property
+    def safety(self) -> NotebookSafety:
+        return nbs()
 
     @contextmanager
     def replace_active_scope(self, new_active_scope):
@@ -41,7 +46,7 @@ class TraceStatement(object):
 
     @property
     def finished(self):
-        return self.stmt_id in self.safety.tracing_manager.seen_stmts
+        return self.stmt_id in TraceManager.instance().seen_stmts
 
     @property
     def stmt_id(self):
@@ -66,10 +71,10 @@ class TraceStatement(object):
                 rval_data_symbols.add(maybe_rval_dsym)
             # else:
             #     assert not isinstance(name, AttrSubSymbolChain)
-        return rval_data_symbols.union(*self.call_point_deps) | self.safety.tracing_manager.loaded_data_symbols
+        return rval_data_symbols.union(*self.call_point_deps) | TraceManager.instance().loaded_data_symbols
 
     def get_post_call_scope(self):
-        old_scope = self.safety.tracing_manager.cur_frame_original_scope
+        old_scope = TraceManager.instance().cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
@@ -102,7 +107,7 @@ class TraceStatement(object):
             rval_deps = self.compute_rval_dependencies(
                 rval_symbol_refs=set.union(*symbol_edges.values()) - {None}
             ) | deep_rval_deps
-        for scope, obj, attr_or_sub, is_subscript in self.safety.tracing_manager.saved_store_data:
+        for scope, obj, attr_or_sub, is_subscript in TraceManager.instance().saved_store_data:
             try:
                 attr_or_sub_obj = self.safety.retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
             except:
@@ -117,7 +122,7 @@ class TraceStatement(object):
                 overwrite=should_overwrite, is_function_def=False, class_scope=None
             )
             # print(scope_to_use, 'upsert', attr_or_sub, attr_or_sub_obj, rval_deps)
-            if len(self.safety.tracing_manager.saved_store_data) == 1:
+            if len(TraceManager.instance().saved_store_data) == 1:
                 break
         else:
             return None, None
@@ -127,10 +132,10 @@ class TraceStatement(object):
     def _handle_literal_namespace(self, lval_name, rval_names, stored_attrsub_scope, stored_attrsub_name):
         # remaining_rval_names = set(rval_names)
         remaining_rval_names = rval_names
-        if self.safety.tracing_manager.literal_namespace is None:
+        if TraceManager.instance().literal_namespace is None:
             return remaining_rval_names
-        literal_namespace = self.safety.tracing_manager.literal_namespace
-        self.safety.tracing_manager.literal_namespace = None
+        literal_namespace = TraceManager.instance().literal_namespace
+        TraceManager.instance().literal_namespace = None
         if lval_name is None:
             if stored_attrsub_name is None:
                 literal_namespace.scope_name = '<unknown namespace>'
@@ -204,7 +209,7 @@ class TraceStatement(object):
 
     def _gather_deep_ref_rval_dsyms(self):
         deep_ref_rval_dsyms = set()
-        for deep_ref_obj_id, deep_ref_name, deep_ref_args in self.safety.tracing_manager.deep_refs:
+        for deep_ref_obj_id, deep_ref_name, deep_ref_args in TraceManager.instance().deep_refs:
             deep_ref_arg_dsyms = set()
             for arg in deep_ref_args:
                 if isinstance(arg, str):
@@ -226,7 +231,7 @@ class TraceStatement(object):
     def handle_dependencies(self):
         if not self.safety.dependency_tracking_enabled:
             return
-        for mutated_obj_id, mutation_args, mutation_event in self.safety.tracing_manager.mutations:
+        for mutated_obj_id, mutation_args, mutation_event in TraceManager.instance().mutations:
             if mutation_event == MutationEvent.arg_mutate:
                 for _, arg_id in mutation_args:
                     for mutated_sym in self.safety.aliases[arg_id]:
@@ -255,7 +260,8 @@ class TraceStatement(object):
                     if mutated_sym is not None and mutation_arg_obj is not None and not isinstance(mutation_arg_obj, int):
                         if namespace_scope is None:
                             namespace_scope = NamespaceScope(
-                                mutated_obj, self.safety, mutated_sym.name,
+                                mutated_obj,
+                                mutated_sym.name,
                                 parent_scope=mutated_sym.containing_scope
                             )
                         namespace_scope.upsert_data_symbol_for_name(
@@ -268,16 +274,16 @@ class TraceStatement(object):
         if self._contains_lval():
             self._make_lval_data_symbols()
         else:
-            if len(self.safety.tracing_manager.saved_store_data) > 0 and self.safety.is_develop:
+            if len(TraceManager.instance().saved_store_data) > 0 and self.safety.is_develop:
                 logger.warning('saw unexpected state in saved_store_data: %s',
-                               self.safety.tracing_manager.saved_store_data)
+                               TraceManager.instance().saved_store_data)
 
     def finished_execution_hook(self):
         if self.finished:
             return
         # print('finishing stmt', self.stmt_node)
-        self.safety.tracing_manager.seen_stmts.add(self.stmt_id)
+        TraceManager.instance().seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
-        self.safety.tracing_manager.after_stmt_reset_hook()
+        TraceManager.instance().after_stmt_reset_hook()
         self.safety._namespace_gc()
         # self.safety._gc()

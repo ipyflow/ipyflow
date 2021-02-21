@@ -25,8 +25,11 @@ from nbsafety import line_magics
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.tracing import SafetyAstRewriter, TraceManager
-from nbsafety.utils import DotDict
+from nbsafety import singletons
+from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
+from nbsafety.tracing.trace_manager import TraceManager
+from nbsafety.utils.dot_dict import DotDict
+# from nbsafety.utils.mixins import EnforceSingletonMixin
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Set, Optional, Tuple, Union
@@ -58,10 +61,11 @@ def _safety_warning(node: 'DataSymbol'):
     )
 
 
-class NotebookSafety(object):
+class NotebookSafety(singletons.NotebookSafety):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
-        self.config = DotDict(dict(
+        super().__init__()
+        self.settings = DotDict(dict(
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
             use_comm=use_comm,
@@ -76,14 +80,13 @@ class NotebookSafety(object):
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
         self.namespaces: 'Dict[int, NamespaceScope]' = {}
         self.aliases: 'Dict[int, Set[DataSymbol]]' = defaultdict(set)
-        self.global_scope: 'Scope' = Scope(self)
+        self.global_scope: 'Scope' = Scope()
         self.updated_symbols: 'Set[DataSymbol]' = set()
         self.updated_scopes: 'Set[NamespaceScope]' = set()
         self.garbage_namespace_obj_ids: 'Set[int]' = set()
         self.ast_node_by_id: 'Dict[int, ast.AST]' = {}
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.statement_to_func_cell: 'Dict[int, DataSymbol]' = {}
-        self.tracing_manager: 'TraceManager' = TraceManager(self)
         self.stale_dependency_detected = False
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
@@ -105,14 +108,14 @@ class NotebookSafety(object):
 
     @property
     def is_develop(self) -> bool:
-        return self.config.get('mode', SafetyRunMode.PRODUCTION) == SafetyRunMode.DEVELOP
+        return self.settings.get('mode', SafetyRunMode.PRODUCTION) == SafetyRunMode.DEVELOP
 
     @property
     def is_test(self) -> bool:
-        return self.config.get('test_context', False)
+        return self.settings.get('test_context', False)
 
     def cell_counter(self):
-        if self.config.store_history:
+        if self.settings.store_history:
             return cell_counter()
         else:
             return self._cell_counter
@@ -152,7 +155,7 @@ class NotebookSafety(object):
             if cell_id is not None:
                 self._counters_by_cell_id[cell_id] = self._last_execution_counter
             cells_by_id = request['content_by_cell_id']
-            if self.config.get('backwards_cell_staleness_propagation', True):
+            if self.settings.get('backwards_cell_staleness_propagation', True):
                 order_index_by_id = None
                 last_cell_exec_position_idx = -1
             else:
@@ -196,7 +199,7 @@ class NotebookSafety(object):
         refresher_links: 'Dict[CellId, List[CellId]]' = defaultdict(list)
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
-            if self.config.get('naive_refresher_computation', False):
+            if self.settings.get('naive_refresher_computation', False):
                 refresher_cell_ids = self._naive_compute_refresher_cells(
                     stale_cell_id,
                     stale_syms,
@@ -372,6 +375,7 @@ class NotebookSafety(object):
             dsym.update_obj_ref(obj)
 
     def safe_execute(self, cell: str, run_cell_func):
+        ret = None
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = self.cell_counter()
 
@@ -379,7 +383,7 @@ class NotebookSafety(object):
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell) and self.config.get('skip_unsafe_cells', True):
+            if self._precheck_for_stale(cell) and self.settings.get('skip_unsafe_cells', True):
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')
@@ -393,16 +397,20 @@ class NotebookSafety(object):
                 defined = self._check_cell_and_resolve_symbols(cell)['dead']
                 self._resync_symbols(defined)
             finally:
-                if not self.config.store_history:
+                if not self.settings.store_history:
                     self._cell_counter += 1
                 return ret
 
     def _make_cell_magic(self, cell_magic_name):
+        # this is to avoid capturing `self` and creating an extra reference to the singleton
+        store_history = self.settings.store_history
+        self_ = lambda: singletons.nbs()
+
         def _run_cell_func(cell):
-            run_cell(cell, store_history=self.config.store_history)
+            run_cell(cell, store_history=store_history)
 
         def _dependency_safety(_, cell: str):
-            self.safe_execute(cell, _run_cell_func)
+            self_().safe_execute(cell, _run_cell_func)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _dependency_safety.__name__ = cell_magic_name
@@ -415,7 +423,7 @@ class NotebookSafety(object):
         self._recorded_cell_name_to_cell_num = False
 
         try:
-            with self.tracing_manager.tracing_context():
+            with TraceManager.instance().tracing_context():
                 with ast_transformer_context([SafetyAstRewriter(self)]):
                     yield
         finally:
@@ -426,31 +434,33 @@ class NotebookSafety(object):
     def _reset_trace_state_hook(self):
         # this assert doesn't hold anymore now that tracing could be disabled inside of something
         # assert len(self.attr_trace_manager.stack) == 0
-        self.tracing_manager = TraceManager(self)
+        TraceManager.clear_instance()
         self._gc()
 
     def _make_line_magic(self):
         line_magic_names = [f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])]
 
         def _safety(line_: str):
+            # this is to avoid capturing `self` and creating an extra reference to the singleton
+            self_ = singletons.nbs()
             line = line_.split()
             if not line or line[0] not in line_magic_names:
                 print(line_magics.USAGE)
                 return
             elif line[0] in ("show_deps", "show_dependency", "show_dependencies"):
-                return line_magics.show_deps(self, line)
+                return line_magics.show_deps(self_, line)
             elif line[0] == "show_stale":
-                return line_magics.show_stale(self, line)
+                return line_magics.show_stale(self_, line)
             elif line[0] == "trace_messages":
-                return line_magics.trace_messages(self, line)
+                return line_magics.trace_messages(self_, line)
             elif line[0] == "remove_dependency":
-                return line_magics.remove_dep(self, line)
+                return line_magics.remove_dep(self_, line)
             elif line[0] in ("add_dependency", "add_dep"):
-                return line_magics.add_dep(self, line)
+                return line_magics.add_dep(self_, line)
             elif line[0] == "turn_off_warnings_for":
-                return line_magics.turn_off_warnings_for(self, line)
+                return line_magics.turn_off_warnings_for(self_, line)
             elif line[0] == "turn_on_warnings_for":
-                return line_magics.turn_on_warnings_for(self, line)
+                return line_magics.turn_on_warnings_for(self_, line)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _safety.__name__ = _SAFETY_LINE_MAGIC
@@ -458,7 +468,7 @@ class NotebookSafety(object):
 
     @property
     def dependency_tracking_enabled(self):
-        return self.config.get('track_dependencies', True)
+        return self.settings.get('track_dependencies', True)
 
     @property
     def cell_magic_name(self):

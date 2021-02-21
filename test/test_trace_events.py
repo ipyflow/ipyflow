@@ -74,11 +74,37 @@ def test_recorded_events_two_stmts():
         TraceEvent.before_literal,
         TraceEvent.after_literal,
         TraceEvent.after_stmt,
+
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
         TraceEvent.before_arg_list,
         TraceEvent.argument,
+        TraceEvent.after_arg_list,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.after_stmt
+    ], 'unexpected events; got %s' % RECORDED_EVENTS
+
+
+def test_nested_chains_no_call():
+    assert RECORDED_EVENTS == []
+    run_cell('logging.info("foo is %s", logging.info("foo"))')
+    assert RECORDED_EVENTS == [
+        TraceEvent.before_stmt,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.before_arg_list,
+        TraceEvent.argument,
+
+        # next events correspond to `logging.info("foo")`
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.before_arg_list,
+        TraceEvent.argument,
+        TraceEvent.after_arg_list,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.argument,
+
         TraceEvent.after_arg_list,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt

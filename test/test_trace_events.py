@@ -26,7 +26,10 @@ def patched_emit_event_fixture():
         frame: FrameType = kwargs.get('_frame', sys._getframe().f_back)
         kwargs['_frame'] = frame
         if frame.f_code.co_filename.startswith('<ipython-input'):
-            if not ((event == TraceEvent.call and self.call_depth == 0) or (event == TraceEvent.return_ and self.call_depth == 1)):
+            if not (
+                (event == TraceEvent.call and self.call_depth == 0) or
+                (event == TraceEvent.return_ and self.call_depth == 1)
+            ):
                 RECORDED_EVENTS.append(event)
         return original_emit_event(self, evt, *args, **kwargs)
     TraceManager._emit_event = _patched_emit_event

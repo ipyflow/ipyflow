@@ -432,7 +432,7 @@ class TraceManager(BaseTraceManager):
     @register_handler(TraceEvent.after_literal)
     def after_literal(self, literal: Any, *_, **__):
         literal = _make_weakrefable_literal(literal)
-        if not self.tracing_enabled:
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
         if self.prev_trace_stmt_in_cur_frame.finished:
             return literal
@@ -533,11 +533,8 @@ class TraceManager(BaseTraceManager):
     ):
         # right now, this should only be enabled for notebook code
         assert frame.f_code.co_filename.startswith('<ipython-input')
+        assert self.tracing_enabled or event == TraceEvent.after_stmt
         self.safety.maybe_set_name_to_cell_num_mapping(frame)
-
-        if event not in (TraceEvent.return_, TraceEvent.after_stmt) and not self.tracing_enabled:
-            logger.warning('skip %s', event)
-            return None
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
@@ -558,9 +555,10 @@ class TraceManager(BaseTraceManager):
         else:
             try:
                 stmt_node = self.safety.statement_cache[cell_num][lineno]
-            except KeyError:
+            except KeyError as e:
+                logger.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
                 if self.safety.is_develop:
-                    logger.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
+                    raise e
                 return self._sys_tracer
 
         trace_stmt = self.traced_statements.get(id(stmt_node), None)

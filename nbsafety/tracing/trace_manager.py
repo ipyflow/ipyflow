@@ -140,6 +140,7 @@ class BaseTraceManager(singletons.TraceManager):
             assert evt == 'call', 'expected call; got event %s' % evt
             self._attempt_to_reenable_tracing(frame)
             return None
+        # notebook cells have filenames that appear as '<ipython-input...>'
         if evt == 'line' or not frame.f_code.co_filename.startswith('<ipython-input'):
             return None
 
@@ -530,12 +531,9 @@ class TraceManager(BaseTraceManager):
         stmt_node: Optional[ast.stmt] = None,
         **__
     ):
-
-        # notebook cells have filenames that appear as '<ipython-input...>'
-        if frame.f_code.co_filename.startswith('<ipython-input'):
-            self.safety.maybe_set_name_to_cell_num_mapping(frame)
-        else:
-            return None
+        # right now, this should only be enabled for notebook code
+        assert frame.f_code.co_filename.startswith('<ipython-input')
+        self.safety.maybe_set_name_to_cell_num_mapping(frame)
 
         if event not in (TraceEvent.return_, TraceEvent.after_stmt) and not self.tracing_enabled:
             logger.warning('skip %s', event)

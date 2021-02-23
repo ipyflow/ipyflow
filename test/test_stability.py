@@ -1,7 +1,7 @@
 # -*- coding: future_annotations -*-
 import logging
 
-from .utils import make_safety_fixture
+from .utils import make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -30,4 +30,21 @@ def fake_func(y):
 new_xs = [fake_func(x) for _ in range(5)]
 
 print(new_xs[0])
+""")
+
+
+@skipif_known_failing
+def test_non_idempotent_subscript():
+    run_cell("""
+class IncDict:
+    def __init__(self):
+        self.val = 0
+    def __getitem__(self, val):
+        self.val += val
+        return self.val
+        
+d = IncDict()
+
+d_sub_1 = d[1]
+assert d_sub_1 == 1, f"got {d_sub_1}, but expected 1"
 """)

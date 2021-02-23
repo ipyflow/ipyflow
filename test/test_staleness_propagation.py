@@ -1319,20 +1319,13 @@ logging.info(x)
 
 
 def test_exception_stack_unwind():
-    import builtins
-    test_passed = 'test_passed'
-    setattr(builtins, test_passed, True)
-    test_passed = "'" + test_passed + "'"
-
     def assert_stack_size(size):
-        return ';'.join([
-            f'can_pass = len(TraceManager.instance().call_stack) == {size}',
-            f'setattr(builtins, {test_passed}, getattr(builtins, {test_passed}) and can_pass)',
-            f'print(len(TraceManager.instance().call_stack), "vs", {size})'
+        len_call_stack = 'len(TraceManager.instance().call_stack)'
+        return ', '.join([
+            f'assert {len_call_stack} == {size}',
+            f'"%d vs {size}" % {len_call_stack}',
         ])
-    try:
-        run_cell(f"""
-import builtins
+    run_cell(f"""
 import numpy as np
 from nbsafety.singletons import TraceManager
 {assert_stack_size(0)}
@@ -1351,10 +1344,6 @@ def f():
 f()
 {assert_stack_size(0)}
 """)
-        test_passed = test_passed.strip("'")
-        assert getattr(builtins, test_passed), 'unexpected stack size somewhere'
-    finally:
-        delattr(builtins, test_passed)
 
 
 def test_throwing_statements_do_not_track_deps():

@@ -33,7 +33,6 @@ print(new_xs[0])
 """)
 
 
-@skipif_known_failing
 def test_non_idempotent_subscript():
     run_cell("""
 class IncDict:

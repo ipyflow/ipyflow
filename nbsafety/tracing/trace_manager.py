@@ -33,9 +33,6 @@ if TYPE_CHECKING:
     DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
 
-    # avoid circular imports
-    from nbsafety.safety import NotebookSafety
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -193,7 +190,7 @@ class TraceManager(BaseTraceManager):
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.first_obj_id_in_chain: Optional[int] = None
-                self.saved_load_symbol: Optional[DataSymbol] = None
+                self.saved_complex_symbol_load_info: Optional[Tuple[NamespaceScope, Tuple[Union[str, int], bool]]] = None
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
@@ -281,6 +278,33 @@ class TraceManager(BaseTraceManager):
             ns.parent_scope = parent_scope
         return ns
 
+    def _clear_info_and_maybe_lookup_or_create_complex_symbol(self, obj_attr_or_sub) -> Optional[DataSymbol]:
+        if self.saved_complex_symbol_load_info is None:
+            return None
+        scope, (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_info
+        self.saved_complex_symbol_load_info = None
+        data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+            attr_or_subscript, is_subscript=is_subscript
+        )
+        if data_sym is None:
+            symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
+            data_sym = DataSymbol(
+                attr_or_subscript,
+                symbol_type,
+                obj_attr_or_sub,
+                scope,
+                stmt_node=None,
+                parents=None,
+                refresh_cached_obj=True,
+                implicit=True,
+            )
+            # this is to prevent refs to the scope object from being considered as stale if we just load it
+            data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
+            scope.put(attr_or_subscript, data_sym)
+        elif data_sym.obj_id != id(obj_attr_or_sub):
+            data_sym.update_obj_ref(obj_attr_or_sub)
+        return data_sym
+
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     def attrsub_tracer(
         self,
@@ -299,6 +323,7 @@ class TraceManager(BaseTraceManager):
             return
         if obj is None:
             return
+        self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
         is_subscript = (event == TraceEvent.subscript)
         obj_id = id(obj)
         if self.first_obj_id_in_chain is None:
@@ -315,36 +340,6 @@ class TraceManager(BaseTraceManager):
             assert ctx in ('Store', 'AugStore')
             self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
             return
-
-        data_sym = scope.lookup_data_symbol_by_name_this_indentation(
-            attr_or_subscript, is_subscript=is_subscript
-        )
-        try:
-            # TODO: ideally we shouldn't actually access the attr / subscript
-            #  in case such accesses are not idempotent, as it will happen again
-            obj_attr_or_sub = nbs().retrieve_namespace_attr_or_sub(
-                obj, attr_or_subscript, is_subscript
-            )
-            if data_sym is None:
-                symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-                data_sym = DataSymbol(
-                    attr_or_subscript,
-                    symbol_type,
-                    obj_attr_or_sub,
-                    scope,
-                    stmt_node=None,
-                    parents=None,
-                    refresh_cached_obj=True,
-                    implicit=True,
-                )
-                # this is to prevent refs to the scope object from being considered as stale if we just load it
-                data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
-                scope.put(attr_or_subscript, data_sym)
-                # print('put', data_sym, 'in', scope.full_namespace_path)
-            elif data_sym.obj_id != id(obj_attr_or_sub):
-                data_sym.update_obj_ref(obj_attr_or_sub)
-        except:
-            pass
         if call_context:
             mutation_event = MutationEvent.normal
             if isinstance(obj, list) and attr_or_subscript == 'append':
@@ -357,8 +352,8 @@ class TraceManager(BaseTraceManager):
             self.deep_ref_candidates.append(
                 ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
             )
-        elif data_sym is not None:
-            self.saved_load_symbol = data_sym
+        else:
+            self.saved_complex_symbol_load_info = (scope, (attr_or_subscript, is_subscript))
 
     @register_handler(TraceEvent.after_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, call_context: bool, **__):
@@ -367,8 +362,9 @@ class TraceManager(BaseTraceManager):
                 return
             if self.first_obj_id_in_chain is None:
                 return
-            if self.saved_load_symbol is not None:
-                self.loaded_data_symbols.add(self.saved_load_symbol)
+            loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
+            if loaded_sym is not None:
+                self.loaded_data_symbols.add(loaded_sym)
             if call_context and len(self.deep_ref_candidates) > 0:
                 (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
                 if evt_counter == self.trace_event_counter:
@@ -390,7 +386,7 @@ class TraceManager(BaseTraceManager):
                     else:
                         self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
         finally:
-            self.saved_load_symbol = None
+            self.saved_complex_symbol_load_info = None  # can't hurt to do it again
             self.first_obj_id_in_chain = None
             self.active_scope = self.cur_frame_original_scope
 

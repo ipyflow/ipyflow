@@ -19,9 +19,6 @@ if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
     from nbsafety.types import SupportedIndexType
 
-    # avoid circular imports
-    from nbsafety.safety import NotebookSafety
-
 
 class Scope:
     GLOBAL_SCOPE_NAME = '<module>'
@@ -40,10 +37,6 @@ class Scope:
 
     def __str__(self):
         return str(self.full_path)
-
-    @property
-    def safety(self) -> NotebookSafety:
-        return nbs()
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
@@ -131,7 +124,7 @@ class Scope:
                 obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
             except (KeyError, IndexError, Exception):
                 break
-            cur_scope = self.safety.namespaces.get(id(obj), None)
+            cur_scope = nbs().namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
         else:
@@ -281,18 +274,18 @@ class NamespaceScope(Scope):
         self._tombstone = tombstone
         self._obj_ref = obj_ref
         self.obj_id = obj_id
-        self.safety.namespaces[obj_id] = self
+        nbs().namespaces[obj_id] = self
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 
     @property
     def is_garbage(self):
-        return self._tombstone or self.obj_id not in self.safety.aliases or self.obj_id not in self.safety.namespaces
+        return self._tombstone or self.obj_id not in nbs().aliases or self.obj_id not in nbs().namespaces
 
     @property
     def is_subscript(self):
         try:
-            return next(iter(self.safety.aliases.get(self.obj_id, None))).is_subscript
+            return next(iter(nbs().aliases.get(self.obj_id, None))).is_subscript
         except (StopIteration, TypeError):
             return False
 
@@ -301,10 +294,10 @@ class NamespaceScope(Scope):
         self._tombstone = tombstone
         self._obj_ref = obj_ref
         self.obj_id = obj_id
-        self.safety.namespaces[obj_id] = self
+        nbs().namespaces[obj_id] = self
 
     def clear_namespace(self, prev_obj_id):
-        if prev_obj_id != self.obj_id and prev_obj_id in self.safety.namespaces:
+        if prev_obj_id != self.obj_id and prev_obj_id in nbs().namespaces:
             raise ValueError('precondition failed; namespace should no longer be registered before we can clear')
         self._data_symbol_by_name.clear()
         self._subscript_data_symbol_by_name.clear()
@@ -333,7 +326,7 @@ class NamespaceScope(Scope):
             return self._data_symbol_by_name
 
     def clone(self, obj: Any):
-        cloned = NamespaceScope(obj, self.safety)
+        cloned = NamespaceScope(obj, nbs())
         cloned.__dict__ = dict(self.__dict__)
         cloned.cloned_from = self
         cloned.update_obj_ref(obj)
@@ -402,7 +395,7 @@ class NamespaceScope(Scope):
         val.containing_scope = self
 
     def refresh(self):
-        self.max_defined_timestamp = self.safety.cell_counter()
+        self.max_defined_timestamp = nbs().cell_counter()
 
     def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> Optional[NamespaceScope]:
         # TODO: test this properly

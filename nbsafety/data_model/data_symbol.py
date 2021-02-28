@@ -11,7 +11,6 @@ from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Optional, Set, Union
-    import ast
 
     # avoid circular imports
     from nbsafety.data_model.scope import Scope, NamespaceScope

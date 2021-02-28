@@ -32,10 +32,6 @@ class TraceStatement(object):
         self.lambda_call_point_deps_done_once = False
         self.call_seen = False
 
-    @property
-    def safety(self) -> NotebookSafety:
-        return nbs()
-
     @contextmanager
     def replace_active_scope(self, new_active_scope):
         old_scope = self.scope
@@ -85,12 +81,12 @@ class TraceStatement(object):
             #     raise TypeError('unexpected type for ast node %s' % self.ast_node)
             return old_scope
         func_name = self.stmt_node.name
-        func_cell = self.safety.statement_to_func_cell.get(id(self.stmt_node), None)
+        func_cell = nbs().statement_to_func_cell.get(id(self.stmt_node), None)
         if func_cell is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
         if not func_cell.is_function:
-            if self.safety.is_develop:
+            if nbs().is_develop:
                 raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
             else:
                 # TODO: log an error to a file
@@ -108,7 +104,7 @@ class TraceStatement(object):
             ) | deep_rval_deps
         for scope, obj, attr_or_sub, is_subscript in TraceManager.instance().saved_store_data:
             try:
-                attr_or_sub_obj = self.safety.retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+                attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
             except:
                 continue
             should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
@@ -142,7 +138,7 @@ class TraceStatement(object):
                     literal_namespace.parent_scope = stored_attrsub_scope
         else:
             literal_namespace.scope_name = lval_name
-        self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
+        nbs().namespaces[literal_namespace.obj_id] = literal_namespace
 
         # TODO: need tighter integration w/ assignment edges to allow for accurate drawing of edges to literal elements
         # if len(rval_names) != literal_namespace.num_subscript_symbols:
@@ -189,7 +185,7 @@ class TraceStatement(object):
                 class_ref = self.frame.f_locals[self.stmt_node.name]
                 class_obj_id = id(class_ref)
                 self.class_scope.obj_id = class_obj_id
-                self.safety.namespaces[class_obj_id] = self.class_scope
+                nbs().namespaces[class_obj_id] = self.class_scope
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             try:
@@ -215,22 +211,22 @@ class TraceStatement(object):
             deep_ref_arg_dsyms.discard(None)
             deep_ref_rval_dsyms |= deep_ref_arg_dsyms
             if deep_ref_name is None:
-                deep_ref_rval_dsyms |= self.safety.aliases.get(deep_ref_obj_id, set())
+                deep_ref_rval_dsyms |= nbs().aliases.get(deep_ref_obj_id, set())
             else:
                 deep_ref_dc = self.scope.lookup_data_symbol_by_name(deep_ref_name)
                 if deep_ref_dc is not None and deep_ref_dc.obj_id == deep_ref_obj_id:
                     deep_ref_rval_dsyms.add(deep_ref_dc)
                 else:
-                    deep_ref_rval_dsyms |= self.safety.aliases.get(deep_ref_obj_id, set())
+                    deep_ref_rval_dsyms |= nbs().aliases.get(deep_ref_obj_id, set())
         return deep_ref_rval_dsyms
 
     def handle_dependencies(self):
-        if not self.safety.dependency_tracking_enabled:
+        if not nbs().dependency_tracking_enabled:
             return
         for mutated_obj_id, mutation_args, mutation_event in TraceManager.instance().mutations:
             if mutation_event == MutationEvent.arg_mutate:
                 for _, arg_id in mutation_args:
-                    for mutated_sym in self.safety.aliases[arg_id]:
+                    for mutated_sym in nbs().aliases[arg_id]:
                         # TODO: happens when module mutates args
                         #  should we add module as a dep in this case?
                         mutated_sym.update_deps(set(), overwrite=False, mutated=True)
@@ -245,8 +241,8 @@ class TraceStatement(object):
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
             if mutation_event == MutationEvent.list_append and len(mutation_arg_dsyms) == 1:
-                namespace_scope = self.safety.namespaces.get(mutated_obj_id, None)
-                mutated_obj_aliases = self.safety.aliases.get(mutated_obj_id, None)
+                namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
+                mutated_obj_aliases = nbs().aliases.get(mutated_obj_id, None)
                 if mutated_obj_aliases is not None:
                     mutated_sym = next(iter(mutated_obj_aliases))
                     mutated_obj = mutated_sym._get_obj()
@@ -265,12 +261,12 @@ class TraceStatement(object):
                             is_subscript=True, overwrite=False, propagate=False
                         )
             # TODO: add mechanism for skipping namespace children in case of list append
-            for mutated_sym in self.safety.aliases[mutated_obj_id]:
+            for mutated_sym in nbs().aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self._contains_lval():
             self._make_lval_data_symbols()
         else:
-            if len(TraceManager.instance().saved_store_data) > 0 and self.safety.is_develop:
+            if len(TraceManager.instance().saved_store_data) > 0 and nbs().is_develop:
                 logger.warning('saw unexpected state in saved_store_data: %s',
                                TraceManager.instance().saved_store_data)
 
@@ -281,5 +277,5 @@ class TraceStatement(object):
         TraceManager.instance().seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
         TraceManager.instance().after_stmt_reset_hook()
-        self.safety._namespace_gc()
+        nbs()._namespace_gc()
         # self.safety._gc()

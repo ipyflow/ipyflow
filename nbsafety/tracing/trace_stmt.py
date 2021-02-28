@@ -128,11 +128,9 @@ class TraceStatement(object):
 
         return scope_to_use, attr_or_sub
 
-    def _handle_literal_namespace(self, lval_name, rval_names, stored_attrsub_scope, stored_attrsub_name):
-        # remaining_rval_names = set(rval_names)
-        remaining_rval_names = rval_names
+    def _handle_literal_namespace(self, lval_name, stored_attrsub_scope, stored_attrsub_name):
         if TraceManager.instance().literal_namespace is None:
-            return remaining_rval_names
+            return
         literal_namespace = TraceManager.instance().literal_namespace
         TraceManager.instance().literal_namespace = None
         if lval_name is None:
@@ -147,7 +145,6 @@ class TraceStatement(object):
         self.safety.namespaces[literal_namespace.obj_id] = literal_namespace
 
         # TODO: need tighter integration w/ assignment edges to allow for accurate drawing of edges to literal elements
-        return remaining_rval_names
         # if len(rval_names) != literal_namespace.num_subscript_symbols:
         #     return remaining_rval_names
         #
@@ -178,8 +175,8 @@ class TraceStatement(object):
 
         stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_stores(symbol_edges, deep_rval_deps)
         for lval_name, rval_names in symbol_edges.items():
-            rval_names = self._handle_literal_namespace(
-                lval_name, rval_names, stored_attrsub_scope, stored_attrsub_name
+            self._handle_literal_namespace(
+                lval_name, stored_attrsub_scope, stored_attrsub_name
             )
             if lval_name is None:
                 continue

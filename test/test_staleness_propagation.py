@@ -1722,6 +1722,25 @@ y = x + 1
     assert_detected('`y` depends on old value `x`')
 
 
+@skipif_known_failing
+def test_tuple_return():
+    run_cell("""
+x = 0
+y = 1
+a = x + 42
+b = y + 77
+def foo():
+    return a, b
+""")
+    run_cell('t = foo()[1]')
+    run_cell('x = 9')
+    run_cell('logging.info(t)')
+    assert_not_detected('`t` independent of updated `x`')
+    run_cell('y = 10')
+    run_cell('logging.info(t)')
+    assert_detected('`t` depends on old version of `y`')
+
+
 if sys.version_info >= (3, 8):
     def test_walrus_simple():
         run_cell("""

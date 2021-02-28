@@ -14,6 +14,7 @@ from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety import singletons
 from nbsafety.run_mode import SafetyRunMode
+from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stack import TraceStack
@@ -185,18 +186,14 @@ class TraceManager(BaseTraceManager):
             self.literal_namespace: Optional[NamespaceScope] = None
 
             with self.call_stack.needing_manual_initialization():
-                self.cur_frame_original_scope = self.safety.global_scope
-                self.active_scope = self.safety.global_scope
+                self.cur_frame_original_scope = nbs().global_scope
+                self.active_scope = nbs().global_scope
                 self.inside_lambda = False
 
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.first_obj_id_in_chain: Optional[int] = None
                 self.saved_load_symbol: Optional[DataSymbol] = None
-
-    @property
-    def safety(self) -> NotebookSafety:
-        return singletons.nbs()
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
@@ -255,11 +252,11 @@ class TraceManager(BaseTraceManager):
 
     def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
         obj_id = id(obj)
-        ns = self.safety.namespaces.get(obj_id, None)
+        ns = nbs().namespaces.get(obj_id, None)
         # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
         if ns is not None:
             return ns
-        class_scope = self.safety.namespaces.get(id(obj.__class__), None)
+        class_scope = nbs().namespaces.get(id(obj.__class__), None)
         if class_scope is not None:
             # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
             ns = class_scope.clone(obj)
@@ -268,7 +265,7 @@ class TraceManager(BaseTraceManager):
         else:
             # print('no scope for class', obj.__class__)
             try:
-                scope_name = next(iter(self.safety.aliases.get(obj_id, None))).name if obj_name is None else obj_name
+                scope_name = next(iter(nbs().aliases.get(obj_id, None))).name if obj_name is None else obj_name
             except (TypeError, StopIteration):
                 scope_name = '<unknown namespace>'
             ns = NamespaceScope(obj, scope_name, parent_scope=None)
@@ -278,7 +275,7 @@ class TraceManager(BaseTraceManager):
                 obj_name is not None and
                 obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
             ):
-                parent_scope = self.safety.global_scope
+                parent_scope = nbs().global_scope
             else:
                 parent_scope = self.active_scope
             ns.parent_scope = parent_scope
@@ -325,7 +322,7 @@ class TraceManager(BaseTraceManager):
         try:
             # TODO: ideally we shouldn't actually access the attr / subscript
             #  in case such accesses are not idempotent, as it will happen again
-            obj_attr_or_sub = self.safety.retrieve_namespace_attr_or_sub(
+            obj_attr_or_sub = nbs().retrieve_namespace_attr_or_sub(
                 obj, attr_or_subscript, is_subscript
             )
             if data_sym is None:
@@ -378,7 +375,7 @@ class TraceManager(BaseTraceManager):
                     if obj is None:
                         if mutation_event == MutationEvent.normal:
                             try:
-                                top_level_sym = next(iter(self.safety.aliases[self.first_obj_id_in_chain]))
+                                top_level_sym = next(iter(nbs().aliases[self.first_obj_id_in_chain]))
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
                                     # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
                                     #  with np.random.seed?
@@ -401,7 +398,7 @@ class TraceManager(BaseTraceManager):
     def arg_recorder(self, arg_obj: Any, arg_node_id: int, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
-        arg_node = self.safety.ast_node_by_id.get(arg_node_id, None)
+        arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
             return
         if len(self.deep_ref_candidates) == 0:
@@ -452,7 +449,7 @@ class TraceManager(BaseTraceManager):
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:
             return ret_expr
-        stmt = self.safety.ast_node_by_id.get(stmt_id, None)
+        stmt = nbs().ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
             self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
         return ret_expr
@@ -471,7 +468,7 @@ class TraceManager(BaseTraceManager):
         if trace_stmt is None:
             trace_stmt = TraceStatement(
                 frame,
-                cast(ast.stmt, self.safety.ast_node_by_id[stmt_id]),
+                cast(ast.stmt, nbs().ast_node_by_id[stmt_id]),
                 self.cur_frame_original_scope
             )
             self.traced_statements[stmt_id] = trace_stmt
@@ -495,7 +492,7 @@ class TraceManager(BaseTraceManager):
         self.first_obj_id_in_chain = None
 
     def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
-        if self.safety.is_develop:
+        if nbs().is_develop:
             assert self.tracing_reset_pending, 'expected tracing reset to be pending!'
             assert self.call_depth > 0, 'expected managed call depth > 0, got %d' % self.call_depth
         self.tracing_reset_pending = False
@@ -504,7 +501,7 @@ class TraceManager(BaseTraceManager):
             if frame.f_code.co_filename.startswith('<ipython-input'):
                 call_depth += 1
             frame = frame.f_back
-        if self.safety.is_develop:
+        if nbs().is_develop:
             assert call_depth >= 1, 'expected call depth >= 1, got %d' % call_depth
         # TODO: allow reenabling tracing beyond just at the top level
         if call_depth != 1:
@@ -517,7 +514,7 @@ class TraceManager(BaseTraceManager):
         self.call_depth = 0
         self.call_stack.clear()
         self.lexical_call_stack.clear()
-        if self.safety.settings.trace_messages_enabled:
+        if nbs().settings.trace_messages_enabled:
             logger.warning('reenable tracing >>>')
 
     @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
@@ -534,7 +531,7 @@ class TraceManager(BaseTraceManager):
         # right now, this should only be enabled for notebook code
         assert frame.f_code.co_filename.startswith('<ipython-input')
         assert self.tracing_enabled or event == TraceEvent.after_stmt
-        self.safety.maybe_set_name_to_cell_num_mapping(frame)
+        nbs().maybe_set_name_to_cell_num_mapping(frame)
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
@@ -548,16 +545,16 @@ class TraceManager(BaseTraceManager):
             if self.call_depth == 0:
                 return self._sys_tracer
 
-        cell_num, lineno = self.safety.get_position(frame)
+        cell_num, lineno = nbs().get_position(frame)
 
         if event == TraceEvent.after_stmt:
             assert stmt_node is not None
         else:
             try:
-                stmt_node = self.safety.statement_cache[cell_num][lineno]
+                stmt_node = nbs().statement_cache[cell_num][lineno]
             except KeyError as e:
                 logger.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
-                if self.safety.is_develop:
+                if nbs().is_develop:
                     raise e
                 return self._sys_tracer
 
@@ -566,13 +563,13 @@ class TraceManager(BaseTraceManager):
             trace_stmt = TraceStatement(frame, stmt_node, self.cur_frame_original_scope)
             self.traced_statements[id(stmt_node)] = trace_stmt
 
-        if self.safety.settings.trace_messages_enabled:
+        if nbs().settings.trace_messages_enabled:
             codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
             logger.warning(' %3d: %10s >>> %s', lineno, event, codeline)
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
-                if self.safety.settings.trace_messages_enabled:
+                if nbs().settings.trace_messages_enabled:
                     logger.warning(' disable tracing >>>')
                 self._disable_tracing()
                 return None

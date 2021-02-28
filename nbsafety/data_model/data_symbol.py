@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     import ast
 
     # avoid circular imports
-    from nbsafety.safety import NotebookSafety
     from nbsafety.data_model.scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
@@ -65,7 +64,7 @@ class DataSymbol(object):
         if self.is_function:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
 
-        self.defined_cell_num = self.safety.cell_counter()
+        self.defined_cell_num = nbs().cell_counter()
 
         # The notebook cell number this is required to have to not be considered stale
         self.required_cell_num = self.defined_cell_num
@@ -79,7 +78,7 @@ class DataSymbol(object):
         # Will never be stale if no_warning is True
         self.disable_warnings = False
 
-        self.safety.aliases[id(obj)].add(self)
+        nbs().aliases[id(obj)].add(self)
 
     def __repr__(self) -> str:
         return f'<{self.readable_name}>'
@@ -89,10 +88,6 @@ class DataSymbol(object):
 
     def __hash__(self):
         return hash(self.full_path)
-
-    @property
-    def safety(self) -> NotebookSafety:
-        return nbs()
 
     @property
     def readable_name(self) -> str:
@@ -143,7 +138,7 @@ class DataSymbol(object):
 
     @property
     def namespace(self):
-        return self.safety.namespaces.get(self.obj_id, None)
+        return nbs().namespaces.get(self.obj_id, None)
 
     @property
     def full_path(self):
@@ -195,7 +190,7 @@ class DataSymbol(object):
         self._obj_ref = obj_ref
         self._has_weakref = has_weakref
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
-            old_ns = self.safety.namespaces.get(self.cached_obj_id, None)
+            old_ns = nbs().namespaces.get(self.cached_obj_id, None)
             if old_ns is not None:
                 old_ns.update_obj_ref(obj)
             self._handle_aliases()
@@ -203,13 +198,13 @@ class DataSymbol(object):
             self._refresh_cached_obj()
 
     def _handle_aliases(self, readd=True):
-        old_aliases = self.safety.aliases.get(self.cached_obj_id, None)
+        old_aliases = nbs().aliases.get(self.cached_obj_id, None)
         if old_aliases is not None:
             old_aliases.discard(self)
             if len(old_aliases) == 0:
-                del self.safety.aliases[self.cached_obj_id]
+                del nbs().aliases[self.cached_obj_id]
         if readd:
-            self.safety.aliases[self.obj_id].add(self)
+            nbs().aliases[self.obj_id].add(self)
 
     def _update_obj_ref_inner(self, obj):
         tombstone = False
@@ -225,7 +220,7 @@ class DataSymbol(object):
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
         if self.is_function:
-            self.safety.statement_to_func_cell[id(stmt_node)] = self
+            nbs().statement_to_func_cell[id(stmt_node)] = self
         return stmt_node
 
     def _refresh_cached_obj(self):
@@ -266,7 +261,7 @@ class DataSymbol(object):
         return True
 
     def update_deps(
-        self, new_deps: Set[DataSymbol], overwrite=True, mutated=False, propagate=True
+        self, new_deps: Set['DataSymbol'], overwrite=True, mutated=False, propagate=True
     ):
         # skip updates for imported symbols
         if self.is_import:
@@ -285,16 +280,16 @@ class DataSymbol(object):
         for new_parent in new_deps - self.parents:
             if new_parent is None:
                 continue
-            new_parent.children_by_cell_position[self.safety.active_cell_position_idx].add(self)
+            new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
         self.required_cell_num = -1
-        UpdateProtocol(self.safety, self, new_deps, mutated)(propagate=propagate)
+        UpdateProtocol(nbs(), self, new_deps, mutated)(propagate=propagate)
         self._refresh_cached_obj()
-        self.safety.updated_symbols.add(self)
+        nbs().updated_symbols.add(self)
 
     def refresh(self: DataSymbol):
         self.fresher_ancestors = set()
-        self.defined_cell_num = self.safety.cell_counter()
+        self.defined_cell_num = nbs().cell_counter()
         self.namespace_stale_symbols = set()
 
     def _propagate_refresh_to_namespace_parents(self, seen: Set[DataSymbol]):
@@ -302,19 +297,19 @@ class DataSymbol(object):
             return
         # print('refresh propagate', self)
         seen.add(self)
-        for self_alias in self.safety.aliases[self.obj_id]:
+        for self_alias in nbs().aliases[self.obj_id]:
             containing_scope: NamespaceScope = cast('NamespaceScope', self_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue
-            # if containing_scope.max_defined_timestamp == self.safety.cell_counter():
+            # if containing_scope.max_defined_timestamp == nbs().cell_counter():
             #     return
-            containing_scope.max_defined_timestamp = self.safety.cell_counter()
+            containing_scope.max_defined_timestamp = nbs().cell_counter()
             containing_namespace_obj_id = containing_scope.obj_id
-            # print('containing namespaces:', self.safety.aliases[containing_namespace_obj_id])
-            for alias in self.safety.aliases[containing_namespace_obj_id]:
+            # print('containing namespaces:', nbs().aliases[containing_namespace_obj_id])
+            for alias in nbs().aliases[containing_namespace_obj_id]:
                 alias.namespace_stale_symbols.discard(self)
                 if not alias.is_stale:
-                    alias.defined_cell_num = self.safety.cell_counter()
+                    alias.defined_cell_num = nbs().cell_counter()
                     alias.fresher_ancestors = set()
                 # print('working on', alias, '; stale?', alias.is_stale, alias.namespace_stale_symbols)
                 alias._propagate_refresh_to_namespace_parents(seen)

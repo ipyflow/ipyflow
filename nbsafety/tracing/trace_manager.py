@@ -27,10 +27,8 @@ if TYPE_CHECKING:
     AttrSubVal = Union[str, int]
     RecordedArg = Tuple[AttrSubSymbolChain, int]
     RecordedArgs = Set[RecordedArg]
-    DeepRef = Tuple[int, Optional[str], Tuple[RecordedArg, ...]]
     Mutation = Tuple[int, Tuple[RecordedArg, ...], MutationEvent]
-    RefCandidate = Optional[Tuple[int, int, Optional[str]]]
-    DeepRefCandidate = Tuple[RefCandidate, MutationEvent, RecordedArgs]
+    MutationCandidate = Tuple[Tuple[int, int, Optional[str]], MutationEvent, RecordedArgs]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
 
 
@@ -164,6 +162,7 @@ class TraceManager(BaseTraceManager):
         self.seen_stmts: Set[int] = set()
         self.call_depth = 0
         self.traced_statements: Dict[int, TraceStatement] = {}
+        self.node_id_to_loaded_symbol: Dict[int, DataSymbol] = {}
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -171,15 +170,13 @@ class TraceManager(BaseTraceManager):
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             ############################################################
             # old state:
-            self.loaded_data_symbols: Set[DataSymbol] = set()
             self.saved_store_data: List[SavedStoreData] = []
             ############################################################
             # new state:
             # just something that maps orig_node_id to data symbol?
             ############################################################
-            self.deep_refs: Set[DeepRef] = set()
             self.mutations: Set[Mutation] = set()
-            self.deep_ref_candidates: List[DeepRefCandidate] = []
+            self.mutation_candidates: List[MutationCandidate] = []
             self.literal_namespace: Optional[NamespaceScope] = None
 
             with self.call_stack.needing_manual_initialization():
@@ -189,7 +186,9 @@ class TraceManager(BaseTraceManager):
 
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
+                self.sym_for_obj_calling_method: Optional[DataSymbol] = None
                 self.first_obj_id_in_chain: Optional[int] = None
+                self.top_level_node_id_for_chain: Optional[int] = None
                 self.saved_complex_symbol_load_info: Optional[Tuple[NamespaceScope, Tuple[Union[str, int], bool]]] = None
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
@@ -316,6 +315,7 @@ class TraceManager(BaseTraceManager):
         attr_or_subscript,
         ctx: str,
         call_context: bool,
+        top_level_node_id: int,
         obj_name: Optional[str] = None,
         **__
     ):
@@ -323,9 +323,11 @@ class TraceManager(BaseTraceManager):
             return
         if obj is None:
             return
-        self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
+        sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
         is_subscript = (event == TraceEvent.subscript)
         obj_id = id(obj)
+        if self.top_level_node_id_for_chain is None:
+            self.top_level_node_id_for_chain = top_level_node_id
         if self.first_obj_id_in_chain is None:
             self.first_obj_id_in_chain = obj_id
         if isinstance(attr_or_subscript, tuple):
@@ -349,9 +351,19 @@ class TraceManager(BaseTraceManager):
             # retval is None, this is a likely signal that we have a mutation
             # TODO: this strategy won't work if the arguments themselves lead to traced function calls
             #  to cope, put DeepRefCandidates (or equivalent) in the lexical stack?
-            self.deep_ref_candidates.append(
+            self.mutation_candidates.append(
                 ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
             )
+            if not is_subscript:
+                if sym_for_obj is None and obj_name is not None:
+                    sym_for_obj = self.cur_frame_original_scope.lookup_data_symbol_by_name(obj_name)
+                if sym_for_obj is None:
+                    if self.prev_trace_stmt_in_cur_frame is not None:
+                        sym_for_obj = self.cur_frame_original_scope.upsert_data_symbol_for_name(
+                            obj_name, obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, False
+                        )
+                if sym_for_obj is not None:
+                    self.sym_for_obj_calling_method = sym_for_obj
         else:
             self.saved_complex_symbol_load_info = (scope, (attr_or_subscript, is_subscript))
 
@@ -363,10 +375,8 @@ class TraceManager(BaseTraceManager):
             if self.first_obj_id_in_chain is None:
                 return
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
-            if loaded_sym is not None:
-                self.loaded_data_symbols.add(loaded_sym)
-            if call_context and len(self.deep_ref_candidates) > 0:
-                (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.deep_ref_candidates.pop()
+            if call_context and len(self.mutation_candidates) > 0:
+                (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.mutation_candidates.pop()
                 if evt_counter == self.trace_event_counter:
                     if obj is None:
                         if mutation_event == MutationEvent.normal:
@@ -384,10 +394,16 @@ class TraceManager(BaseTraceManager):
                                 pass
                         self.mutations.add((obj_id, tuple(recorded_args), mutation_event))
                     else:
-                        self.deep_refs.add((obj_id, obj_name, tuple(recorded_args)))
+                        if self.sym_for_obj_calling_method is not None:
+                            loaded_sym = self.sym_for_obj_calling_method
+                            self.sym_for_obj_calling_method = None
+            if loaded_sym is not None:
+                self.node_id_to_loaded_symbol[self.top_level_node_id_for_chain] = loaded_sym
         finally:
             self.saved_complex_symbol_load_info = None  # can't hurt to do it again
             self.first_obj_id_in_chain = None
+            self.top_level_node_id_for_chain = None
+            self.sym_for_obj_calling_method = None
             self.active_scope = self.cur_frame_original_scope
 
     @register_handler(TraceEvent.argument)
@@ -397,14 +413,14 @@ class TraceManager(BaseTraceManager):
         arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
             return
-        if len(self.deep_ref_candidates) == 0:
+        if len(self.mutation_candidates) == 0:
             return
 
         arg_obj_id = id(arg_obj)
         # TODO: we should be able to get the actual data symbol during live tracing,
         #  instead of trying to resolve from an attrsub chain determined via analysis
         recorded_arg = GetAttrSubSymbols()(arg_node)
-        self.deep_ref_candidates[-1][-1].add((recorded_arg, arg_obj_id))
+        self.mutation_candidates[-1][-1].add((recorded_arg, arg_obj_id))
 
     @register_handler(TraceEvent.before_arg_list)
     def before_argument_list(self, *_, **__):
@@ -477,11 +493,9 @@ class TraceManager(BaseTraceManager):
             _finish_tracing_reset()  # trigger the tracer with a frame
 
     def after_stmt_reset_hook(self):
-        self.loaded_data_symbols.clear()
         self.saved_store_data.clear()
-        self.deep_refs.clear()
         self.mutations.clear()
-        self.deep_ref_candidates.clear()
+        self.mutation_candidates.clear()
         self.lexical_call_stack.clear()
         self.active_scope = self.cur_frame_original_scope
         self.literal_namespace = None

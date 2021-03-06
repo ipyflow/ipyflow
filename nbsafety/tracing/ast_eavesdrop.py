@@ -49,7 +49,7 @@ class AstEavesdropper(ast.NodeTransformer):
         return ret
 
     @contextmanager
-    def attrsub_load_context(self, top_level_node: Optional[ast.AST]):
+    def attrsub_context(self, top_level_node: Optional[ast.AST]):
         old = self._top_level_node_for_symbol
         if old is None or top_level_node is None:
             # entering context when we are already inside chain is a no-op,
@@ -169,7 +169,7 @@ class AstEavesdropper(ast.NodeTransformer):
             if isinstance(node.value, ast.Name):
                 extra_args = fast.kwargs(obj_name=fast.Str(node.value.id))
 
-            with self.attrsub_load_context(node):
+            with self.attrsub_context(node):
                 node.value = fast.Call(
                     func=self._emitter_ast(),
                     args=[
@@ -196,9 +196,9 @@ class AstEavesdropper(ast.NodeTransformer):
             else:
                 maybe_kwarg = arg
             with fast.location_of(maybe_kwarg):
-                with self.attrsub_load_context(None):
+                with self.attrsub_context(None):
                     visited_maybe_kwarg = self.visit(maybe_kwarg)
-                with self.attrsub_load_context(None):
+                with self.attrsub_context(None):
                     new_arg_value = cast(ast.expr, fast.Call(
                         func=self._emitter_ast(),
                         args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
@@ -215,7 +215,7 @@ class AstEavesdropper(ast.NodeTransformer):
         orig_node_id = id(node)
         orig_node_func_id = id(node.func)
 
-        with self.attrsub_load_context(node):
+        with self.attrsub_context(node):
             if isinstance(node.func, ast.Attribute):
                 node.func = self.visit_Attribute(node.func, call_context=True)
             elif isinstance(node.func, ast.Subscript):

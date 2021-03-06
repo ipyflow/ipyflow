@@ -4,9 +4,7 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis import (
-    AttrSubSymbolChain, get_symbol_edges, stmt_contains_lval
-)
+from nbsafety.analysis import get_symbol_edges, stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope, Scope
 from nbsafety.singletons import nbs, TraceManager
@@ -15,9 +13,6 @@ from nbsafety.tracing.mutation_event import MutationEvent
 if TYPE_CHECKING:
     from types import FrameType
     from typing import List, Optional, Set
-
-    # avoid circular imports
-    from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +46,7 @@ class TraceStatement(object):
         return stmt_contains_lval(self.stmt_node)
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
+        node_id_to_symbol = TraceManager.instance().node_id_to_loaded_symbol
         if rval_symbol_refs is None:
             symbol_edges, _ = get_symbol_edges(self.stmt_node)
             if len(symbol_edges) == 0:
@@ -59,14 +55,17 @@ class TraceStatement(object):
                 rval_symbol_refs = set.union(*symbol_edges.values()) - {None}
         rval_data_symbols = set()
         for name in rval_symbol_refs:
-            if name is None:
-                continue
-            maybe_rval_dsym = self.scope.lookup_data_symbol_by_name(name)
+            if isinstance(name, int):
+                maybe_rval_dsym = node_id_to_symbol.get(name, None)
+            elif isinstance(name, str):
+                maybe_rval_dsym = self.scope.lookup_data_symbol_by_name(name)
+            else:
+                maybe_rval_dsym = None
             if maybe_rval_dsym is not None:
                 rval_data_symbols.add(maybe_rval_dsym)
             # else:
             #     assert not isinstance(name, AttrSubSymbolChain)
-        return rval_data_symbols.union(*self.call_point_deps) | TraceManager.instance().loaded_data_symbols
+        return rval_data_symbols.union(*self.call_point_deps)
 
     def get_post_call_scope(self):
         old_scope = TraceManager.instance().cur_frame_original_scope
@@ -95,13 +94,13 @@ class TraceStatement(object):
             func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
-    def _handle_attrsub_stores(self, symbol_edges, deep_rval_deps):
+    def _handle_attrsub_stores(self, symbol_edges):
         if len(symbol_edges) == 0:
-            rval_deps = deep_rval_deps
+            rval_deps = set()
         else:
             rval_deps = self.compute_rval_dependencies(
                 rval_symbol_refs=set.union(*symbol_edges.values()) - {None}
-            ) | deep_rval_deps
+            )
         for scope, obj, attr_or_sub, is_subscript in TraceManager.instance().saved_store_data:
             try:
                 attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
@@ -129,7 +128,7 @@ class TraceStatement(object):
             return
         literal_namespace = TraceManager.instance().literal_namespace
         TraceManager.instance().literal_namespace = None
-        if lval_name is None:
+        if isinstance(lval_name, int):
             if stored_attrsub_name is None:
                 literal_namespace.scope_name = '<unknown namespace>'
             else:
@@ -161,7 +160,6 @@ class TraceStatement(object):
 
     def _make_lval_data_symbols(self):
         symbol_edges, should_overwrite = get_symbol_edges(self.stmt_node)
-        deep_rval_deps = self._gather_deep_ref_rval_dsyms()
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
@@ -169,16 +167,16 @@ class TraceStatement(object):
             assert len(symbol_edges) == 1
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
 
-        stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_stores(symbol_edges, deep_rval_deps)
+        stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_stores(symbol_edges)
         for lval_name, rval_names in symbol_edges.items():
             self._handle_literal_namespace(
                 lval_name, stored_attrsub_scope, stored_attrsub_name
             )
-            if lval_name is None:
+            if isinstance(lval_name, int):
                 continue
 
             should_overwrite_for_name = should_overwrite and lval_name not in rval_names
-            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name}) | deep_rval_deps
+            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name})
             # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
             if is_class_def:
                 assert self.class_scope is not None
@@ -198,27 +196,6 @@ class TraceStatement(object):
             except KeyError:
                 logger.warning('keyerror for %s', lval_name)
                 pass
-
-    def _gather_deep_ref_rval_dsyms(self):
-        deep_ref_rval_dsyms = set()
-        for deep_ref_obj_id, deep_ref_name, deep_ref_args in TraceManager.instance().deep_refs:
-            deep_ref_arg_dsyms = set()
-            for arg in deep_ref_args:
-                if isinstance(arg, str):
-                    deep_ref_arg_dsyms.add(self.scope.lookup_data_symbol_by_name(arg))
-                elif isinstance(arg, AttrSubSymbolChain):
-                    deep_ref_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
-            deep_ref_arg_dsyms.discard(None)
-            deep_ref_rval_dsyms |= deep_ref_arg_dsyms
-            if deep_ref_name is None:
-                deep_ref_rval_dsyms |= nbs().aliases.get(deep_ref_obj_id, set())
-            else:
-                deep_ref_dc = self.scope.lookup_data_symbol_by_name(deep_ref_name)
-                if deep_ref_dc is not None and deep_ref_dc.obj_id == deep_ref_obj_id:
-                    deep_ref_rval_dsyms.add(deep_ref_dc)
-                else:
-                    deep_ref_rval_dsyms |= nbs().aliases.get(deep_ref_obj_id, set())
-        return deep_ref_rval_dsyms
 
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:

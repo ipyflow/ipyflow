@@ -2,9 +2,8 @@
 import ast
 from collections import defaultdict
 import logging
-from typing import Sequence, TYPE_CHECKING
+from typing import Any, List, Sequence, TYPE_CHECKING
 
-from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 
 if TYPE_CHECKING:
@@ -60,9 +59,9 @@ def _edges_from_tuples(lvals, rvals):
 class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: figure out how to give these type annotations
-        self.lval_symbols = []
-        self.rval_symbols = []
-        self.simple_edges = []
+        self.lval_symbols: List[Any] = []
+        self.rval_symbols: List[Any] = []
+        self.simple_edges: List[Any] = []
         self.gather_rvals = True
         self.should_overwrite = True
         self.assignment_seen = False
@@ -209,21 +208,22 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
 
     def visit_Call(self, node):
         extra_to_add = []
-        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            extra_to_add.append(get_attrsub_symbol_chain(node))
-            to_visit = [node.args, node.keywords]
+        if isinstance(node.func, (ast.Attribute, ast.Subscript, ast.Call)):
+            # TODO: descend further down
+            extra_to_add.append(id(node))
         else:
-            to_visit = node
+            assert isinstance(node.func, ast.Name)
+            extra_to_add.append(node.func.id)
         temp = self.to_add_set
         self.to_add_set = []
-        self.generic_visit(to_visit)
+        self.generic_visit([node.args, node.keywords])
         self.to_add_set, temp = temp, self.to_add_set
-        temp = TiedTuple(set(_flatten(temp)) | set(_flatten(extra_to_add)))
+        temp = TiedTuple(set(_flatten(temp)) | set(extra_to_add))
         self.to_add_set.append(temp)
 
     def visit_Attribute_or_Subscript(self, node):
-        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h
-        self.to_add_set.append(get_attrsub_symbol_chain(node))
+        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
+        self.to_add_set.append(id(node))
 
     def visit_Attribute(self, node):
         self.visit_Attribute_or_Subscript(node)
@@ -383,20 +383,8 @@ def get_symbol_edges(node: Union[str, ast.AST]):
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     visitor = GetSymbolEdges()
-    edges: Dict[Optional[str], Set[Optional[str]]] = defaultdict(set)
+    edges: Dict[Optional[Union[str, int]], Set[Optional[Union[str, int]]]] = defaultdict(set)
     for edge in visitor(node):
-        # FIXME: figure out how to handle attributes in a principled manner here
         left, right = edge
-        if isinstance(left, AttrSubSymbolChain) and isinstance(right, AttrSubSymbolChain):
-            # still need this to indicate non empty edge set
-            edges[None].add(None)
-        elif isinstance(left, AttrSubSymbolChain):
-            assert not isinstance(right, AttrSubSymbolChain)
-            edges[None].add(right)
-        elif isinstance(right, AttrSubSymbolChain) or right is None:
-            # just get the lval in the keys
-            edges[left].add(None)
-            edges[left].discard(None)
-        else:
-            edges[left].add(right)
+        edges[left].add(right)
     return edges, visitor.should_overwrite

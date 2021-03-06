@@ -191,6 +191,8 @@ class Scope:
             if name in self.data_symbol_by_name(old_dc.is_subscript) and old_dc.symbol_type == symbol_type:
                 old_dc.update_obj_ref(obj, refresh_cached=False)
                 # old_dc.update_type(symbol_type)
+                # if we're updating a pre-existing one, it should not be an implicit upsert
+                assert stmt_node is not None
                 old_dc.update_stmt_node(stmt_node)
                 return old_dc, old_dc, old_id
             else:

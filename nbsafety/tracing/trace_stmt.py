@@ -200,19 +200,13 @@ class TraceStatement(object):
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:
             return
-        for mutated_obj_id, mutation_args, mutation_event in TraceManager.instance().mutations:
+        for mutated_obj_id, mutation_event, mutation_arg_dsyms in TraceManager.instance().mutations:
             if mutation_event == MutationEvent.arg_mutate:
-                for _, arg_id in mutation_args:
-                    for mutated_sym in nbs().aliases[arg_id]:
-                        # TODO: happens when module mutates args
-                        #  should we add module as a dep in this case?
-                        mutated_sym.update_deps(set(), overwrite=False, mutated=True)
+                for mutated_sym in mutation_arg_dsyms:
+                    # TODO: happens when module mutates args
+                    #  should we add module as a dep in this case?
+                    mutated_sym.update_deps(set(), overwrite=False, mutated=True)
                 continue
-
-            mutation_arg_dsyms = set()
-            for arg, _ in mutation_args:
-                mutation_arg_dsyms.add(self.scope.get_most_specific_data_symbol_for_attrsub_chain(arg)[0])
-            mutation_arg_dsyms.discard(None)
 
             # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are

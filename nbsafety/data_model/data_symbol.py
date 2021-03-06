@@ -38,6 +38,9 @@ class DataSymbol(object):
         refresh_cached_obj: bool = False,
         implicit: bool = False,
     ):
+        if refresh_cached_obj:
+            assert implicit
+            assert stmt_node is None
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
         self.symbol_type = symbol_type
@@ -71,13 +74,28 @@ class DataSymbol(object):
         self.fresher_ancestors: Set[DataSymbol] = set()
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 
-        # if implicitly created by attrsub access
+        # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
 
         # Will never be stale if no_warning is True
         self.disable_warnings = False
 
         nbs().aliases[id(obj)].add(self)
+
+    @staticmethod
+    def create_implicit(
+        name: Union[str, int], obj: Any, containing_scope: Scope, symbol_type: Optional[DataSymbolType] = None
+    ) -> DataSymbol:
+        if symbol_type is None:
+            symbol_type = DataSymbolType.DEFAULT
+        dsym = DataSymbol(name, symbol_type, obj, containing_scope, refresh_cached_obj=True, implicit=True)
+        # FIXME: hack to circumvent circular import
+        if containing_scope.__class__.__name__ == 'NamespaceScope':
+            containing_scope = cast('NamespaceScope', containing_scope)
+            # this is to prevent refs to the scope object from being considered as stale if we just load it
+            dsym.defined_cell_num = dsym.required_cell_num = containing_scope.max_defined_timestamp
+        containing_scope.put(name, dsym)
+        return dsym
 
     def __repr__(self) -> str:
         return f'<{self.readable_name}>'

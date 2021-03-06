@@ -9,7 +9,6 @@ from typing import cast, TYPE_CHECKING
 
 import astunparse
 
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, GetAttrSubSymbols
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety import singletons
@@ -23,12 +22,9 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
-    SymbolRef = Union[str, AttrSubSymbolChain]
     AttrSubVal = Union[str, int]
-    RecordedArg = Tuple[AttrSubSymbolChain, int]
-    RecordedArgs = Set[RecordedArg]
-    Mutation = Tuple[int, Tuple[RecordedArg, ...], MutationEvent]
-    MutationCandidate = Tuple[Tuple[int, int, Optional[str]], MutationEvent, RecordedArgs]
+    MutationCandidate = Tuple[Tuple[int, int, Optional[str]], MutationEvent, Set[DataSymbol]]
+    Mutation = Tuple[int, MutationEvent, Set[DataSymbol]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
 
 
@@ -175,7 +171,7 @@ class TraceManager(BaseTraceManager):
             # new state:
             # just something that maps orig_node_id to data symbol?
             ############################################################
-            self.mutations: Set[Mutation] = set()
+            self.mutations: List[Mutation] = []
             self.mutation_candidates: List[MutationCandidate] = []
             self.literal_namespace: Optional[NamespaceScope] = None
 
@@ -287,19 +283,7 @@ class TraceManager(BaseTraceManager):
         )
         if data_sym is None:
             symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-            data_sym = DataSymbol(
-                attr_or_subscript,
-                symbol_type,
-                obj_attr_or_sub,
-                scope,
-                stmt_node=None,
-                parents=None,
-                refresh_cached_obj=True,
-                implicit=True,
-            )
-            # this is to prevent refs to the scope object from being considered as stale if we just load it
-            data_sym.defined_cell_num = data_sym.required_cell_num = scope.max_defined_timestamp
-            scope.put(attr_or_subscript, data_sym)
+            data_sym = DataSymbol.create_implicit(attr_or_subscript, obj_attr_or_sub, scope, symbol_type=symbol_type)
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
@@ -359,9 +343,10 @@ class TraceManager(BaseTraceManager):
                     sym_for_obj = self.cur_frame_original_scope.lookup_data_symbol_by_name(obj_name)
                 if sym_for_obj is None:
                     if self.prev_trace_stmt_in_cur_frame is not None:
-                        sym_for_obj = self.cur_frame_original_scope.upsert_data_symbol_for_name(
-                            obj_name, obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, False
-                        )
+                        sym_for_obj = DataSymbol.create_implicit(obj_name, obj, self.cur_frame_original_scope)
+                        # sym_for_obj = self.cur_frame_original_scope.upsert_data_symbol_for_name(
+                        #     obj_name, obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, False
+                        # )
                 if sym_for_obj is not None:
                     self.sym_for_obj_calling_method = sym_for_obj
         else:
@@ -385,14 +370,12 @@ class TraceManager(BaseTraceManager):
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
                                     # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
                                     #  with np.random.seed?
-                                    for recorded_arg, _recorded_arg_id in recorded_args:
-                                        if len(recorded_arg.symbols) > 0:
-                                            # only make this an arg mutation event if it looks like there's an arg to mutate
-                                            mutation_event = MutationEvent.arg_mutate
-                                            break
+                                    if len(recorded_args) > 0:
+                                        # only make this an arg mutation event if it looks like there's an arg to mutate
+                                        mutation_event = MutationEvent.arg_mutate
                             except:
                                 pass
-                        self.mutations.add((obj_id, tuple(recorded_args), mutation_event))
+                        self.mutations.append((obj_id, mutation_event, recorded_args))
                     else:
                         if self.sym_for_obj_calling_method is not None:
                             loaded_sym = self.sym_for_obj_calling_method
@@ -416,11 +399,15 @@ class TraceManager(BaseTraceManager):
         if len(self.mutation_candidates) == 0:
             return
 
-        arg_obj_id = id(arg_obj)
-        # TODO: we should be able to get the actual data symbol during live tracing,
-        #  instead of trying to resolve from an attrsub chain determined via analysis
-        recorded_arg = GetAttrSubSymbols()(arg_node)
-        self.mutation_candidates[-1][-1].add((recorded_arg, arg_obj_id))
+        if isinstance(arg_node, ast.Name):
+            assert self.active_scope is self.cur_frame_original_scope
+            arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
+            if arg_dsym is None:
+                arg_dsym = DataSymbol.create_implicit(arg_node.id, arg_obj, self.active_scope)
+        else:
+            arg_dsym = self.node_id_to_loaded_symbol.get(arg_node_id, None)
+        if arg_dsym is not None:
+            self.mutation_candidates[-1][-1].add(arg_dsym)
 
     @register_handler(TraceEvent.before_arg_list)
     def before_argument_list(self, *_, **__):

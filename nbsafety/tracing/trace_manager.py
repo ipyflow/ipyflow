@@ -23,9 +23,12 @@ if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
     AttrSubVal = Union[str, int]
-    MutationCandidate = Tuple[Tuple[int, int, Optional[str]], MutationEvent, Set[DataSymbol]]
+    NodeId = int
+    ObjId = int
+    MutationCandidate = Tuple[Tuple[int, ObjId, Optional[str]], MutationEvent, Set[DataSymbol]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
+    SavedComplexSymbolLoadData = Tuple[NamespaceScope, Tuple[AttrSubVal, bool]]
 
 
 logger = logging.getLogger(__name__)
@@ -155,22 +158,16 @@ class TraceManager(BaseTraceManager):
         self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
-        self.seen_stmts: Set[int] = set()
+        self.seen_stmts: Set[NodeId] = set()
         self.call_depth = 0
-        self.traced_statements: Dict[int, TraceStatement] = {}
-        self.node_id_to_loaded_symbol: Dict[int, DataSymbol] = {}
+        self.traced_statements: Dict[NodeId, TraceStatement] = {}
+        self.node_id_to_loaded_symbol: Dict[NodeId, DataSymbol] = {}
+        self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
-            ############################################################
-            # old state:
-            self.saved_store_data: List[SavedStoreData] = []
-            ############################################################
-            # new state:
-            # just something that maps orig_node_id to data symbol?
-            ############################################################
             self.mutations: List[Mutation] = []
             self.mutation_candidates: List[MutationCandidate] = []
             self.literal_namespace: Optional[NamespaceScope] = None
@@ -183,9 +180,9 @@ class TraceManager(BaseTraceManager):
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.sym_for_obj_calling_method: Optional[DataSymbol] = None
-                self.first_obj_id_in_chain: Optional[int] = None
-                self.top_level_node_id_for_chain: Optional[int] = None
-                self.saved_complex_symbol_load_info: Optional[Tuple[NamespaceScope, Tuple[Union[str, int], bool]]] = None
+                self.first_obj_id_in_chain: Optional[ObjId] = None
+                self.top_level_node_id_for_chain: Optional[NodeId] = None
+                self.saved_complex_symbol_load_data: Optional[SavedComplexSymbolLoadData] = None
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
@@ -274,10 +271,10 @@ class TraceManager(BaseTraceManager):
         return ns
 
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(self, obj_attr_or_sub) -> Optional[DataSymbol]:
-        if self.saved_complex_symbol_load_info is None:
+        if self.saved_complex_symbol_load_data is None:
             return None
-        scope, (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_info
-        self.saved_complex_symbol_load_info = None
+        scope, (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_data
+        self.saved_complex_symbol_load_data = None
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
             attr_or_subscript, is_subscript=is_subscript
         )
@@ -292,14 +289,14 @@ class TraceManager(BaseTraceManager):
     def attrsub_tracer(
         self,
         obj: Any,
-        _node_id: int,
+        _node_id: NodeId,
         _frame_: FrameType,
         event: TraceEvent,
         *_,
         attr_or_subscript,
         ctx: str,
         call_context: bool,
-        top_level_node_id: int,
+        top_level_node_id: NodeId,
         obj_name: Optional[str] = None,
         **__
     ):
@@ -324,7 +321,7 @@ class TraceManager(BaseTraceManager):
         self.active_scope = scope
         if ctx != 'Load':
             assert ctx in ('Store', 'AugStore')
-            self.saved_store_data.append((scope, obj, attr_or_subscript, is_subscript))
+            self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
             return
         if call_context:
             mutation_event = MutationEvent.normal
@@ -350,14 +347,17 @@ class TraceManager(BaseTraceManager):
                 if sym_for_obj is not None:
                     self.sym_for_obj_calling_method = sym_for_obj
         else:
-            self.saved_complex_symbol_load_info = (scope, (attr_or_subscript, is_subscript))
+            self.saved_complex_symbol_load_data = (scope, (attr_or_subscript, is_subscript))
 
     @register_handler(TraceEvent.after_complex_symbol)
-    def after_complex_symbol(self, obj: Any, *_, call_context: bool, **__):
+    def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):
         try:
             if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
                 return
             if self.first_obj_id_in_chain is None:
+                return
+            if ctx == 'Store':
+                # don't trace after events w/ store context
                 return
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
             if call_context and len(self.mutation_candidates) > 0:
@@ -383,7 +383,7 @@ class TraceManager(BaseTraceManager):
             if loaded_sym is not None:
                 self.node_id_to_loaded_symbol[self.top_level_node_id_for_chain] = loaded_sym
         finally:
-            self.saved_complex_symbol_load_info = None  # can't hurt to do it again
+            self.saved_complex_symbol_load_data = None
             self.first_obj_id_in_chain = None
             self.top_level_node_id_for_chain = None
             self.sym_for_obj_calling_method = None
@@ -480,13 +480,16 @@ class TraceManager(BaseTraceManager):
             _finish_tracing_reset()  # trigger the tracer with a frame
 
     def after_stmt_reset_hook(self):
-        self.saved_store_data.clear()
         self.mutations.clear()
         self.mutation_candidates.clear()
         self.lexical_call_stack.clear()
         self.active_scope = self.cur_frame_original_scope
         self.literal_namespace = None
         self.first_obj_id_in_chain = None
+        self.top_level_node_id_for_chain = None
+        self.saved_complex_symbol_load_data = None
+        self.node_id_to_loaded_symbol.clear()  # TODO: keep this around?
+        self.node_id_to_saved_store_data.clear()
 
     def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
         if nbs().is_develop:

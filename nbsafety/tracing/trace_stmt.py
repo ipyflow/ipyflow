@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from typing import List, Optional, Set
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class TraceStatement(object):
@@ -94,33 +95,23 @@ class TraceStatement(object):
             func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
-    def _handle_attrsub_stores(self, symbol_edges):
-        if len(symbol_edges) == 0:
-            rval_deps = set()
-        else:
-            rval_deps = self.compute_rval_dependencies(
-                rval_symbol_refs=set.union(*symbol_edges.values()) - {None}
-            )
-        for scope, obj, attr_or_sub, is_subscript in TraceManager.instance().saved_store_data:
-            try:
-                attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
-            except:
-                continue
-            should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
-            scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
-            if scope_to_use is None:
-                # Nobody before `scope` has it, so we'll insert it at this level
-                scope_to_use = scope
-            scope_to_use.upsert_data_symbol_for_name(
-                attr_or_sub, attr_or_sub_obj, rval_deps, self.stmt_node, is_subscript,
-                overwrite=should_overwrite, is_function_def=False, class_scope=None
-            )
-            # print(scope_to_use, 'upsert', attr_or_sub, attr_or_sub_obj, rval_deps)
-            if len(TraceManager.instance().saved_store_data) == 1:
-                break
-        else:
-            return None, None
-
+    def _handle_attrsub_store(self, anchor_node_id: int, should_overwrite: bool, rval_deps: Set[DataSymbol]):
+        (
+            scope, obj, attr_or_sub, is_subscript
+        ) = TraceManager.instance().node_id_to_saved_store_data[anchor_node_id]
+        attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+        scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
+        if scope_to_use is None:
+            # Nobody before `scope` has it, so we'll insert it at this level
+            scope_to_use = scope
+        prev_dsym = scope_to_use.lookup_data_symbol_by_name_this_indentation(attr_or_sub, is_subscript)
+        if prev_dsym is not None:
+            should_overwrite = should_overwrite and prev_dsym not in rval_deps
+            rval_deps.discard(prev_dsym)
+        scope_to_use.upsert_data_symbol_for_name(
+            attr_or_sub, attr_or_sub_obj, rval_deps, self.stmt_node, is_subscript,
+            overwrite=should_overwrite, is_function_def=False, class_scope=None
+        )
         return scope_to_use, attr_or_sub
 
     def _handle_literal_namespace(self, lval_name, stored_attrsub_scope, stored_attrsub_name):
@@ -167,14 +158,7 @@ class TraceStatement(object):
             assert len(symbol_edges) == 1
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
 
-        stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_stores(symbol_edges)
         for lval_name, rval_names in symbol_edges.items():
-            self._handle_literal_namespace(
-                lval_name, stored_attrsub_scope, stored_attrsub_name
-            )
-            if isinstance(lval_name, int):
-                continue
-
             should_overwrite_for_name = should_overwrite and lval_name not in rval_names
             rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name})
             # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
@@ -187,14 +171,23 @@ class TraceStatement(object):
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             try:
-                obj = self.frame.f_locals[lval_name]
-                self.scope.upsert_data_symbol_for_name(
-                    lval_name, obj, rval_deps, self.stmt_node, False,
-                    overwrite=should_overwrite_for_name, is_function_def=is_function_def, is_import=is_import,
-                    class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
-                )
+                if isinstance(lval_name, int):
+                    stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_store(
+                        lval_name, should_overwrite_for_name, rval_deps
+                    )
+                else:
+                    obj = self.frame.f_locals[lval_name]
+                    stored_attrsub_scope, stored_attrsub_name = None, None
+                    self.scope.upsert_data_symbol_for_name(
+                        lval_name, obj, rval_deps, self.stmt_node, False,
+                        overwrite=should_overwrite_for_name, is_function_def=is_function_def, is_import=is_import,
+                        class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
+                    )
+                self._handle_literal_namespace(lval_name, stored_attrsub_scope, stored_attrsub_name)
             except KeyError:
                 logger.warning('keyerror for %s', lval_name)
+            except Exception as e:
+                logger.warning('exception while handling store: %s', e)
                 pass
 
     def handle_dependencies(self):
@@ -237,9 +230,9 @@ class TraceStatement(object):
         if self._contains_lval():
             self._make_lval_data_symbols()
         else:
-            if len(TraceManager.instance().saved_store_data) > 0 and nbs().is_develop:
+            if len(TraceManager.instance().node_id_to_saved_store_data) > 0 and nbs().is_develop:
                 logger.warning('saw unexpected state in saved_store_data: %s',
-                               TraceManager.instance().saved_store_data)
+                               TraceManager.instance().node_id_to_saved_store_data)
 
     def finished_execution_hook(self):
         if self.finished:

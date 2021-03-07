@@ -6,7 +6,7 @@ from .utils import make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(setup_cells=['%safety trace_messages enable'])
+# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
 _safety_fixture, run_cell_ = make_safety_fixture()
 
 

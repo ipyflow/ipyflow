@@ -39,6 +39,7 @@ class DataSymbol(object):
         implicit: bool = False,
     ):
         if refresh_cached_obj:
+            # TODO: clean up redundancies
             assert implicit
             assert stmt_node is None
         # print(containing_scope, name, obj, is_subscript)

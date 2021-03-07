@@ -111,11 +111,12 @@ class AstEavesdropper(ast.NodeTransformer):
 
         with fast.location_of(node):
             begin_kwargs['ret'] = self._get_copy_id_ast(orig_node_id)
-            end_ret = fast.Constant(None)
             if is_load:
                 end_ret = orig_node
             elif isinstance(orig_node, (ast.Attribute, ast.Subscript)):
                 end_ret = orig_node.value
+            else:
+                raise TypeError('Unsupported node type for before / after symbol tracing: %s', type(orig_node))
             end_kwargs['ret'] = end_ret
             end_kwargs['ctx'] = fast.Str(ctx.__class__.__name__)
             end_kwargs['call_context'] = fast.NameConstant(call_context)
@@ -133,12 +134,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 keywords=fast.kwargs(**end_kwargs),
             )
             if not is_load:
-                if isinstance(orig_node, ast.Name):
-                    node = fast.Attribute(
-                        value=node,
-                        attr=orig_node.id,
-                    )
-                elif isinstance(orig_node, ast.Attribute):
+                if isinstance(orig_node, ast.Attribute):
                     node = fast.Attribute(
                         value=node,
                         attr=orig_node.attr,
@@ -152,7 +148,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     logger.error(
                         'Symbol tracing stores unsupported for node %s with type %s', orig_node, type(orig_node)
                     )
-                    return orig_node
+                    assert False
                 node.ctx = ast.Store()
         # end location_of(node)
         return node
@@ -265,7 +261,7 @@ class AstEavesdropper(ast.NodeTransformer):
             new_targets.append(self.visit(target))
         node.targets = cast('List[ast.expr]', new_targets)
         with fast.location_of(node.value):
-            subscripted_node_value = self._make_tuple_event_for(node.value, TraceEvent.before_literal)
+            subscripted_node_value = self._make_tuple_event_for(self.visit(node.value), TraceEvent.before_literal)
             node.value = fast.Call(
                 func=self._emitter_ast(),
                 args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(node.value)],

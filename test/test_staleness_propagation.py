@@ -732,6 +732,63 @@ class Foo(object):
     assert_detected('y depends on stale x')
 
 
+def test_attribute_unpacking():
+    run_cell("""
+class Foo(object):
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('x = Foo(5)')
+    run_cell('y = Foo(6)')
+    run_cell('w = 42')
+    run_cell('z = 43')
+    run_cell('x.x, y.x = w + 2, z + 3')
+    run_cell('z = 9001')
+    run_cell('logging.info(x.x)')
+    assert_not_detected()
+    run_cell('logging.info(x)')
+    assert_not_detected()
+    run_cell('logging.info(y.x)')
+    assert_detected()
+    run_cell('logging.info(y)')
+    assert_detected()
+    run_cell('y.x = z + 3')
+    run_cell('logging.info(y.x)')
+    assert_not_detected()
+    run_cell('w = 99')
+    run_cell('logging.info(x.x)')
+    assert_detected()
+    run_cell('logging.info(x)')
+    assert_detected()
+    run_cell('logging.info(y.x)')
+    assert_not_detected()
+    run_cell('logging.info(y)')
+    assert_not_detected()
+
+
+def test_attribute_unpacking_no_overwrite():
+    run_cell("""
+class Foo(object):
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('x = Foo(5)')
+    run_cell('y = Foo(6)')
+    run_cell('w = 42')
+    run_cell('z = 43')
+    run_cell('x.x, y.x = w + 2, z + 3')
+    run_cell('s, t = 12, 13')
+    run_cell('x.x, y.x = x.x + s, y.x + t')
+    run_cell('w = 101')
+    run_cell('logging.info(x.x)')
+    assert_detected()
+    run_cell('logging.info(y.x)')
+    assert_not_detected()
+    run_cell('z = 103')
+    run_cell('logging.info(y.x)')
+    assert_detected()
+
+
 def test_attributes_3():
     run_cell("""
 class Foo(object):

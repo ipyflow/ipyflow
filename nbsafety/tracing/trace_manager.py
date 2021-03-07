@@ -20,7 +20,7 @@ from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+    from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
     from types import FrameType
     AttrSubVal = Union[str, int]
     NodeId = int
@@ -79,10 +79,17 @@ def _finish_tracing_reset():
 
 class BaseTraceManager(singletons.TraceManager):
 
-    EVENT_HANDLERS: Dict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
+    _MANAGER_CLASS_REGISTERED = False
+    EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
+    EVENT_HANDLERS_BY_CLASS: Dict[Type['BaseTraceManager'], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
 
     def __init__(self):
+        if not self._MANAGER_CLASS_REGISTERED:
+            raise ValueError(
+                f'class not registered; use the `{register_trace_manager_class.__name__}` decorator on the subclass'
+            )
         super().__init__()
+        self._event_handlers = self.EVENT_HANDLERS_BY_CLASS[self.__class__]
         self.tracing_enabled = False
         self.tracing_reset_pending = False
 
@@ -90,7 +97,7 @@ class BaseTraceManager(singletons.TraceManager):
         event = TraceEvent(evt) if isinstance(evt, str) else evt
         frame = kwargs.get('_frame', sys._getframe().f_back)
         kwargs['_frame'] = frame
-        for handler in self.EVENT_HANDLERS[event]:  # type: ignore
+        for handler in self._event_handlers[event]:
             try:
                 new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
             except Exception as exc:
@@ -147,11 +154,19 @@ def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
 
     def _inner_registrar(handler):
         for evt in events:
-            BaseTraceManager.EVENT_HANDLERS[evt].append(handler)
+            BaseTraceManager.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
         return handler
     return _inner_registrar
 
 
+def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTraceManager]:
+    mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
+    mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
+    mgr_cls._MANAGER_CLASS_REGISTERED = True
+    return mgr_cls
+
+
+@register_trace_manager_class
 class TraceManager(BaseTraceManager):
     def __init__(self):
         super().__init__()
@@ -576,3 +591,7 @@ class TraceManager(BaseTraceManager):
             trace_stmt.call_seen = True
         self.state_transition_hook(event, trace_stmt)
         return self._sys_tracer
+
+
+assert not BaseTraceManager._MANAGER_CLASS_REGISTERED
+assert TraceManager._MANAGER_CLASS_REGISTERED

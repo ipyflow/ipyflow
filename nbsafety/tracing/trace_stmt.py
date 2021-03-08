@@ -12,7 +12,7 @@ from nbsafety.tracing.mutation_event import MutationEvent
 
 if TYPE_CHECKING:
     from types import FrameType
-    from typing import List, Optional, Set
+    from typing import List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -49,7 +49,7 @@ class TraceStatement(object):
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         node_id_to_symbol = TraceManager.instance().node_id_to_loaded_symbol
         if rval_symbol_refs is None:
-            symbol_edges, _ = get_symbol_edges(self.stmt_node)
+            symbol_edges, _, _ = get_symbol_edges(self.stmt_node)
             if len(symbol_edges) == 0:
                 rval_symbol_refs = set()
             else:
@@ -95,7 +95,9 @@ class TraceStatement(object):
             func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
-    def _handle_attrsub_store(self, anchor_node_id: int, should_overwrite: bool, rval_deps: Set[DataSymbol]):
+    def _handle_attrsub_store(
+            self, anchor_node_id: int, should_overwrite: bool, rval_deps: Set[DataSymbol]
+    ) -> Tuple[NamespaceScope, Union[str, int]]:
         (
             scope, obj, attr_or_sub, is_subscript
         ) = TraceManager.instance().node_id_to_saved_store_data[anchor_node_id]
@@ -114,21 +116,31 @@ class TraceStatement(object):
         )
         return scope_to_use, attr_or_sub
 
-    def _handle_literal_namespace(self, lval_name, stored_attrsub_scope, stored_attrsub_name):
-        if TraceManager.instance().literal_namespace is None:
+    def _handle_literal_namespace(
+        self, lval_name: Union[str, int], node_id: int, stored_attrsub_scope, stored_attrsub_name
+    ):
+        literal_obj = TraceManager.instance().node_id_to_loaded_literal.get(node_id, None)
+        if literal_obj is None:
             return
-        literal_namespace = TraceManager.instance().literal_namespace
-        TraceManager.instance().literal_namespace = None
+
+        literal_namespace_scope_name = lval_name
+        literal_namespace_parent_scope = TraceManager.instance().cur_frame_original_scope
         if isinstance(lval_name, int):
             if stored_attrsub_name is None:
-                literal_namespace.scope_name = '<unknown namespace>'
+                literal_namespace_scope_name = '<unknown namespace>'
             else:
-                literal_namespace.scope_name = stored_attrsub_name
+                literal_namespace_scope_name = stored_attrsub_name
                 if stored_attrsub_scope is not None:
-                    literal_namespace.parent_scope = stored_attrsub_scope
-        else:
-            literal_namespace.scope_name = lval_name
-        nbs().namespaces[literal_namespace.obj_id] = literal_namespace
+                    literal_namespace_parent_scope = stored_attrsub_scope
+
+        if isinstance(literal_obj, (dict, list, tuple)):
+            scope = NamespaceScope(
+                literal_obj, literal_namespace_scope_name, literal_namespace_parent_scope
+            )
+            gen = literal_obj.items() if isinstance(literal_obj, dict) else enumerate(literal_obj)
+            for i, obj in gen:
+                if isinstance(i, (int, str)):
+                    scope.upsert_data_symbol_for_name(i, obj, set(), self.stmt_node, True)
 
         # TODO: need tighter integration w/ assignment edges to allow for accurate drawing of edges to literal elements
         # if len(rval_names) != literal_namespace.num_subscript_symbols:
@@ -150,7 +162,7 @@ class TraceStatement(object):
         # return remaining_rval_names
 
     def _make_lval_data_symbols(self):
-        symbol_edges, should_overwrite = get_symbol_edges(self.stmt_node)
+        symbol_edges, lval_name_to_literal_node_id, should_overwrite = get_symbol_edges(self.stmt_node)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
@@ -183,7 +195,10 @@ class TraceStatement(object):
                         overwrite=should_overwrite_for_name, is_function_def=is_function_def, is_import=is_import,
                         class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
                     )
-                self._handle_literal_namespace(lval_name, stored_attrsub_scope, stored_attrsub_name)
+                if lval_name in lval_name_to_literal_node_id:
+                    self._handle_literal_namespace(
+                        lval_name, lval_name_to_literal_node_id[lval_name], stored_attrsub_scope, stored_attrsub_name
+                    )
             except KeyError:
                 logger.warning('keyerror for %s', lval_name)
             except Exception as e:

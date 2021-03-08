@@ -252,19 +252,22 @@ class AstEavesdropper(ast.NodeTransformer):
 
         return self._maybe_wrap_symbol_in_before_after_tracing(node, call_context=True, orig_node_id=orig_node_id)
 
-    def visit_Assign(self, node: ast.Assign):
-        if not isinstance(node.value, (ast.List, ast.Tuple)):
+    def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Tuple]):
+        if not isinstance(getattr(node, 'ctx', ast.Load()), ast.Load):
             return self.generic_visit(node)
-
-        new_targets = []
-        for target in node.targets:
-            new_targets.append(self.visit(target))
-        node.targets = cast('List[ast.expr]', new_targets)
-        with fast.location_of(node.value):
-            subscripted_node_value = self._make_tuple_event_for(self.visit(node.value), TraceEvent.before_literal)
-            node.value = fast.Call(
+        with fast.location_of(node):
+            subscripted_node = self._make_tuple_event_for(self.generic_visit(node), TraceEvent.before_literal)
+            return fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(node.value)],
-                keywords=fast.kwargs(ret=subscripted_node_value),
+                args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(node)],
+                keywords=fast.kwargs(ret=subscripted_node),
             )
-        return node
+
+    def visit_Tuple(self, node: ast.Tuple):
+        return self.visit_literal(node)
+
+    def visit_List(self, node: ast.List):
+        return self.visit_literal(node)
+
+    def visit_Dict(self, node: ast.Dict):
+        return self.visit_literal(node)

@@ -703,6 +703,57 @@ def test_identity_checking_obj():
     assert_not_detected('`y` was not mutated')
 
 
+def test_identity_checking_obj_2():
+    run_cell('x, y = [7], [8]')
+    run_cell('z = y + [3]')
+    run_cell('x[0] = 99')
+    run_cell('logging.info(z)')
+    assert_not_detected('`z` independent of x')
+    run_cell('y[0] = 8')
+    run_cell('logging.info(z)')
+    assert_not_detected('`y` was not mutated')
+    run_cell('y[0] = 42')
+    run_cell('logging.info(z)')
+    assert_detected('`y` was mutated')
+
+
+def test_identity_checking_obj_3():
+    run_cell('d = {"y": 7}')
+    run_cell('x = list(d.values()) + [3]')
+    run_cell('d["y"] = 7')
+    run_cell('logging.info(x)')
+    assert_not_detected('`d["y"]` was not mutated')
+    run_cell('d["y"] = 8')
+    run_cell('logging.info(x)')
+    assert_detected('`d["y"]` was mutated')
+
+
+@skipif_known_failing
+def test_identity_checking_obj_4():
+    # To get this working properly, we need to create datasyms for literal namespaces recursively
+    run_cell('d = {"y": [7]}')
+    run_cell('d["x"] = d["y"] + [3]')
+    run_cell('d["y"][0] = 7')
+    run_cell('logging.info(d["x"])')
+    assert_not_detected('`d["y"]` was not mutated')
+    run_cell('d["y"][0] = 8')
+    run_cell('logging.info(d["x"])')
+    assert_detected('`d["y"]` was mutated')
+
+
+@skipif_known_failing
+def test_identity_checking_obj_5():
+    # To get this working properly, we need to create datasyms for literal namespaces recursively
+    run_cell('d = {"y": {0: 7}}')
+    run_cell('d["x"] = {1:3, **d["y"]}')
+    run_cell('d["y"][0] = 7')
+    run_cell('logging.info(d["x"])')
+    assert_not_detected('`d["y"]` was not mutated')
+    run_cell('d["y"][0] = 8')
+    run_cell('logging.info(d["x"])')
+    assert_detected('`d["y"]` was mutated')
+
+
 def test_attributes():
     run_cell("""
 class Foo(object):
@@ -1692,6 +1743,15 @@ x = g(True) + 1
 def test_dict():
     run_cell('d = {}; d[0] = 0')
     run_cell('x = d[0] + 1')
+    run_cell('d[0] = 42')
+    run_cell('logging.info(x)')
+    assert_detected('`x` has dependency on old value of `d[0]`')
+
+
+@skipif_known_failing
+def test_dict_2():
+    run_cell('d = {}; d[0] = 0')
+    run_cell('x = d[0] + 1')
     run_cell('d = {}; d[0] = 42')
     run_cell('logging.info(x)')
     assert_detected('`x` has dependency on old value of `d[0]`')
@@ -1822,3 +1882,24 @@ if (x := (y := (z := 1) + 1) + 1) > 0:
         assert_detected('`x` depends on old value of `y`')
         run_cell('logging.info(a)')
         assert_detected('`a` depends on old value of `y`')
+
+    def test_walrus_fancy_attributes():
+        run_cell("""
+class Foo(object):
+    def __init__(self, x):
+        self.x = x
+""")
+        run_cell('foo = Foo(9001)')
+        run_cell("""
+if (x := (y := (z := 1) + foo.x) + 1) > 0:
+    a = x + 1
+""")
+        run_cell('foo.x = 42')
+        run_cell('logging.info(z)')
+        assert_not_detected('`z` does not depend on `foo.x`')
+        run_cell('logging.info(y)')
+        assert_detected('`y` depends on old `foo.x`')
+        run_cell('logging.info(x)')
+        assert_detected('`x` depends on old value of `foo.x`')
+        run_cell('logging.info(a)')
+        assert_detected('`a` depends on old value of `foo.x`')

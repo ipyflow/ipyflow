@@ -178,6 +178,7 @@ class TraceManager(BaseTraceManager):
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbol: Dict[NodeId, DataSymbol] = {}
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
+        self.node_id_to_loaded_literal: Dict[NodeId, Any] = {}
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -441,22 +442,12 @@ class TraceManager(BaseTraceManager):
         self.lexical_call_stack.pop()
 
     @register_handler(TraceEvent.after_literal)
-    def after_literal(self, literal: Any, *_, **__):
-        literal = _make_weakrefable_literal(literal)
+    def after_literal(self, obj: Any, node_id: NodeId, *_, **__):
+        literal = _make_weakrefable_literal(obj)
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
-        if self.prev_trace_stmt_in_cur_frame.finished:
-            return literal
-        if isinstance(literal, (dict, list, tuple)):
-            scope = NamespaceScope(
-                literal, None, self.prev_trace_stmt_in_cur_frame.scope
-            )
-            gen = literal.items() if isinstance(literal, dict) else enumerate(literal)
-            for i, obj in gen:
-                scope.upsert_data_symbol_for_name(
-                    i, obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, True
-                )
-            self.literal_namespace = scope
+
+        self.node_id_to_loaded_literal[node_id] = literal
         return literal
 
     @register_handler(TraceEvent.after_stmt)
@@ -505,6 +496,7 @@ class TraceManager(BaseTraceManager):
         self.saved_complex_symbol_load_data = None
         self.node_id_to_loaded_symbol.clear()  # TODO: keep this around?
         self.node_id_to_saved_store_data.clear()
+        self.node_id_to_loaded_literal.clear()
 
     def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
         if nbs().is_develop:

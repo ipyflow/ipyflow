@@ -752,6 +752,40 @@ def test_identity_checking_obj_5():
     assert_detected('`d["y"]` was mutated')
 
 
+def test_identity_checking_obj_6():
+    # To get this working properly, we need to create datasyms for literal namespaces recursively
+    run_cell('lst = [[1, 2], 0]')
+    run_cell('lst[1] = lst[0] + [3, 4]')
+    run_cell('lst[0][1] = 2')
+    run_cell('logging.info(lst[1])')
+    assert_not_detected('`lst[0][1]` was not mutated')
+    run_cell('lst[0][1] = 42')
+    run_cell('logging.info(lst[1])')
+    assert_detected('`lst[0][1]` was mutated')
+
+
+@skipif_known_failing
+def test_starred_assignment():
+    run_cell('x = 0')
+    run_cell('y = 1')
+    run_cell('z = 2')
+    run_cell('lst = ["foo", "bar"]')
+    # just to make sure the tracer can handle a starred expr in list literal
+    run_cell('s, *t = [x + 1, y + 2, z + 3, *lst]')
+    run_cell('z = 42')
+    run_cell('logging.info(s)')
+    assert_not_detected()
+    run_cell('logging.info(t[0])')
+    assert_not_detected()
+    run_cell('logging.info(t[1])')
+    assert_detected()
+    run_cell('x = 99')
+    run_cell('logging.info(s)')
+    assert_detected()
+    run_cell('logging.info(t[0])')
+    assert_detected()
+
+
 def test_attributes():
     run_cell("""
 class Foo(object):

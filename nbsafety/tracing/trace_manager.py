@@ -475,6 +475,7 @@ class TraceManager(BaseTraceManager):
                 )
 
         self.node_id_to_loaded_literal_scope[node_id] = scope
+        # TODO: support this for nested lists, tuples, and sets too, not just dicts
         for child_scope in self.node_id_to_scopes_needing_parent[node_id]:
             child_scope.parent_scope = scope
         return literal

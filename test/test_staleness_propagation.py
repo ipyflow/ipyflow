@@ -728,7 +728,6 @@ def test_identity_checking_obj_3():
     assert_detected('`d["y"]` was mutated')
 
 
-@skipif_known_failing
 def test_identity_checking_obj_4():
     # To get this working properly, we need to create datasyms for literal namespaces recursively
     run_cell('d = {"y": [7]}')
@@ -741,7 +740,6 @@ def test_identity_checking_obj_4():
     assert_detected('`d["y"]` was mutated')
 
 
-@skipif_known_failing
 def test_identity_checking_obj_5():
     # To get this working properly, we need to create datasyms for literal namespaces recursively
     run_cell('d = {"y": {0: 7}}')

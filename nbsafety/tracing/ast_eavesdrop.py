@@ -252,11 +252,16 @@ class AstEavesdropper(ast.NodeTransformer):
 
         return self._maybe_wrap_symbol_in_before_after_tracing(node, call_context=True, orig_node_id=orig_node_id)
 
-    def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Tuple]):
+    def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Tuple], should_inner_visit=True):
+        maybe_visited: ast.AST = node
+        if should_inner_visit:
+            maybe_visited = self.generic_visit(node)
         if not isinstance(getattr(node, 'ctx', ast.Load()), ast.Load):
-            return self.generic_visit(node)
+            return maybe_visited
         with fast.location_of(node):
-            subscripted_node = self._make_tuple_event_for(self.generic_visit(node), TraceEvent.before_literal)
+            subscripted_node = self._make_tuple_event_for(
+                maybe_visited, TraceEvent.before_literal, orig_node_id=id(node)
+            )
             return fast.Call(
                 func=self._emitter_ast(),
                 args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(node)],
@@ -270,4 +275,37 @@ class AstEavesdropper(ast.NodeTransformer):
         return self.visit_literal(node)
 
     def visit_Dict(self, node: ast.Dict):
-        return self.visit_literal(node)
+        traced_keys: List[Optional[ast.expr]] = []
+        traced_values: List[ast.expr] = []
+        for k, v in zip(node.keys, node.values):
+            is_dict_unpack = (k is None)
+            if is_dict_unpack:
+                traced_keys.append(None)
+            else:
+                with fast.location_of(k):
+                    traced_keys.append(fast.Call(
+                        func=self._emitter_ast(),
+                        args=[TraceEvent.dict_key.to_ast(), self._get_copy_id_ast(k)],
+                        keywords=fast.kwargs(
+                            ret=self.visit(k),
+                            value_node_id=self._get_copy_id_ast(v),
+                            dict_node_id=self._get_copy_id_ast(node),
+                        )
+                    ))
+            with fast.location_of(v):
+                if is_dict_unpack:
+                    key_node_id_ast = fast.NameConstant(None)
+                else:
+                    key_node_id_ast = self._get_copy_id_ast(k)
+                traced_values.append(fast.Call(
+                    func=self._emitter_ast(),
+                    args=[TraceEvent.dict_value.to_ast(), self._get_copy_id_ast(v)],
+                    keywords=fast.kwargs(
+                        ret=self.visit(v),
+                        key_node_id=key_node_id_ast,
+                        dict_node_id=self._get_copy_id_ast(node),
+                    )
+                ))
+        node.keys = traced_keys
+        node.values = traced_values
+        return self.visit_literal(node, should_inner_visit=False)

@@ -23,6 +23,8 @@ class TraceEvent(Enum):
 
     before_literal = 'before_literal'
     after_literal = 'after_literal'
+    dict_key = 'dict_key'
+    dict_value = 'dict_value'
 
     line = 'line'
     call = 'call'

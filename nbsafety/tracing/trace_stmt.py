@@ -119,47 +119,16 @@ class TraceStatement(object):
     def _handle_literal_namespace(
         self, lval_name: Union[str, int], node_id: int, stored_attrsub_scope, stored_attrsub_name
     ):
-        literal_obj = TraceManager.instance().node_id_to_loaded_literal.get(node_id, None)
-        if literal_obj is None:
+        scope = TraceManager.instance().node_id_to_loaded_literal_scope.get(node_id, None)
+        if scope is None:
             return
 
-        literal_namespace_scope_name = lval_name
-        literal_namespace_parent_scope = TraceManager.instance().cur_frame_original_scope
-        if isinstance(lval_name, int):
-            if stored_attrsub_name is None:
-                literal_namespace_scope_name = '<unknown namespace>'
-            else:
-                literal_namespace_scope_name = stored_attrsub_name
-                if stored_attrsub_scope is not None:
-                    literal_namespace_parent_scope = stored_attrsub_scope
-
-        if isinstance(literal_obj, (dict, list, tuple)):
-            scope = NamespaceScope(
-                literal_obj, literal_namespace_scope_name, literal_namespace_parent_scope
-            )
-            gen = literal_obj.items() if isinstance(literal_obj, dict) else enumerate(literal_obj)
-            for i, obj in gen:
-                if isinstance(i, (int, str)):
-                    scope.upsert_data_symbol_for_name(i, obj, set(), self.stmt_node, True)
-
-        # TODO: need tighter integration w/ assignment edges to allow for accurate drawing of edges to literal elements
-        # if len(rval_names) != literal_namespace.num_subscript_symbols:
-        #     return remaining_rval_names
-        #
-        # # FIXME: rval_names can be traversed in the wrong order!
-        # for rval_name, literal_namespace_symbol in zip(
-        #         rval_names, literal_namespace.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)
-        # ):
-        #     if rval_name is None or rval_name == lval_name:
-        #         continue
-        #     literal_namespace_sym_parent = self.scope.lookup_data_symbol_by_name(rval_name)
-        #     if literal_namespace_sym_parent is None:
-        #         continue
-        #     remaining_rval_names.discard(rval_name)
-        #     literal_namespace_sym_parent.children.add(literal_namespace_symbol)
-        #     literal_namespace_symbol.parents.add(literal_namespace_sym_parent)
-        #
-        # return remaining_rval_names
+        if isinstance(lval_name, str):
+            scope.scope_name = lval_name
+        elif isinstance(lval_name, int) and stored_attrsub_name is not None:
+            scope.scope_name = stored_attrsub_name
+            if stored_attrsub_scope is not None:
+                scope.parent_scope = stored_attrsub_scope
 
     def _make_lval_data_symbols(self):
         symbol_edges, lval_name_to_literal_node_id, should_overwrite = get_symbol_edges(self.stmt_node)

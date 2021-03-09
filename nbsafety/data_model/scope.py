@@ -28,7 +28,7 @@ class Scope:
         scope_name: str = GLOBAL_SCOPE_NAME,
         parent_scope: Optional[Scope] = None,
     ):
-        self.scope_name = scope_name
+        self.scope_name = str(scope_name)
         self.parent_scope = parent_scope  # None iff this is the global scope
         self._data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 

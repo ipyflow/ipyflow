@@ -112,3 +112,20 @@ def test_nested_chains_no_call():
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt
     ], 'unexpected events; got %s' % RECORDED_EVENTS
+
+
+def test_list_nested_in_dict():
+    assert RECORDED_EVENTS == []
+    run_cell('x = {1: [2, 3, 4]}')
+    assert RECORDED_EVENTS == [
+        TraceEvent.before_stmt,
+        TraceEvent.before_literal,
+
+        TraceEvent.dict_key,
+        TraceEvent.before_literal,
+        TraceEvent.after_literal,
+        TraceEvent.dict_value,
+
+        TraceEvent.after_literal,
+        TraceEvent.after_stmt
+    ], 'unexpected events; got %s' % RECORDED_EVENTS

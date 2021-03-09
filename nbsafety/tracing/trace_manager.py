@@ -178,7 +178,9 @@ class TraceManager(BaseTraceManager):
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbol: Dict[NodeId, DataSymbol] = {}
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
-        self.node_id_to_loaded_literal: Dict[NodeId, Any] = {}
+        self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
+        self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
+        self.node_id_to_scopes_needing_parent: Dict[NodeId, List[NamespaceScope]] = defaultdict(list)
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -186,7 +188,6 @@ class TraceManager(BaseTraceManager):
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             self.mutations: List[Mutation] = []
             self.mutation_candidates: List[MutationCandidate] = []
-            self.literal_namespace: Optional[NamespaceScope] = None
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope = nbs().global_scope
@@ -199,6 +200,22 @@ class TraceManager(BaseTraceManager):
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
                 self.saved_complex_symbol_load_data: Optional[SavedComplexSymbolLoadData] = None
+
+    # TODO: use stack mechanism to automate this?
+    def after_stmt_reset_hook(self):
+        self.mutations.clear()
+        self.mutation_candidates.clear()
+        self.lexical_call_stack.clear()
+        self.active_scope = self.cur_frame_original_scope
+        self.literal_namespace = None
+        self.first_obj_id_in_chain = None
+        self.top_level_node_id_for_chain = None
+        self.saved_complex_symbol_load_data = None
+        self.node_id_to_loaded_symbol.clear()  # TODO: keep this around?
+        self.node_id_to_saved_store_data.clear()
+        self.node_id_to_loaded_literal_scope.clear()
+        self.node_id_to_saved_dict_key.clear()
+        self.node_id_to_scopes_needing_parent.clear()
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
@@ -263,7 +280,10 @@ class TraceManager(BaseTraceManager):
             return ns
         class_scope = nbs().namespaces.get(id(obj.__class__), None)
         if class_scope is not None:
-            # print('found class scope %s containing %s' % (class_scope, list(class_scope.all_data_symbols_this_indentation())))
+            print(
+                'found class scope %s containing %s' %
+                (class_scope, list(class_scope.all_data_symbols_this_indentation()))
+            )
             ns = class_scope.clone(obj)
             if obj_name is not None:
                 ns.scope_name = obj_name
@@ -384,8 +404,8 @@ class TraceManager(BaseTraceManager):
                             try:
                                 top_level_sym = next(iter(nbs().aliases[self.first_obj_id_in_chain]))
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
-                                    # TODO: should it be the other way around? i.e. allow-list for arg mutations, starting
-                                    #  with np.random.seed?
+                                    # TODO: should it be the other way around?
+                                    #  i.e. allow-list for arg mutations, starting with np.random.seed?
                                     if len(recorded_args) > 0:
                                         # only make this an arg mutation event if it looks like there's an arg to mutate
                                         mutation_event = MutationEvent.arg_mutate
@@ -446,9 +466,40 @@ class TraceManager(BaseTraceManager):
         literal = _make_weakrefable_literal(obj)
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
+        scope = NamespaceScope(literal, '<anonymous_namespace>', self.cur_frame_original_scope)
+        gen = literal.items() if isinstance(literal, dict) else enumerate(literal)
+        for i, inner_obj in gen:
+            if isinstance(i, (int, str)):
+                scope.upsert_data_symbol_for_name(
+                    i, inner_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, True
+                )
 
-        self.node_id_to_loaded_literal[node_id] = literal
+        self.node_id_to_loaded_literal_scope[node_id] = scope
+        for child_scope in self.node_id_to_scopes_needing_parent[node_id]:
+            child_scope.parent_scope = scope
         return literal
+
+    @register_handler(TraceEvent.dict_key)
+    def dict_key(self, obj: Any, key_node_id: NodeId, *_, **__):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            return obj
+        self.node_id_to_saved_dict_key[key_node_id] = obj
+        return obj
+
+    @register_handler(TraceEvent.dict_value)
+    def dict_value(self, obj: Any, value_node_id: NodeId, *_, key_node_id: NodeId, dict_node_id: NodeId, **__):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            return obj
+        scope = self.node_id_to_loaded_literal_scope.pop(value_node_id, None)
+        if scope is None:
+            return obj
+        # if we found a pending literal, assert that it's not dict unpacking
+        assert key_node_id is not None
+        key_obj = self.node_id_to_saved_dict_key.pop(key_node_id, None)
+        if isinstance(key_obj, (str, int)):
+            scope.scope_name = str(key_obj)
+        self.node_id_to_scopes_needing_parent[dict_node_id].append(scope)
+        return obj
 
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
@@ -484,19 +535,6 @@ class TraceManager(BaseTraceManager):
             self._enable_tracing()
             self.tracing_reset_pending = True
             _finish_tracing_reset()  # trigger the tracer with a frame
-
-    def after_stmt_reset_hook(self):
-        self.mutations.clear()
-        self.mutation_candidates.clear()
-        self.lexical_call_stack.clear()
-        self.active_scope = self.cur_frame_original_scope
-        self.literal_namespace = None
-        self.first_obj_id_in_chain = None
-        self.top_level_node_id_for_chain = None
-        self.saved_complex_symbol_load_data = None
-        self.node_id_to_loaded_symbol.clear()  # TODO: keep this around?
-        self.node_id_to_saved_store_data.clear()
-        self.node_id_to_loaded_literal.clear()
 
     def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
         if nbs().is_develop:

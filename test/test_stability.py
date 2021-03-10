@@ -47,3 +47,12 @@ d = IncDict()
 d_sub_1 = d[1]
 assert d_sub_1 == 1, f"got {d_sub_1}, but expected 1"
 """)
+
+
+def test_starred_args():
+    run_cell("""
+def f(foo, bar):
+    return foo + bar
+""")
+    run_cell('args = [1, 2]')
+    run_cell('f(*args)')

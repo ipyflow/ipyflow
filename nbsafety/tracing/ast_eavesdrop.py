@@ -187,6 +187,10 @@ class AstEavesdropper(ast.NodeTransformer):
     def _get_replacement_args(self, args, keywords: bool):
         replacement_args = []
         for arg in args:
+            if isinstance(arg, ast.Starred) or keywords and arg.arg is None:
+                # TODO: figure out how to trace *args and **kwargs too
+                replacement_args.append(arg)
+                continue
             if keywords:
                 maybe_kwarg = getattr(arg, 'value')
             else:

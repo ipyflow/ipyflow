@@ -2,7 +2,7 @@
 import logging
 
 from nbsafety.singletons import nbs
-from .utils import assert_bool, make_safety_fixture
+from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -86,3 +86,16 @@ def test_nested_readable_name():
     assert d_y_a.readable_name == 'd.y.a'
     d_y_b = lookup_symbol(8)
     assert d_y_b.readable_name == 'd.y.b'
+
+
+def test_nested_readable_name_dict_literal():
+    run_cell('d = {"x": {"y": 42}}')
+    d_x_y = lookup_symbol(42)
+    assert d_x_y.readable_name == 'd[x][y]', 'got %s when expected d[x][y]' % d_x_y.readable_name
+
+
+@skipif_known_failing
+def test_nested_readable_name_list_literal():
+    run_cell('lst = [0, [1, 2, 3]]')
+    lst_1_1 = lookup_symbol(2)
+    assert lst_1_1.readable_name == 'lst[1][1]', 'got %s when expected lst[1][1]' % lst_1_1.readable_name

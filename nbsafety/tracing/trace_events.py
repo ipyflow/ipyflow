@@ -25,6 +25,8 @@ class TraceEvent(Enum):
     after_literal = 'after_literal'
     dict_key = 'dict_key'
     dict_value = 'dict_value'
+    list_elt = 'list_elt'
+    tuple_elt = 'tuple_elt'
 
     line = 'line'
     call = 'call'

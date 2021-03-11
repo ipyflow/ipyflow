@@ -94,8 +94,19 @@ def test_nested_readable_name_dict_literal():
     assert d_x_y.readable_name == 'd[x][y]', 'got %s when expected d[x][y]' % d_x_y.readable_name
 
 
-@skipif_known_failing
 def test_nested_readable_name_list_literal():
     run_cell('lst = [0, [1, 2, 3]]')
+    lst_1_1 = lookup_symbol(2)
+    assert lst_1_1.readable_name == 'lst[1][1]', 'got %s when expected lst[1][1]' % lst_1_1.readable_name
+
+
+def test_nested_readable_name_tuple_in_list():
+    run_cell('lst = [0, (1, 2, 3)]')
+    lst_1_1 = lookup_symbol(2)
+    assert lst_1_1.readable_name == 'lst[1][1]', 'got %s when expected lst[1][1]' % lst_1_1.readable_name
+
+
+def test_nested_readable_name_list_in_tuple():
+    run_cell('lst = (0, [1, 2, 3])')
     lst_1_1 = lookup_symbol(2)
     assert lst_1_1.readable_name == 'lst[1][1]', 'got %s when expected lst[1][1]' % lst_1_1.readable_name

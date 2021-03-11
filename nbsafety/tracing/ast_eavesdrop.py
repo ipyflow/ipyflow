@@ -273,10 +273,38 @@ class AstEavesdropper(ast.NodeTransformer):
             )
 
     def visit_Tuple(self, node: ast.Tuple):
-        return self.visit_literal(node)
+        return self.visit_List_or_Tuple(node)
 
     def visit_List(self, node: ast.List):
-        return self.visit_literal(node)
+        return self.visit_List_or_Tuple(node)
+
+    def visit_List_or_Tuple(self, node: Union[ast.List, ast.Tuple]):
+        traced_elts: List[ast.expr] = []
+        is_load = isinstance(getattr(node, 'ctx', ast.Load()), ast.Load)
+        saw_starred = False
+        for i, elt in enumerate(node.elts):
+            if isinstance(elt, ast.Starred):
+                # TODO: trace starred elts too
+                saw_starred = True
+                traced_elts.append(elt)
+            elif not is_load:
+                traced_elts.append(self.visit(elt))
+                continue
+            with fast.location_of(elt):
+                traced_elts.append(fast.Call(
+                    func=self._emitter_ast(),
+                    args=[
+                        TraceEvent.list_elt.to_ast() if isinstance(node, ast.List) else TraceEvent.tuple_elt.to_ast(),
+                        self._get_copy_id_ast(elt),
+                    ],
+                    keywords=fast.kwargs(
+                        ret=self.visit(elt),
+                        index=fast.NameConstant(None) if saw_starred else fast.Num(i),
+                        container_node_id=self._get_copy_id_ast(node),
+                    )
+                ))
+        node.elts = traced_elts
+        return self.visit_literal(node, should_inner_visit=False)
 
     def visit_Dict(self, node: ast.Dict):
         traced_keys: List[Optional[ast.expr]] = []

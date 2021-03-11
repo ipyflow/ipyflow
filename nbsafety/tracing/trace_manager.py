@@ -502,6 +502,20 @@ class TraceManager(BaseTraceManager):
         self.node_id_to_scopes_needing_parent[dict_node_id].append(scope)
         return obj
 
+    @register_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
+    def list_or_tuple_elt(
+        self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
+    ):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            return obj
+        scope = self.node_id_to_loaded_literal_scope.pop(elt_node_id, None)
+        if scope is None:
+            return obj
+        if index is not None:
+            scope.scope_name = str(index)
+        self.node_id_to_scopes_needing_parent[container_node_id].append(scope)
+        return obj
+
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:

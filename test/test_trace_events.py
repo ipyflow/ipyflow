@@ -75,6 +75,7 @@ def test_recorded_events_two_stmts():
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
         TraceEvent.before_literal,
+        *([TraceEvent.list_elt] * 3),
         TraceEvent.after_literal,
         TraceEvent.after_stmt,
 
@@ -123,6 +124,7 @@ def test_list_nested_in_dict():
 
         TraceEvent.dict_key,
         TraceEvent.before_literal,
+        *([TraceEvent.list_elt] * 3),
         TraceEvent.after_literal,
         TraceEvent.dict_value,
 

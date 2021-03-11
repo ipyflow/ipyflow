@@ -210,3 +210,8 @@ History
 * Various tracing improvements;
 * Various analysis improvements;
 * Fix for stack unwinding bug during trace reenabling;
+
+0.0.59 (2021-03-10)
+-------------------
+* Various tracing improvements;
+* Bugfix for tuple unpacking;

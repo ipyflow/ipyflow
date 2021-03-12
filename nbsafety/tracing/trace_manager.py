@@ -20,7 +20,7 @@ from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
+    from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Sequence, Tuple, Type, Union
     from types import FrameType
     AttrSubVal = Union[str, int]
     NodeId = int
@@ -150,7 +150,12 @@ class BaseTraceManager(singletons.TraceManager):
 
 
 def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
-    events = event if isinstance(event, tuple) else (event,)
+    if event == TraceEvent.all_:
+        events: Sequence[TraceEvent] = [
+            evt for evt in TraceEvent if evt != TraceEvent.all_
+        ]
+    else:
+        events = event if isinstance(event, tuple) else (event,)
 
     def _inner_registrar(handler):
         for evt in events:
@@ -186,6 +191,7 @@ class TraceManager(BaseTraceManager):
         with self.call_stack.register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
+            self.prev_node_id_in_cur_frame: Optional[NodeId] = None
             self.mutations: List[Mutation] = []
             self.mutation_candidates: List[MutationCandidate] = []
 
@@ -320,6 +326,10 @@ class TraceManager(BaseTraceManager):
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
+
+    @register_handler(TraceEvent.all_)
+    def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
+        self.prev_node_id_in_cur_frame = node_id
 
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     def attrsub_tracer(
@@ -603,7 +613,7 @@ class TraceManager(BaseTraceManager):
         if event == TraceEvent.return_:
             self.call_depth -= 1
             if self.call_depth == 0:
-                return self._sys_tracer
+                return
 
         cell_num, lineno = nbs().get_position(frame)
 

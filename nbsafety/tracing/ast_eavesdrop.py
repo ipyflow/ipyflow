@@ -341,3 +341,12 @@ class AstEavesdropper(ast.NodeTransformer):
         node.keys = traced_keys
         node.values = traced_values
         return self.visit_literal(node, should_inner_visit=False)
+
+    def visit_Return(self, node: ast.Return):
+        with fast.location_of(node):
+            node.value = fast.Call(
+                func=self._emitter_ast(),
+                args=[TraceEvent.before_return.to_ast(), self._get_copy_id_ast(node.value)],
+                keywords=fast.kwargs(ret=self.visit(node.value))
+            )
+        return node

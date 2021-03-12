@@ -346,7 +346,13 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node):
             node.value = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.before_return.to_ast(), self._get_copy_id_ast(node.value)],
-                keywords=fast.kwargs(ret=self.visit(node.value))
+                args=[TraceEvent.after_return.to_ast(), self._get_copy_id_ast(node.value)],
+                keywords=fast.kwargs(
+                    ret=self._make_tuple_event_for(
+                        self.visit(node.value),
+                        TraceEvent.before_return,
+                        orig_node_id=id(node.value),
+                    ),
+                ),
             )
         return node

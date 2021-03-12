@@ -137,22 +137,29 @@ def test_function_call():
     assert RECORDED_EVENTS == []
     run_cell("""
 def foo(x):
-    return x
+    return [x]
 """)
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
     RECORDED_EVENTS.clear()
-    run_cell('foo(42)')
+    run_cell('foo([42])')
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.before_arg_list,
+        TraceEvent.before_literal,
+        TraceEvent.list_elt,
+        TraceEvent.after_literal,
         TraceEvent.argument,
         TraceEvent.call,
         TraceEvent.before_stmt,
         TraceEvent.before_return,
+        TraceEvent.before_literal,
+        TraceEvent.list_elt,
+        TraceEvent.after_literal,
+        TraceEvent.after_return,
         TraceEvent.return_,
         TraceEvent.after_arg_list,
         TraceEvent.after_complex_symbol,

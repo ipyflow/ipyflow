@@ -32,6 +32,7 @@ class TraceEvent(Enum):
     tuple_elt = 'tuple_elt'
 
     before_return = 'before_return'
+    after_return = 'after_return'
 
     line = 'line'
     call = 'call'

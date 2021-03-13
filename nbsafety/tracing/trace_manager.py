@@ -150,18 +150,17 @@ class BaseTraceManager(singletons.TraceManager):
 
 
 def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
-    if event == TraceEvent.all_:
-        events: Sequence[TraceEvent] = [
-            evt for evt in TraceEvent if evt != TraceEvent.all_
-        ]
-    else:
-        events = event if isinstance(event, tuple) else (event,)
+    events = event if isinstance(event, tuple) else (event,)
 
     def _inner_registrar(handler):
         for evt in events:
             BaseTraceManager.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
         return handler
     return _inner_registrar
+
+
+def register_universal_handler(handler):
+    return register_handler(tuple(evt for evt in TraceEvent))(handler)
 
 
 def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTraceManager]:
@@ -327,7 +326,7 @@ class TraceManager(BaseTraceManager):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    @register_handler(TraceEvent.all_)
+    @register_universal_handler
     def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
 

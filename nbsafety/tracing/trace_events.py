@@ -8,9 +8,6 @@ EMIT_EVENT = '_X5ix_NBSAFETY_EVT_EMIT'
 
 
 class TraceEvent(Enum):
-    # handlers for `all` are triggered on every event
-    all_ = 'all'
-
     before_stmt = 'before_stmt'
     after_stmt = 'after_stmt'
 

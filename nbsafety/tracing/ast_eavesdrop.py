@@ -242,16 +242,22 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node.func):
             node.func = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.before_arg_list.to_ast(), self._get_copy_id_ast(orig_node_func_id)],
-                keywords=fast.kwargs(ret=node.func),
+                args=[TraceEvent.before_call.to_ast(), self._get_copy_id_ast(orig_node_func_id)],
+                keywords=fast.kwargs(
+                    ret=node.func,
+                    call_node_id=self._get_copy_id_ast(orig_node_id),
+                ),
             )
 
         # f(a, b, ..., c) -> trace(f(a, b, ..., c), 'exit argument list')
         with fast.location_of(node):
             node = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.after_arg_list.to_ast(), self._get_copy_id_ast(node)],
-                keywords=fast.kwargs(ret=node),
+                args=[TraceEvent.after_call.to_ast(), self._get_copy_id_ast(node)],
+                keywords=fast.kwargs(
+                    ret=node,
+                    call_node_id=self._get_copy_id_ast(orig_node_id),
+                ),
             )
 
         return self._maybe_wrap_symbol_in_before_after_tracing(node, call_context=True, orig_node_id=orig_node_id)

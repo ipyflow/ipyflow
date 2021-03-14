@@ -1589,6 +1589,18 @@ def test_tuple_unpack_hard():
 
 
 @skipif_known_failing
+def test_unpack_multiple_from_single():
+    run_cell('x, y = 0, 1')
+    run_cell('lst = [x + 1, y + 1]')
+    run_cell('a, b = lst')
+    run_cell('x = 42')
+    run_cell('logging.info(b)')
+    assert_not_detected()
+    run_cell('logging.info(a)')
+    assert_detected()
+
+
+@skipif_known_failing
 def test_attr_dep_with_top_level_overwrite():
     run_cell("""
 class Foo:

@@ -17,9 +17,11 @@ class TraceEvent(Enum):
     before_complex_symbol = 'before_complex_symbol'
     after_complex_symbol = 'after_complex_symbol'
 
-    before_arg_list = 'before_arg_list'
-    after_arg_list = 'after_arg_list'
+    before_call = 'before_call'
+    after_call = 'after_call'
     argument = 'argument'
+    before_return = 'before_return'
+    after_return = 'after_return'
 
     before_literal = 'before_literal'
     after_literal = 'after_literal'
@@ -27,9 +29,6 @@ class TraceEvent(Enum):
     dict_value = 'dict_value'
     list_elt = 'list_elt'
     tuple_elt = 'tuple_elt'
-
-    before_return = 'before_return'
-    after_return = 'after_return'
 
     line = 'line'
     call = 'call'

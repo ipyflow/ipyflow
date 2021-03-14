@@ -212,7 +212,6 @@ class TraceManager(BaseTraceManager):
         self.mutation_candidates.clear()
         self.lexical_call_stack.clear()
         self.active_scope = self.cur_frame_original_scope
-        self.literal_namespace = None
         self.first_obj_id_in_chain = None
         self.top_level_node_id_for_chain = None
         self.saved_complex_symbol_load_data = None
@@ -454,16 +453,16 @@ class TraceManager(BaseTraceManager):
         if arg_dsym is not None:
             self.mutation_candidates[-1][-1].add(arg_dsym)
 
-    @register_handler(TraceEvent.before_arg_list)
-    def before_argument_list(self, *_, **__):
+    @register_handler(TraceEvent.before_call)
+    def before_call(self, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         with self.lexical_call_stack.push():
             pass
         self.active_scope = self.cur_frame_original_scope
 
-    @register_handler(TraceEvent.after_arg_list)
-    def after_argument_list(self, *_, **__):
+    @register_handler(TraceEvent.after_call)
+    def after_call(self, *_, call_node_id: NodeId, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         # no need to reset active scope here;
@@ -480,6 +479,8 @@ class TraceManager(BaseTraceManager):
         for i, inner_obj in gen:
             if isinstance(i, (int, str)):
                 scope.upsert_data_symbol_for_name(
+                    # TODO: check the inner node ids for attached DataSymbols
+                    #  and use these as the dependencies
                     i, inner_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, True
                 )
 
@@ -487,6 +488,7 @@ class TraceManager(BaseTraceManager):
         # TODO: support this for nested lists, tuples, and sets too, not just dicts
         for child_scope in self.node_id_to_scopes_needing_parent[node_id]:
             child_scope.parent_scope = scope
+        # TODO: create and attach a DataSymbol to `node_id`
         return literal
 
     @register_handler(TraceEvent.dict_key)

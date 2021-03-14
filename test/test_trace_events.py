@@ -60,9 +60,9 @@ def test_recorded_events_simple():
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
-        TraceEvent.before_arg_list,
+        TraceEvent.before_call,
         TraceEvent.argument,
-        TraceEvent.after_arg_list,
+        TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
@@ -82,9 +82,9 @@ def test_recorded_events_two_stmts():
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
-        TraceEvent.before_arg_list,
+        TraceEvent.before_call,
         TraceEvent.argument,
-        TraceEvent.after_arg_list,
+        TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
@@ -97,19 +97,19 @@ def test_nested_chains_no_call():
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
-        TraceEvent.before_arg_list,
+        TraceEvent.before_call,
         TraceEvent.argument,
 
         # next events correspond to `logging.info("foo")`
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
-        TraceEvent.before_arg_list,
+        TraceEvent.before_call,
         TraceEvent.argument,
-        TraceEvent.after_arg_list,
+        TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.argument,
 
-        TraceEvent.after_arg_list,
+        TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
@@ -148,7 +148,7 @@ def foo(x):
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
-        TraceEvent.before_arg_list,
+        TraceEvent.before_call,
         TraceEvent.before_literal,
         TraceEvent.list_elt,
         TraceEvent.after_literal,
@@ -161,7 +161,7 @@ def foo(x):
         TraceEvent.after_literal,
         TraceEvent.after_return,
         TraceEvent.return_,
-        TraceEvent.after_arg_list,
+        TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS

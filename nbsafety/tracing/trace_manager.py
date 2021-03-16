@@ -10,7 +10,7 @@ from typing import cast, TYPE_CHECKING
 import astunparse
 
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
-from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety import singletons
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
@@ -20,7 +20,7 @@ from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Sequence, Tuple, Type, Union
+    from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
     from types import FrameType
     AttrSubVal = Union[str, int]
     NodeId = int
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.ERROR)
 
 
 ARG_MUTATION_EXCEPTED_MODULES = {
@@ -72,6 +72,18 @@ def _make_weakrefable_literal(literal):
         return literal
 
 
+def _match_literal_namespace_with_literal_elts(literal_obj, literal_node):
+    if isinstance(literal_obj, dict):
+        gen = literal_obj.items()
+        assert isinstance(literal_node, ast.Dict)
+        elts = literal_node.values
+    else:
+        gen = enumerate(literal_obj)
+        elts = literal_node.elts
+    # TODO: handle starred
+    yield from zip(gen, elts)
+
+
 def _finish_tracing_reset():
     # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
     pass
@@ -82,6 +94,8 @@ class BaseTraceManager(singletons.TraceManager):
     _MANAGER_CLASS_REGISTERED = False
     EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
     EVENT_HANDLERS_BY_CLASS: Dict[Type['BaseTraceManager'], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
+
+    EVENT_LOGGER = logging.getLogger('events')
 
     def __init__(self):
         if not self._MANAGER_CLASS_REGISTERED:
@@ -104,7 +118,7 @@ class BaseTraceManager(singletons.TraceManager):
                 if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
                     raise exc
                 else:
-                    logger.warning('Exception occurred: %s' % exc)
+                    logger.error('Exception occurred: %s' % exc)
                 new_ret = None
             if new_ret is not None:
                 kwargs['ret'] = new_ret
@@ -184,7 +198,6 @@ class TraceManager(BaseTraceManager):
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
-        self.node_id_to_scopes_needing_parent: Dict[NodeId, List[NamespaceScope]] = defaultdict(list)
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -195,8 +208,8 @@ class TraceManager(BaseTraceManager):
             self.mutation_candidates: List[MutationCandidate] = []
 
             with self.call_stack.needing_manual_initialization():
-                self.cur_frame_original_scope = nbs().global_scope
-                self.active_scope = nbs().global_scope
+                self.cur_frame_original_scope: Scope = nbs().global_scope
+                self.active_scope: Scope = nbs().global_scope
                 self.inside_lambda = False
 
             self.lexical_call_stack: TraceStack = self._make_stack()
@@ -206,20 +219,26 @@ class TraceManager(BaseTraceManager):
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
                 self.saved_complex_symbol_load_data: Optional[SavedComplexSymbolLoadData] = None
 
+            self.lexical_literal_stack: TraceStack = self._make_stack()
+            with self.lexical_literal_stack.register_stack_state():
+                # `None` means use 'cur_frame_original_scope'
+                self.active_literal_scope: Optional[NamespaceScope] = None
+
     # TODO: use stack mechanism to automate this?
     def after_stmt_reset_hook(self):
         self.mutations.clear()
         self.mutation_candidates.clear()
         self.lexical_call_stack.clear()
+        self.lexical_literal_stack.clear()
         self.active_scope = self.cur_frame_original_scope
         self.first_obj_id_in_chain = None
         self.top_level_node_id_for_chain = None
         self.saved_complex_symbol_load_data = None
+        self.active_literal_scope = None
         self.node_id_to_loaded_symbol.clear()  # TODO: keep this around?
         self.node_id_to_saved_store_data.clear()
         self.node_id_to_loaded_literal_scope.clear()
         self.node_id_to_saved_dict_key.clear()
-        self.node_id_to_scopes_needing_parent.clear()
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         new_scope = trace_stmt.get_post_call_scope()
@@ -279,15 +298,14 @@ class TraceManager(BaseTraceManager):
     def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
         obj_id = id(obj)
         ns = nbs().namespaces.get(obj_id, None)
-        # print('%s attrsub %s of obj %s' % (ctx, attr_or_subscript, obj))
         if ns is not None:
             return ns
         class_scope = nbs().namespaces.get(id(obj.__class__), None)
         if class_scope is not None:
-            print(
-                'found class scope %s containing %s' %
-                (class_scope, list(class_scope.all_data_symbols_this_indentation()))
-            )
+            # logger.info(
+            #     'found class scope %s containing %s',
+            #     class_scope, list(class_scope.all_data_symbols_this_indentation())
+            # )
             ns = class_scope.clone(obj)
             if obj_name is not None:
                 ns.scope_name = obj_name
@@ -348,6 +366,7 @@ class TraceManager(BaseTraceManager):
             return
         if obj is None:
             return
+        logger.info('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
         sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
         is_subscript = (event == TraceEvent.subscript)
         obj_id = id(obj)
@@ -469,27 +488,50 @@ class TraceManager(BaseTraceManager):
         # that will happen in the 'after chain' handler
         self.lexical_call_stack.pop()
 
+    @register_handler(TraceEvent.before_literal)
+    def before_literal(self, *_, **__):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            return
+        parent_scope = self.active_literal_scope or self.cur_frame_original_scope
+        with self.lexical_literal_stack.push():
+            self.active_literal_scope = NamespaceScope(None, '<anonymous_namespace>', parent_scope)
+
     @register_handler(TraceEvent.after_literal)
     def after_literal(self, obj: Any, node_id: NodeId, *_, **__):
         literal = _make_weakrefable_literal(obj)
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
-        scope = NamespaceScope(literal, '<anonymous_namespace>', self.cur_frame_original_scope)
-        gen = literal.items() if isinstance(literal, dict) else enumerate(literal)
-        for i, inner_obj in gen:
-            if isinstance(i, (int, str)):
-                scope.upsert_data_symbol_for_name(
-                    # TODO: check the inner node ids for attached DataSymbols
-                    #  and use these as the dependencies
-                    i, inner_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, True
-                )
+        try:
+            self.active_literal_scope.update_obj_ref(literal)
+            for (i, inner_obj), inner_node in _match_literal_namespace_with_literal_elts(literal, nbs().ast_node_by_id[node_id]):
+                inner_symbols = set()
+                if isinstance(inner_node, ast.Name):
+                    inner_symbols.add(self.cur_frame_original_scope.lookup_data_symbol_by_name(inner_node.id))
+                else:
+                    inner_symbols.add(self.node_id_to_loaded_symbol.get(id(inner_node), None))
+                inner_symbols.discard(None)
+                if isinstance(i, (int, str)):
+                    self.node_id_to_loaded_symbol[id(inner_node)] = self.active_literal_scope.upsert_data_symbol_for_name(
+                        i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, True
+                    )
+                    # self.node_id_to_loaded_symbol.pop(id(inner_node), None)
 
-        self.node_id_to_loaded_literal_scope[node_id] = scope
-        # TODO: support this for nested lists, tuples, and sets too, not just dicts
-        for child_scope in self.node_id_to_scopes_needing_parent[node_id]:
-            child_scope.parent_scope = scope
-        # TODO: create and attach a DataSymbol to `node_id`
-        return literal
+            self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
+            parent_scope: Scope = self.active_literal_scope.parent_scope
+            assert parent_scope is not None
+            # assert node_id not in self.node_id_to_loaded_symbol
+            # self.node_id_to_loaded_symbol[node_id] = parent_scope.upsert_data_symbol_for_name(
+            #     # we will fix these settings up later
+            #     '<anonymous_literal_symbol_%d>' % id(literal),
+            #     literal,
+            #     set(),
+            #     self.prev_trace_stmt_in_cur_frame.stmt_node,
+            #     parent_scope is not self.cur_frame_original_scope,
+            # )
+            # logger.info('upsert %s into %s', literal, parent_scope)
+            return literal
+        finally:
+            self.lexical_literal_stack.pop()
 
     @register_handler(TraceEvent.dict_key)
     def dict_key(self, obj: Any, key_node_id: NodeId, *_, **__):
@@ -510,7 +552,6 @@ class TraceManager(BaseTraceManager):
         key_obj = self.node_id_to_saved_dict_key.pop(key_node_id, None)
         if isinstance(key_obj, (str, int)):
             scope.scope_name = str(key_obj)
-        self.node_id_to_scopes_needing_parent[dict_node_id].append(scope)
         return obj
 
     @register_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
@@ -524,7 +565,6 @@ class TraceManager(BaseTraceManager):
             return obj
         if index is not None:
             scope.scope_name = str(index)
-        self.node_id_to_scopes_needing_parent[container_node_id].append(scope)
         return obj
 
     @register_handler(TraceEvent.after_stmt)
@@ -551,7 +591,7 @@ class TraceManager(BaseTraceManager):
             trace_stmt = TraceStatement(
                 frame,
                 cast(ast.stmt, nbs().ast_node_by_id[stmt_id]),
-                self.cur_frame_original_scope
+                self.cur_frame_original_scope,
             )
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
@@ -586,7 +626,7 @@ class TraceManager(BaseTraceManager):
         self.call_stack.clear()
         self.lexical_call_stack.clear()
         if nbs().settings.trace_messages_enabled:
-            logger.warning('reenable tracing >>>')
+            self.EVENT_LOGGER.warning('reenable tracing >>>')
 
     @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
     def handle_sys_events(
@@ -624,7 +664,7 @@ class TraceManager(BaseTraceManager):
             try:
                 stmt_node = nbs().statement_cache[cell_num][lineno]
             except KeyError as e:
-                logger.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
+                self.EVENT_LOGGER.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
                 if nbs().is_develop:
                     raise e
                 return self._sys_tracer
@@ -637,11 +677,11 @@ class TraceManager(BaseTraceManager):
         if nbs().settings.trace_messages_enabled:
             codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
-            logger.warning(' %3d: %10s >>> %s', lineno, event, codeline)
+            self.EVENT_LOGGER.warning(' %3d: %10s >>> %s', trace_stmt.lineno, event, codeline)
         if event == TraceEvent.call:
             if trace_stmt.call_seen:
                 if nbs().settings.trace_messages_enabled:
-                    logger.warning(' disable tracing >>>')
+                    self.EVENT_LOGGER.warning(' disable tracing >>>')
                 self._disable_tracing()
                 return None
             trace_stmt.call_seen = True

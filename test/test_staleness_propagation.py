@@ -8,8 +8,8 @@ from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture()
+_safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
+# _safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell, **kwargs):
@@ -1562,6 +1562,17 @@ except:
     assert_not_detected('x inside class scope is different')
 
 
+def test_set_literal():
+    run_cell('x, y, z = 1, 2, 3')
+    run_cell('s = {x + 1, y + 7}')
+    run_cell('z = 42')
+    run_cell('logging.info(s)')
+    assert_not_detected()
+    run_cell('x = 17')
+    run_cell('logging.info(s)')
+    assert_detected()
+
+
 def test_tuple_unpack_simple():
     run_cell('x, y = 0, 1')
     run_cell('a, b = x + 2, y + 3')
@@ -1835,7 +1846,7 @@ def test_mutate_arg_special_cases():
     assert_not_detected('`logging.info` does not mutate `y`')
 
 
-def test_augassign_does_not_overwrite():
+def test_augassign_does_not_overwrite_deps():
     run_cell('x = 0')
     run_cell('y = 1')
     run_cell('z = x + 2')
@@ -1843,6 +1854,44 @@ def test_augassign_does_not_overwrite():
     run_cell('x = 42')
     run_cell('logging.info(z)')
     assert_detected('`z` depends on old value of `x`')
+
+
+def test_rval_appearance_does_not_overwrite_deps():
+    run_cell('x = 0')
+    run_cell('y = 1')
+    run_cell('z = x + 2')
+    run_cell('z = z + y')
+    run_cell('x = 42')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on old value of `x`')
+
+
+def test_augassign_does_not_overwrite_deps_for_attributes():
+    run_cell("""
+class Foo:
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('x, y, z = Foo(0), Foo(5), Foo(10)')
+    run_cell('z.x = x.x + 2')
+    run_cell('z.x += y.x')
+    run_cell('x.x = 42')
+    run_cell('logging.info(z.x)')
+    assert_detected('`z.x` depends on old value of `x.x`')
+
+
+def test_rval_appearance_does_not_overwrite_deps_for_attributes():
+    run_cell("""
+class Foo:
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('x, y, z = Foo(0), Foo(5), Foo(10)')
+    run_cell('z.x = x.x + 2')
+    run_cell('z.x = z.x + y.x')
+    run_cell('x.x = 42')
+    run_cell('logging.info(z.x)')
+    assert_detected('`z.x` depends on old value of `x.x`')
 
 
 def test_context_manager():

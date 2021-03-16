@@ -23,13 +23,20 @@ def assert_not_detected(msg=''):
     assert_bool(not stale_detected(), msg=msg)
 
 
-def lookup_symbol(val):
+def lookup_symbols(val):
     safety = nbs()
     val_id = id(val)
     if val_id not in safety.aliases:
         return None
     alias_set = safety.aliases[val_id]
     if len(alias_set) == 0:
+        return None
+    return set(alias_set)
+
+
+def lookup_symbol(val):
+    alias_set = lookup_symbols(val)
+    if alias_set is None:
         return None
     return next(iter(alias_set))
 
@@ -110,3 +117,13 @@ def test_nested_readable_name_list_in_tuple():
     run_cell('lst = (0, [1, 2, 3])')
     lst_1_1 = lookup_symbol(2)
     assert lst_1_1.readable_name == 'lst[1][1]', 'got %s when expected lst[1][1]' % lst_1_1.readable_name
+
+
+def test_nested_symbol_created_for_symbol_already_existing():
+    run_cell('x = 42')
+    run_cell('lst = [1, 2, [7, x, 8], 4]')
+    x_syms = lookup_symbols(42)
+    assert len(x_syms) == 2
+    x_names = {sym.readable_name for sym in x_syms}
+    assert 'x' in x_names, 'could not find `x` in set of names %s' % x_names
+    assert 'lst[2][1]' in x_names, 'could not find `lst[2][1]` in set of names %s' % x_names

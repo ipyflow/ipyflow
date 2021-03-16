@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 
 class UpdateProtocol(object):
@@ -39,6 +40,7 @@ class UpdateProtocol(object):
                     # TODO: go deeper?
                     namespace_refresh = set(namespace.all_data_symbols_this_indentation())
         updated_symbols = set(self.seen)
+        logger.warning('mutated: %s; updated symbols: %s', self.mutated, updated_symbols)
         self.safety.updated_symbols |= updated_symbols
         self.seen |= self.new_deps  # don't propagate to stuff on RHS
         for dsym in updated_symbols:
@@ -63,6 +65,7 @@ class UpdateProtocol(object):
             aliases_to_consider = {dsym}
         else:
             aliases_to_consider = self.safety.aliases[dsym.obj_id]
+        logger.warning('collecting updates symbols for %s', aliases_to_consider)
         for dsym_alias in aliases_to_consider:
             if dsym_alias.is_import or dsym_alias in self.seen:
                 continue
@@ -70,6 +73,7 @@ class UpdateProtocol(object):
             containing_scope: NamespaceScope = cast('NamespaceScope', dsym_alias.containing_scope)
             if not containing_scope.is_namespace_scope:
                 continue
+            logger.warning('containing scope for %s: %s; ids %s, %s', dsym_alias, containing_scope, dsym_alias.obj_id, containing_scope.obj_id)
             # TODO: figure out what this is for again
             # self.safety.updated_scopes.add(containing_scope)
             containing_scope.max_defined_timestamp = self.safety.cell_counter()
@@ -90,7 +94,7 @@ class UpdateProtocol(object):
             containing_alias.namespace_stale_symbols.add(dsym)
             self._propagate_staleness_to_namespace_parents(containing_alias)
             for child in self._non_class_to_instance_children(containing_alias):
-                # print('propagate from', dsym, 'to', child)
+                logger.warning('propagate from namespace parent of %s to child %s', dsym, child)
                 self._propagate_staleness_to_deps(child)
 
     def _non_class_to_instance_children(self, dsym):
@@ -120,7 +124,7 @@ class UpdateProtocol(object):
         if self_scope is None:
             return
         for ns_child in self_scope.all_data_symbols_this_indentation(exclude_class=True):
-            # print('propagate from', dsym, 'to namespace child', ns_child)
+            logger.warning('propagate from %s to namespace child %s', dsym, ns_child)
             self._propagate_staleness_to_deps(ns_child)
 
     def _propagate_staleness_to_deps(self, dsym: DataSymbol, skip_seen_check=False):
@@ -134,5 +138,5 @@ class UpdateProtocol(object):
                 self._propagate_staleness_to_namespace_parents(dsym, skip_seen_check=True)
                 self._propagate_staleness_to_namespace_children(dsym, skip_seen_check=True)
         for child in self._non_class_to_instance_children(dsym):
-            # print('propagate from', dsym, 'to', child)
+            logger.warning('propagate %s %s to %s', dsym, dsym.obj_id, child)
             self._propagate_staleness_to_deps(child)

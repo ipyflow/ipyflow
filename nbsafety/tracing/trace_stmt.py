@@ -4,7 +4,8 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis import get_symbol_edges, stmt_contains_lval
+from nbsafety.analysis.symbol_edges import get_symbol_edges, get_symbol_edges_new
+from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope, Scope
 from nbsafety.singletons import nbs, TraceManager
@@ -28,6 +29,10 @@ class TraceStatement(object):
         self.lambda_call_point_deps_done_once = False
         self.call_seen = False
 
+    @property
+    def lineno(self):
+        return self.stmt_node.lineno
+
     @contextmanager
     def replace_active_scope(self, new_active_scope):
         old_scope = self.scope
@@ -46,27 +51,28 @@ class TraceStatement(object):
     def _contains_lval(self):
         return stmt_contains_lval(self.stmt_node)
 
-    def compute_rval_dependencies(self, rval_symbol_refs=None):
+    def resolve_symbols(self, symbol_refs: Set[Union[str, int]]) -> Set[DataSymbol]:
+        data_symbols = set()
         node_id_to_symbol = TraceManager.instance().node_id_to_loaded_symbol
+        for ref in symbol_refs:
+            if isinstance(ref, int):
+                maybe_dsym = node_id_to_symbol.get(ref, None)
+            elif isinstance(ref, str):
+                maybe_dsym = self.scope.lookup_data_symbol_by_name(ref)
+            else:
+                maybe_dsym = None
+            if maybe_dsym is not None:
+                data_symbols.add(maybe_dsym)
+        return data_symbols
+
+    def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
             symbol_edges, _, _ = get_symbol_edges(self.stmt_node)
             if len(symbol_edges) == 0:
                 rval_symbol_refs = set()
             else:
                 rval_symbol_refs = set.union(*symbol_edges.values()) - {None}
-        rval_data_symbols = set()
-        for name in rval_symbol_refs:
-            if isinstance(name, int):
-                maybe_rval_dsym = node_id_to_symbol.get(name, None)
-            elif isinstance(name, str):
-                maybe_rval_dsym = self.scope.lookup_data_symbol_by_name(name)
-            else:
-                maybe_rval_dsym = None
-            if maybe_rval_dsym is not None:
-                rval_data_symbols.add(maybe_rval_dsym)
-            # else:
-            #     assert not isinstance(name, AttrSubSymbolChain)
-        return rval_data_symbols.union(*self.call_point_deps)
+        return self.resolve_symbols(rval_symbol_refs).union(*self.call_point_deps)
 
     def get_post_call_scope(self):
         old_scope = TraceManager.instance().cur_frame_original_scope
@@ -122,15 +128,66 @@ class TraceStatement(object):
         scope = TraceManager.instance().node_id_to_loaded_literal_scope.get(node_id, None)
         if scope is None:
             return
+        # dsym: DataSymbol = TraceManager.instance().node_id_to_loaded_symbol[node_id]
 
         if isinstance(lval_name, str):
             scope.scope_name = lval_name
+            # dsym.name = lval_name
         elif isinstance(lval_name, int) and stored_attrsub_name is not None:
             scope.scope_name = stored_attrsub_name
+            # dsym.name = stored_attrsub_name
             if stored_attrsub_scope is not None:
                 scope.parent_scope = stored_attrsub_scope
 
     def _make_lval_data_symbols(self):
+        return self._make_lval_data_symbols_old()
+
+    def _handle_tuple_unpack(self, lval_ref: ast.AST, rval_refs: Set[Union[str, int]]):
+        pass
+
+    def _make_lval_data_symbols_new(self):
+        lval_refs, rval_refs = get_symbol_edges_new(self.stmt_node)
+        rval_refs -= {None}
+        should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
+        is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        is_class_def = isinstance(self.stmt_node, ast.ClassDef)
+        is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
+        rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_refs)
+        for lref in lval_refs:
+            if isinstance(lref, ast.AST):
+                assert should_overwrite
+                self._handle_tuple_unpack(lref, rval_refs)
+                continue
+            if is_class_def:
+                assert self.class_scope is not None
+                class_ref = self.frame.f_locals[self.stmt_node.name]
+                class_obj_id = id(class_ref)
+                self.class_scope.obj_id = class_obj_id
+                nbs().namespaces[class_obj_id] = self.class_scope
+            try:
+                if isinstance(lref, int):
+                    stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_store(
+                        lref, should_overwrite, rval_deps
+                    )
+                else:
+                    obj = self.frame.f_locals[lref]
+                    stored_attrsub_scope, stored_attrsub_name = None, None
+                    self.scope.upsert_data_symbol_for_name(
+                        lref, obj, rval_deps, self.stmt_node, False,
+                        overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
+                        class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
+                    )
+                # if lref in lval_name_to_literal_node_id:
+                #     self._handle_literal_namespace(
+                #         lref, lval_name_to_literal_node_id[lref], stored_attrsub_scope, stored_attrsub_name
+                #     )
+            except KeyError:
+                logger.warning('keyerror for %s', lref)
+            except Exception as e:
+                logger.warning('exception while handling store: %s', e)
+                pass
+
+    def _make_lval_data_symbols_old(self):
         symbol_edges, lval_name_to_literal_node_id, should_overwrite = get_symbol_edges(self.stmt_node)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
@@ -140,9 +197,8 @@ class TraceStatement(object):
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
 
         for lval_name, rval_names in symbol_edges.items():
-            should_overwrite_for_name = should_overwrite and lval_name not in rval_names
-            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names - {lval_name})
-            # print('create edges from', rval_deps, 'to', lval_name, should_overwrite_for_name)
+            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names)
+            # print('create edges from', rval_deps, 'to', lval_name)
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
@@ -154,14 +210,15 @@ class TraceStatement(object):
             try:
                 if isinstance(lval_name, int):
                     stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_store(
-                        lval_name, should_overwrite_for_name, rval_deps
+                        lval_name, should_overwrite, rval_deps
                     )
                 else:
                     obj = self.frame.f_locals[lval_name]
+                    # print(lval_name, 'is', obj, 'with id', id(obj))
                     stored_attrsub_scope, stored_attrsub_name = None, None
                     self.scope.upsert_data_symbol_for_name(
                         lval_name, obj, rval_deps, self.stmt_node, False,
-                        overwrite=should_overwrite_for_name, is_function_def=is_function_def, is_import=is_import,
+                        overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
                         class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
                     )
                 if lval_name in lval_name_to_literal_node_id:

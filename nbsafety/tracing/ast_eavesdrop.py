@@ -263,6 +263,7 @@ class AstEavesdropper(ast.NodeTransformer):
         return self._maybe_wrap_symbol_in_before_after_tracing(node, call_context=True, orig_node_id=orig_node_id)
 
     def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Tuple], should_inner_visit=True):
+        # TODO: what about set literals?
         maybe_visited: ast.AST = node
         if should_inner_visit:
             maybe_visited = self.generic_visit(node)

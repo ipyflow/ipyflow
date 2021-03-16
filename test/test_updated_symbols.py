@@ -32,7 +32,8 @@ def test_simplest():
 
 def test_dict_hierarchy():
     run_cell('d = {}')
-    assert updated_symbol_names() == ['d']
+    updated_sym_names = updated_symbol_names()
+    assert updated_sym_names == ['d'], 'got %s' % updated_sym_names
     run_cell('d["foo"] = {}')
     assert updated_symbol_names() == sorted(['d[foo]', 'd'])
     run_cell('d["foo"]["bar"] = []')

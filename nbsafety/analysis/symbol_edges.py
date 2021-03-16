@@ -21,16 +21,21 @@ class TiedTuple(tuple):
 class LiteralInfo:
     def __init__(self, items, node_id):
         self.items = items
+        # self.items = tuple(list(items) + [node_id])
         self.node_id = node_id
 
     def __len__(self):
         return len(self.items)
+        # return 1
 
     def __iter__(self):
         return iter(self.items)
+        # return iter([self.node_id])
 
     def __getitem__(self, item):
         return self.items[item]
+        # assert item == 0
+        # return self.node_id
 
 
 _MULTIPLE_SYMBOL_TYPES = (tuple, LiteralInfo, TiedTuple)
@@ -61,7 +66,7 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         # TODO: figure out how to give these type annotations
         self.lval_symbols: List[Any] = []
         self.rval_symbols: List[Any] = []
-        self.literal_lval_symbols_to_node_id: Dict[Union[str, int]] = {}
+        self.literal_lval_symbols_to_node_id: Dict[Union[str, int], int] = {}
         self.simple_edges: List[Any] = []
         self.gather_rvals = True
         self.should_overwrite = True
@@ -407,6 +412,36 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.rval_symbols.extend(rvals_to_extend)
 
 
+class GetSymbolEdgesNew(GetSymbolEdges):
+    def __init__(self):
+        super().__init__()
+
+    def visit_Dict(self, node):
+        assert self.gather_rvals
+        self.to_add_set.append(id(node))
+
+    def visit_List_or_Tuple(self, node):
+        if self.gather_rvals:
+            self.to_add_set.append(id(node))
+        else:
+            self.to_add_set.append(node)
+
+    def visit_Assign(self, node):
+        with self.gather_lvals_context():
+            for target in node.targets:
+                target_lval_symbols = []
+                with self.push_attributes(lval_symbols=target_lval_symbols):
+                    self.visit(target)
+                assert len(target_lval_symbols) == 1
+                self.lval_symbols.append(target_lval_symbols[0])
+        with self.gather_rvals_context():
+            self.visit(node.value)
+
+    def __call__(self, node: ast.AST):
+        self.visit(node)
+        return list(_flatten(self.lval_symbols)), set(_flatten(self.rval_symbols))
+
+
 def get_assignment_lval_and_rval_symbol_refs(node: Union[str, ast.AST]):
     if isinstance(node, str):
         node = ast.parse(node).body[0]
@@ -423,3 +458,12 @@ def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, Any, bool]:
         left, right = edge
         edges[left].add(right)
     return edges, visitor.literal_lval_symbols_to_node_id, visitor.should_overwrite
+
+
+# TODO: refine type sig
+def get_symbol_edges_new(
+        node: Union[str, ast.AST]
+) -> Tuple[List[Union[ast.AST, int, str]], Set[Union[int, str]]]:
+    if isinstance(node, str):
+        node = ast.parse(node).body[0]
+    return GetSymbolEdgesNew()(node)

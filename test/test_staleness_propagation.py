@@ -8,8 +8,8 @@ from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-# _safety_fixture, run_cell_ = make_safety_fixture()
+# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
+_safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell, **kwargs):
@@ -1304,6 +1304,7 @@ def test_single_line_dictionary_literal():
     assert_detected('`d` depends on stale `bar`')
 
 
+@skipif_known_failing
 def test_single_line_dictionary_literal_fix_stale_deps():
     run_cell('foo = 5')
     run_cell('bar = 6')
@@ -1312,10 +1313,11 @@ def test_single_line_dictionary_literal_fix_stale_deps():
     run_cell('logging.info(d)')
     assert_detected('`d` depends on stale `bar`')
     run_cell('d[foo] = bar')
+    assert_not_detected()
     run_cell('logging.info(d)')
-    assert_false_positive('`d`s stale dep fixed, but this is hard to detect '
-                          'since we did not yet have a DataSymbol for `d[foo]` when staleness introduced')
-    # assert_not_detected('`d`s stale dep fixed')
+    # assert_false_positive('`d`s stale dep fixed, but this is hard to detect '
+    #                       'since we did not yet have a DataSymbol for `d[foo]` when staleness introduced')
+    assert_not_detected('`d`s stale dep fixed')
     run_cell('foo = 8')
     run_cell('logging.info(d)')
     assert_detected('`d` depends on stale `foo`')

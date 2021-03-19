@@ -96,6 +96,7 @@ class BaseTraceManager(singletons.TraceManager):
     EVENT_HANDLERS_BY_CLASS: Dict[Type['BaseTraceManager'], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
 
     EVENT_LOGGER = logging.getLogger('events')
+    EVENT_LOGGER.setLevel(logging.WARNING)
 
     def __init__(self):
         if not self._MANAGER_CLASS_REGISTERED:

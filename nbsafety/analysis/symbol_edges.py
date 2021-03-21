@@ -125,6 +125,10 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
             else:
                 yield from edges_for_lval
 
+    def get_rval_symbols(self, node: ast.AST):
+        self.visit(node)
+        return {sym for sym in _flatten(self.rval_symbols) if sym is not None}
+
     def _collect_simple_edges(self):
         if len(self.lval_symbols) == 0:
             self.lval_symbols.append(None)
@@ -412,36 +416,6 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.rval_symbols.extend(rvals_to_extend)
 
 
-class GetSymbolEdgesNew(GetSymbolEdges):
-    def __init__(self):
-        super().__init__()
-
-    def visit_Dict(self, node):
-        assert self.gather_rvals
-        self.to_add_set.append(id(node))
-
-    def visit_List_or_Tuple(self, node):
-        if self.gather_rvals:
-            self.to_add_set.append(id(node))
-        else:
-            self.to_add_set.append(node)
-
-    def visit_Assign(self, node):
-        with self.gather_lvals_context():
-            for target in node.targets:
-                target_lval_symbols = []
-                with self.push_attributes(lval_symbols=target_lval_symbols):
-                    self.visit(target)
-                assert len(target_lval_symbols) == 1
-                self.lval_symbols.append(target_lval_symbols[0])
-        with self.gather_rvals_context():
-            self.visit(node.value)
-
-    def __call__(self, node: ast.AST):
-        self.visit(node)
-        return list(_flatten(self.lval_symbols)), set(_flatten(self.rval_symbols))
-
-
 def get_assignment_lval_and_rval_symbol_refs(node: Union[str, ast.AST]):
     if isinstance(node, str):
         node = ast.parse(node).body[0]
@@ -460,10 +434,7 @@ def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, Any, bool]:
     return edges, visitor.literal_lval_symbols_to_node_id, visitor.should_overwrite
 
 
-# TODO: refine type sig
-def get_symbol_edges_new(
-        node: Union[str, ast.AST]
-) -> Tuple[List[Union[ast.AST, int, str]], Set[Union[int, str]]]:
+def get_symbol_rvals(node: Union[str, ast.AST]) -> Set[Union[int, str]]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
-    return GetSymbolEdgesNew()(node)
+    return GetSymbolEdges().get_rval_symbols(node)

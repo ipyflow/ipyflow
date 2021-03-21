@@ -288,6 +288,7 @@ class DataSymbol(object):
         self._implicit = False
         # quick last fix to avoid overwriting if we appear inside the set of deps to add
         overwrite = overwrite and self not in new_deps
+        logger.warning("symbol %s new deps %s", self, new_deps)
         new_deps.discard(self)
         if overwrite:
             for parent in self.parents - new_deps:

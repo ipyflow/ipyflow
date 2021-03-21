@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis.symbol_edges import get_symbol_edges, get_symbol_edges_new
+from nbsafety.analysis.symbol_edges import get_symbol_edges, get_symbol_rvals
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope, Scope
@@ -13,7 +13,7 @@ from nbsafety.tracing.mutation_event import MutationEvent
 
 if TYPE_CHECKING:
     from types import FrameType
-    from typing import List, Optional, Set, Tuple, Union
+    from typing import Any, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -51,20 +51,6 @@ class TraceStatement(object):
     def _contains_lval(self):
         return stmt_contains_lval(self.stmt_node)
 
-    def resolve_symbols(self, symbol_refs: Set[Union[str, int]]) -> Set[DataSymbol]:
-        data_symbols = set()
-        node_id_to_symbol = tracer().node_id_to_loaded_symbol
-        for ref in symbol_refs:
-            if isinstance(ref, int):
-                maybe_dsym = node_id_to_symbol.get(ref, None)
-            elif isinstance(ref, str):
-                maybe_dsym = self.scope.lookup_data_symbol_by_name(ref)
-            else:
-                maybe_dsym = None
-            if maybe_dsym is not None:
-                data_symbols.add(maybe_dsym)
-        return data_symbols
-
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
             symbol_edges, _, _ = get_symbol_edges(self.stmt_node)
@@ -72,7 +58,7 @@ class TraceStatement(object):
                 rval_symbol_refs = set()
             else:
                 rval_symbol_refs = set.union(*symbol_edges.values()) - {None}
-        return self.resolve_symbols(rval_symbol_refs).union(*self.call_point_deps)
+        return tracer().resolve_symbols(rval_symbol_refs, scope=self.scope).union(*self.call_point_deps)
 
     def get_post_call_scope(self):
         old_scope = tracer().cur_frame_original_scope
@@ -101,26 +87,116 @@ class TraceStatement(object):
             func_cell.create_symbols_for_call_args()
         return func_cell.call_scope
 
-    def _handle_attrsub_store(
-            self, anchor_node_id: int, should_overwrite: bool, rval_deps: Set[DataSymbol]
-    ) -> Tuple[NamespaceScope, Union[str, int]]:
-        (
-            scope, obj, attr_or_sub, is_subscript
-        ) = tracer().node_id_to_saved_store_data[anchor_node_id]
-        attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
-        scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
-        if scope_to_use is None:
-            # Nobody before `scope` has it, so we'll insert it at this level
-            scope_to_use = scope
-        prev_dsym = scope_to_use.lookup_data_symbol_by_name_this_indentation(attr_or_sub, is_subscript)
-        if prev_dsym is not None:
-            should_overwrite = should_overwrite and prev_dsym not in rval_deps
-            rval_deps.discard(prev_dsym)
-        scope_to_use.upsert_data_symbol_for_name(
-            attr_or_sub, attr_or_sub_obj, rval_deps, self.stmt_node, is_subscript,
-            overwrite=should_overwrite, is_function_def=False, class_scope=None
+    def _resolve_scope_and_name_for_target(
+        self, target: Union[str, ast.AST, int]
+    ) -> Tuple[Scope, Union[str, int], Any, bool]:
+        if isinstance(target, (ast.Name, str)):
+            target = target.id if isinstance(target, ast.Name) else target
+            obj = self.frame.f_locals[target]
+            return tracer().cur_frame_original_scope, target, obj, False
+        else:
+            target = id(target) if isinstance(target, ast.AST) else target
+            (
+                scope, obj, attr_or_sub, is_subscript
+            ) = tracer().node_id_to_saved_store_data[target]
+            attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+            scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
+            if scope_to_use is None:
+                # Nobody before `scope` has it, so we'll insert it at this level
+                scope_to_use = scope
+            return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
+
+    def _handle_assign_target_for_deps(
+        self,
+        target: ast.AST,
+        deps: Set[DataSymbol],
+        maybe_fixup_literal_namespace=False,
+        literal_references: Optional[Set[DataSymbol]] = None
+    ):
+        overwrite = True
+        scope, name, obj, is_subscript = self._resolve_scope_and_name_for_target(target)
+        if literal_references is not None:
+            prev_sym = scope.lookup_data_symbol_by_name_this_indentation(name)
+            if prev_sym is not None and prev_sym in literal_references:
+                overwrite = False
+        scope.upsert_data_symbol_for_name(
+            # TODO: handle this at finer granularity
+            name, obj, deps.union(*self.call_point_deps), self.stmt_node, is_subscript, overwrite=overwrite
         )
-        return scope_to_use, attr_or_sub
+        if maybe_fixup_literal_namespace:
+            namespace_for_upsert = nbs().namespaces.get(id(obj), None)
+            if namespace_for_upsert is not None and namespace_for_upsert.scope_name == NamespaceScope.ANONYMOUS:
+                namespace_for_upsert.scope_name = str(name)
+                namespace_for_upsert.parent_scope = scope
+
+    def _handle_assign_target_tuple_unpack_from_deps(self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]):
+        for inner_target in target.elts:
+            if isinstance(inner_target, (ast.List, ast.Tuple)):
+                self._handle_assign_target_tuple_unpack_from_deps(inner_target, deps)
+            else:
+                self._handle_assign_target_for_deps(inner_target, deps)
+
+    def _handle_assign_target_tuple_unpack_from_namespace(
+        self, target: Union[ast.List, ast.Tuple], value: Optional[ast.AST], rhs_namespace: NamespaceScope
+    ):
+        if isinstance(value, (ast.List, ast.Tuple)) and len(value.elts) == len(target.elts):
+            value_elts = value.elts
+        else:
+            value_elts = [None] * len(target.elts)
+        for (i, inner_target), inner_value in zip(enumerate(target.elts), value_elts):
+            if isinstance(inner_target, ast.Starred):
+                break
+            inner_dep = rhs_namespace.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
+            if inner_dep is None:
+                inner_deps = set()
+            else:
+                inner_deps = {inner_dep}
+            if isinstance(inner_target, (ast.List, ast.Tuple)):
+                inner_namespace = nbs().namespaces.get(inner_dep.obj_id, None)
+                if inner_namespace is None:
+                    self._handle_assign_target_tuple_unpack_from_deps(inner_target, inner_deps)
+                else:
+                    self._handle_assign_target_tuple_unpack_from_namespace(inner_target, inner_value, inner_namespace)
+            else:
+                if inner_value is None:
+                    literal_references = None
+                else:
+                    literal_references = tracer().resolve_symbols(get_symbol_rvals(inner_value))
+                self._handle_assign_target_for_deps(
+                    inner_target, inner_deps,
+                    maybe_fixup_literal_namespace=True,
+                    literal_references=literal_references,
+                )
+
+    def _handle_assign_target(self, target: ast.AST, value: ast.AST):
+        if isinstance(target, (ast.List, ast.Tuple)):
+            rhs_namespace = tracer().node_id_to_loaded_literal_scope.get(id(value), None)
+            if rhs_namespace is None:
+                rval_dsyms = tracer().resolve_symbols(get_symbol_rvals(value), scope=self.scope)
+                if len(rval_dsyms) == 1:
+                    rhs_namespace = nbs().namespaces.get(next(iter(rval_dsyms)).obj_id, None)
+            if rhs_namespace is None:
+                self._handle_assign_target_tuple_unpack_from_deps(target, tracer().resolve_symbols(get_symbol_rvals(value), scope=self.scope))
+            else:
+                self._handle_assign_target_tuple_unpack_from_namespace(target, value, rhs_namespace)
+        else:
+            rval_deps = tracer().resolve_symbols(get_symbol_rvals(value), scope=self.scope)
+            literal_references = None
+            if isinstance(value, (ast.Dict, ast.List, ast.Tuple)):
+                literal_references = rval_deps
+                if isinstance(value, ast.Dict):
+                    rval_deps = tracer().resolve_symbols(
+                        set.union(set(), *[get_symbol_rvals(k) for k in value.keys if k is not None]), scope=self.scope
+                    )
+                else:
+                    rval_deps = set()
+            self._handle_assign_target_for_deps(
+                target, rval_deps, maybe_fixup_literal_namespace=True, literal_references=literal_references
+            )
+
+    def _handle_assign(self, node: ast.Assign):
+        for target in node.targets:
+            self._handle_assign_target(target, node.value)
 
     def _handle_literal_namespace(
         self, lval_name: Union[str, int], node_id: int, stored_attrsub_scope, stored_attrsub_name
@@ -137,52 +213,13 @@ class TraceStatement(object):
                 scope.parent_scope = stored_attrsub_scope
 
     def _make_lval_data_symbols(self):
-        return self._make_lval_data_symbols_old()
+        if isinstance(self.stmt_node, ast.Assign):
+            self._handle_assign(self.stmt_node)
+        else:
+            self._make_lval_data_symbols_old()
 
     def _handle_tuple_unpack(self, lval_ref: ast.AST, rval_refs: Set[Union[str, int]]):
         pass
-
-    def _make_lval_data_symbols_new(self):
-        lval_refs, rval_refs = get_symbol_edges_new(self.stmt_node)
-        rval_refs -= {None}
-        should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
-        is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        is_class_def = isinstance(self.stmt_node, ast.ClassDef)
-        is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
-        rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_refs)
-        for lref in lval_refs:
-            if isinstance(lref, ast.AST):
-                assert should_overwrite
-                self._handle_tuple_unpack(lref, rval_refs)
-                continue
-            if is_class_def:
-                assert self.class_scope is not None
-                class_ref = self.frame.f_locals[self.stmt_node.name]
-                class_obj_id = id(class_ref)
-                self.class_scope.obj_id = class_obj_id
-                nbs().namespaces[class_obj_id] = self.class_scope
-            try:
-                if isinstance(lref, int):
-                    stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_store(
-                        lref, should_overwrite, rval_deps
-                    )
-                else:
-                    obj = self.frame.f_locals[lref]
-                    stored_attrsub_scope, stored_attrsub_name = None, None
-                    self.scope.upsert_data_symbol_for_name(
-                        lref, obj, rval_deps, self.stmt_node, False,
-                        overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
-                        class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
-                    )
-                # if lref in lval_name_to_literal_node_id:
-                #     self._handle_literal_namespace(
-                #         lref, lval_name_to_literal_node_id[lref], stored_attrsub_scope, stored_attrsub_name
-                #     )
-            except KeyError:
-                logger.warning('keyerror for %s', lref)
-            except Exception as e:
-                logger.warning('exception while handling store: %s', e)
-                pass
 
     def _make_lval_data_symbols_old(self):
         symbol_edges, lval_name_to_literal_node_id, should_overwrite = get_symbol_edges(self.stmt_node)
@@ -205,19 +242,15 @@ class TraceStatement(object):
             # if is_function_def:
             #     print('create function', name, 'in scope', self.scope)
             try:
+                scope, name, obj, is_subscript = self._resolve_scope_and_name_for_target(lval_name)
+                stored_attrsub_scope, stored_attrsub_name = None, None
                 if isinstance(lval_name, int):
-                    stored_attrsub_scope, stored_attrsub_name = self._handle_attrsub_store(
-                        lval_name, should_overwrite, rval_deps
-                    )
-                else:
-                    obj = self.frame.f_locals[lval_name]
-                    # print(lval_name, 'is', obj, 'with id', id(obj))
-                    stored_attrsub_scope, stored_attrsub_name = None, None
-                    self.scope.upsert_data_symbol_for_name(
-                        lval_name, obj, rval_deps, self.stmt_node, False,
-                        overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
-                        class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
-                    )
+                    stored_attrsub_scope, stored_attrsub_name = scope, name
+                scope.upsert_data_symbol_for_name(
+                    name, obj, rval_deps, self.stmt_node, is_subscript,
+                    overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
+                    class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
+                )
                 if lval_name in lval_name_to_literal_node_id:
                     self._handle_literal_namespace(
                         lval_name, lval_name_to_literal_node_id[lval_name], stored_attrsub_scope, stored_attrsub_name

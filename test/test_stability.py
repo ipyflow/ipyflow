@@ -56,3 +56,19 @@ def f(foo, bar):
 """)
     run_cell('args = [1, 2]')
     run_cell('f(*args)')
+
+
+def test_starred_assignment():
+    run_cell('x = 0')
+    run_cell('y = 1')
+    run_cell('z = 2')
+    run_cell('lst = ["foo", "bar"]')
+    # just to make sure the tracer can handle a starred expr in list literal
+    run_cell('s, *t = [x + 1, y + 2, z + 3, *lst]')
+    run_cell('z = 42')
+    run_cell('logging.info(s)')
+    run_cell('logging.info(t[0])')
+    run_cell('logging.info(t[1])')
+    run_cell('x = 99')
+    run_cell('logging.info(s)')
+    run_cell('logging.info(t[0])')

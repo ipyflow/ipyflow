@@ -9,6 +9,7 @@ from typing import cast, TYPE_CHECKING
 
 import astunparse
 
+from nbsafety.analysis.symbol_edges import get_symbol_rvals
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety import singletons
@@ -344,6 +345,20 @@ class TraceManager(BaseTraceManager):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
+    def resolve_symbols(self, symbol_refs: Set[Union[str, int]], scope: Optional[Scope] = None) -> Set[DataSymbol]:
+        scope = scope or self.cur_frame_original_scope
+        data_symbols = set()
+        for ref in symbol_refs:
+            if isinstance(ref, int):
+                maybe_dsym = self.node_id_to_loaded_symbol.get(ref, None)
+            elif isinstance(ref, str):
+                maybe_dsym = scope.lookup_data_symbol_by_name(ref)
+            else:
+                maybe_dsym = None
+            if maybe_dsym is not None:
+                data_symbols.add(maybe_dsym)
+        return data_symbols
+
     @register_universal_handler
     def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
@@ -495,7 +510,7 @@ class TraceManager(BaseTraceManager):
             return
         parent_scope = self.active_literal_scope or self.cur_frame_original_scope
         with self.lexical_literal_stack.push():
-            self.active_literal_scope = NamespaceScope(None, '<anonymous_namespace>', parent_scope)
+            self.active_literal_scope = NamespaceScope(None, NamespaceScope.ANONYMOUS, parent_scope)
 
     @register_handler(TraceEvent.after_literal)
     def after_literal(self, obj: Any, node_id: NodeId, *_, **__):
@@ -505,31 +520,16 @@ class TraceManager(BaseTraceManager):
         try:
             self.active_literal_scope.update_obj_ref(literal)
             for (i, inner_obj), inner_node in _match_literal_namespace_with_literal_elts(literal, nbs().ast_node_by_id[node_id]):
-                inner_symbols = set()
-                if isinstance(inner_node, ast.Name):
-                    inner_symbols.add(self.cur_frame_original_scope.lookup_data_symbol_by_name(inner_node.id))
-                else:
-                    inner_symbols.add(self.node_id_to_loaded_symbol.get(id(inner_node), None))
+                # TODO: memoize symbol resolution; otherwise this will be quadratic for deeply nested literals
+                inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_node))
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
                     self.node_id_to_loaded_symbol[id(inner_node)] = self.active_literal_scope.upsert_data_symbol_for_name(
                         i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, True
                     )
-                    # self.node_id_to_loaded_symbol.pop(id(inner_node), None)
-
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope
             assert parent_scope is not None
-            # assert node_id not in self.node_id_to_loaded_symbol
-            # self.node_id_to_loaded_symbol[node_id] = parent_scope.upsert_data_symbol_for_name(
-            #     # we will fix these settings up later
-            #     '<anonymous_literal_symbol_%d>' % id(literal),
-            #     literal,
-            #     set(),
-            #     self.prev_trace_stmt_in_cur_frame.stmt_node,
-            #     parent_scope is not self.cur_frame_original_scope,
-            # )
-            # logger.info('upsert %s into %s', literal, parent_scope)
             return literal
         finally:
             self.lexical_literal_stack.pop()

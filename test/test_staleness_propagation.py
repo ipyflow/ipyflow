@@ -1304,7 +1304,6 @@ def test_single_line_dictionary_literal():
     assert_detected('`d` depends on stale `bar`')
 
 
-@skipif_known_failing
 def test_single_line_dictionary_literal_fix_stale_deps():
     run_cell('foo = 5')
     run_cell('bar = 6')
@@ -1601,7 +1600,6 @@ def test_tuple_unpack_hard():
     assert_detected('`a` depends on stale `x`')
 
 
-@skipif_known_failing
 def test_unpack_multiple_from_single():
     run_cell('x, y = 0, 1')
     run_cell('lst = [x + 1, y + 1]')

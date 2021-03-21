@@ -266,6 +266,8 @@ class Scope:
 
 
 class NamespaceScope(Scope):
+    ANONYMOUS = '<anonymous_namespace>'
+
     # TODO: support (multiple) inheritance by allowing
     #  NamespaceScopes from classes to clone their parent class's NamespaceScopes
     def __init__(self, obj: Any, *args, **kwargs):

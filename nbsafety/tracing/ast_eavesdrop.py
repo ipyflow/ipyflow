@@ -294,6 +294,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 # TODO: trace starred elts too
                 saw_starred = True
                 traced_elts.append(elt)
+                continue
             elif not is_load:
                 traced_elts.append(self.visit(elt))
                 continue

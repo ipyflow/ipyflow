@@ -17,9 +17,13 @@ class TraceStack:
         self._stack_item_initializers: Dict[str, Callable[[], Any]] = {}
         self._stack_items_with_manual_initialization: Set[str] = set()
         self._registering_stack_state_context = False
+        self._field_mapping: Dict[str, int] = {}
 
     def _stack_item_names(self):
         return itertools.chain(self._stack_item_initializers.keys(), self._stack_items_with_manual_initialization)
+
+    def get_field(self, field: str, depth: int = 1) -> Any:
+        return self._stack[-depth][self._field_mapping[field]]
 
     @contextmanager
     def register_stack_state(self):
@@ -39,6 +43,8 @@ class TraceStack:
                 self._stack_item_initializers[stack_item_name] = lambda: init_val
             else:
                 self._stack_item_initializers[stack_item_name] = type(stack_item)
+        for i, stack_item_name in enumerate(self._stack_item_names()):
+            self._field_mapping[stack_item_name] = i
 
     @contextmanager
     def needing_manual_initialization(self):

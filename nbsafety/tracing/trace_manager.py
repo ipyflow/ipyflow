@@ -267,20 +267,21 @@ class TraceManager(BaseTraceManager):
             #     prev_overall.finished_execution_hook()
 
     def _handle_return_transition(self, trace_stmt: TraceStatement):
-        inside_lambda = self.inside_lambda
-        cur_frame_scope = self.cur_frame_original_scope
-        self.call_stack.pop()
-        return_to_stmt = self.prev_trace_stmt_in_cur_frame
-        assert return_to_stmt is not None
-        if self.prev_event != TraceEvent.exception:
-            # exception events are followed by return events until we hit an except clause
-            # no need to track dependencies in this case
-            if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
-                return_to_stmt.class_scope = cast(NamespaceScope, cur_frame_scope)
-            elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
-                if not trace_stmt.lambda_call_point_deps_done_once:
-                    trace_stmt.lambda_call_point_deps_done_once = True
-                    return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
+        try:
+            inside_lambda = self.inside_lambda
+            return_to_stmt: TraceStatement = self.call_stack.get_field('prev_trace_stmt_in_cur_frame')
+            assert return_to_stmt is not None
+            if self.prev_event != TraceEvent.exception:
+                # exception events are followed by return events until we hit an except clause
+                # no need to track dependencies in this case
+                if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
+                    return_to_stmt.class_scope = cast(NamespaceScope, self.cur_frame_original_scope)
+                elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
+                    if not trace_stmt.lambda_call_point_deps_done_once:
+                        trace_stmt.lambda_call_point_deps_done_once = True
+                        return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
+        finally:
+            self.call_stack.pop()
 
     def state_transition_hook(
         self,
@@ -345,14 +346,13 @@ class TraceManager(BaseTraceManager):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    def resolve_symbols(self, symbol_refs: Set[Union[str, int]], scope: Optional[Scope] = None) -> Set[DataSymbol]:
-        scope = scope or self.cur_frame_original_scope
+    def resolve_symbols(self, symbol_refs: Set[Union[str, int]]) -> Set[DataSymbol]:
         data_symbols = set()
         for ref in symbol_refs:
             if isinstance(ref, int):
                 maybe_dsym = self.node_id_to_loaded_symbol.get(ref, None)
             elif isinstance(ref, str):
-                maybe_dsym = scope.lookup_data_symbol_by_name(ref)
+                maybe_dsym = self.cur_frame_original_scope.lookup_data_symbol_by_name(ref)
             else:
                 maybe_dsym = None
             if maybe_dsym is not None:
@@ -589,11 +589,7 @@ class TraceManager(BaseTraceManager):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(
-                frame,
-                cast(ast.stmt, nbs().ast_node_by_id[stmt_id]),
-                self.cur_frame_original_scope,
-            )
+            trace_stmt = TraceStatement(frame, cast(ast.stmt, nbs().ast_node_by_id[stmt_id]))
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
         self.prev_trace_stmt = trace_stmt
@@ -672,7 +668,7 @@ class TraceManager(BaseTraceManager):
 
         trace_stmt = self.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(frame, stmt_node, self.cur_frame_original_scope)
+            trace_stmt = TraceStatement(frame, stmt_node)
             self.traced_statements[id(stmt_node)] = trace_stmt
 
         if nbs().settings.trace_messages_enabled:

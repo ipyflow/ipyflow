@@ -1,6 +1,5 @@
 # -*- coding: future_annotations -*-
 import ast
-from contextlib import contextmanager
 import logging
 from typing import TYPE_CHECKING
 
@@ -20,10 +19,9 @@ logger.setLevel(logging.WARNING)
 
 
 class TraceStatement(object):
-    def __init__(self, frame: FrameType, stmt_node: ast.stmt, scope: Scope):
+    def __init__(self, frame: FrameType, stmt_node: ast.stmt):
         self.frame = frame
         self.stmt_node = stmt_node
-        self.scope = scope
         self.class_scope: Optional[NamespaceScope] = None
         self.call_point_deps: List[Set[DataSymbol]] = []
         self.lambda_call_point_deps_done_once = False
@@ -32,13 +30,6 @@ class TraceStatement(object):
     @property
     def lineno(self):
         return self.stmt_node.lineno
-
-    @contextmanager
-    def replace_active_scope(self, new_active_scope):
-        old_scope = self.scope
-        self.scope = new_active_scope
-        yield
-        self.scope = old_scope
 
     @property
     def finished(self):
@@ -58,14 +49,14 @@ class TraceStatement(object):
                 rval_symbol_refs = set()
             else:
                 rval_symbol_refs = set.union(*symbol_edges.values()) - {None}
-        return tracer().resolve_symbols(rval_symbol_refs, scope=self.scope).union(*self.call_point_deps)
+        return tracer().resolve_symbols(rval_symbol_refs).union(*self.call_point_deps)
 
     def get_post_call_scope(self):
         old_scope = tracer().cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return self.scope.make_child_scope(self.stmt_node.name, obj_id=-1)
+            return old_scope.make_child_scope(self.stmt_node.name, obj_id=-1)
 
         if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
@@ -172,21 +163,21 @@ class TraceStatement(object):
         if isinstance(target, (ast.List, ast.Tuple)):
             rhs_namespace = tracer().node_id_to_loaded_literal_scope.get(id(value), None)
             if rhs_namespace is None:
-                rval_dsyms = tracer().resolve_symbols(get_symbol_rvals(value), scope=self.scope)
+                rval_dsyms = tracer().resolve_symbols(get_symbol_rvals(value))
                 if len(rval_dsyms) == 1:
                     rhs_namespace = nbs().namespaces.get(next(iter(rval_dsyms)).obj_id, None)
             if rhs_namespace is None:
-                self._handle_assign_target_tuple_unpack_from_deps(target, tracer().resolve_symbols(get_symbol_rvals(value), scope=self.scope))
+                self._handle_assign_target_tuple_unpack_from_deps(target, tracer().resolve_symbols(get_symbol_rvals(value)))
             else:
                 self._handle_assign_target_tuple_unpack_from_namespace(target, value, rhs_namespace)
         else:
-            rval_deps = tracer().resolve_symbols(get_symbol_rvals(value), scope=self.scope)
+            rval_deps = tracer().resolve_symbols(get_symbol_rvals(value))
             literal_references = None
             if isinstance(value, (ast.Dict, ast.List, ast.Tuple)):
                 literal_references = rval_deps
                 if isinstance(value, ast.Dict):
                     rval_deps = tracer().resolve_symbols(
-                        set.union(set(), *[get_symbol_rvals(k) for k in value.keys if k is not None]), scope=self.scope
+                        set.union(set(), *[get_symbol_rvals(k) for k in value.keys if k is not None])
                     )
                 else:
                     rval_deps = set()
@@ -239,8 +230,6 @@ class TraceStatement(object):
                 class_obj_id = id(class_ref)
                 self.class_scope.obj_id = class_obj_id
                 nbs().namespaces[class_obj_id] = self.class_scope
-            # if is_function_def:
-            #     print('create function', name, 'in scope', self.scope)
             try:
                 scope, name, obj, is_subscript = self._resolve_scope_and_name_for_target(lval_name)
                 stored_attrsub_scope, stored_attrsub_name = None, None

@@ -70,11 +70,17 @@ class AstEavesdropper(ast.NodeTransformer):
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
-        with fast.location_of(node.value):
-            attr_or_sub = node.slice
-            if isinstance(attr_or_sub, ast.Index):
-                attr_or_sub = attr_or_sub.value  # type: ignore
-        return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
+        attr_or_sub = node.slice
+        if isinstance(attr_or_sub, ast.Index):
+            attr_or_sub = attr_or_sub.value  # type: ignore
+        if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
+            with fast.location_of(node.value):
+                attr_or_sub = fast.NameConstant(None)  # type: ignore
+                # attr_or_sub = fast.Call(
+                #     func='slice',
+                #     arts=[attr_or_sub.lower, attr_or_sub.upper, attr_or_sub.step],
+                # )
+        return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(
             self, node, call_context=False, orig_node_id=None, begin_kwargs=None, end_kwargs=None

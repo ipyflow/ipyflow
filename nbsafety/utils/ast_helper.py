@@ -12,12 +12,12 @@ class FastAst(object):
     def location_of(node):
         """
         All nodes created like `fast.AST(...)` instead of
-        `ast.AST(...)` will have get location info from `node`.
+        `ast.AST(...)` will inherit location info from `node`.
         """
         old_location_of_node = FastAst._LOCATION_OF_NODE
-        _LOCATION_OF_NODE = node
+        FastAst._LOCATION_OF_NODE = node
         yield
-        _LOCATION_OF_NODE = old_location_of_node
+        FastAst._LOCATION_OF_NODE = old_location_of_node
 
     @staticmethod
     def kw(arg, value):

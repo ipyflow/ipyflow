@@ -16,6 +16,19 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+def _maybe_convert_ast_subscript(subscript: ast.AST) -> ast.AST:
+    if isinstance(subscript, ast.Index):
+        return subscript.value  # type: ignore
+    elif isinstance(subscript, ast.Slice):
+        return fast.Call(
+            func=fast.Name('slice', ast.Load()),
+            args=[subscript.lower, subscript.upper] + ([] if subscript.step is None else [subscript.step]),
+            keywords=[],
+        )
+    else:
+        return subscript
+
+
 class AstEavesdropper(ast.NodeTransformer):
     def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST]):
         self._orig_to_copy_mapping = orig_to_copy_mapping
@@ -70,16 +83,12 @@ class AstEavesdropper(ast.NodeTransformer):
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
-        attr_or_sub = node.slice
-        if isinstance(attr_or_sub, ast.Index):
-            attr_or_sub = attr_or_sub.value  # type: ignore
-        if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
-            with fast.location_of(node.value):
-                attr_or_sub = fast.NameConstant(None)  # type: ignore
-                # attr_or_sub = fast.Call(
-                #     func='slice',
-                #     arts=[attr_or_sub.lower, attr_or_sub.upper, attr_or_sub.step],
-                # )
+        with fast.location_of(node.slice if hasattr(node.slice, 'lineno') else node.value):
+            attr_or_sub = _maybe_convert_ast_subscript(node.slice)
+            if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
+                elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
+                elts = [_maybe_convert_ast_subscript(elt) for elt in elts]
+                attr_or_sub = fast.Tuple(elts)
         return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(

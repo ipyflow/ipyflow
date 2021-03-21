@@ -8,7 +8,7 @@ from nbsafety.analysis.symbol_edges import get_symbol_edges, get_symbol_edges_ne
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope, Scope
-from nbsafety.singletons import nbs, TraceManager
+from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.mutation_event import MutationEvent
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ class TraceStatement(object):
 
     @property
     def finished(self):
-        return self.stmt_id in TraceManager.instance().seen_stmts
+        return self.stmt_id in tracer().seen_stmts
 
     @property
     def stmt_id(self):
@@ -53,7 +53,7 @@ class TraceStatement(object):
 
     def resolve_symbols(self, symbol_refs: Set[Union[str, int]]) -> Set[DataSymbol]:
         data_symbols = set()
-        node_id_to_symbol = TraceManager.instance().node_id_to_loaded_symbol
+        node_id_to_symbol = tracer().node_id_to_loaded_symbol
         for ref in symbol_refs:
             if isinstance(ref, int):
                 maybe_dsym = node_id_to_symbol.get(ref, None)
@@ -75,7 +75,7 @@ class TraceStatement(object):
         return self.resolve_symbols(rval_symbol_refs).union(*self.call_point_deps)
 
     def get_post_call_scope(self):
-        old_scope = TraceManager.instance().cur_frame_original_scope
+        old_scope = tracer().cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
@@ -106,7 +106,7 @@ class TraceStatement(object):
     ) -> Tuple[NamespaceScope, Union[str, int]]:
         (
             scope, obj, attr_or_sub, is_subscript
-        ) = TraceManager.instance().node_id_to_saved_store_data[anchor_node_id]
+        ) = tracer().node_id_to_saved_store_data[anchor_node_id]
         attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
         scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
         if scope_to_use is None:
@@ -125,17 +125,14 @@ class TraceStatement(object):
     def _handle_literal_namespace(
         self, lval_name: Union[str, int], node_id: int, stored_attrsub_scope, stored_attrsub_name
     ):
-        scope = TraceManager.instance().node_id_to_loaded_literal_scope.get(node_id, None)
+        scope = tracer().node_id_to_loaded_literal_scope.get(node_id, None)
         if scope is None:
             return
-        # dsym: DataSymbol = TraceManager.instance().node_id_to_loaded_symbol[node_id]
 
         if isinstance(lval_name, str):
             scope.scope_name = lval_name
-            # dsym.name = lval_name
         elif isinstance(lval_name, int) and stored_attrsub_name is not None:
             scope.scope_name = stored_attrsub_name
-            # dsym.name = stored_attrsub_name
             if stored_attrsub_scope is not None:
                 scope.parent_scope = stored_attrsub_scope
 
@@ -234,7 +231,7 @@ class TraceStatement(object):
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:
             return
-        for mutated_obj_id, mutation_event, mutation_arg_dsyms in TraceManager.instance().mutations:
+        for mutated_obj_id, mutation_event, mutation_arg_dsyms in tracer().mutations:
             if mutation_event == MutationEvent.arg_mutate:
                 for mutated_sym in mutation_arg_dsyms:
                     # TODO: happens when module mutates args
@@ -271,16 +268,16 @@ class TraceStatement(object):
         if self._contains_lval():
             self._make_lval_data_symbols()
         else:
-            if len(TraceManager.instance().node_id_to_saved_store_data) > 0 and nbs().is_develop:
+            if len(tracer().node_id_to_saved_store_data) > 0 and nbs().is_develop:
                 logger.warning('saw unexpected state in saved_store_data: %s',
-                               TraceManager.instance().node_id_to_saved_store_data)
+                               tracer().node_id_to_saved_store_data)
 
     def finished_execution_hook(self):
         if self.finished:
             return
         # print('finishing stmt', self.stmt_node)
-        TraceManager.instance().seen_stmts.add(self.stmt_id)
+        tracer().seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
-        TraceManager.instance().after_stmt_reset_hook()
+        tracer().after_stmt_reset_hook()
         nbs()._namespace_gc()
         # self.safety._gc()

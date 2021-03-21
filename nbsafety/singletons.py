@@ -6,6 +6,7 @@ from traitlets.config.configurable import SingletonConfigurable
 if TYPE_CHECKING:
     from typing import Optional
     from nbsafety.safety import NotebookSafety as NotebookSafetyInstance
+    from nbsafety.tracing import TraceManager as TraceManagerInstance
 
 
 class NotebookSafety(SingletonConfigurable):
@@ -25,6 +26,11 @@ class TraceManager(SingletonConfigurable):
 def nbs() -> NotebookSafetyInstance:
     assert NotebookSafety.initialized()
     return NotebookSafety.instance()
+
+
+def tracer() -> TraceManagerInstance:
+    assert TraceManager.initialized()
+    return TraceManager.instance()
 
 
 def nbs_check_init() -> Optional[NotebookSafetyInstance]:

@@ -103,9 +103,15 @@ class TraceStatement(object):
         deps: Set[DataSymbol],
         maybe_fixup_literal_namespace=False,
         literal_references: Optional[Set[DataSymbol]] = None
-    ):
+    ) -> None:
         overwrite = True
-        scope, name, obj, is_subscript = self._resolve_scope_and_name_for_target(target)
+        try:
+            scope, name, obj, is_subscript = self._resolve_scope_and_name_for_target(target)
+        except KeyError as e:
+            # e.g., slices aren't implemented yet
+            # use suppressed log level to avoid noise to user
+            logger.info("Exception: %s", e)
+            return
         if literal_references is not None:
             prev_sym = scope.lookup_data_symbol_by_name_this_indentation(name)
             if prev_sym is not None and prev_sym in literal_references:

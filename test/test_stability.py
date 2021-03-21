@@ -6,8 +6,8 @@ from .utils import make_safety_fixture, skipif_known_failing
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-# _safety_fixture, run_cell_ = make_safety_fixture()
+# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
+_safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell, **kwargs):
@@ -72,3 +72,9 @@ def test_starred_assignment():
     run_cell('x = 99')
     run_cell('logging.info(s)')
     run_cell('logging.info(t[0])')
+
+
+def test_slices():
+    run_cell('lst = list(range(10))')
+    run_cell('foo = lst[3:7]')
+    run_cell('lst[1:2] = foo')

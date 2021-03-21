@@ -400,6 +400,7 @@ class TraceManager(BaseTraceManager):
         self.active_scope = scope
         if ctx != 'Load':
             assert ctx in ('Store', 'AugStore')
+            logger.error("save store data for node id %d", top_level_node_id)
             self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
             return
         if call_context:

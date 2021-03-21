@@ -71,29 +71,9 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
         with fast.location_of(node.value):
-            # TODO: expand beyond simple slices
-            if isinstance(node.slice, ast.Index):
-                attr_or_sub = node.slice.value  # type: ignore
-                # ast.copy_location(attr_or_sub, sub_node.slice.value)
-                # if isinstance(attr_or_sub, ast.Str):
-                #     attr_or_sub = attr_or_sub.s
-                # elif isinstance(attr_or_sub, ast.Num):
-                #     attr_or_sub = attr_or_sub.n
-                # else:
-                #     logger.debug('unimpled index: %s', attr_or_sub)
-                #     return node
-            elif isinstance(node.slice, ast.Constant):
-                # Python > 3.8 doesn't use ast.Index for constant slices
-                attr_or_sub = node.slice
-            else:
-                logger.debug('unimpled slice: %s', node.slice)
-                return node
-            # elif isinstance(sub_node.slice, ast.Slice):
-            #     raise ValueError('unimpled slice: %s' % sub_node.slice)
-            # elif isinstance(sub_node.slice, ast.ExtSlice):
-            #     raise ValueError('unimpled slice: %s' % sub_node.slice)
-            # else:
-            #     raise ValueError('unexpected slice: %s' % sub_node.slice)
+            attr_or_sub = node.slice
+            if isinstance(attr_or_sub, ast.Index):
+                attr_or_sub = attr_or_sub.value  # type: ignore
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(

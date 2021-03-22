@@ -786,6 +786,28 @@ def test_starred_assignment():
     assert_detected()
 
 
+@skipif_known_failing
+def test_starred_assignment_in_middle():
+    run_cell('a, b, c, d, e = 1, 2, 3, 4, 5')
+    run_cell('x, *star, y = [a, b, c, d, e]')
+    run_cell('a += 1')
+    run_cell('logging.info(x)')
+    assert_detected()
+    run_cell('logging.info(star)')
+    assert_not_detected()
+    run_cell('logging.info(y)')
+    assert_not_detected()
+    run_cell('e += 1')
+    run_cell('logging.info(y)')
+    assert_detected()
+    run_cell('logging.info(star)')
+    assert_not_detected()
+    run_cell('c += 1')
+    run_cell('logging.info(star)')
+    assert_detected()
+
+
+
 def test_attributes():
     run_cell("""
 class Foo(object):

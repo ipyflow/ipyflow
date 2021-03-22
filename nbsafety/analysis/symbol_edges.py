@@ -18,47 +18,15 @@ class TiedTuple(tuple):
     pass
 
 
-class LiteralInfo:
-    def __init__(self, items, node_id):
-        self.items = items
-        # self.items = tuple(list(items) + [node_id])
-        self.node_id = node_id
-
-    def __len__(self):
-        return len(self.items)
-        # return 1
-
-    def __iter__(self):
-        return iter(self.items)
-        # return iter([self.node_id])
-
-    def __getitem__(self, item):
-        return self.items[item]
-        # assert item == 0
-        # return self.node_id
-
-
-_MULTIPLE_SYMBOL_TYPES = (tuple, LiteralInfo, TiedTuple)
-_UNPACKABLE_SYMBOL_TYPES = (tuple, LiteralInfo)
+_MULTIPLE_SYMBOL_TYPES = (tuple, TiedTuple)
 
 
 def _flatten(vals):
     for v in vals:
-        if isinstance(v, _UNPACKABLE_SYMBOL_TYPES):
+        if isinstance(v, tuple):
             yield from _flatten(v)
         else:
             yield v
-
-
-def _seek_literal_node_id(vals):
-    if isinstance(vals, LiteralInfo):
-        return vals.node_id
-    elif isinstance(vals, _MULTIPLE_SYMBOL_TYPES):
-        possible = [_seek_literal_node_id(v) for v in vals]
-        possible = [v for v in possible if v is not None]
-        if len(possible) == 1:
-            return possible[0]
-    return None
 
 
 class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
@@ -66,7 +34,6 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         # TODO: figure out how to give these type annotations
         self.lval_symbols: List[Any] = []
         self.rval_symbols: List[Any] = []
-        self.literal_lval_symbols_to_node_id: Dict[Union[str, int], int] = {}
         self.simple_edges: List[Any] = []
         self.gather_rvals = True
         self.should_overwrite = True
@@ -76,16 +43,9 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         if isinstance(lvals, _MULTIPLE_SYMBOL_TYPES) and isinstance(rvals, _MULTIPLE_SYMBOL_TYPES):
             yield from self._edges_from_tuples(lvals, rvals)
         elif isinstance(lvals, _MULTIPLE_SYMBOL_TYPES):
-            # TODO: yield edges with subscript symbols
             for left in _flatten(lvals):
                 yield left, rvals
         elif isinstance(rvals, _MULTIPLE_SYMBOL_TYPES):
-            # node_id = _seek_literal_node_id(rvals)
-            # if node_id is not None:
-            #     self.literal_lval_symbols_to_node_id[lvals] = node_id
-            if isinstance(rvals, LiteralInfo):
-                self.literal_lval_symbols_to_node_id[lvals] = rvals.node_id
-            # TODO: yield edges with subscript symbols
             for right in _flatten(rvals):
                 yield lvals, right
         else:
@@ -187,14 +147,14 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.visit(node.keys)
         self.visit(node.values)
         self.to_add_set, temp = temp, self.to_add_set
-        self.to_add_set.append(LiteralInfo(tuple(temp), id(node)))
+        self.to_add_set.append(tuple(temp))
 
     def visit_List_or_Tuple(self, node):
         temp = self.to_add_set
         self.to_add_set = []
         self.visit(node.elts)
         self.to_add_set, temp = temp, self.to_add_set
-        self.to_add_set.append(LiteralInfo(tuple(temp), id(node)))
+        self.to_add_set.append(tuple(temp))
 
     def visit_expr(self, node):
         if hasattr(ast, 'NamedExpr') and isinstance(node, getattr(ast, 'NamedExpr')):
@@ -423,7 +383,7 @@ def get_assignment_lval_and_rval_symbol_refs(node: Union[str, ast.AST]):
 
 
 # TODO: refine type sig
-def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, Any, bool]:
+def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, bool]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     visitor = GetSymbolEdges()
@@ -431,7 +391,7 @@ def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, Any, bool]:
     for edge in visitor(node):
         left, right = edge
         edges[left].add(right)
-    return edges, visitor.literal_lval_symbols_to_node_id, visitor.should_overwrite
+    return edges, visitor.should_overwrite
 
 
 def get_symbol_rvals(node: Union[str, ast.AST]) -> Set[Union[int, str]]:

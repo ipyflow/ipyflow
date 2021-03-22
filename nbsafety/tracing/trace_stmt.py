@@ -44,7 +44,7 @@ class TraceStatement(object):
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
-            symbol_edges, _, _ = get_symbol_edges(self.stmt_node)
+            symbol_edges, _ = get_symbol_edges(self.stmt_node)
             if len(symbol_edges) == 0:
                 rval_symbol_refs = set()
             else:
@@ -219,7 +219,7 @@ class TraceStatement(object):
         pass
 
     def _make_lval_data_symbols_old(self):
-        symbol_edges, lval_name_to_literal_node_id, should_overwrite = get_symbol_edges(self.stmt_node)
+        symbol_edges, should_overwrite = get_symbol_edges(self.stmt_node)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
@@ -246,10 +246,6 @@ class TraceStatement(object):
                     overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
                     class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
                 )
-                if lval_name in lval_name_to_literal_node_id:
-                    self._handle_literal_namespace(
-                        lval_name, lval_name_to_literal_node_id[lval_name], stored_attrsub_scope, stored_attrsub_name
-                    )
             except KeyError:
                 logger.warning('keyerror for %s', lval_name)
             except Exception as e:

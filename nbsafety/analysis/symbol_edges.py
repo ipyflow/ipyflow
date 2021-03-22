@@ -39,51 +39,12 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.should_overwrite = True
         self.assignment_seen = False
 
-    def _edges(self, lvals, rvals):
-        if isinstance(lvals, _MULTIPLE_SYMBOL_TYPES) and isinstance(rvals, _MULTIPLE_SYMBOL_TYPES):
-            yield from self._edges_from_tuples(lvals, rvals)
-        elif isinstance(lvals, _MULTIPLE_SYMBOL_TYPES):
-            for left in _flatten(lvals):
-                yield left, rvals
-        elif isinstance(rvals, _MULTIPLE_SYMBOL_TYPES):
-            for right in _flatten(rvals):
-                yield lvals, right
-        else:
-            yield lvals, rvals
-
-    def _edges_from_tuples(self, lvals, rvals):
-        if isinstance(rvals, TiedTuple):
-            for lval in lvals:
-                yield from self._edges(lval, rvals)
-        elif len(lvals) == len(rvals):
-            for left, right in zip(lvals, rvals):
-                yield from self._edges(left, right)
-        elif len(lvals) == 1:
-            yield from self._edges(lvals[0], rvals)
-        elif len(rvals) == 1:
-            yield from self._edges(lvals, rvals[0])
-        else:
-            raise ValueError('Incompatible lists: %s, %s' % (lvals, rvals))
-
     def __call__(self, node: ast.AST):
         self.visit(node)
-        if not self.assignment_seen:
-            self._collect_simple_edges()
-            self.lval_symbols = []
-            self.rval_symbols = []
+        self._collect_simple_edges()
+        self.lval_symbols = []
+        self.rval_symbols = []
         yield from self.simple_edges
-        for lval_list in self.lval_symbols:
-            try:
-                edges_for_lval = list(self._edges(lval_list, tuple(self.rval_symbols)))
-            except Exception as e:
-                # TODO: only show warning if not in prod mode
-                logger.warning('Exception occurred while computing symbol edges: %s', e)
-                continue
-            if len(edges_for_lval) == 0:
-                for lval in lval_list:
-                    yield lval, None
-            else:
-                yield from edges_for_lval
 
     def get_rval_symbols(self, node: ast.AST):
         self.visit(node)
@@ -175,24 +136,6 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
             self.visit_expr(node)
         else:
             super().generic_visit(node)
-
-    def visit_Assign(self, node):
-        self.assignment_seen = True
-        with self.gather_lvals_context():
-            for target in node.targets:
-                target_lval_symbols = []
-                with self.push_attributes(lval_symbols=target_lval_symbols):
-                    self.visit(target)
-                if isinstance(target, (ast.List, ast.Tuple)):
-                    # not strictly necessary since we are robust to this later,
-                    # but helps avoid unncessary double nesting, e.g., ((a, b, c),)
-                    assert len(target_lval_symbols) == 1
-                    assert isinstance(target_lval_symbols[0], _MULTIPLE_SYMBOL_TYPES)
-                    self.lval_symbols.append(target_lval_symbols[0])
-                else:
-                    self.lval_symbols.append(tuple(target_lval_symbols))
-        with self.gather_rvals_context():
-            self.visit(node.value)
 
     def visit_AugAssign_or_AnnAssign(self, node):
         with self.push_attributes(lval_symbols=[], rval_symbols=[]):

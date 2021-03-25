@@ -78,11 +78,17 @@ def _match_literal_namespace_with_literal_elts(literal_obj, literal_node):
         gen = literal_obj.items()
         assert isinstance(literal_node, ast.Dict)
         elts = literal_node.values
-    else:
-        gen = enumerate(literal_obj)
-        elts = literal_node.elts
-    # TODO: handle starred
-    yield from zip(gen, elts)
+        yield from zip(gen, elts)
+        return
+    elts = literal_node.elts
+    cur_node = None
+    cur_elt_idx = -1
+    for i, obj in enumerate(literal_obj):
+        if not isinstance(cur_node, ast.Starred) or len(elts) - cur_elt_idx - 1 >= len(literal_obj) - i:
+            cur_elt_idx += 1
+            cur_node = elts[cur_elt_idx]
+        yield (i, obj), cur_node
+
 
 
 def _finish_tracing_reset():
@@ -298,6 +304,26 @@ class TraceManager(BaseTraceManager):
             self._handle_return_transition(trace_stmt)
         self.prev_event = event
 
+    # TODO: name change; not necessarily used for target
+    def resolve_scope_and_name_for_target(
+        self, target: Union[str, ast.AST, int], frame: FrameType
+    ) -> Tuple[Scope, Union[str, int], Any, bool]:
+        if isinstance(target, (ast.Name, str)):
+            target = target.id if isinstance(target, ast.Name) else target
+            obj = frame.f_locals[target]
+            return self.cur_frame_original_scope, target, obj, False
+        else:
+            target = id(target) if isinstance(target, ast.AST) else target
+            (
+                scope, obj, attr_or_sub, is_subscript
+            ) = self.node_id_to_saved_store_data[target]
+            attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+            scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
+            if scope_to_use is None:
+                # Nobody before `scope` has it, so we'll insert it at this level
+                scope_to_use = scope
+            return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
+
     def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
         obj_id = id(obj)
         ns = nbs().namespaces.get(obj_id, None)
@@ -400,7 +426,7 @@ class TraceManager(BaseTraceManager):
         self.active_scope = scope
         if ctx != 'Load':
             assert ctx in ('Store', 'AugStore')
-            logger.error("save store data for node id %d", top_level_node_id)
+            logger.info("save store data for node id %d", top_level_node_id)
             self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
             return
         if call_context:
@@ -514,18 +540,29 @@ class TraceManager(BaseTraceManager):
             self.active_literal_scope = NamespaceScope(None, NamespaceScope.ANONYMOUS, parent_scope)
 
     @register_handler(TraceEvent.after_literal)
-    def after_literal(self, obj: Any, node_id: NodeId, *_, **__):
-        literal = _make_weakrefable_literal(obj)
+    def after_literal(self, obj: Any, node_id: NodeId, frame: FrameType, *_, **__):
+        # literal = _make_weakrefable_literal(obj)
+        literal = obj
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
         try:
             self.active_literal_scope.update_obj_ref(literal)
+            starred_idx = -1
             for (i, inner_obj), inner_node in _match_literal_namespace_with_literal_elts(literal, nbs().ast_node_by_id[node_id]):
                 # TODO: memoize symbol resolution; otherwise this will be quadratic for deeply nested literals
-                inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_node))
+                if isinstance(inner_node, ast.Starred):
+                    inner_symbols = set()
+                    starred_idx += 1
+                    starred_obj = self.resolve_scope_and_name_for_target(inner_node.value, frame)[-2]
+                    starred_namespace = nbs().namespaces.get(id(starred_obj), None)
+                    if starred_namespace is not None:
+                        starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(starred_idx, is_subscript=True)
+                        inner_symbols.add(starred_dep)
+                else:
+                    inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_node))
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
-                    self.node_id_to_loaded_symbol[id(inner_node)] = self.active_literal_scope.upsert_data_symbol_for_name(
+                    self.active_literal_scope.upsert_data_symbol_for_name(
                         i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, True
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope

@@ -764,6 +764,34 @@ def test_identity_checking_obj_6():
     assert_detected('`lst[0][1]` was mutated')
 
 
+def test_starred_assignment_rhs():
+    run_cell('x = 0')
+    run_cell('y = 1')
+    run_cell('z = 2')
+    run_cell('lst = ["foo", "bar"]')
+    # just to make sure the tracer can handle a starred expr in list literal
+    run_cell('a, b, c, d, e = [x + 1, y + 2, z + 3, *lst]')
+    run_cell('z = 42')
+    run_cell('logging.info(a)')
+    assert_not_detected()
+    run_cell('logging.info(b)')
+    assert_not_detected()
+    run_cell('logging.info(c)')
+    assert_detected()
+    run_cell('logging.info(d)')
+    assert_not_detected()
+    run_cell('logging.info(e)')
+    assert_not_detected()
+    run_cell('lst[0] = 7')
+    run_cell('logging.info(d)')
+    assert_detected()
+    run_cell('logging.info(e)')
+    assert_not_detected()
+    run_cell('lst[1] = 8')
+    run_cell('logging.info(e)')
+    assert_detected()
+
+
 @skipif_known_failing
 def test_starred_assignment():
     run_cell('x = 0')

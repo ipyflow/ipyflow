@@ -311,7 +311,7 @@ class NamespaceScope(Scope):
         try:
             obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
         except TypeError:
-            obj_ref = None
+            obj_ref = lambda: obj
         obj_id = id(obj)
         return tombstone, obj_ref, obj_id
 

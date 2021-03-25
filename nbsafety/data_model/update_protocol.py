@@ -29,6 +29,9 @@ class UpdateProtocol(object):
         self.seen: Set[DataSymbol] = set()
 
     def __call__(self, propagate=True):
+        logger.warning("updated sym %s (containing scope %s) with children %s", self.updated_sym,
+                       self.updated_sym.containing_scope,
+                       self.updated_sym.children_by_cell_position.values())
         namespace_refresh = None
         if propagate:
             if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:

@@ -115,8 +115,6 @@ class TraceStatement(object):
     ):
         if isinstance(value, (ast.List, ast.Tuple)) and len(value.elts) == len(target.elts):
             value_elts = value.elts
-        elif not isinstance(value, (ast.List, ast.Tuple)):
-            value_elts = [value] * len(target.elts)  # type: ignore
         else:
             value_elts = [None] * len(target.elts)
         for (i, inner_target), inner_value in zip(enumerate(target.elts), value_elts):

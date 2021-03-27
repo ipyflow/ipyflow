@@ -12,7 +12,7 @@ from nbsafety.tracing.mutation_event import MutationEvent
 
 if TYPE_CHECKING:
     from types import FrameType
-    from typing import Any, List, Optional, Set, Tuple, Union
+    from typing import List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -83,20 +83,15 @@ class TraceStatement(object):
         target: ast.AST,
         deps: Set[DataSymbol],
         maybe_fixup_literal_namespace=False,
-        literal_references: Optional[Set[DataSymbol]] = None
     ) -> None:
         overwrite = True
         try:
-            scope, name, obj, is_subscript = tracer().resolve_scope_and_name_for_target(target, self.frame)
+            scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
             logger.info("Exception: %s", e)
             return
-        if literal_references is not None:
-            prev_sym = scope.lookup_data_symbol_by_name_this_indentation(name)
-            if prev_sym is not None and prev_sym in literal_references:
-                overwrite = False
         upserted = scope.upsert_data_symbol_for_name(
             # TODO: handle this at finer granularity
             name, obj, set.union(deps, *self.call_point_deps), self.stmt_node, is_subscript, overwrite=overwrite
@@ -120,6 +115,8 @@ class TraceStatement(object):
     ):
         if isinstance(value, (ast.List, ast.Tuple)) and len(value.elts) == len(target.elts):
             value_elts = value.elts
+        elif not isinstance(value, (ast.List, ast.Tuple)):
+            value_elts = [value] * len(target.elts)  # type: ignore
         else:
             value_elts = [None] * len(target.elts)
         for (i, inner_target), inner_value in zip(enumerate(target.elts), value_elts):
@@ -137,14 +134,14 @@ class TraceStatement(object):
                 else:
                     self._handle_assign_target_tuple_unpack_from_namespace(inner_target, inner_value, inner_namespace)
             else:
-                if inner_value is None:
-                    literal_references = None
-                else:
-                    literal_references = tracer().resolve_symbols(get_symbol_rvals(inner_value))
+                if isinstance(inner_value, ast.Dict):
+                    inner_deps |= tracer().resolve_symbols(
+                        set.union(set(), *[get_symbol_rvals(k) for k in inner_value.keys if k is not None])
+                    )
                 self._handle_assign_target_for_deps(
-                    inner_target, inner_deps,
+                    inner_target,
+                    inner_deps,
                     maybe_fixup_literal_namespace=True,
-                    literal_references=literal_references,
                 )
 
     def _handle_assign_target(self, target: ast.AST, value: ast.AST):
@@ -159,18 +156,16 @@ class TraceStatement(object):
             else:
                 self._handle_assign_target_tuple_unpack_from_namespace(target, value, rhs_namespace)
         else:
-            rval_deps = tracer().resolve_symbols(get_symbol_rvals(value))
-            literal_references = None
-            if isinstance(value, (ast.Dict, ast.List, ast.Tuple)):
-                literal_references = rval_deps
-                if isinstance(value, ast.Dict):
-                    rval_deps = tracer().resolve_symbols(
-                        set.union(set(), *[get_symbol_rvals(k) for k in value.keys if k is not None])
-                    )
-                else:
-                    rval_deps = set()
+            if isinstance(value, (ast.List, ast.Tuple)):
+                rval_deps = set()
+            elif isinstance(value, ast.Dict):
+                rval_deps = tracer().resolve_symbols(
+                    set.union(set(), *[get_symbol_rvals(k) for k in value.keys if k is not None])
+                )
+            else:
+                rval_deps = tracer().resolve_symbols(get_symbol_rvals(value))
             self._handle_assign_target_for_deps(
-                target, rval_deps, maybe_fixup_literal_namespace=True, literal_references=literal_references
+                target, rval_deps, maybe_fixup_literal_namespace=True
             )
 
     def _handle_assign(self, node: ast.Assign):
@@ -202,10 +197,7 @@ class TraceStatement(object):
                 self.class_scope.obj_id = class_obj_id
                 nbs().namespaces[class_obj_id] = self.class_scope
             try:
-                scope, name, obj, is_subscript = tracer().resolve_scope_and_name_for_target(lval_name, self.frame)
-                stored_attrsub_scope, stored_attrsub_name = None, None
-                if isinstance(lval_name, int):
-                    stored_attrsub_scope, stored_attrsub_name = scope, name
+                scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(lval_name, self.frame)
                 scope.upsert_data_symbol_for_name(
                     name, obj, rval_deps, self.stmt_node, is_subscript,
                     overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,

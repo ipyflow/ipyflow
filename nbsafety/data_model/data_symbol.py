@@ -286,8 +286,10 @@ class DataSymbol(object):
             return
         # if we get here, no longer implicit
         self._implicit = False
-        # quick last fix to avoid overwriting if we appear inside the set of deps to add
+        # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
+        # TODO: check higher-order ancestors too?
         overwrite = overwrite and self not in new_deps
+        overwrite = overwrite and not any(self in new_dep.parents for new_dep in new_deps)
         logger.warning("symbol %s new deps %s", self, new_deps)
         new_deps.discard(self)
         if overwrite:

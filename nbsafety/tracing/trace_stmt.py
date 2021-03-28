@@ -9,6 +9,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.mutation_event import MutationEvent
+from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -25,7 +26,7 @@ class TraceStatement(object):
         self.class_scope: Optional[NamespaceScope] = None
         self.call_point_deps: List[Set[DataSymbol]] = []
         self.lambda_call_point_deps_done_once = False
-        self.call_seen = False
+        self.node_id_for_last_call: Optional[int] = None
 
     @property
     def lineno(self):
@@ -113,10 +114,9 @@ class TraceStatement(object):
     def _handle_assign_target_tuple_unpack_from_namespace(
         self, target: Union[ast.List, ast.Tuple], rhs_namespace: NamespaceScope
     ):
-        for i, inner_target in enumerate(target.elts):
+        for (i, inner_dep), (_, inner_target) in match_container_obj_or_namespace_with_literal_nodes(rhs_namespace, target):
             if isinstance(inner_target, ast.Starred):
                 break
-            inner_dep = rhs_namespace.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
             if inner_dep is None:
                 inner_deps = set()
             else:
@@ -137,7 +137,7 @@ class TraceStatement(object):
     def _handle_assign_target(self, target: ast.AST, value: ast.AST):
         if isinstance(target, (ast.List, ast.Tuple)):
             rhs_namespace = tracer().node_id_to_loaded_literal_scope.get(id(value), None)
-            if rhs_namespace is None:
+            if rhs_namespace is None and not isinstance(value, (ast.List, ast.Tuple)):
                 rval_dsyms = tracer().resolve_symbols(get_symbol_rvals(value))
                 if len(rval_dsyms) == 1:
                     rhs_namespace = nbs().namespaces.get(next(iter(rval_dsyms)).obj_id, None)

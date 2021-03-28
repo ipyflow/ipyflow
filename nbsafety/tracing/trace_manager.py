@@ -19,6 +19,7 @@ from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
+from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
     from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
@@ -49,22 +50,6 @@ ARG_MUTATION_EXCEPTED_MODULES = {
     'sns',
     'widget',
 }
-
-
-def _match_literal_namespace_with_literal_elts(literal_obj, literal_node):
-    if isinstance(literal_obj, dict):
-        gen = literal_obj.items()
-        assert isinstance(literal_node, ast.Dict)
-        yield from zip(gen, zip(literal_node.keys, literal_node.values))
-        return
-    elts = literal_node.elts
-    cur_node = None
-    cur_elt_idx = -1
-    for i, obj in enumerate(literal_obj):
-        if not isinstance(cur_node, ast.Starred) or len(elts) - cur_elt_idx - 1 >= len(literal_obj) - i:
-            cur_elt_idx += 1
-            cur_node = elts[cur_elt_idx]
-        yield (i, obj), (None, cur_node)
 
 
 
@@ -374,7 +359,17 @@ class TraceManager(BaseTraceManager):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    @register_universal_handler
+    @register_handler(
+        # all the AST-related events
+        tuple(set(TraceEvent) - {
+            TraceEvent.call,
+            TraceEvent.return_,
+            TraceEvent.exception,
+            TraceEvent.c_call,
+            TraceEvent.c_return,
+            TraceEvent.c_exception
+        })
+    )
     def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
 
@@ -535,7 +530,9 @@ class TraceManager(BaseTraceManager):
         try:
             self.active_literal_scope.update_obj_ref(literal)
             starred_idx = -1
-            for (i, inner_obj), (inner_key_node, inner_val_node) in _match_literal_namespace_with_literal_elts(literal, nbs().ast_node_by_id[node_id]):
+            for (i, inner_obj), (inner_key_node, inner_val_node) in match_container_obj_or_namespace_with_literal_nodes(
+                literal, nbs().ast_node_by_id[node_id]  # type: ignore
+            ):
                 # TODO: memoize symbol resolution; otherwise this will be quadratic for deeply nested literals
                 if isinstance(inner_val_node, ast.Starred):
                     inner_symbols = set()
@@ -703,12 +700,12 @@ class TraceManager(BaseTraceManager):
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
             self.EVENT_LOGGER.warning(' %3d: %10s >>> %s', trace_stmt.lineno, event, codeline)
         if event == TraceEvent.call:
-            if trace_stmt.call_seen:
+            if trace_stmt.node_id_for_last_call == self.prev_node_id_in_cur_frame:
                 if nbs().settings.trace_messages_enabled:
                     self.EVENT_LOGGER.warning(' disable tracing >>>')
                 self._disable_tracing()
                 return None
-            trace_stmt.call_seen = True
+            trace_stmt.node_id_for_last_call = self.prev_node_id_in_cur_frame
         self.state_transition_hook(event, trace_stmt)
         return self._sys_tracer
 

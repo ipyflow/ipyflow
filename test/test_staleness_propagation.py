@@ -1819,7 +1819,7 @@ def f(p):
     assert_not_detected()
     run_cell('x = 3')
     run_cell('logging.info(z)')
-    assert_false_negative('tracing should have been reactivated but this is hard')
+    assert_detected('tracing should not be disabled')
 
 
 def test_tracing_disable_with_nested_calls():
@@ -1842,7 +1842,7 @@ x = g(True) + 1
 """)
     run_cell('y = 42')
     run_cell('logging.info(x)')
-    assert_false_negative('`x` has dep on stale `y` but capturing this is hard')
+    assert_detected('`x` has dep on stale `y`')
 
 
 def test_dict():

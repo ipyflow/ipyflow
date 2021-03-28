@@ -2,6 +2,7 @@
 import ast
 import inspect
 import itertools
+import logging
 from typing import TYPE_CHECKING
 import weakref
 
@@ -18,6 +19,10 @@ from nbsafety.singletons import nbs, nbs_check_init
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
     from nbsafety.types import SupportedIndexType
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class Scope:
@@ -281,6 +286,38 @@ class NamespaceScope(Scope):
         nbs().namespaces[obj_id] = self
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
+
+    def __bool__(self):
+        # in order to override if __len__ returns 0
+        return True
+
+    def __len__(self):
+        obj = self._obj_ref()
+        if not isinstance(obj, (dict, list, tuple)):
+            raise TypeError("tried to get length of non-container namespace %s: %s", self, obj)
+        return len(obj)
+
+    def _iter_inner(self, obj):
+        for i in range(len(obj)):
+            yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
+
+    def __iter__(self):
+        obj = self._obj_ref()
+        if not isinstance(obj, (list, tuple)):
+            raise TypeError("tried to iterate through non-sequence namespace %s: %s", self, obj)
+        # do the validation before starting the generator part so that we raise immediately
+        return self._iter_inner(obj)
+
+    def _items_inner(self, obj):
+        for key in obj.keys():
+            yield key, self.lookup_data_symbol_by_name_this_indentation(key, is_subscript=True)
+
+    def items(self):
+        obj = self._obj_ref()
+        if not isinstance(obj, dict):
+            raise TypeError("tried to get iterate through items of non-dict namespace: %s", obj)
+        # do the validation before starting the generator part so that we raise immediately
+        return self._items_inner(obj)
 
     @property
     def is_garbage(self):

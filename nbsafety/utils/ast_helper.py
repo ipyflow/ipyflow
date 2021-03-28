@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import sys
 
 
-class FastAst(object):
+class FastAst:
     _LOCATION_OF_NODE = None
 
     @staticmethod

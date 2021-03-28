@@ -25,7 +25,7 @@ class VisitListsMixin(ast.NodeVisitor):
             super().generic_visit(node)
 
 
-class SaveOffAttributesMixin(object):
+class SaveOffAttributesMixin:
     @contextmanager
     def push_attributes(self, **kwargs):
         for k in kwargs:

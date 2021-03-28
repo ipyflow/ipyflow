@@ -13,7 +13,7 @@ def _ipython():
     return get_ipython()
 
 
-class _IpythonState(object):
+class _IpythonState:
     def __init__(self):
         self.cell_counter: Optional[int] = None
 

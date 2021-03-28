@@ -86,7 +86,7 @@ def test_update_list_elem():
     force_subscript_symbol_creation = True
     cells = {
         0: """
-class Foo(object):
+class Foo:
     def __init__(self):
         self.counter = 0
         self.dummy = 0

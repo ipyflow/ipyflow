@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class TraceStatement(object):
+class TraceStatement:
     def __init__(self, frame: FrameType, stmt_node: ast.stmt):
         self.frame = frame
         self.stmt_node = stmt_node

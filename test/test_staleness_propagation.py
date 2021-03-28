@@ -838,7 +838,7 @@ def test_starred_assignment_in_middle():
 
 def test_attributes():
     run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x):
         self.x = x
 """)
@@ -852,7 +852,7 @@ class Foo(object):
 @skipif_known_failing
 def test_attributes_2():
     run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x):
         self.x = x
 """)
@@ -867,7 +867,7 @@ class Foo(object):
 
 def test_attribute_unpacking():
     run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x):
         self.x = x
 """)
@@ -901,7 +901,7 @@ class Foo(object):
 
 def test_attribute_unpacking_no_overwrite():
     run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x):
         self.x = x
 """)
@@ -924,7 +924,7 @@ class Foo(object):
 
 def test_attributes_3():
     run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -939,7 +939,7 @@ class Foo(object):
 
 def test_stale_use_of_attribute():
     run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -955,7 +955,7 @@ class Foo(object):
 def test_attr_manager_active_scope_resets():
     run_cell("""
 y = 10
-class Foo(object):
+class Foo:
     def f(self):
         y = 11
         return y
@@ -974,7 +974,7 @@ def f():
 def test_attribute_call_point():
     run_cell("""
 y = 10
-class Foo(object):
+class Foo:
     def f(self):
         return y
 """)
@@ -988,7 +988,7 @@ class Foo(object):
 def test_attr_manager_active_scope_with_property():
     run_cell("""
 y = 10
-class Foo(object):
+class Foo:
     @property
     def f(self):
         y = 11
@@ -1006,7 +1006,7 @@ class Foo(object):
 def test_namespace_scope_resolution():
     run_cell("""
 y = 42
-class Foo(object):
+class Foo:
     y = 10
     @property
     def foo(self):
@@ -1021,13 +1021,13 @@ class Foo(object):
 
 def test_long_chain_attribute():
     run_cell("""
-class Foo(object):
+class Foo:
     shared = 99
     def __init__(self, x, y):
         self.x = x
         self.y = y + self.shared
         
-    class Bar(object):
+    class Bar:
         def __init__(self, a, b):
             self.a = a
             self.b = b
@@ -1189,7 +1189,7 @@ for word in s.split('X'):
 
 def test_lazy_class_scope_resolution():
     run_cell("""
-class Foo(object):
+class Foo:
     shared = 99
     def __init__(self, x):
         self.x = x
@@ -1208,7 +1208,7 @@ class Foo(object):
 
 def test_new_scope_val_depends_on_old():
     run_cell("""
-class Foo(object):
+class Foo:
     shared = 99
 """)
     run_cell('foo = Foo()')
@@ -1225,7 +1225,7 @@ class Foo(object):
 
 def test_class_member_mutation_does_not_affect_instance_members():
     run_cell("""
-class Foo(object):
+class Foo:
     shared = 99
     def __init__(self):
         self.x = 42
@@ -2028,7 +2028,7 @@ if (x := (y := (z := 1) + 1) + 1) > 0:
 
     def test_walrus_fancy_attributes():
         run_cell("""
-class Foo(object):
+class Foo:
     def __init__(self, x):
         self.x = x
 """)

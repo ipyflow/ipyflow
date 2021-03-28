@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
-class UpdateProtocol(object):
+class UpdateProtocol:
     def __init__(
         self,
         safety: NotebookSafety,

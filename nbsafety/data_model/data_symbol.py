@@ -27,7 +27,7 @@ class DataSymbolType(Enum):
     IMPORT = 'import'
 
 
-class DataSymbol(object):
+class DataSymbol:
     def __init__(
         self,
         name: Union[str, int],

@@ -530,6 +530,7 @@ class TraceManager(BaseTraceManager):
         try:
             self.active_literal_scope.update_obj_ref(literal)
             starred_idx = -1
+            starred_namespace = None
             for (i, inner_obj), (inner_key_node, inner_val_node) in match_container_obj_or_namespace_with_literal_nodes(
                 literal, nbs().ast_node_by_id[node_id]  # type: ignore
             ):
@@ -537,8 +538,9 @@ class TraceManager(BaseTraceManager):
                 if isinstance(inner_val_node, ast.Starred):
                     inner_symbols = set()
                     starred_idx += 1
-                    starred_sym = self.resolve_loaded_symbol(inner_val_node)
-                    starred_namespace = None if starred_sym is None else nbs().namespaces.get(starred_sym.obj_id, None)
+                    if starred_idx == 0:
+                        starred_sym = self.resolve_loaded_symbol(inner_val_node)
+                        starred_namespace = None if starred_sym is None else nbs().namespaces.get(starred_sym.obj_id, None)
                     if starred_namespace is not None:
                         starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(starred_idx, is_subscript=True)
                         inner_symbols.add(starred_dep)
@@ -548,9 +550,10 @@ class TraceManager(BaseTraceManager):
                         inner_symbols.add(self.resolve_loaded_symbol(inner_key_node))
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
-                    self.active_literal_scope.upsert_data_symbol_for_name(
+                    _upserted = self.active_literal_scope.upsert_data_symbol_for_name(
                         i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, True
                     )
+                    # logger.error("upserted %s with deps %s", upserted, upserted.parents)
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope
             assert parent_scope is not None

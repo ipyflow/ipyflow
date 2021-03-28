@@ -792,7 +792,6 @@ def test_starred_assignment_rhs():
     assert_detected()
 
 
-@skipif_known_failing
 def test_starred_assignment():
     run_cell('x = 0')
     run_cell('y = 1')
@@ -811,10 +810,12 @@ def test_starred_assignment():
     run_cell('logging.info(s)')
     assert_detected()
     run_cell('logging.info(t[0])')
+    assert_not_detected()
+    run_cell('y = 142')
+    run_cell('logging.info(t[0])')
     assert_detected()
 
 
-@skipif_known_failing
 def test_starred_assignment_in_middle():
     run_cell('a, b, c, d, e = 1, 2, 3, 4, 5')
     run_cell('x, *star, y = [a, b, c, d, e]')
@@ -833,7 +834,6 @@ def test_starred_assignment_in_middle():
     run_cell('c += 1')
     run_cell('logging.info(star)')
     assert_detected()
-
 
 
 def test_attributes():
@@ -1140,7 +1140,7 @@ def test_subscript_sensitivity():
     run_cell('lst[i] = 10')
     run_cell('i = 1')
     run_cell('logging.info(lst)')
-    assert_detected('lst depends on stale i')
+    assert_detected('`lst[0]` depends on stale i')
 
 
 def test_subscript_adds():

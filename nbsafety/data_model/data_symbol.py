@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from nbsafety.data_model.scope import Scope, NamespaceScope
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 
 class DataSymbolType(Enum):

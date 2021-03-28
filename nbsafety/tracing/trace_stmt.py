@@ -85,7 +85,6 @@ class TraceStatement(object):
         deps: Set[DataSymbol],
         maybe_fixup_literal_namespace=False,
     ) -> None:
-        overwrite = True
         try:
             scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
@@ -93,11 +92,11 @@ class TraceStatement(object):
             # use suppressed log level to avoid noise to user
             logger.info("Exception: %s", e)
             return
-        upserted = scope.upsert_data_symbol_for_name(
+        _upserted = scope.upsert_data_symbol_for_name(
             # TODO: handle this at finer granularity
-            name, obj, set.union(deps, *self.call_point_deps), self.stmt_node, is_subscript, overwrite=overwrite
+            name, obj, set.union(deps, *self.call_point_deps), self.stmt_node, is_subscript
         )
-        logger.info("upserted %s with deps %s; overwrite=%s", upserted, upserted.parents, overwrite)
+        # logger.error("upserted %s with deps %s", upserted, upserted.parents)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
             if namespace_for_upsert is not None and namespace_for_upsert.scope_name == NamespaceScope.ANONYMOUS:
@@ -111,12 +110,32 @@ class TraceStatement(object):
             else:
                 self._handle_assign_target_for_deps(inner_target, deps)
 
+    def _handle_starred_assign_target(self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]):
+        try:
+            scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
+        except KeyError as e:
+            # e.g., slices aren't implemented yet
+            # use suppressed log level to avoid noise to user
+            logger.info("Exception: %s", e)
+            return
+        ns = nbs().namespaces.get(id(obj), None)
+        if ns is None:
+            ns = NamespaceScope(obj, str(name), scope)
+        for i, inner_dep in enumerate(inner_deps):
+            deps = set() if inner_dep is None else {inner_dep}
+            ns.upsert_data_symbol_for_name(i, inner_dep._get_obj(), deps, self.stmt_node, True)
+        scope.upsert_data_symbol_for_name(name, obj, set.union(set(), *self.call_point_deps), self.stmt_node, is_subscript)
+
     def _handle_assign_target_tuple_unpack_from_namespace(
         self, target: Union[ast.List, ast.Tuple], rhs_namespace: NamespaceScope
     ):
+        saved_starred_node: Optional[ast.Starred] = None
+        saved_starred_deps = []
         for (i, inner_dep), (_, inner_target) in match_container_obj_or_namespace_with_literal_nodes(rhs_namespace, target):
             if isinstance(inner_target, ast.Starred):
-                break
+                saved_starred_node = inner_target
+                saved_starred_deps.append(inner_dep)
+                continue
             if inner_dep is None:
                 inner_deps = set()
             else:
@@ -133,6 +152,8 @@ class TraceStatement(object):
                     inner_deps,
                     maybe_fixup_literal_namespace=True,
                 )
+        if saved_starred_node is not None:
+            self._handle_starred_assign_target(saved_starred_node, saved_starred_deps)
 
     def _handle_assign_target(self, target: ast.AST, value: ast.AST):
         if isinstance(target, (ast.List, ast.Tuple)):

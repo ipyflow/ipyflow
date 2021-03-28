@@ -374,7 +374,7 @@ class NotebookSafety(singletons.NotebookSafety):
             if namespace is not None:
                 namespace.update_obj_ref(obj)
                 del self.namespaces[dsym.obj_id]
-                self.namespaces[id(obj)] = namespace
+                self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
 
     def safe_execute(self, cell: str, run_cell_func):

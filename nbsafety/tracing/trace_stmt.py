@@ -111,13 +111,9 @@ class TraceStatement(object):
                 self._handle_assign_target_for_deps(inner_target, deps)
 
     def _handle_assign_target_tuple_unpack_from_namespace(
-        self, target: Union[ast.List, ast.Tuple], value: Optional[ast.AST], rhs_namespace: NamespaceScope
+        self, target: Union[ast.List, ast.Tuple], rhs_namespace: NamespaceScope
     ):
-        if isinstance(value, (ast.List, ast.Tuple)) and len(value.elts) == len(target.elts):
-            value_elts = value.elts
-        else:
-            value_elts = [None] * len(target.elts)
-        for (i, inner_target), inner_value in zip(enumerate(target.elts), value_elts):
+        for i, inner_target in enumerate(target.elts):
             if isinstance(inner_target, ast.Starred):
                 break
             inner_dep = rhs_namespace.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
@@ -130,12 +126,8 @@ class TraceStatement(object):
                 if inner_namespace is None:
                     self._handle_assign_target_tuple_unpack_from_deps(inner_target, inner_deps)
                 else:
-                    self._handle_assign_target_tuple_unpack_from_namespace(inner_target, inner_value, inner_namespace)
+                    self._handle_assign_target_tuple_unpack_from_namespace(inner_target, inner_namespace)
             else:
-                if isinstance(inner_value, ast.Dict):
-                    inner_deps |= tracer().resolve_symbols(
-                        set.union(set(), *[get_symbol_rvals(k) for k in inner_value.keys if k is not None])
-                    )
                 self._handle_assign_target_for_deps(
                     inner_target,
                     inner_deps,
@@ -152,14 +144,10 @@ class TraceStatement(object):
             if rhs_namespace is None:
                 self._handle_assign_target_tuple_unpack_from_deps(target, tracer().resolve_symbols(get_symbol_rvals(value)))
             else:
-                self._handle_assign_target_tuple_unpack_from_namespace(target, value, rhs_namespace)
+                self._handle_assign_target_tuple_unpack_from_namespace(target, rhs_namespace)
         else:
-            if isinstance(value, (ast.List, ast.Tuple)):
+            if isinstance(value, (ast.Dict, ast.List, ast.Tuple)):
                 rval_deps = set()
-            elif isinstance(value, ast.Dict):
-                rval_deps = tracer().resolve_symbols(
-                    set.union(set(), *[get_symbol_rvals(k) for k in value.keys if k is not None])
-                )
             else:
                 rval_deps = tracer().resolve_symbols(get_symbol_rvals(value))
             self._handle_assign_target_for_deps(

@@ -55,8 +55,7 @@ def _match_literal_namespace_with_literal_elts(literal_obj, literal_node):
     if isinstance(literal_obj, dict):
         gen = literal_obj.items()
         assert isinstance(literal_node, ast.Dict)
-        elts = literal_node.values
-        yield from zip(gen, elts)
+        yield from zip(gen, zip(literal_node.keys, literal_node.values))
         return
     elts = literal_node.elts
     cur_node = None
@@ -65,7 +64,7 @@ def _match_literal_namespace_with_literal_elts(literal_obj, literal_node):
         if not isinstance(cur_node, ast.Starred) or len(elts) - cur_elt_idx - 1 >= len(literal_obj) - i:
             cur_elt_idx += 1
             cur_node = elts[cur_elt_idx]
-        yield (i, obj), cur_node
+        yield (i, obj), (None, cur_node)
 
 
 
@@ -530,24 +529,26 @@ class TraceManager(BaseTraceManager):
             self.active_literal_scope = NamespaceScope(None, NamespaceScope.ANONYMOUS, parent_scope)
 
     @register_handler(TraceEvent.after_literal)
-    def after_literal(self, literal: Any, node_id: NodeId, frame: FrameType, *_, **__):
+    def after_literal(self, literal: Any, node_id: NodeId, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
         try:
             self.active_literal_scope.update_obj_ref(literal)
             starred_idx = -1
-            for (i, inner_obj), inner_node in _match_literal_namespace_with_literal_elts(literal, nbs().ast_node_by_id[node_id]):
+            for (i, inner_obj), (inner_key_node, inner_val_node) in _match_literal_namespace_with_literal_elts(literal, nbs().ast_node_by_id[node_id]):
                 # TODO: memoize symbol resolution; otherwise this will be quadratic for deeply nested literals
-                if isinstance(inner_node, ast.Starred):
+                if isinstance(inner_val_node, ast.Starred):
                     inner_symbols = set()
                     starred_idx += 1
-                    starred_sym = self.resolve_loaded_symbol(inner_node)
+                    starred_sym = self.resolve_loaded_symbol(inner_val_node)
                     starred_namespace = None if starred_sym is None else nbs().namespaces.get(starred_sym.obj_id, None)
                     if starred_namespace is not None:
                         starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(starred_idx, is_subscript=True)
                         inner_symbols.add(starred_dep)
                 else:
-                    inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_node))
+                    inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_val_node))
+                    if inner_key_node is not None:
+                        inner_symbols.add(self.resolve_loaded_symbol(inner_key_node))
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
                     self.active_literal_scope.upsert_data_symbol_for_name(

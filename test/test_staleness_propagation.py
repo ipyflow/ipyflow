@@ -1868,7 +1868,7 @@ def test_default_dict():
     run_cell('x = d[0][0] + 1')
     run_cell('d = defaultdict(dict); d[0][0] = 42')
     run_cell('logging.info(x)')
-    assert_detected('`x` has dependency on old value of `d[0][0]`')
+    assert_false_negative('`x` has dependency on old value of `d[0][0]`, but this is hard to detect b/c d was cleared')
 
 
 def test_mutate_arg():

@@ -202,3 +202,30 @@ def test_symbol_on_both_sides_of_assignment():
     assert response['stale_cells'] == [3]
     assert response['fresh_cells'] == [1]
     assert list(response['refresher_links'].keys()) == [1]
+
+
+def test_updated_namespace_after_subscript_dep_removed():
+    cells = {
+        0: 'x = 5',
+        1: 'd = {x: 5}',
+        2: 'logging.info(d[5])',
+        3: 'x = 9',
+    }
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [2]
+    assert response['fresh_cells'] == [1]
+    cells[1] = 'd = {5: 5}'
+    run_cell(cells[1], 1)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2]
+    run_cell(cells[2], 2)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell(cells[0], 0)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []

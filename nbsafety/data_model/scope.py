@@ -376,6 +376,9 @@ class NamespaceScope(Scope):
         self.child_clones.append(cloned)
         return cloned
 
+    def fresh_copy(self, obj: Any):
+        return NamespaceScope(obj, self.scope_name, self.parent_scope)
+
     def make_namespace_qualified_name(self, dc: DataSymbol):
         path = self.full_namespace_path
         name = str(dc.name)

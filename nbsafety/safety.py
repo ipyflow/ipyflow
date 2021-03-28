@@ -5,6 +5,7 @@ from contextlib import contextmanager
 import inspect
 import logging
 import re
+import sys
 from typing import cast, TYPE_CHECKING
 
 from IPython import get_ipython

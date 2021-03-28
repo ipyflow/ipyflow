@@ -211,7 +211,8 @@ class DataSymbol(object):
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             old_ns = nbs().namespaces.get(self.cached_obj_id, None)
             if old_ns is not None:
-                old_ns.update_obj_ref(obj)
+                _ = old_ns.fresh_copy(obj)
+                old_ns._tombstone = True
             self._handle_aliases()
         if refresh_cached:
             self._refresh_cached_obj()

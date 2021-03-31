@@ -76,4 +76,3 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, Any]':
         get_ipython().reset()  # reset ipython state
 
     return init_or_reset_dependency_graph, run_cell
-

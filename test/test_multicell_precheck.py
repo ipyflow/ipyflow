@@ -1,6 +1,8 @@
 # -*- coding: future_annotations -*-
+from contextlib import contextmanager
 import logging
 
+from nbsafety.safety import NotebookSafetySettings
 from nbsafety.singletons import nbs
 from .utils import make_safety_fixture, skipif_known_failing
 
@@ -9,6 +11,19 @@ logging.basicConfig(level=logging.ERROR)
 # Reset dependency graph before each test
 # _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
 _safety_fixture, run_cell_ = make_safety_fixture()
+
+
+@contextmanager
+def override_settings(**kwargs):
+    old_settings = nbs().settings
+    new_settings = old_settings._asdict()
+    new_settings.update(kwargs)
+    new_settings = NotebookSafetySettings(**new_settings)
+    try:
+        nbs().settings = new_settings
+        yield
+    finally:
+        nbs().settings = old_settings
 
 
 def run_cell(cell, cell_id=None, **kwargs):
@@ -177,16 +192,12 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
         5: 'x = 43',
         6: 'foo = foo.set_x(10)',
     }
-    old_skip_stale = nbs().settings.get('skip_unsafe_cells', True)
-    try:
-        nbs().settings.skip_unsafe_cells = False
+    with override_settings(skip_unsafe_cells=False):
         for idx, cell in cells.items():
             run_cell(cell, idx)
         response = nbs().check_and_link_multiple_cells(cells)
         assert response['stale_cells'] == []
         assert response['fresh_cells'] == [2, 4]
-    finally:
-        nbs().settings.skip_unsafe_cells = old_skip_stale
 
 
 def test_symbol_on_both_sides_of_assignment():

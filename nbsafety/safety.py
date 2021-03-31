@@ -5,8 +5,7 @@ from contextlib import contextmanager
 import inspect
 import logging
 import re
-import sys
-from typing import cast, TYPE_CHECKING
+from typing import cast, TYPE_CHECKING, NamedTuple
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
@@ -29,7 +28,6 @@ from nbsafety.run_mode import SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
-from nbsafety.utils.dot_dict import DotDict
 # from nbsafety.utils.mixins import EnforceSingletonMixin
 
 if TYPE_CHECKING:
@@ -62,11 +60,26 @@ def _safety_warning(node: DataSymbol):
     )
 
 
+class NotebookSafetySettings(NamedTuple):
+    store_history: bool
+    test_context: bool
+    use_comm: bool
+    trace_messages_enabled: bool
+    backwards_cell_staleness_propagation: bool
+    track_dependencies: bool
+    naive_refresher_computation: bool
+    skip_unsafe_cells: bool
+    mode: SafetyRunMode
+
+    def get(self, key, default):
+        return getattr(self, key, default)
+
+
 class NotebookSafety(singletons.NotebookSafety):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
         super().__init__()
-        self.settings = DotDict(dict(
+        self.settings = NotebookSafetySettings(
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
             use_comm=use_comm,
@@ -76,8 +89,7 @@ class NotebookSafety(singletons.NotebookSafety):
             naive_refresher_computation=False,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             mode=SafetyRunMode.get(),
-            **kwargs
-        ))
+        )
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)

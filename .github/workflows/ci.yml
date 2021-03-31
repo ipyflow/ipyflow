@@ -34,6 +34,9 @@ jobs:
         #flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         flake8 . --exit-zero
     - name: Run type checker with mypy
+      # skip for windows 3.6.x; mypy seems to have some issue that
+      # gives a false positive syntax error
+      if: ${{ ! (matrix.os == 'windows-latest' && matrix.python_version == '3.6.x') }}
       run: make typecheck
     - name: Run tests with ipytest
       run: make check

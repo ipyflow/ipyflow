@@ -2001,6 +2001,21 @@ def foo():
     assert_detected('`t` depends on old version of `y`')
 
 
+@skipif_known_failing
+def test_list_sum_simple():
+    run_cell("w, x, y, z = 0, 1, 2, 3")
+    run_cell("lst = [w, x] + [y, z]")
+    run_cell("z += 42")
+    run_cell("logging.info(lst[0])")
+    assert_not_detected()
+    run_cell("logging.info(lst[1])")
+    assert_not_detected()
+    run_cell("logging.info(lst[2])")
+    assert_not_detected()
+    run_cell("logging.info(lst[3])")
+    assert_detected()
+
+
 if sys.version_info >= (3, 8):
     def test_walrus_simple():
         run_cell("""

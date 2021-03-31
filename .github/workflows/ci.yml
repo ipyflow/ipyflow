@@ -39,4 +39,4 @@ jobs:
       if: matrix.os != 'windows-latest'
       run: make typecheck
     - name: Run tests with ipytest
-      run: make check
+      run: make check_no_typing

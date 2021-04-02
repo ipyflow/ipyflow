@@ -5,6 +5,8 @@ import logging
 from typing import Any, List, Sequence, TYPE_CHECKING
 
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.singletons import tracer
 
 if TYPE_CHECKING:
     from typing import Dict, Optional, Set, Tuple, Union
@@ -29,6 +31,151 @@ def _flatten(vals):
             yield v
 
 
+class ResolveDependencies(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+    def __init__(self):
+        self.symbols: List[Optional[DataSymbol]] = []
+
+    def __call__(self, node: ast.AST):
+        self.visit(node)
+        return {sym for sym in self.symbols if sym is not None}
+
+    def _push_symbols(self):
+        return self.push_attributes(symbols=[])
+
+    def visit_Name(self, node: ast.Name):
+        self.symbols.append(tracer().resolve_loaded_symbol(node))
+
+    def visit_Tuple(self, node: ast.Tuple):
+        self.visit_List_or_Tuple(node)
+
+    def visit_List(self, node: ast.List):
+        self.visit_List_or_Tuple(node)
+
+    def visit_Dict(self, node: ast.Dict):
+        resolved = tracer().resolve_loaded_symbol(node)
+        if resolved is None:
+            # only descend if tracer failed to create literal symbol
+            self.generic_visit(node.keys)
+            self.generic_visit(node.values)
+        else:
+            self.symbols.append(resolved)
+
+    def visit_List_or_Tuple(self, node: Union[ast.List, ast.Tuple]):
+        resolved = tracer().resolve_loaded_symbol(node)
+        if resolved is None:
+            # only descend if tracer failed to create literal symbol
+            self.generic_visit(node.elts)
+        else:
+            self.symbols.append(resolved)
+
+    def visit_AugAssign_or_AnnAssign(self, node):
+        self.visit(node.value)
+
+    def visit_AnnAssign(self, node):
+        self.visit_AugAssign_or_AnnAssign(node)
+
+    def visit_AugAssign(self, node):
+        self.visit_AugAssign_or_AnnAssign(node)
+
+    def visit_Call(self, node):
+        # TODO: descend further down
+        self.symbols.append(tracer().resolve_loaded_symbol(node.func))
+        self.generic_visit([node.args, node.keywords])
+
+    def visit_Attribute(self, node: ast.Attribute):
+        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
+        self.symbols.append(tracer().resolve_loaded_symbol(node))
+
+    def visit_Subscript(self, node: ast.Subscript):
+        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
+        self.symbols.append(tracer().resolve_loaded_symbol(node))
+        # add slice to RHS to avoid propagating to it
+        self.visit(node.slice)
+
+    def visit_keyword(self, node: ast.keyword):
+        self.visit(node.value)
+
+    def visit_Starred(self, node: ast.Starred):
+        self.symbols.append(tracer().resolve_loaded_symbol(node))
+
+    def visit_Lambda(self, node):
+        with self._push_symbols():
+            self.visit(node.body)
+            self.visit(node.args)
+            to_add = set(self.symbols)
+        # remove node.arguments
+        with self._push_symbols():
+            self.visit(node.args.args)
+            self.visit(node.args.vararg)
+            self.visit(node.args.kwonlyargs)
+            self.visit(node.args.kwarg)
+            discard_set = set(self.symbols)
+        # throw away anything appearing in lambda body that isn't bound
+        self.symbols.extend(to_add - discard_set)
+
+    def visit_GeneratorExp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_DictComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_ListComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_SetComp(self, node):
+        self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
+
+    def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
+        to_append = set()
+        for gen in node.generators:
+            if isinstance(gen, ast.comprehension):
+                with self._push_symbols():
+                    self.visit(gen.iter)
+                    self.visit(gen.ifs)
+                    to_append |= set(self.symbols)
+                with self._push_symbols():
+                    self.visit(gen.target)
+                    discard_set = set(self.symbols)
+            else:
+                with self._push_symbols():
+                    self.visit(gen)
+                    discard_set = set(self.symbols)
+            to_append -= discard_set
+        self.symbols.extend(to_append - discard_set)
+
+    def visit_arg(self, node: ast.arg):
+        self.symbols.append(tracer().resolve_loaded_symbol(node.arg))
+
+    def visit_For(self, node: ast.For):
+        # skip body -- will have dummy since this visitor works line-by-line
+        self.visit(node.iter)
+
+    def visit_If(self, node: ast.If):
+        # skip body here too
+        self.visit(node.test)
+
+    def visit_FunctionDef_or_AsyncFunctionDef(self, node: Union[ast.AsyncFunctionDef, ast.FunctionDef]):
+        self.visit(node.args)
+        self.generic_visit(node.decorator_list)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef):
+        self.visit_FunctionDef_or_AsyncFunctionDef(node)
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
+        self.visit_FunctionDef_or_AsyncFunctionDef(node)
+
+    def visit_ClassDef(self, node: ast.ClassDef):
+        self.generic_visit(node.bases)
+        self.generic_visit(node.decorator_list)
+
+    def visit_With(self, node: ast.With):
+        # skip body
+        self.generic_visit(node.items)
+
+    def visit_withitem(self, node: ast.withitem):
+        self.visit(node.context_expr)
+
+
 class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self):
         # TODO: figure out how to give these type annotations
@@ -36,8 +183,6 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.rval_symbols: List[Any] = []
         self.simple_edges: List[Any] = []
         self.gather_rvals = True
-        self.should_overwrite = True
-        self.assignment_seen = False
 
     def __call__(self, node: ast.AST):
         self.visit(node)
@@ -118,7 +263,7 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.to_add_set.append(tuple(temp))
 
     def visit_expr(self, node):
-        if hasattr(ast, 'NamedExpr') and isinstance(node, getattr(ast, 'NamedExpr')):
+        if isinstance(node, getattr(ast, 'NamedExpr', None)):
             self.visit_NamedExpr(node)
             return
         assert self.gather_rvals
@@ -127,6 +272,16 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         super().generic_visit(node)
         self.to_add_set, temp = temp, self.to_add_set
         self.to_add_set.append(tuple(temp))
+
+    def visit_NamedExpr(self, node):
+        with self.push_attributes(lval_symbols=[], rval_symbols=[]):
+            with self.gather_lvals_context():
+                self.visit(node.target)
+            with self.gather_rvals_context():
+                self.visit(node.value)
+            rvals_to_extend = self.lval_symbols + self.rval_symbols
+            self._collect_simple_edges()
+        self.rval_symbols.extend(rvals_to_extend)
 
     def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]):
         # The purpose of this is to make sure we call our visit_expr method if we see an expr
@@ -149,7 +304,6 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
         self.visit_AugAssign_or_AnnAssign(node)
 
     def visit_AugAssign(self, node):
-        self.should_overwrite = False
         self.visit_AugAssign_or_AnnAssign(node)
 
     def visit_Call(self, node):
@@ -308,16 +462,6 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
                     self.lval_symbols.append(name.asname)
             self._collect_simple_edges()
 
-    def visit_NamedExpr(self, node):
-        with self.push_attributes(lval_symbols=[], rval_symbols=[]):
-            with self.gather_lvals_context():
-                self.visit(node.target)
-            with self.gather_rvals_context():
-                self.visit(node.value)
-            rvals_to_extend = self.lval_symbols + self.rval_symbols
-            self._collect_simple_edges()
-        self.rval_symbols.extend(rvals_to_extend)
-
 
 def get_assignment_lval_and_rval_symbol_refs(node: Union[str, ast.AST]):
     if isinstance(node, str):
@@ -326,7 +470,7 @@ def get_assignment_lval_and_rval_symbol_refs(node: Union[str, ast.AST]):
 
 
 # TODO: refine type sig
-def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, bool]:
+def get_symbol_edges(node: Union[str, ast.AST]) -> Any:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     visitor = GetSymbolEdges()
@@ -334,10 +478,10 @@ def get_symbol_edges(node: Union[str, ast.AST]) -> Tuple[Any, bool]:
     for edge in visitor(node):
         left, right = edge
         edges[left].add(right)
-    return edges, visitor.should_overwrite
+    return edges
 
 
-def get_symbol_rvals(node: Union[str, ast.AST]) -> Set[Union[int, str]]:
+def get_symbol_rvals(node: Union[str, ast.AST]) -> Set[Union[int, str, DataSymbol]]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     return GetSymbolEdges().get_rval_symbols(node)

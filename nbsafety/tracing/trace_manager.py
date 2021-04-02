@@ -294,7 +294,9 @@ class TraceManager(BaseTraceManager):
                 scope_to_use = scope
             return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
 
-    def resolve_loaded_symbol(self, symbol_ref: Union[str, int, ast.AST]) -> Optional[DataSymbol]:
+    def resolve_loaded_symbol(self, symbol_ref: Union[str, int, ast.AST, DataSymbol]) -> Optional[DataSymbol]:
+        if isinstance(symbol_ref, DataSymbol):
+            return symbol_ref
         symbol_ref = self._partial_resolve_ref(symbol_ref)
         if isinstance(symbol_ref, int):
             return self.node_id_to_loaded_symbol.get(symbol_ref, None)
@@ -303,7 +305,7 @@ class TraceManager(BaseTraceManager):
         else:
             return None
 
-    def resolve_symbols(self, symbol_refs: Set[Union[str, int]]) -> Set[DataSymbol]:
+    def resolve_symbols(self, symbol_refs: Set[Union[str, int, DataSymbol]]) -> Set[DataSymbol]:
         data_symbols = set()
         for ref in symbol_refs:
             maybe_dsym = self.resolve_loaded_symbol(ref)
@@ -548,15 +550,19 @@ class TraceManager(BaseTraceManager):
                     inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_val_node))
                     if inner_key_node is not None:
                         inner_symbols.add(self.resolve_loaded_symbol(inner_key_node))
+                self.node_id_to_loaded_symbol.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
-                    _upserted = self.active_literal_scope.upsert_data_symbol_for_name(
+                    self.active_literal_scope.upsert_data_symbol_for_name(
                         i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, True
                     )
-                    # logger.error("upserted %s with deps %s", upserted, upserted.parents)
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope
             assert parent_scope is not None
+            # literal_sym = parent_scope.upsert_data_symbol_for_name(
+            #     '<literal_sym_%d>' % id(literal), literal, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, False
+            # )
+            # self.node_id_to_loaded_symbol[node_id] = literal_sym
             return literal
         finally:
             self.lexical_literal_stack.pop()

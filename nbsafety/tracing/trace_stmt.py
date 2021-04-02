@@ -45,7 +45,7 @@ class TraceStatement:
 
     def compute_rval_dependencies(self, rval_symbol_refs=None):
         if rval_symbol_refs is None:
-            symbol_edges, _ = get_symbol_edges(self.stmt_node)
+            symbol_edges = get_symbol_edges(self.stmt_node)
             if len(symbol_edges) == 0:
                 rval_symbol_refs = set()
             else:
@@ -186,7 +186,8 @@ class TraceStatement:
             self._make_lval_data_symbols_old()
 
     def _make_lval_data_symbols_old(self):
-        symbol_edges, should_overwrite = get_symbol_edges(self.stmt_node)
+        symbol_edges = get_symbol_edges(self.stmt_node)
+        should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
         is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))

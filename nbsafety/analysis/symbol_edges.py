@@ -18,6 +18,9 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
 
     def __call__(self, node: ast.AST) -> List[Tuple[Union[str, ast.AST], ast.AST]]:
         self.visit(node)
+        # need to reverse in order to handle nested edges first,
+        # since these need to have symbols in place for e.g. nested NamedExpr's
+        self.edges.reverse()
         return self.edges
 
     def visit_expr(self, node):

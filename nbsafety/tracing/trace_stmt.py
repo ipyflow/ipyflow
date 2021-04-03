@@ -186,7 +186,7 @@ class TraceStatement:
             assert len(symbol_edges) == 1
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
 
-        for target, dep_node in reversed(symbol_edges):
+        for target, dep_node in symbol_edges:
             rval_deps = resolve_rval_symbols(dep_node).union(*self.call_point_deps)
             logger.info('create edges from %s to %s', rval_deps, target)
             if is_class_def:

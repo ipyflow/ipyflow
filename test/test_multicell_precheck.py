@@ -239,4 +239,4 @@ def test_updated_namespace_after_subscript_dep_removed():
     run_cell(cells[0], 0)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == []
+    assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']

@@ -25,6 +25,7 @@ class DataSymbolType(Enum):
     FUNCTION = 'function'
     CLASS = 'class'
     IMPORT = 'import'
+    ANONYMOUS = 'anonymous'
 
 
 class DataSymbol:
@@ -127,6 +128,10 @@ class DataSymbol:
     @property
     def is_import(self):
         return self.symbol_type == DataSymbolType.IMPORT
+
+    @property
+    def is_anonymous(self):
+        return self.symbol_type == DataSymbolType.ANONYMOUS
 
     @property
     def is_implicit(self):
@@ -306,7 +311,7 @@ class DataSymbol:
             new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
         self.required_cell_num = -1
-        UpdateProtocol(nbs(), self, new_deps, mutated)(propagate=propagate)
+        UpdateProtocol(self, new_deps, mutated)(propagate=propagate)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
 

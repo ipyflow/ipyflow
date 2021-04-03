@@ -25,18 +25,15 @@ def assert_not_detected(msg=''):
 
 def lookup_symbols(val):
     safety = nbs()
-    val_id = id(val)
-    if val_id not in safety.aliases:
-        return None
-    alias_set = safety.aliases[val_id]
+    alias_set = {alias for alias in safety.aliases.get(id(val), []) if not alias.is_anonymous}
     if len(alias_set) == 0:
         return None
-    return set(alias_set)
+    return alias_set
 
 
 def lookup_symbol(val):
     alias_set = lookup_symbols(val)
-    if alias_set is None:
+    if alias_set is None or len(alias_set) == 0:
         return None
     return next(iter(alias_set))
 

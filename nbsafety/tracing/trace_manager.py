@@ -9,13 +9,13 @@ from typing import cast, TYPE_CHECKING
 
 import astunparse
 
-from nbsafety.analysis.symbol_edges import get_symbol_rvals
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety import singletons
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import MutationEvent
+from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
@@ -247,7 +247,7 @@ class TraceManager(BaseTraceManager):
                 elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
                     if not trace_stmt.lambda_call_point_deps_done_once:
                         trace_stmt.lambda_call_point_deps_done_once = True
-                        return_to_stmt.call_point_deps.append(trace_stmt.compute_rval_dependencies())
+                        return_to_stmt.call_point_deps.append(resolve_rval_symbols(trace_stmt.stmt_node).union(*trace_stmt.call_point_deps))
         finally:
             self.call_stack.pop()
 
@@ -330,8 +330,8 @@ class TraceManager(BaseTraceManager):
         else:
             # print('no scope for class', obj.__class__)
             try:
-                scope_name = next(iter(nbs().aliases.get(obj_id, None))).name if obj_name is None else obj_name
-            except (TypeError, StopIteration):
+                scope_name = nbs().get_first_full_symbol(obj_id).name if obj_name is None else obj_name
+            except AttributeError:
                 scope_name = '<unknown namespace>'
             ns = NamespaceScope(obj, scope_name, parent_scope=None)
         # FIXME: brittle strategy for determining parent scope of obj
@@ -433,9 +433,6 @@ class TraceManager(BaseTraceManager):
                 if sym_for_obj is None:
                     if self.prev_trace_stmt_in_cur_frame is not None:
                         sym_for_obj = DataSymbol.create_implicit(obj_name, obj, self.cur_frame_original_scope)
-                        # sym_for_obj = self.cur_frame_original_scope.upsert_data_symbol_for_name(
-                        #     obj_name, obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, False
-                        # )
                 if sym_for_obj is not None:
                     self.sym_for_obj_calling_method = sym_for_obj
         else:
@@ -458,7 +455,7 @@ class TraceManager(BaseTraceManager):
                     if obj is None:
                         if mutation_event == MutationEvent.normal:
                             try:
-                                top_level_sym = next(iter(nbs().aliases[self.first_obj_id_in_chain]))
+                                top_level_sym = nbs().get_first_full_symbol(self.first_obj_id_in_chain)
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
                                     # TODO: should it be the other way around?
                                     #  i.e. allow-list for arg mutations, starting with np.random.seed?
@@ -547,22 +544,27 @@ class TraceManager(BaseTraceManager):
                         starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(starred_idx, is_subscript=True)
                         inner_symbols.add(starred_dep)
                 else:
-                    inner_symbols = self.resolve_symbols(get_symbol_rvals(inner_val_node))
+                    inner_symbols = resolve_rval_symbols(inner_val_node)
                     if inner_key_node is not None:
-                        inner_symbols.add(self.resolve_loaded_symbol(inner_key_node))
+                        # inner_symbols.add(self.resolve_loaded_symbol(inner_key_node))
+                        inner_symbols |= resolve_rval_symbols(inner_key_node)
                 self.node_id_to_loaded_symbol.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
                     self.active_literal_scope.upsert_data_symbol_for_name(
-                        i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, True
+                        i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, is_subscript=True
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope
             assert parent_scope is not None
-            # literal_sym = parent_scope.upsert_data_symbol_for_name(
-            #     '<literal_sym_%d>' % id(literal), literal, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, False
-            # )
-            # self.node_id_to_loaded_symbol[node_id] = literal_sym
+            literal_sym = parent_scope.upsert_data_symbol_for_name(
+                '<literal_sym_%d>' % id(literal),
+                literal,
+                set(),
+                self.prev_trace_stmt_in_cur_frame.stmt_node,
+                is_anonymous=True,
+            )
+            self.node_id_to_loaded_symbol[node_id] = literal_sym
             return literal
         finally:
             self.lexical_literal_stack.pop()

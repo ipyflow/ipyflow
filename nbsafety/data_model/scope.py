@@ -136,70 +136,85 @@ class Scope:
             success = True
         return dsym, next_dsym, success
 
+    @staticmethod
+    def _resolve_symbol_type(
+        overwrite: bool = True,
+        is_subscript: bool = False,
+        is_function_def: bool = False,
+        is_import: bool = False,
+        is_anonymous: bool = False,
+        class_scope: Optional[Scope] = None,
+    ):
+        assert not (class_scope is not None and (is_function_def or is_import))
+        if is_function_def:
+            assert overwrite
+            assert not is_subscript
+            return DataSymbolType.FUNCTION
+        elif is_import:
+            assert overwrite
+            assert not is_subscript
+            return DataSymbolType.IMPORT
+        elif class_scope is not None:
+            assert overwrite
+            assert not is_subscript
+            return DataSymbolType.CLASS
+        elif is_subscript:
+            return DataSymbolType.SUBSCRIPT
+        elif is_anonymous:
+            return DataSymbolType.ANONYMOUS
+        else:
+            return DataSymbolType.DEFAULT
+
     def upsert_data_symbol_for_name(
         self,
         name: Union[str, int],
         obj: Any,
         deps: Set[DataSymbol],
         stmt_node: ast.AST,
-        is_subscript: bool,
         overwrite: bool = True,
+        is_subscript: bool = False,
         is_function_def: bool = False,
         is_import: bool = False,
+        is_anonymous: bool = False,
         class_scope: Optional[Scope] = None,
         propagate: bool = True
     ) -> DataSymbol:
-        dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
-            name, obj, deps, stmt_node, is_subscript,
-            overwrite=overwrite, is_function_def=is_function_def, is_import=is_import, class_scope=class_scope
+        symbol_type = self._resolve_symbol_type(
+            overwrite=overwrite,
+            is_subscript=is_subscript,
+            is_function_def=is_function_def,
+            is_import=is_import,
+            is_anonymous=is_anonymous,
+            class_scope=class_scope
         )
-        # print(self, 'upsert', name, 'with deps', deps, 'and children', list(dc.children_by_cell_position.values()))
+        dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
+            name, obj, deps,
+            symbol_type,
+            stmt_node,
+        )
         dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
         return dc
 
     def _upsert_data_symbol_for_name_inner(
-            self,
-            name: Union[str, int],
-            obj: Any,
-            deps: Set[DataSymbol],
-            stmt_node: ast.AST,
-            is_subscript: bool,
-            overwrite: bool = True,
-            is_function_def: bool = False,
-            is_import: bool = False,
-            class_scope: Optional[Scope] = None,
+        self,
+        name: Union[str, int],
+        obj: Any,
+        deps: Set[DataSymbol],
+        symbol_type: DataSymbolType,
+        stmt_node: ast.AST,
     ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]:
-        # print(self, 'upsert', name)
-        assert not (class_scope is not None and (is_function_def or is_import))
-        symbol_type = DataSymbolType.DEFAULT
-        if is_function_def:
-            assert overwrite
-            assert not is_subscript
-            symbol_type = DataSymbolType.FUNCTION
-            # return self._upsert_function_data_symbol_for_name(name, obj, deps)
-        elif is_import:
-            assert overwrite
-            assert not is_subscript
-            symbol_type = DataSymbolType.IMPORT
-        elif class_scope is not None:
-            assert overwrite
-            assert not is_subscript
-            symbol_type = DataSymbolType.CLASS
-            # return self._upsert_class_data_symbol_for_name(name, obj, deps, class_scope)
-        elif is_subscript:
-            symbol_type = DataSymbolType.SUBSCRIPT
         old_id = None
-        old_dc = self.lookup_data_symbol_by_name_this_indentation(name)
-        if old_dc is not None and self.is_globally_accessible:
-            old_id = old_dc.cached_obj_id
+        old_dsym = self.lookup_data_symbol_by_name_this_indentation(name)
+        if old_dsym is not None and self.is_globally_accessible:
+            old_id = old_dsym.cached_obj_id
             # TODO: handle case where new dc is of different type
-            if name in self.data_symbol_by_name(old_dc.is_subscript) and old_dc.symbol_type == symbol_type:
-                old_dc.update_obj_ref(obj, refresh_cached=False)
-                # old_dc.update_type(symbol_type)
+            if name in self.data_symbol_by_name(old_dsym.is_subscript) and old_dsym.symbol_type == symbol_type:
+                old_dsym.update_obj_ref(obj, refresh_cached=False)
+                # old_dsym.update_type(symbol_type)
                 # if we're updating a pre-existing one, it should not be an implicit upsert
                 assert stmt_node is not None
-                old_dc.update_stmt_node(stmt_node)
-                return old_dc, old_dc, old_id
+                old_dsym.update_stmt_node(stmt_node)
+                return old_dsym, old_dsym, old_id
             else:
                 # In this case, we are copying from a class and we need the dsym from which we are copying
                 # as able to propagate to the new dsym.
@@ -207,9 +222,9 @@ class Scope:
                 # class Foo:
                 #     shared = 99
                 # foo = Foo()
-                # foo.shared = 42  # old_dc refers to Foo.shared here
+                # foo.shared = 42  # old_dsym refers to Foo.shared here
                 # Earlier, we were explicitly adding Foo.shared as a dependency of foo.shared as follows:
-                # deps.add(old_dc)
+                # deps.add(old_dsym)
                 # But it turns out not to be necessary because foo depends on Foo, and changing Foo.shared will
                 # propagate up the namespace hierarchy to Foo, which propagates to foo, which then propagates to
                 # all of foo's namespace children (e.g. foo.shared).
@@ -219,10 +234,10 @@ class Scope:
                 # If we do this, then we should go back to explicitly adding the dep as follows:
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
-                deps.add(old_dc)
-        dc = DataSymbol(name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
-        self.put(name, dc)
-        return dc, old_dc, old_id
+                deps.add(old_dsym)
+        dsym = DataSymbol(name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
+        self.put(name, dsym)
+        return dsym, old_dsym, old_id
 
     @property
     def is_global(self):
@@ -325,10 +340,11 @@ class NamespaceScope(Scope):
 
     @property
     def is_subscript(self):
-        try:
-            return next(iter(nbs().aliases.get(self.obj_id, None))).is_subscript
-        except (StopIteration, TypeError):
+        dsym = nbs().get_first_full_symbol(self.obj_id)
+        if dsym is None:
             return False
+        else:
+            return dsym.is_subscript
 
     def update_obj_ref(self, obj):
         tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)

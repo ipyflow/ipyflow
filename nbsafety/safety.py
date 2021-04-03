@@ -127,6 +127,12 @@ class NotebookSafety(singletons.NotebookSafety):
     def is_test(self) -> bool:
         return self.settings.get('test_context', False)
 
+    def get_first_full_symbol(self, obj_id: int) -> Optional[DataSymbol]:
+        for alias in self.aliases.get(obj_id, []):
+            if not alias.is_anonymous:
+                return alias
+        return None
+
     def cell_counter(self):
         if self.settings.store_history:
             return cell_counter()

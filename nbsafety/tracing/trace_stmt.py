@@ -3,12 +3,13 @@ import ast
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis.symbol_edges import get_symbol_edges, get_symbol_rvals
+from nbsafety.analysis.symbol_edges import get_symbol_edges
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.mutation_event import MutationEvent
+from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
@@ -43,15 +44,6 @@ class TraceStatement:
     def _contains_lval(self):
         return stmt_contains_lval(self.stmt_node)
 
-    def compute_rval_dependencies(self, rval_symbol_refs=None):
-        if rval_symbol_refs is None:
-            symbol_edges = get_symbol_edges(self.stmt_node)
-            if len(symbol_edges) == 0:
-                rval_symbol_refs = set()
-            else:
-                rval_symbol_refs = set.union(*symbol_edges.values()) - {None}
-        return tracer().resolve_symbols(rval_symbol_refs).union(*self.call_point_deps)
-
     def get_post_call_scope(self):
         old_scope = tracer().cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
@@ -85,6 +77,7 @@ class TraceStatement:
         deps: Set[DataSymbol],
         maybe_fixup_literal_namespace=False,
     ) -> None:
+        logger.info("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
             scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
@@ -92,11 +85,10 @@ class TraceStatement:
             # use suppressed log level to avoid noise to user
             logger.info("Exception: %s", e)
             return
-        _upserted = scope.upsert_data_symbol_for_name(
+        scope.upsert_data_symbol_for_name(
             # TODO: handle this at finer granularity
-            name, obj, set.union(deps, *self.call_point_deps), self.stmt_node, is_subscript
+            name, obj, set.union(deps, *self.call_point_deps), self.stmt_node, is_subscript=is_subscript,
         )
-        # logger.error("upserted %s with deps %s", upserted, upserted.parents)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
             if namespace_for_upsert is not None and namespace_for_upsert.scope_name == NamespaceScope.ANONYMOUS:
@@ -123,8 +115,10 @@ class TraceStatement:
             ns = NamespaceScope(obj, str(name), scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
-            ns.upsert_data_symbol_for_name(i, inner_dep._get_obj(), deps, self.stmt_node, True)
-        scope.upsert_data_symbol_for_name(name, obj, set.union(set(), *self.call_point_deps), self.stmt_node, is_subscript)
+            ns.upsert_data_symbol_for_name(i, inner_dep._get_obj(), deps, self.stmt_node, is_subscript=True)
+        scope.upsert_data_symbol_for_name(
+            name, obj, set.union(set(), *self.call_point_deps), self.stmt_node, is_subscript=is_subscript,
+        )
 
     def _handle_assign_target_tuple_unpack_from_namespace(
         self, target: Union[ast.List, ast.Tuple], rhs_namespace: NamespaceScope
@@ -158,21 +152,18 @@ class TraceStatement:
     def _handle_assign_target(self, target: ast.AST, value: ast.AST):
         if isinstance(target, (ast.List, ast.Tuple)):
             rhs_namespace = tracer().node_id_to_loaded_literal_scope.get(id(value), None)
+            rval_dsyms = None
             if rhs_namespace is None and not isinstance(value, (ast.List, ast.Tuple)):
-                rval_dsyms = tracer().resolve_symbols(get_symbol_rvals(value))
+                rval_dsyms = {dsym for dsym in resolve_rval_symbols(value) if not dsym.is_anonymous}
                 if len(rval_dsyms) == 1:
                     rhs_namespace = nbs().namespaces.get(next(iter(rval_dsyms)).obj_id, None)
             if rhs_namespace is None:
-                self._handle_assign_target_tuple_unpack_from_deps(target, tracer().resolve_symbols(get_symbol_rvals(value)))
+                self._handle_assign_target_tuple_unpack_from_deps(target, rval_dsyms or resolve_rval_symbols(value))
             else:
                 self._handle_assign_target_tuple_unpack_from_namespace(target, rhs_namespace)
         else:
-            if isinstance(value, (ast.Dict, ast.List, ast.Tuple)):
-                rval_deps = set()
-            else:
-                rval_deps = tracer().resolve_symbols(get_symbol_rvals(value))
             self._handle_assign_target_for_deps(
-                target, rval_deps, maybe_fixup_literal_namespace=True
+                target, resolve_rval_symbols(value), maybe_fixup_literal_namespace=True
             )
 
     def _handle_assign(self, node: ast.Assign):
@@ -195,9 +186,9 @@ class TraceStatement:
             assert len(symbol_edges) == 1
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
 
-        for lval_name, rval_names in symbol_edges.items():
-            rval_deps = self.compute_rval_dependencies(rval_symbol_refs=rval_names)
-            # print('create edges from', rval_deps, 'to', lval_name)
+        for target, dep_node in reversed(symbol_edges):
+            rval_deps = resolve_rval_symbols(dep_node).union(*self.call_point_deps)
+            logger.info('create edges from %s to %s', rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
@@ -205,14 +196,18 @@ class TraceStatement:
                 self.class_scope.obj_id = class_obj_id
                 nbs().namespaces[class_obj_id] = self.class_scope
             try:
-                scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(lval_name, self.frame)
+                scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
                 scope.upsert_data_symbol_for_name(
-                    name, obj, rval_deps, self.stmt_node, is_subscript,
-                    overwrite=should_overwrite, is_function_def=is_function_def, is_import=is_import,
-                    class_scope=self.class_scope, propagate=not isinstance(self.stmt_node, ast.For)
+                    name, obj, rval_deps, self.stmt_node,
+                    overwrite=should_overwrite,
+                    is_subscript=is_subscript,
+                    is_function_def=is_function_def,
+                    is_import=is_import,
+                    class_scope=self.class_scope,
+                    propagate=not isinstance(self.stmt_node, ast.For)
                 )
             except KeyError:
-                logger.warning('keyerror for %s', lval_name)
+                logger.warning('keyerror for %s', target)
             except Exception as e:
                 logger.warning('exception while handling store: %s', e)
                 pass
@@ -233,14 +228,13 @@ class TraceStatement:
             # themselves namespace children.
             if mutation_event == MutationEvent.list_append and len(mutation_arg_dsyms) == 1:
                 namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
-                mutated_obj_aliases = nbs().aliases.get(mutated_obj_id, None)
-                if mutated_obj_aliases is not None:
-                    mutated_sym = next(iter(mutated_obj_aliases))
+                mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
+                if mutated_sym is not None:
                     mutated_obj = mutated_sym._get_obj()
                     mutation_arg_sym = next(iter(mutation_arg_dsyms))
                     mutation_arg_obj = mutation_arg_sym._get_obj()
                     # TODO: replace int check w/ more general "immutable" check
-                    if mutated_sym is not None and mutation_arg_obj is not None and not isinstance(mutation_arg_obj, int):
+                    if mutation_arg_obj is not None and not isinstance(mutation_arg_obj, int):
                         if namespace_scope is None:
                             namespace_scope = NamespaceScope(
                                 mutated_obj,
@@ -248,8 +242,13 @@ class TraceStatement:
                                 parent_scope=mutated_sym.containing_scope
                             )
                         namespace_scope.upsert_data_symbol_for_name(
-                            len(mutated_obj) - 1, mutation_arg_obj, set(), self.stmt_node,
-                            is_subscript=True, overwrite=False, propagate=False
+                            len(mutated_obj) - 1,
+                            mutation_arg_obj,
+                            set(),
+                            self.stmt_node,
+                            overwrite=False,
+                            is_subscript=True,
+                            propagate=False
                         )
             # TODO: add mechanism for skipping namespace children in case of list append
             for mutated_sym in nbs().aliases[mutated_obj_id]:

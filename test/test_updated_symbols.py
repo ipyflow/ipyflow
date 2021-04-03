@@ -12,7 +12,7 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def updated_symbol_names():
-    return sorted(map(lambda sym: sym.readable_name, nbs().updated_symbols))
+    return sorted([sym.readable_name for sym in nbs().updated_symbols if not sym.is_anonymous])
 
 
 def run_cell(cell):

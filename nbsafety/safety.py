@@ -99,6 +99,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+        self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.stale_dependency_detected = False
         self.active_cell_position_idx = -1
@@ -411,6 +412,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
+                self.cell_content_by_counter[self._last_execution_counter] = cell
                 with self._tracing_context():
                     ret = run_cell_func(cell)
                 # Stage 2.1: resync any defined symbols that could have gotten out-of-sync

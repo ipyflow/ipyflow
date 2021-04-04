@@ -256,6 +256,23 @@ class AstEavesdropper(ast.NodeTransformer):
 
         return self._maybe_wrap_symbol_in_before_after_tracing(node, call_context=True, orig_node_id=orig_node_id)
 
+    def visit_Assign(self, node: ast.Assign):
+        new_targets = []
+        for target in node.targets:
+            new_targets.append(self.visit(target))
+        node.targets = new_targets
+        orig_value_id = id(node.value)
+        with fast.location_of(node.value):
+            node.value = self._make_tuple_event_for(
+                self.visit(node.value), TraceEvent.before_assign_rhs, orig_node_id=orig_value_id
+            )
+            node.value = fast.Call(
+                func=self._emitter_ast(),
+                args=[TraceEvent.after_assign_rhs.to_ast(), self._get_copy_id_ast(orig_value_id)],
+                keywords=fast.kwargs(ret=node.value),
+            )
+        return node
+
     def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Tuple], should_inner_visit=True):
         # TODO: what about set literals?
         maybe_visited: ast.AST = node

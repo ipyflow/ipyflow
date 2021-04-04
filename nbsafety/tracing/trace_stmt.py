@@ -154,16 +154,9 @@ class TraceStatement:
 
     def _handle_assign_target(self, target: ast.AST, value: ast.AST):
         if isinstance(target, (ast.List, ast.Tuple)):
-            rhs_namespace = tracer().node_id_to_loaded_literal_scope.get(id(value), None)
-            rval_dsyms = None
-            if rhs_namespace is None and not isinstance(value, (ast.List, ast.Tuple)):
-                rval_dsyms = {dsym for dsym in resolve_rval_symbols(value) if not dsym.is_anonymous}
-                if len(rval_dsyms) == 1:
-                    rhs_namespace = nbs().namespaces.get(next(iter(rval_dsyms)).obj_id, None)
-                if not isinstance(rhs_namespace._obj_ref(), (list, tuple)):
-                    rhs_namespace = None
+            rhs_namespace = nbs().namespaces.get(tracer().saved_assign_rhs_obj_id, None)
             if rhs_namespace is None:
-                self._handle_assign_target_tuple_unpack_from_deps(target, rval_dsyms or resolve_rval_symbols(value))
+                self._handle_assign_target_tuple_unpack_from_deps(target, resolve_rval_symbols(value))
             else:
                 self._handle_assign_target_tuple_unpack_from_namespace(target, rhs_namespace)
         else:

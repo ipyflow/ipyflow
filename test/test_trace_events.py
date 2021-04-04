@@ -74,9 +74,11 @@ def test_recorded_events_two_stmts():
     run_cell('logging.info(x)')
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
         TraceEvent.before_literal,
         *([TraceEvent.list_elt] * 3),
         TraceEvent.after_literal,
+        TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
 
         TraceEvent.before_stmt,
@@ -120,6 +122,7 @@ def test_list_nested_in_dict():
     run_cell('x = {1: [2, 3, 4]}')
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
         TraceEvent.before_literal,
 
         TraceEvent.dict_key,
@@ -129,6 +132,7 @@ def test_list_nested_in_dict():
         TraceEvent.dict_value,
 
         TraceEvent.after_literal,
+        TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
 

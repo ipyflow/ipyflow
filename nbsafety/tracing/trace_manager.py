@@ -176,6 +176,7 @@ class TraceManager(BaseTraceManager):
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
             self.mutations: List[Mutation] = []
             self.mutation_candidates: List[MutationCandidate] = []
+            self.saved_assign_rhs_obj_id: Optional[int] = None
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = nbs().global_scope
@@ -395,6 +396,12 @@ class TraceManager(BaseTraceManager):
     def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
+
+    @register_handler(TraceEvent.after_assign_rhs)
+    def after_assign_rhs(self, obj: Any, *_, **__):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            return
+        self.saved_assign_rhs_obj_id = id(obj)
 
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     def attrsub_tracer(

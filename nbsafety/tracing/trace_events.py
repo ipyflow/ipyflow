@@ -30,6 +30,9 @@ class TraceEvent(Enum):
     list_elt = 'list_elt'
     tuple_elt = 'tuple_elt'
 
+    before_assign_rhs = 'before_assign_rhs'
+    after_assign_rhs = 'after_assign_rhs'
+
     line = 'line'
     call = 'call'
     return_ = 'return'

@@ -78,3 +78,30 @@ def test_slices():
     run_cell('lst = list(range(10))')
     run_cell('foo = lst[3:7]')
     run_cell('lst[1:2] = foo')
+
+
+def test_delete():
+    run_cell('lst = list(range(10))')
+    run_cell('del lst[0]')
+    run_cell('del lst[-1]')
+
+
+def test_delitem():
+    run_cell("""
+class Foo:
+    def __init__(self):
+        self.lst = []
+    def __getitem__(self, i):
+        return self.lst[i]
+    def __setitem__(self, i, v):
+        self.lst[i] = v
+    def __delitem__(self, i):
+        del self.lst[i]
+""")
+    run_cell('foo = Foo()')
+    run_cell('foo.lst.append(0)')
+    run_cell('foo.lst.append(1)')
+    run_cell('foo.lst.append(2)')
+    run_cell('logging.info(foo[0])')
+    run_cell('foo[1] = 2')
+    run_cell('del foo[-1]')

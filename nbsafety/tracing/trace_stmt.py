@@ -171,8 +171,13 @@ class TraceStatement:
     def _handle_delete(self):
         assert isinstance(self.stmt_node, ast.Delete)
         for target in self.stmt_node.targets:
-            scope, name, _, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame, ctx=ast.Del())
-            scope.delete_data_symbol_for_name(name, is_subscript=is_subscript)
+            try:
+                scope, name, _, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame, ctx=ast.Del())
+                scope.delete_data_symbol_for_name(name, is_subscript=is_subscript)
+            except KeyError as e:
+                # this will happen if, e.g., a __delitem__ triggered a call
+                # logger.info("got key error while trying to handle %s: %s", ast.dump(self.stmt_node), e)
+                logger.info("got key error: %s", e)
 
     def _make_lval_data_symbols(self):
         if isinstance(self.stmt_node, ast.Assign):

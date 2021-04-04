@@ -29,7 +29,8 @@ if TYPE_CHECKING:
     ObjId = int
     MutationCandidate = Tuple[Tuple[int, ObjId, Optional[str]], MutationEvent, Set[DataSymbol], List[Any]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
-    SavedStoreDelData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
+    SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
+    SavedDelData = Tuple[NamespaceScope, AttrSubVal, bool]
     SavedComplexSymbolLoadData = Tuple[NamespaceScope, Tuple[AttrSubVal, bool]]
 
 
@@ -165,8 +166,8 @@ class TraceManager(BaseTraceManager):
         self.call_depth = 0
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbol: Dict[NodeId, DataSymbol] = {}
-        self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreDelData] = {}
-        self.node_id_to_saved_del_data: Dict[NodeId, SavedStoreDelData] = {}
+        self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
+        self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
 
@@ -208,12 +209,14 @@ class TraceManager(BaseTraceManager):
         self.top_level_node_id_for_chain = None
         self.saved_complex_symbol_load_data = None
         self.active_literal_scope = None
-        self.node_id_to_saved_store_data.clear()
-        self.node_id_to_saved_del_data.clear()
         self.node_id_to_loaded_literal_scope.clear()
         self.node_id_to_saved_dict_key.clear()
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
+        node_before_call = nbs().ast_node_by_id[self.prev_node_id_in_cur_frame]
+        if hasattr(node_before_call, 'ctx') and isinstance(getattr(node_before_call, 'ctx'), ast.Del):
+            self.node_id_to_saved_del_data.pop(self.prev_node_id_in_cur_frame, None)
+        self.node_id_to_saved_del_data.clear()  # ensures we only handle del's and not delitem's
         new_scope = trace_stmt.get_post_call_scope()
         with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda
@@ -318,7 +321,7 @@ class TraceManager(BaseTraceManager):
             else:
                 assert isinstance(ctx, ast.Del)
                 (
-                    scope, obj, attr_or_sub, is_subscript
+                    scope, attr_or_sub, is_subscript
                 ) = self.node_id_to_saved_del_data[target]
                 attr_or_sub_obj = None
             if attr_or_sub_obj is None:
@@ -463,8 +466,9 @@ class TraceManager(BaseTraceManager):
             self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
             return
         elif ctx == 'Del':
+            # logger.error("save del data for node %s", ast.dump(nbs().ast_node_by_id[top_level_node_id]))
             logger.info("save del data for node id %d", top_level_node_id)
-            self.node_id_to_saved_del_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
+            self.node_id_to_saved_del_data[top_level_node_id] = (scope, attr_or_subscript, is_subscript)
             return
         if call_context:
             mutation_event = MutationEvent.normal

@@ -513,6 +513,7 @@ class NotebookSafety(singletons.NotebookSafety):
         for obj_id in self.garbage_namespace_obj_ids:
             garbage_ns = self.namespaces.pop(obj_id, None)
             if garbage_ns is not None:
+                logger.info("collect ns %s", garbage_ns)
                 garbage_ns.clear_namespace(obj_id)
         self.garbage_namespace_obj_ids.clear()
         # while True:
@@ -528,6 +529,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _gc(self):
         for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
+                logger.info("collect sym %s", dsym)
                 dsym.collect_self_garbage()
 
     def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: Union[str, int], is_subscript: bool):

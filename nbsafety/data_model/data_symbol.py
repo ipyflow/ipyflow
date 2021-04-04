@@ -177,7 +177,8 @@ class DataSymbol:
         return (
             self._tombstone
             or self.containing_scope.is_garbage
-            or not self.containing_scope.is_globally_accessible
+            # TODO: probably should keep this, but lift any symbols / namespaces in return statements to outer scope
+            # or not self.containing_scope.is_globally_accessible
             or (self._has_weakref and self._get_obj() is None)
         )
 

@@ -357,6 +357,7 @@ class TraceManager(BaseTraceManager):
         if data_sym is None:
             symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
             data_sym = DataSymbol.create_implicit(attr_or_subscript, obj_attr_or_sub, scope, symbol_type=symbol_type)
+            logger.info("create implicit sym %s", data_sym)
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
@@ -528,6 +529,7 @@ class TraceManager(BaseTraceManager):
             return literal
         try:
             self.active_literal_scope.update_obj_ref(literal)
+            logger.info("create literal scope %s", self.active_literal_scope)
             starred_idx = -1
             starred_namespace = None
             for (i, inner_obj), (inner_key_node, inner_val_node) in match_container_obj_or_namespace_with_literal_nodes(

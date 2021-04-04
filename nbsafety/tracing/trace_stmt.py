@@ -1,7 +1,7 @@
 # -*- coding: future_annotations -*-
 import ast
 import logging
-from typing import TYPE_CHECKING
+from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.symbol_edges import get_symbol_edges
 from nbsafety.analysis.utils import stmt_contains_lval
@@ -85,10 +85,11 @@ class TraceStatement:
             # use suppressed log level to avoid noise to user
             logger.info("Exception: %s", e)
             return
-        scope.upsert_data_symbol_for_name(
+        upserted = scope.upsert_data_symbol_for_name(
             # TODO: handle this at finer granularity
-            name, obj, set.union(deps, *self.call_point_deps), self.stmt_node, is_subscript=is_subscript,
+            name, obj, deps.union(*self.call_point_deps), self.stmt_node, is_subscript=is_subscript,
         )
+        logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
             if namespace_for_upsert is not None and namespace_for_upsert.scope_name == NamespaceScope.ANONYMOUS:
@@ -117,7 +118,11 @@ class TraceStatement:
             deps = set() if inner_dep is None else {inner_dep}
             ns.upsert_data_symbol_for_name(i, inner_dep._get_obj(), deps, self.stmt_node, is_subscript=True)
         scope.upsert_data_symbol_for_name(
-            name, obj, set.union(set(), *self.call_point_deps), self.stmt_node, is_subscript=is_subscript,
+            name,
+            obj,
+            cast('Set[DataSymbol]', set()).union(*self.call_point_deps),
+            self.stmt_node,
+            is_subscript=is_subscript,
         )
 
     def _handle_assign_target_tuple_unpack_from_namespace(

@@ -1993,6 +1993,27 @@ def foo():
     return a, b
 """)
     run_cell('t = foo()[1]')
+    run_cell('%safety show_deps t')
+    run_cell('x = 9')
+    run_cell('logging.info(t)')
+    assert_not_detected('`t` independent of updated `x`')
+    run_cell('y = 10')
+    run_cell('logging.info(t)')
+    assert_detected('`t` depends on old version of `y`')
+
+
+@skipif_known_failing
+def test_tuple_return_obj():
+    run_cell("""
+x = 0
+y = 1
+a = x + 42
+b = y + 77
+def foo():
+    return [a], [b]
+""")
+    run_cell('t = foo()[1][0]')
+    run_cell('%safety show_deps t')
     run_cell('x = 9')
     run_cell('logging.info(t)')
     assert_not_detected('`t` independent of updated `x`')

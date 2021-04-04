@@ -187,13 +187,13 @@ class Scope:
             is_anonymous=is_anonymous,
             class_scope=class_scope
         )
-        dc, old_dc, old_id = self._upsert_data_symbol_for_name_inner(
+        dsym, old_dsym, old_id = self._upsert_data_symbol_for_name_inner(
             name, obj, deps,
             symbol_type,
             stmt_node,
         )
-        dc.update_deps(deps, overwrite=overwrite, propagate=propagate)
-        return dc
+        dsym.update_deps(deps, overwrite=overwrite, propagate=propagate)
+        return dsym
 
     def _upsert_data_symbol_for_name_inner(
         self,

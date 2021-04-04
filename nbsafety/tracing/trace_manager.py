@@ -265,6 +265,8 @@ class TraceManager(BaseTraceManager):
                                 ).get_field('prev_node_id_in_cur_frame_lexical')
                                 self.node_id_to_loaded_symbol[return_to_node_id] = dsym_to_attach
                             except IndexError:
+                                # TODO: this will break if we have a call due to a @property decorator
+                                #   inside the arg list of an ast.Call node; how to handle this elegantly?
                                 pass
         finally:
             self.call_stack.pop()

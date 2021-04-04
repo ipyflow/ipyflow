@@ -25,7 +25,6 @@ class TraceStatement:
         self.frame = frame
         self.stmt_node = stmt_node
         self.class_scope: Optional[NamespaceScope] = None
-        self.call_point_deps: List[Set[DataSymbol]] = []
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
 
@@ -86,8 +85,7 @@ class TraceStatement:
             logger.info("Exception: %s", e)
             return
         upserted = scope.upsert_data_symbol_for_name(
-            # TODO: handle this at finer granularity
-            name, obj, deps.union(*self.call_point_deps), self.stmt_node, is_subscript=is_subscript,
+            name, obj, deps, self.stmt_node, is_subscript=is_subscript,
         )
         logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
         if maybe_fixup_literal_namespace:
@@ -120,7 +118,7 @@ class TraceStatement:
         scope.upsert_data_symbol_for_name(
             name,
             obj,
-            cast('Set[DataSymbol]', set()).union(*self.call_point_deps),
+            set(),
             self.stmt_node,
             is_subscript=is_subscript,
         )
@@ -162,6 +160,8 @@ class TraceStatement:
                 rval_dsyms = {dsym for dsym in resolve_rval_symbols(value) if not dsym.is_anonymous}
                 if len(rval_dsyms) == 1:
                     rhs_namespace = nbs().namespaces.get(next(iter(rval_dsyms)).obj_id, None)
+                if not isinstance(rhs_namespace._obj_ref(), (list, tuple)):
+                    rhs_namespace = None
             if rhs_namespace is None:
                 self._handle_assign_target_tuple_unpack_from_deps(target, rval_dsyms or resolve_rval_symbols(value))
             else:
@@ -192,7 +192,7 @@ class TraceStatement:
             # assert not lval_symbol_refs.issubset(rval_symbol_refs)
 
         for target, dep_node in symbol_edges:
-            rval_deps = resolve_rval_symbols(dep_node).union(*self.call_point_deps)
+            rval_deps = resolve_rval_symbols(dep_node)
             logger.info('create edges from %s to %s', rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None

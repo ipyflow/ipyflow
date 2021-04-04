@@ -18,7 +18,7 @@ def match_container_obj_or_namespace_with_literal_nodes(
 ):
     try:
         gen = container_obj_or_namespace.items()  # type: ignore
-        assert isinstance(literal_node, ast.Dict)
+        assert isinstance(literal_node, ast.Dict), 'got %s' % ast.dump(literal_node)
         yield from zip(gen, zip(literal_node.keys, literal_node.values))
     except (AttributeError, TypeError):
         assert isinstance(literal_node, (ast.List, ast.Tuple))

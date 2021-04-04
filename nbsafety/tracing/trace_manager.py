@@ -121,7 +121,7 @@ class BaseTraceManager(singletons.TraceManager):
     def _attempt_to_reenable_tracing(self, frame: FrameType):
         return NotImplemented
 
-    def _sys_tracer(self, frame: FrameType, evt: str, *_, **__):
+    def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
         if self.tracing_reset_pending:
             assert evt == 'call', 'expected call; got event %s' % evt
             self._attempt_to_reenable_tracing(frame)
@@ -130,7 +130,7 @@ class BaseTraceManager(singletons.TraceManager):
         if evt == 'line' or not frame.f_code.co_filename.startswith('<ipython-input'):
             return None
 
-        return self._emit_event(evt, 0, _frame=frame)
+        return self._emit_event(evt, 0, _frame=frame, ret=arg)
 
 
 def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
@@ -188,6 +188,7 @@ class TraceManager(BaseTraceManager):
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
                 self.saved_complex_symbol_load_data: Optional[SavedComplexSymbolLoadData] = None
+                self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
 
             self.lexical_literal_stack: TraceStack = self._make_stack()
             with self.lexical_literal_stack.register_stack_state():
@@ -205,7 +206,6 @@ class TraceManager(BaseTraceManager):
         self.top_level_node_id_for_chain = None
         self.saved_complex_symbol_load_data = None
         self.active_literal_scope = None
-        self.node_id_to_loaded_symbol.clear()  # TODO: keep this around?
         self.node_id_to_saved_store_data.clear()
         self.node_id_to_loaded_literal_scope.clear()
         self.node_id_to_saved_dict_key.clear()
@@ -234,7 +234,7 @@ class TraceManager(BaseTraceManager):
             #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             #     prev_overall.finished_execution_hook()
 
-    def _handle_return_transition(self, trace_stmt: TraceStatement):
+    def _handle_return_transition(self, trace_stmt: TraceStatement, ret: Any):
         try:
             inside_lambda = self.inside_lambda
             return_to_stmt: TraceStatement = self.call_stack.get_field('prev_trace_stmt_in_cur_frame')
@@ -247,14 +247,32 @@ class TraceManager(BaseTraceManager):
                 elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
                     if not trace_stmt.lambda_call_point_deps_done_once:
                         trace_stmt.lambda_call_point_deps_done_once = True
-                        return_to_stmt.call_point_deps.append(resolve_rval_symbols(trace_stmt.stmt_node).union(*trace_stmt.call_point_deps))
+                        rvals = resolve_rval_symbols(trace_stmt.stmt_node)
+                        dsym_to_attach = None
+                        if len(rvals) == 1:
+                            dsym_to_attach = next(iter(rvals))
+                            if dsym_to_attach.obj_id != id(ret):
+                                dsym_to_attach = None
+                        if dsym_to_attach is None and len(rvals) > 0:
+                            dsym_to_attach = self.cur_frame_original_scope.upsert_data_symbol_for_name(
+                                '<return_sym_%d>' % id(ret), ret, rvals, trace_stmt.stmt_node, is_anonymous=True
+                            )
+                        if dsym_to_attach is not None:
+                            try:
+                                return_to_node_id = self.call_stack.get_field(
+                                    'lexical_call_stack'
+                                ).get_field('prev_node_id_in_cur_frame_lexical')
+                                self.node_id_to_loaded_symbol[return_to_node_id] = dsym_to_attach
+                            except IndexError:
+                                pass
         finally:
             self.call_stack.pop()
 
     def state_transition_hook(
         self,
         event: TraceEvent,
-        trace_stmt: TraceStatement
+        trace_stmt: TraceStatement,
+        ret: Any,
     ):
         self.trace_event_counter += 1
 
@@ -263,7 +281,7 @@ class TraceManager(BaseTraceManager):
         if event == TraceEvent.call:
             self._handle_call_transition(trace_stmt)
         if event == TraceEvent.return_:
-            self._handle_return_transition(trace_stmt)
+            self._handle_return_transition(trace_stmt, ret)
         self.prev_event = event
 
     @staticmethod
@@ -370,17 +388,19 @@ class TraceManager(BaseTraceManager):
             TraceEvent.exception,
             TraceEvent.c_call,
             TraceEvent.c_return,
-            TraceEvent.c_exception
+            TraceEvent.c_exception,
+            TraceEvent.argument,
         })
     )
     def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
+        self.prev_node_id_in_cur_frame_lexical = node_id
 
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     def attrsub_tracer(
         self,
         obj: Any,
-        _node_id: NodeId,
+        node_id: NodeId,
         _frame_: FrameType,
         event: TraceEvent,
         *_,
@@ -393,6 +413,9 @@ class TraceManager(BaseTraceManager):
     ):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
+        if isinstance(nbs().ast_node_by_id[node_id], ast.Call):
+            # clear the callpoint dependency
+            self.node_id_to_loaded_symbol.pop(node_id, None)
         if obj is None:
             return
         logger.info('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
@@ -665,7 +688,7 @@ class TraceManager(BaseTraceManager):
     @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
     def handle_sys_events(
         self,
-        _ret: None,
+        ret_obj: Any,
         _node_id: int,
         frame: FrameType,
         event: TraceEvent,
@@ -719,7 +742,7 @@ class TraceManager(BaseTraceManager):
                 self._disable_tracing()
                 return None
             trace_stmt.node_id_for_last_call = self.prev_node_id_in_cur_frame
-        self.state_transition_hook(event, trace_stmt)
+        self.state_transition_hook(event, trace_stmt, ret_obj)
         return self._sys_tracer
 
 

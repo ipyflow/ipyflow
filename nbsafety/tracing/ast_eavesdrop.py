@@ -92,7 +92,7 @@ class AstEavesdropper(ast.NodeTransformer):
         return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(
-            self, node, call_context=False, orig_node_id=None, begin_kwargs=None, end_kwargs=None
+        self, node, call_context=False, orig_node_id=None, begin_kwargs=None, end_kwargs=None
     ):
         if self._inside_attrsub_load_chain:
             return node
@@ -208,7 +208,6 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def visit_Call(self, node: ast.Call):
         orig_node_id = id(node)
-        orig_node_func_id = id(node.func)
 
         with self.attrsub_context(node):
             if isinstance(node.func, ast.Attribute):
@@ -237,7 +236,7 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node.func):
             node.func = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.before_call.to_ast(), self._get_copy_id_ast(orig_node_func_id)],
+                args=[TraceEvent.before_call.to_ast(), self._get_copy_id_ast(orig_node_id)],
                 keywords=fast.kwargs(
                     ret=node.func,
                     call_node_id=self._get_copy_id_ast(orig_node_id),
@@ -248,7 +247,7 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node):
             node = fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.after_call.to_ast(), self._get_copy_id_ast(node)],
+                args=[TraceEvent.after_call.to_ast(), self._get_copy_id_ast(orig_node_id)],
                 keywords=fast.kwargs(
                     ret=node,
                     call_node_id=self._get_copy_id_ast(orig_node_id),

@@ -10,6 +10,7 @@ from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
+    from nbsafety.types import SupportedIndexType
     from typing import Any, Dict, Optional, Set, Union
 
     # avoid circular imports
@@ -31,7 +32,7 @@ class DataSymbolType(Enum):
 class DataSymbol:
     def __init__(
         self,
-        name: Union[str, int],
+        name: SupportedIndexType,
         symbol_type: DataSymbolType,
         obj: Any,
         containing_scope: Scope,
@@ -287,7 +288,7 @@ class DataSymbol:
         return True
 
     def update_deps(
-        self, new_deps: Set['DataSymbol'], overwrite=True, mutated=False, propagate=True
+        self, new_deps: Set['DataSymbol'], overwrite=True, mutated=False, deleted=False, propagate=True
     ):
         # skip updates for imported symbols
         if self.is_import:
@@ -312,7 +313,7 @@ class DataSymbol:
             new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
         self.required_cell_num = -1
-        UpdateProtocol(self, new_deps, mutated)(propagate=propagate)
+        UpdateProtocol(self, new_deps, mutated, deleted)(propagate=propagate)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
 

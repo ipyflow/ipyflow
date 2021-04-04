@@ -1,8 +1,9 @@
 # -*- coding: future_annotations -*-
 from typing import TYPE_CHECKING
+from nbsafety.data_model.data_symbol import DataSymbol
 
 if TYPE_CHECKING:
-    from typing import Any, List
+    from typing import Iterable, List
     from nbsafety.safety import NotebookSafety
 
 
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
 
 USAGE = """Options:
 
-show_dependency <variable_name> <variable_name2> ...: 
+show_[deps|dependencies] <variable_name> <variable_name2> ...: 
     - This will print out the dependencies for given global variables.
       Multiple variables should be separated with spaces.
 
@@ -38,16 +39,20 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
 
 def show_deps(safety: NotebookSafety, line: List[str]):
     if len(line) == 1:
-        print("Usage: %safety show_dependency <variable_name> <variable_name2> ...")
+        print("Usage: %safety show_[deps|dependencies] <variable_name> <variable_name2> ...")
         return
     for data_sym_name in line[1:]:
         data_sym = safety.global_scope.lookup_data_symbol_by_name(data_sym_name)
+        parents = {par for par in data_sym.parents if not par.is_anonymous}
+        if data_sym.required_cell_num > 0:
+            dsym_extra_info = 'defined {}; required {}'.format(data_sym.defined_cell_num, data_sym.required_cell_num)
+        else:
+            dsym_extra_info = 'defined in cell {}'.format(data_sym.defined_cell_num)
         if data_sym:
-            print("DataSymbol {} (defined {}; required {}) is dependent on {}".format(
+            print("DataSymbol {} ({}) is dependent on {}".format(
                 data_sym.readable_name,
-                data_sym.defined_cell_num,
-                data_sym.required_cell_num,
-                [str(n) for n in data_sym.parents] if data_sym.parents else "Nothing"
+                dsym_extra_info,
+                parents or "nothing"
             ))
         else:
             print("Cannot find DataSymbol", data_sym_name)
@@ -55,7 +60,7 @@ def show_deps(safety: NotebookSafety, line: List[str]):
 
 def show_stale(safety: NotebookSafety, line: List[str]):
     if len(line) < 2 or line[1] == 'global':
-        dsym_sets: Any = [safety.global_scope.all_data_symbols_this_indentation()]
+        dsym_sets: Iterable[Iterable[DataSymbol]] = [safety.global_scope.all_data_symbols_this_indentation()]
     elif line[1] == 'all':
         dsym_sets = safety.aliases.values()
     else:
@@ -64,14 +69,14 @@ def show_stale(safety: NotebookSafety, line: List[str]):
     stale_set = set()
     for dsym_set in dsym_sets:
         for data_sym in dsym_set:
-            if data_sym.is_stale:
+            if data_sym.is_stale and not data_sym.is_anonymous:
                 stale_set.add(data_sym)
     if not stale_set:
-        print("No DataSymbol has stale dependency for now!")
+        print("No DataSymbol has stale dependencies for now!")
     elif len(stale_set) == 1:
-        print("The only DataSymbol with stale dependencies is:", str(stale_set.pop()))
+        print("The only DataSymbol with stale dependencies is:", next(iter(stale_set)))
     else:
-        print("DataSymbols with stale dependencies are:", [str(n) for n in stale_set])
+        print("DataSymbols with stale dependencies are:", stale_set)
 
 
 def trace_messages(safety: NotebookSafety, line: List[str]):

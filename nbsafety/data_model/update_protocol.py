@@ -20,11 +20,13 @@ class UpdateProtocol:
         self,
         updated_sym: DataSymbol,
         new_deps: Set[DataSymbol],
-        mutated: bool
+        mutated: bool,
+        deleted: bool,
     ):
         self.updated_sym = updated_sym
         self.new_deps = new_deps
         self.mutated = mutated
+        self.deleted = deleted
         self.seen: Set[DataSymbol] = set()
 
     def __call__(self, propagate=True):
@@ -33,7 +35,7 @@ class UpdateProtocol:
                        self.updated_sym.children_by_cell_position.values())
         namespace_refresh = None
         if propagate:
-            if self.mutated or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
+            if self.mutated or self.deleted or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
             if self.updated_sym.cached_obj_id is not None:
                 # TODO: also condition on non simple assign

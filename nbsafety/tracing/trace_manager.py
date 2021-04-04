@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     AttrSubVal = Union[str, int]
     NodeId = int
     ObjId = int
-    MutationCandidate = Tuple[Tuple[int, ObjId, Optional[str]], MutationEvent, Set[DataSymbol]]
-    Mutation = Tuple[int, MutationEvent, Set[DataSymbol]]
-    SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
+    MutationCandidate = Tuple[Tuple[int, ObjId, Optional[str]], MutationEvent, Set[DataSymbol], List[Any]]
+    Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
+    SavedStoreDelData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedComplexSymbolLoadData = Tuple[NamespaceScope, Tuple[AttrSubVal, bool]]
 
 
@@ -165,7 +165,8 @@ class TraceManager(BaseTraceManager):
         self.call_depth = 0
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbol: Dict[NodeId, DataSymbol] = {}
-        self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
+        self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreDelData] = {}
+        self.node_id_to_saved_del_data: Dict[NodeId, SavedStoreDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
 
@@ -208,6 +209,7 @@ class TraceManager(BaseTraceManager):
         self.saved_complex_symbol_load_data = None
         self.active_literal_scope = None
         self.node_id_to_saved_store_data.clear()
+        self.node_id_to_saved_del_data.clear()
         self.node_id_to_loaded_literal_scope.clear()
         self.node_id_to_saved_dict_key.clear()
 
@@ -297,19 +299,32 @@ class TraceManager(BaseTraceManager):
             ref = id(ref)
         return ref
 
-    def resolve_store_data_for_target(
-        self, target: Union[str, int, ast.AST], frame: FrameType
+    def resolve_store_or_del_data_for_target(
+        self, target: Union[str, int, ast.AST], frame: FrameType, ctx: Union[ast.Del, ast.Store] = ast.Store()
     ) -> Tuple[Scope, Union[str, int], Any, bool]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
-            obj = frame.f_locals[target]
+            if isinstance(ctx, ast.Store):
+                obj = frame.f_locals[target]
+            else:
+                obj = None
             return self.cur_frame_original_scope, target, obj, False
         else:
-            (
-                scope, obj, attr_or_sub, is_subscript
-            ) = self.node_id_to_saved_store_data[target]
-            attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
-            scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
+            if isinstance(ctx, ast.Store):
+                (
+                    scope, obj, attr_or_sub, is_subscript
+                ) = self.node_id_to_saved_store_data[target]
+                attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+            else:
+                assert isinstance(ctx, ast.Del)
+                (
+                    scope, obj, attr_or_sub, is_subscript
+                ) = self.node_id_to_saved_del_data[target]
+                attr_or_sub_obj = None
+            if attr_or_sub_obj is None:
+                scope_to_use = scope
+            else:
+                scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
             if scope_to_use is None:
                 # Nobody before `scope` has it, so we'll insert it at this level
                 scope_to_use = scope
@@ -443,10 +458,13 @@ class TraceManager(BaseTraceManager):
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         self.active_scope = scope
-        if ctx != 'Load':
-            assert ctx in ('Store', 'AugStore')
+        if ctx in ('Store', 'AugStore'):
             logger.info("save store data for node id %d", top_level_node_id)
             self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
+            return
+        elif ctx == 'Del':
+            logger.info("save del data for node id %d", top_level_node_id)
+            self.node_id_to_saved_del_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
             return
         if call_context:
             mutation_event = MutationEvent.normal
@@ -458,7 +476,7 @@ class TraceManager(BaseTraceManager):
             # TODO: this strategy won't work if the arguments themselves lead to traced function calls
             #  to cope, put DeepRefCandidates (or equivalent) in the lexical stack?
             self.mutation_candidates.append(
-                ((self.trace_event_counter, obj_id, obj_name), mutation_event, set())
+                ((self.trace_event_counter, obj_id, obj_name), mutation_event, set(), [])
             )
             if not is_subscript:
                 if sym_for_obj is None and obj_name is not None:
@@ -483,7 +501,7 @@ class TraceManager(BaseTraceManager):
                 return
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
             if call_context and len(self.mutation_candidates) > 0:
-                (evt_counter, obj_id, obj_name), mutation_event, recorded_args = self.mutation_candidates.pop()
+                (evt_counter, obj_id, obj_name), mutation_event, recorded_arg_dsyms, recorded_arg_objs = self.mutation_candidates.pop()
                 if evt_counter == self.trace_event_counter:
                     if obj is None:
                         if mutation_event == MutationEvent.normal:
@@ -492,12 +510,12 @@ class TraceManager(BaseTraceManager):
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
                                     # TODO: should it be the other way around?
                                     #  i.e. allow-list for arg mutations, starting with np.random.seed?
-                                    if len(recorded_args) > 0:
+                                    if len(recorded_arg_dsyms) > 0:
                                         # only make this an arg mutation event if it looks like there's an arg to mutate
                                         mutation_event = MutationEvent.arg_mutate
                             except:
                                 pass
-                        self.mutations.append((obj_id, mutation_event, recorded_args))
+                        self.mutations.append((obj_id, mutation_event, recorded_arg_dsyms, recorded_arg_objs))
                     else:
                         if self.sym_for_obj_calling_method is not None:
                             loaded_sym = self.sym_for_obj_calling_method
@@ -516,7 +534,7 @@ class TraceManager(BaseTraceManager):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
         arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
-        if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name)):
+        if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name, ast.Num, ast.Constant, ast.Str)):
             return
         if len(self.mutation_candidates) == 0:
             return
@@ -529,7 +547,8 @@ class TraceManager(BaseTraceManager):
         else:
             arg_dsym = self.node_id_to_loaded_symbol.get(arg_node_id, None)
         if arg_dsym is not None:
-            self.mutation_candidates[-1][-1].add(arg_dsym)
+            self.mutation_candidates[-1][-2].add(arg_dsym)
+        self.mutation_candidates[-1][-1].append(arg_obj)
 
     @register_handler(TraceEvent.before_call)
     def before_call(self, *_, **__):

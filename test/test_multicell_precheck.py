@@ -133,7 +133,7 @@ for foo in lst:
     run_cell(cells[4], 4)
 
     response = nbs().check_and_link_multiple_cells(cells)
-    assert response['stale_cells'] == []
+    assert response['stale_cells'] == [], 'got %s' % response['stale_cells']
     assert response['fresh_cells'] == [2, 3]
 
     cells[5] = 'foo.inc()'

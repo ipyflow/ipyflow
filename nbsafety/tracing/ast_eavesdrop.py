@@ -375,3 +375,9 @@ class AstEavesdropper(ast.NodeTransformer):
                 ),
             )
         return node
+
+    def visit_Delete(self, node: ast.Delete):
+        ret = cast(ast.Delete, self.generic_visit(node))
+        for target in ret.targets:
+            target.ctx = ast.Del()  # type: ignore
+        return ret

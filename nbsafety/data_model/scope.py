@@ -167,7 +167,7 @@ class Scope:
 
     def upsert_data_symbol_for_name(
         self,
-        name: Union[str, int],
+        name: SupportedIndexType,
         obj: Any,
         deps: Set[DataSymbol],
         stmt_node: ast.AST,
@@ -197,7 +197,7 @@ class Scope:
 
     def _upsert_data_symbol_for_name_inner(
         self,
-        name: Union[str, int],
+        name: SupportedIndexType,
         obj: Any,
         deps: Set[DataSymbol],
         symbol_type: DataSymbolType,
@@ -238,6 +238,11 @@ class Scope:
         dsym = DataSymbol(name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
         self.put(name, dsym)
         return dsym, old_dsym, old_id
+
+    def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
+        dsym = self._data_symbol_by_name.pop(name, None)
+        if dsym is not None:
+            dsym.update_deps(set())
 
     @property
     def is_global(self):
@@ -419,6 +424,18 @@ class NamespaceScope(Scope):
         if ret is None and self.cloned_from is not None:
             ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
         return ret
+
+    def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
+        logger.info("delete %s from %s", name, self)
+        if is_subscript:
+            dsym = self._subscript_data_symbol_by_name.pop(name, None)
+            if dsym is None and name == -1 and isinstance(self._obj_ref(), list):
+                name = len(self._obj_ref())  # it will have already been deleted, so don't subtract 1
+                dsym = self._subscript_data_symbol_by_name.pop(name, None)
+            if dsym is not None:
+                dsym.update_deps(set(), deleted=True)
+        else:
+            super().delete_data_symbol_for_name(name)
 
     def all_data_symbols_this_indentation(self, exclude_class=False, is_subscript=None) -> Iterable[DataSymbol]:
         if is_subscript is None:

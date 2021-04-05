@@ -165,7 +165,7 @@ class TraceManager(BaseTraceManager):
         self.seen_stmts: Set[NodeId] = set()
         self.call_depth = 0
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
-        self.node_id_to_loaded_symbol: Dict[NodeId, DataSymbol] = {}
+        self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = defaultdict(list)
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
@@ -187,6 +187,7 @@ class TraceManager(BaseTraceManager):
 
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
+                self.num_args_seen = 0
                 self.sym_for_obj_calling_method: Optional[DataSymbol] = None
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
@@ -264,15 +265,29 @@ class TraceManager(BaseTraceManager):
                                 '<return_sym_%d>' % id(ret), ret, rvals, trace_stmt.stmt_node, is_anonymous=True
                             )
                         if dsym_to_attach is not None:
+                            return_to_node_id = self.call_stack.get_field('prev_node_id_in_cur_frame')
+                            # logger.error("prev seen: %s", ast.dump(nbs().ast_node_by_id[return_to_node_id]))
                             try:
-                                return_to_node_id = self.call_stack.get_field(
+                                call_node_id = self.call_stack.get_field(
                                     'lexical_call_stack'
                                 ).get_field('prev_node_id_in_cur_frame_lexical')
-                                self.node_id_to_loaded_symbol[return_to_node_id] = dsym_to_attach
+                                call_node = cast(ast.Call, nbs().ast_node_by_id[call_node_id])
+                                # logger.error("prev seen outer: %s", ast.dump(nbs().ast_node_by_id[call_node_id]))
+                                total_args = len(call_node.args) + len(call_node.keywords)
+                                num_args_seen = self.call_stack.get_field('num_args_seen')
+                                logger.info("num args seen: %d", num_args_seen)
+                                if total_args == num_args_seen:
+                                    return_to_node_id = call_node_id
+                                else:
+                                    assert num_args_seen < total_args
+                                    if num_args_seen < len(call_node.args):
+                                        return_to_node_id = id(call_node.args[num_args_seen])
+                                    else:
+                                        return_to_node_id = id(call_node.keywords[num_args_seen - len(call_node.args)].value)
                             except IndexError:
-                                # TODO: this will break if we have a call due to a @property decorator
-                                #   inside the arg list of an ast.Call node; how to handle this elegantly?
                                 pass
+                            # logger.error("use node %s", ast.dump(nbs().ast_node_by_id[return_to_node_id]))
+                            self.node_id_to_loaded_symbols[return_to_node_id].append(dsym_to_attach)
         finally:
             self.call_stack.pop()
 
@@ -333,23 +348,21 @@ class TraceManager(BaseTraceManager):
                 scope_to_use = scope
             return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
 
-    def resolve_loaded_symbol(self, symbol_ref: Union[str, int, ast.AST, DataSymbol]) -> Optional[DataSymbol]:
+    def resolve_loaded_symbols(self, symbol_ref: Union[str, int, ast.AST, DataSymbol]) -> List[DataSymbol]:
         if isinstance(symbol_ref, DataSymbol):
-            return symbol_ref
+            return [symbol_ref]
         symbol_ref = self._partial_resolve_ref(symbol_ref)
         if isinstance(symbol_ref, int):
-            return self.node_id_to_loaded_symbol.get(symbol_ref, None)
+            return self.node_id_to_loaded_symbols.get(symbol_ref, [])
         elif isinstance(symbol_ref, str):
-            return self.cur_frame_original_scope.lookup_data_symbol_by_name(symbol_ref)
+            return [self.cur_frame_original_scope.lookup_data_symbol_by_name(symbol_ref)]
         else:
-            return None
+            return []
 
     def resolve_symbols(self, symbol_refs: Set[Union[str, int, DataSymbol]]) -> Set[DataSymbol]:
         data_symbols = set()
         for ref in symbol_refs:
-            maybe_dsym = self.resolve_loaded_symbol(ref)
-            if maybe_dsym is not None:
-                data_symbols.add(maybe_dsym)
+            data_symbols.update(self.resolve_loaded_symbols(ref))
         return data_symbols
 
     def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
@@ -442,7 +455,7 @@ class TraceManager(BaseTraceManager):
             return
         if isinstance(nbs().ast_node_by_id[node_id], ast.Call):
             # clear the callpoint dependency
-            self.node_id_to_loaded_symbol.pop(node_id, None)
+            self.node_id_to_loaded_symbols.pop(node_id, None)
         if obj is None:
             return
         logger.info('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
@@ -525,7 +538,7 @@ class TraceManager(BaseTraceManager):
                             loaded_sym = self.sym_for_obj_calling_method
                             self.sym_for_obj_calling_method = None
             if loaded_sym is not None:
-                self.node_id_to_loaded_symbol[self.top_level_node_id_for_chain] = loaded_sym
+                self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(loaded_sym)
         finally:
             self.saved_complex_symbol_load_data = None
             self.first_obj_id_in_chain = None
@@ -534,9 +547,10 @@ class TraceManager(BaseTraceManager):
             self.active_scope = self.cur_frame_original_scope
 
     @register_handler(TraceEvent.argument)
-    def arg_recorder(self, arg_obj: Any, arg_node_id: int, *_, **__):
+    def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
+        self.num_args_seen += 1
         arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
         if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name, ast.Num, ast.Constant, ast.Str)):
             return
@@ -548,10 +562,10 @@ class TraceManager(BaseTraceManager):
             arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
             if arg_dsym is None:
                 arg_dsym = DataSymbol.create_implicit(arg_node.id, arg_obj, self.active_scope)
+            arg_dsyms = [arg_dsym]
         else:
-            arg_dsym = self.node_id_to_loaded_symbol.get(arg_node_id, None)
-        if arg_dsym is not None:
-            self.mutation_candidates[-1][-2].add(arg_dsym)
+            arg_dsyms = self.node_id_to_loaded_symbols.get(arg_node_id, [])
+        self.mutation_candidates[-1][-2].update(arg_dsyms)
         self.mutation_candidates[-1][-1].append(arg_obj)
 
     @register_handler(TraceEvent.before_call)
@@ -595,17 +609,17 @@ class TraceManager(BaseTraceManager):
                     inner_symbols = set()
                     starred_idx += 1
                     if starred_idx == 0:
-                        starred_sym = self.resolve_loaded_symbol(inner_val_node)
-                        starred_namespace = None if starred_sym is None else nbs().namespaces.get(starred_sym.obj_id, None)
+                        starred_syms = self.resolve_loaded_symbols(inner_val_node)
+                        starred_namespace = nbs().namespaces.get(starred_syms[0].obj_id, None) if starred_syms else None
                     if starred_namespace is not None:
                         starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(starred_idx, is_subscript=True)
                         inner_symbols.add(starred_dep)
                 else:
                     inner_symbols = resolve_rval_symbols(inner_val_node)
                     if inner_key_node is not None:
-                        # inner_symbols.add(self.resolve_loaded_symbol(inner_key_node))
-                        inner_symbols |= resolve_rval_symbols(inner_key_node)
-                self.node_id_to_loaded_symbol.pop(id(inner_val_node), None)
+                        # inner_symbols.add(self.resolve_loaded_symbols(inner_key_node))
+                        inner_symbols.update(resolve_rval_symbols(inner_key_node))
+                self.node_id_to_loaded_symbols.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):
                     self.active_literal_scope.upsert_data_symbol_for_name(
@@ -621,7 +635,7 @@ class TraceManager(BaseTraceManager):
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
                 is_anonymous=True,
             )
-            self.node_id_to_loaded_symbol[node_id] = literal_sym
+            self.node_id_to_loaded_symbols[node_id].append(literal_sym)
             return literal
         finally:
             self.lexical_literal_stack.pop()

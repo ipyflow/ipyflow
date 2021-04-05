@@ -2018,6 +2018,24 @@ def foo():
     assert_detected('`t` depends on old version of `y`')
 
 
+def test_property_in_function_arg():
+    run_cell("""
+z = 42
+class Foo:
+    @property
+    def bar(self):
+        return z
+
+def f(x, y):
+    return x + y
+""")
+    run_cell('foo = Foo()')
+    run_cell('w = f(3, foo.bar)')
+    run_cell('z = 7')
+    run_cell('logging.info(w)')
+    assert_detected('`w` depends on old version of `z`')
+
+
 @skipif_known_failing
 def test_list_sum_simple():
     run_cell("w, x, y, z = 0, 1, 2, 3")

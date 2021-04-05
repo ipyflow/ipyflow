@@ -38,8 +38,8 @@ class TraceStack:
                 self._stack_item_initializers[stack_item_name] = stack_item._clone
             elif stack_item is None:
                 self._stack_item_initializers[stack_item_name] = lambda: None
-            elif isinstance(stack_item, bool):
-                init_val = bool(stack_item)
+            elif isinstance(stack_item, (int, bool, str, float)):
+                init_val = type(stack_item)(stack_item)
                 self._stack_item_initializers[stack_item_name] = lambda: init_val
             else:
                 self._stack_item_initializers[stack_item_name] = type(stack_item)

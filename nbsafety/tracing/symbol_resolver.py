@@ -26,7 +26,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         return self.push_attributes(symbols=[])
 
     def visit_Name(self, node: ast.Name):
-        self.symbols.append(tracer().resolve_loaded_symbol(node))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node))
 
     def visit_Tuple(self, node: ast.Tuple):
         self.visit_List_or_Tuple(node)
@@ -35,23 +35,23 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.visit_List_or_Tuple(node)
 
     def visit_Dict(self, node: ast.Dict):
-        resolved = tracer().resolve_loaded_symbol(node)
-        if resolved is None:
+        resolved = tracer().resolve_loaded_symbols(node)
+        if not resolved:
             # if id(node) not in tracer().node_id_to_loaded_literal_scope:
             # only descend if tracer failed to create literal symbol
             self.generic_visit(node.keys)
             self.generic_visit(node.values)
         else:
-            self.symbols.append(resolved)
+            self.symbols.extend(resolved)
 
     def visit_List_or_Tuple(self, node: Union[ast.List, ast.Tuple]):
-        resolved = tracer().resolve_loaded_symbol(node)
-        if resolved is None:
+        resolved = tracer().resolve_loaded_symbols(node)
+        if not resolved:
             # if id(node) not in tracer().node_id_to_loaded_literal_scope:
             # only descend if tracer failed to create literal symbol
             self.generic_visit(node.elts)
         else:
-            self.symbols.append(resolved)
+            self.symbols.extend(resolved)
 
     def visit_AugAssign_or_AnnAssign(self, node):
         self.visit(node.value)
@@ -64,17 +64,17 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
 
     def visit_Call(self, node):
         # TODO: descend further down
-        self.symbols.append(tracer().resolve_loaded_symbol(node.func))
-        self.symbols.append(tracer().resolve_loaded_symbol(node))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node.func))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node))
         self.generic_visit([node.args, node.keywords])
 
     def visit_Attribute(self, node: ast.Attribute):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
-        self.symbols.append(tracer().resolve_loaded_symbol(node))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node))
 
     def visit_Subscript(self, node: ast.Subscript):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
-        self.symbols.append(tracer().resolve_loaded_symbol(node))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node))
         # add slice to RHS to avoid propagating to it
         self.visit(node.slice)
 
@@ -82,7 +82,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.visit(node.value)
 
     def visit_Starred(self, node: ast.Starred):
-        self.symbols.append(tracer().resolve_loaded_symbol(node))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node))
 
     def visit_Lambda(self, node):
         with self._push_symbols():
@@ -130,7 +130,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.symbols.extend(to_append - discard_set)
 
     def visit_arg(self, node: ast.arg):
-        self.symbols.append(tracer().resolve_loaded_symbol(node.arg))
+        self.symbols.extend(tracer().resolve_loaded_symbols(node.arg))
 
     def visit_For(self, node: ast.For):
         # skip body -- will have dummy since this visitor works line-by-line

@@ -182,11 +182,9 @@ class AstEavesdropper(ast.NodeTransformer):
     def _get_replacement_args(self, args, keywords: bool):
         replacement_args = []
         for arg in args:
-            if isinstance(arg, ast.Starred) or keywords and arg.arg is None:
-                # TODO: figure out how to trace *args and **kwargs too
-                replacement_args.append(arg)
-                continue
-            if keywords:
+            is_starred = isinstance(arg, ast.Starred)
+            is_kwstarred = keywords and arg.arg is None
+            if keywords or is_starred:
                 maybe_kwarg = getattr(arg, 'value')
             else:
                 maybe_kwarg = arg
@@ -197,9 +195,13 @@ class AstEavesdropper(ast.NodeTransformer):
                     new_arg_value = cast(ast.expr, fast.Call(
                         func=self._emitter_ast(),
                         args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
-                        keywords=fast.kwargs(ret=visited_maybe_kwarg),
+                        keywords=fast.kwargs(
+                            ret=visited_maybe_kwarg,
+                            is_starred=fast.NameConstant(is_starred),
+                            is_kwstarred=fast.NameConstant(is_kwstarred)
+                        ),
                     ))
-            if keywords:
+            if keywords or is_starred:
                 setattr(arg, 'value', new_arg_value)
             else:
                 arg = new_arg_value

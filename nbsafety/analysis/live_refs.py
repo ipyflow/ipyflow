@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from nbsafety.types import SymbolRef
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.ERROR)
 
 
 # TODO: have the logger warnings additionally raise exceptions for tests
@@ -101,6 +102,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         elif isinstance(target_node, (ast.Tuple, ast.List)):
             for elt in target_node.elts:
                 self.visit_Assign_target(elt)
+        elif isinstance(target_node, ast.Starred):
+            self.visit_Assign_target(target_node.value)
         else:
             logger.warning('unsupported type for node %s' % target_node)
 

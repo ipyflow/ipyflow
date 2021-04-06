@@ -2036,6 +2036,36 @@ def f(x, y):
     assert_detected('`w` depends on old version of `z`')
 
 
+def test_getter_setter_with_global():
+    run_cell("""
+z = 42
+class Bar:
+    shared = 25
+    @property
+    def baz(self):
+        return z
+    
+    @baz.setter
+    def baz(self, new_val):
+        global z
+        z = new_val
+    
+class Foo:
+    def __init__(self):
+        self.bar = Bar()
+
+def f(x, y):
+    return x + y
+""")
+    run_cell('foo = Bar()')
+    run_cell('w = f(3, foo.baz)')
+    run_cell('logging.info(w)')
+    assert_not_detected()
+    run_cell('foo.baz = 84')
+    run_cell('logging.info(w)')
+    assert_detected('`w` depends on stale `foo.baz`')
+
+
 @skipif_known_failing
 def test_list_sum_simple():
     run_cell("w, x, y, z = 0, 1, 2, 3")

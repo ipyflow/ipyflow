@@ -72,16 +72,16 @@ class Scope:
         self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
-    def lookup_data_symbol_by_name_this_indentation(self, name) -> Optional[DataSymbol]:
+    def lookup_data_symbol_by_name_this_indentation(self, name, **_) -> Optional[DataSymbol]:
         return self._data_symbol_by_name.get(name, None)
 
     def all_data_symbols_this_indentation(self):
         return self._data_symbol_by_name.values()
 
-    def lookup_data_symbol_by_name(self, name) -> Optional[DataSymbol]:
-        ret = self.lookup_data_symbol_by_name_this_indentation(name)
+    def lookup_data_symbol_by_name(self, name, **kwargs) -> Optional[DataSymbol]:
+        ret = self.lookup_data_symbol_by_name_this_indentation(name, **kwargs)
         if ret is None and self.non_namespace_parent_scope is not None:
-            ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name)
+            ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name, **kwargs)
         return ret
 
     @staticmethod
@@ -177,9 +177,11 @@ class Scope:
         is_import: bool = False,
         is_anonymous: bool = False,
         class_scope: Optional[Scope] = None,
-        propagate: bool = True
+        symbol_type: Optional[DataSymbolType] = None,
+        propagate: bool = True,
+        implicit: bool = False,
     ) -> DataSymbol:
-        symbol_type = self._resolve_symbol_type(
+        symbol_type = symbol_type or self._resolve_symbol_type(
             overwrite=overwrite,
             is_subscript=is_subscript,
             is_function_def=is_function_def,
@@ -188,9 +190,12 @@ class Scope:
             class_scope=class_scope
         )
         dsym, old_dsym, old_id = self._upsert_data_symbol_for_name_inner(
-            name, obj, deps,
+            name,
+            obj,
+            deps,
             symbol_type,
             stmt_node,
+            implicit=implicit,
         )
         dsym.update_deps(deps, overwrite=overwrite, propagate=propagate)
         return dsym
@@ -202,9 +207,14 @@ class Scope:
         deps: Set[DataSymbol],
         symbol_type: DataSymbolType,
         stmt_node: ast.AST,
+        implicit: bool = False,
     ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]:
         old_id = None
-        old_dsym = self.lookup_data_symbol_by_name_this_indentation(name)
+        old_dsym = self.lookup_data_symbol_by_name_this_indentation(
+            name, is_subscript=symbol_type == DataSymbolType.SUBSCRIPT, skip_cloned_lookup=True,
+        )
+        if implicit and symbol_type != DataSymbolType.ANONYMOUS:
+            assert old_dsym is None, 'expected None, got %s' % old_dsym
         if old_dsym is not None and self.is_globally_accessible:
             old_id = old_dsym.cached_obj_id
             # TODO: handle case where new dc is of different type
@@ -235,7 +245,14 @@ class Scope:
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
                 deps.add(old_dsym)
-        dsym = DataSymbol(name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False)
+        if isinstance(self, NamespaceScope) and symbol_type == DataSymbolType.DEFAULT and self.cloned_from is not None:
+            # add the cloned symbol as a dependency of the symbol about to b ecreated
+            new_dep = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name, is_subscript=False)
+            if new_dep is not None:
+                deps.add(new_dep)
+        dsym = DataSymbol(
+            name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False, implicit=implicit
+        )
         self.put(name, dsym)
         return dsym, old_dsym, old_id
 
@@ -411,7 +428,7 @@ class NamespaceScope(Scope):
         else:
             return name
 
-    def lookup_data_symbol_by_name_this_indentation(self, name, is_subscript=None):
+    def lookup_data_symbol_by_name_this_indentation(self, name, is_subscript=None, skip_cloned_lookup=False):
         # TODO: specify in arguments whether `name` refers to a subscript
         if is_subscript is None:
             ret = self._data_symbol_by_name.get(name, None)
@@ -421,8 +438,10 @@ class NamespaceScope(Scope):
             ret = self._subscript_data_symbol_by_name.get(name, None)
         else:
             ret = self._data_symbol_by_name.get(name, None)
-        if ret is None and self.cloned_from is not None:
-            ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name)
+        if not skip_cloned_lookup and ret is None and self.cloned_from is not None and not is_subscript and isinstance(name, str):
+            if name not in getattr(self._obj_ref(), '__dict__', {}):
+                # only fall back to the class sym if it's not present in the corresponding obj for this scope
+                ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name, is_subscript=is_subscript)
         return ret
 
     def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):

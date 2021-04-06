@@ -404,11 +404,23 @@ class TraceManager(BaseTraceManager):
         scope, (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_data
         self.saved_complex_symbol_load_data = None
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
-            attr_or_subscript, is_subscript=is_subscript
+            attr_or_subscript, is_subscript=is_subscript, skip_cloned_lookup=True,
         )
+        logger.info("found sym %s in scope %s", data_sym, scope)
         if data_sym is None:
-            symbol_type = DataSymbolType.SUBSCRIPT if is_subscript else DataSymbolType.DEFAULT
-            data_sym = DataSymbol.create_implicit(attr_or_subscript, obj_attr_or_sub, scope, symbol_type=symbol_type)
+            parent = scope.lookup_data_symbol_by_name_this_indentation(
+                attr_or_subscript, is_subscript, skip_cloned_lookup=False,
+            )
+            parents = set() if parent is None else {parent}
+            data_sym = scope.upsert_data_symbol_for_name(
+                attr_or_subscript,
+                obj_attr_or_sub,
+                parents,
+                self.prev_trace_stmt_in_cur_frame.stmt_node,
+                is_subscript=is_subscript,
+                propagate=False,
+                implicit=True,
+            )
             logger.info("create implicit sym %s", data_sym)
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
@@ -475,7 +487,10 @@ class TraceManager(BaseTraceManager):
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         self.active_scope = scope
         if ctx in ('Store', 'AugStore'):
-            logger.info("save store data for node id %d", top_level_node_id)
+            logger.info(
+                "save store data for node id %d: %s, %s, %s, %s",
+                top_level_node_id, scope, obj, attr_or_subscript, is_subscript
+            )
             self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
             return
         elif ctx == 'Del':
@@ -490,20 +505,28 @@ class TraceManager(BaseTraceManager):
             # save off event counter and obj_id
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
-            # TODO: this strategy won't work if the arguments themselves lead to traced function calls
-            #  to cope, put DeepRefCandidates (or equivalent) in the lexical stack?
             self.mutation_candidates.append(
                 ((self.trace_event_counter, obj_id, obj_name), mutation_event, set(), [])
             )
             if not is_subscript:
                 if sym_for_obj is None and obj_name is not None:
-                    sym_for_obj = self.cur_frame_original_scope.lookup_data_symbol_by_name(obj_name)
-                if sym_for_obj is None:
-                    if self.prev_trace_stmt_in_cur_frame is not None:
-                        sym_for_obj = DataSymbol.create_implicit(obj_name, obj, self.cur_frame_original_scope)
+                    sym_for_obj = self.cur_frame_original_scope.lookup_data_symbol_by_name(
+                        obj_name, is_subscript=is_subscript
+                    )
+                if sym_for_obj is None and self.prev_trace_stmt_in_cur_frame is not None:
+                    sym_for_obj = self.cur_frame_original_scope.upsert_data_symbol_for_name(
+                        obj_name or '<anonymous_symbol_%d>' % id(obj),
+                        obj,
+                        set(),
+                        self.prev_trace_stmt_in_cur_frame.stmt_node,
+                        is_subscript=is_subscript,
+                        is_anonymous=obj_name is None,
+                        implicit=True,
+                    )
                 if sym_for_obj is not None:
                     self.sym_for_obj_calling_method = sym_for_obj
         else:
+            logger.info("saved load data: %s, %s, %s", scope, attr_or_subscript, is_subscript)
             self.saved_complex_symbol_load_data = (scope, (attr_or_subscript, is_subscript))
 
     @register_handler(TraceEvent.after_complex_symbol)
@@ -513,8 +536,8 @@ class TraceManager(BaseTraceManager):
                 return
             if self.first_obj_id_in_chain is None:
                 return
-            if ctx == 'Store':
-                # don't trace after events w/ store context
+            if ctx != 'Load':
+                # don't trace after non-load events
                 return
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
             if call_context and len(self.mutation_candidates) > 0:
@@ -561,7 +584,9 @@ class TraceManager(BaseTraceManager):
             assert self.active_scope is self.cur_frame_original_scope
             arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
             if arg_dsym is None:
-                arg_dsym = DataSymbol.create_implicit(arg_node.id, arg_obj, self.active_scope)
+                arg_dsym = self.active_scope.upsert_data_symbol_for_name(
+                    arg_node.id, arg_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, implicit=True
+                )
             arg_dsyms = [arg_dsym]
         else:
             arg_dsyms = self.node_id_to_loaded_symbols.get(arg_node_id, [])

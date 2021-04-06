@@ -76,7 +76,7 @@ class TraceStatement:
         deps: Set[DataSymbol],
         maybe_fixup_literal_namespace=False,
     ) -> None:
-        logger.info("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
+        # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
             scope, name, obj, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame)
         except KeyError as e:

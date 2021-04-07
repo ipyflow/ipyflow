@@ -215,3 +215,12 @@ History
 -------------------
 * Various tracing improvements;
 * Bugfix for tuple unpacking;
+
+0.0.60 (2021-04-06)
+-------------------
+* Major improvements and bugfixes for lineage involving list, tuple, dict literals;
+* Improvements to granuarity of dependency tracking for function calls;
+* Improvements to dynamic symbol resolution;
+* Improved handling for @property getter / setter methods;
+* Fix some spurious warnings;
+* Bugfix for statements involving `del`;

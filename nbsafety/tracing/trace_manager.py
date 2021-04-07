@@ -753,7 +753,7 @@ class TraceManager(BaseTraceManager):
         self.call_depth = 0
         self.call_stack.clear()
         self.lexical_call_stack.clear()
-        if nbs().settings.trace_messages_enabled:
+        if nbs().trace_messages_enabled:
             self.EVENT_LOGGER.warning('reenable tracing >>>')
 
     @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
@@ -802,13 +802,13 @@ class TraceManager(BaseTraceManager):
             trace_stmt = TraceStatement(frame, stmt_node)
             self.traced_statements[id(stmt_node)] = trace_stmt
 
-        if nbs().settings.trace_messages_enabled:
+        if nbs().trace_messages_enabled:
             codeline = astunparse.unparse(stmt_node).strip('\n').split('\n')[0]
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
             self.EVENT_LOGGER.warning(' %3d: %10s >>> %s', trace_stmt.lineno, event, codeline)
         if event == TraceEvent.call:
             if trace_stmt.node_id_for_last_call == self.prev_node_id_in_cur_frame:
-                if nbs().settings.trace_messages_enabled:
+                if nbs().trace_messages_enabled:
                     self.EVENT_LOGGER.warning(' disable tracing >>>')
                 self._disable_tracing()
                 return None

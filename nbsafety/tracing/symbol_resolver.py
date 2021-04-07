@@ -5,13 +5,14 @@ from typing import List, TYPE_CHECKING
 
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.singletons import tracer
+from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from typing import Dict, Optional, Set, Tuple, Union
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
@@ -70,13 +71,73 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
 
     def visit_Attribute(self, node: ast.Attribute):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
-        self.symbols.extend(tracer().resolve_loaded_symbols(node))
+        symbols = tracer().resolve_loaded_symbols(node)
+        if len(symbols) > 0:
+            self.symbols.extend(symbols)
+            return
+        # TODO: this path lacks coverage
+        try:
+            with self._push_symbols():
+                self.visit(node.value)
+                symbols = self.symbols
+            if len(symbols) != 1 or symbols[0] is None:
+                return
+            ns = nbs().namespaces.get(symbols[0].obj_id, None)
+            if ns is None:
+                return
+            dsym = ns.lookup_data_symbol_by_name_this_indentation(node.attr, is_subscript=False)
+            if dsym is not None:
+                self.symbols.append(dsym)
+        except Exception as e:
+            logger.warning("Exception occurred while resolving node %s: %s", ast.dump(node), e)
 
     def visit_Subscript(self, node: ast.Subscript):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
-        self.symbols.extend(tracer().resolve_loaded_symbols(node))
-        # add slice to RHS to avoid propagating to it
-        self.visit(node.slice)
+        symbols = tracer().resolve_loaded_symbols(node)
+        with self._push_symbols():
+            # add slice to RHS to avoid propagating to it
+            self.visit(node.slice)
+            symbols.extend(self.symbols)
+        if len(symbols) > 0:
+            self.symbols.extend(symbols)
+            return
+        # TODO: this path lacks coverage
+        try:
+            if isinstance(node.slice, ast.Index):
+                slice = node.slice.value  # type: ignore
+            else:
+                slice = node.slice
+            negate = False
+            if isinstance(slice, ast.UnaryOp) and isinstance(slice.op, ast.USub):
+                negate = True
+                slice = slice.operand
+            if not isinstance(slice, (ast.Constant, ast.Str, ast.Num)):
+                return
+            if isinstance(slice, ast.Constant):
+                slice = slice.value
+            elif isinstance(slice, ast.Num):
+                slice = slice.n
+            else:  # isinstance(slice, ast.Str):
+                slice = slice.s
+            if isinstance(slice, int) and negate:
+                slice = -slice
+                with self._push_symbols():
+                    self.visit(node.value)
+                    symbols = self.symbols
+            if len(symbols) != 1 or symbols[0] is None:
+                return
+            ns = nbs().namespaces.get(symbols[0].obj_id, None)
+            if ns is not None:
+                dsym = ns.lookup_data_symbol_by_name_this_indentation(slice, is_subscript=True)
+                if dsym is None and isinstance(slice, int) and slice < 0:
+                    try:
+                        dsym = ns.lookup_data_symbol_by_name_this_indentation(len(ns) + slice, is_subscript=True)
+                    except TypeError:
+                        dsym = None
+                if dsym is not None:
+                    self.symbols.append(dsym)
+        except Exception as e:
+            logger.warning("Exception occurred while resolving node %s: %s", ast.dump(node), e)
 
     def visit_keyword(self, node: ast.keyword):
         self.visit(node.value)

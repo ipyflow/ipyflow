@@ -64,7 +64,6 @@ class NotebookSafetySettings(NamedTuple):
     store_history: bool
     test_context: bool
     use_comm: bool
-    trace_messages_enabled: bool
     backwards_cell_staleness_propagation: bool
     track_dependencies: bool
     naive_refresher_computation: bool
@@ -83,7 +82,6 @@ class NotebookSafety(singletons.NotebookSafety):
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
             use_comm=use_comm,
-            trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             backwards_cell_staleness_propagation=True,
             track_dependencies=True,
             naive_refresher_computation=False,
@@ -91,6 +89,7 @@ class NotebookSafety(singletons.NotebookSafety):
             mode=SafetyRunMode.get(),
         )
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
+        self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False),
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope()
@@ -465,25 +464,24 @@ class NotebookSafety(singletons.NotebookSafety):
 
         def _safety(line_: str):
             # this is to avoid capturing `self` and creating an extra reference to the singleton
-            self_ = singletons.nbs()
-            line = line_.split()
-            if not line or line[0] not in line_magic_names:
+            cmd, line = line_.split(' ', 1)
+            if cmd not in line_magic_names:
                 print(line_magics.USAGE)
                 return
-            elif line[0] in ("show_deps", "show_dependency", "show_dependencies"):
-                return line_magics.show_deps(self_, line)
-            elif line[0] == "show_stale":
-                return line_magics.show_stale(self_, line)
-            elif line[0] == "trace_messages":
-                return line_magics.trace_messages(self_, line)
-            elif line[0] == "remove_dependency":
-                return line_magics.remove_dep(self_, line)
-            elif line[0] in ("add_dependency", "add_dep"):
-                return line_magics.add_dep(self_, line)
-            elif line[0] == "turn_off_warnings_for":
-                return line_magics.turn_off_warnings_for(self_, line)
-            elif line[0] == "turn_on_warnings_for":
-                return line_magics.turn_on_warnings_for(self_, line)
+            elif cmd in ("show_deps", "show_dependency", "show_dependencies"):
+                return line_magics.show_deps(line)
+            elif cmd == "show_stale":
+                return line_magics.show_stale(line)
+            elif cmd == "trace_messages":
+                return line_magics.trace_messages(line)
+            elif cmd == "remove_dependency":
+                return line_magics.remove_dep(line)
+            elif cmd in ("add_dependency", "add_dep"):
+                return line_magics.add_dep(line)
+            elif cmd == "turn_off_warnings_for":
+                return line_magics.turn_off_warnings_for(line)
+            elif cmd == "turn_on_warnings_for":
+                return line_magics.turn_on_warnings_for(line)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _safety.__name__ = _SAFETY_LINE_MAGIC

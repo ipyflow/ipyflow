@@ -106,7 +106,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             if isinstance(node.slice, ast.Index):
                 slice = node.slice.value  # type: ignore
             else:
-                slice = node.slice
+                slice = node.slice  # type: ignore
             negate = False
             if isinstance(slice, ast.UnaryOp) and isinstance(slice.op, ast.USub):
                 negate = True
@@ -116,11 +116,11 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             if isinstance(slice, ast.Constant):
                 slice = slice.value
             elif isinstance(slice, ast.Num):
-                slice = slice.n
+                slice = slice.n  # type: ignore
             else:  # isinstance(slice, ast.Str):
-                slice = slice.s
+                slice = slice.s  # type: ignore
             if isinstance(slice, int) and negate:
-                slice = -slice
+                slice = -slice  # type: ignore
                 with self._push_symbols():
                     self.visit(node.value)
                     symbols = self.symbols

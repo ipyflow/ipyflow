@@ -3,8 +3,10 @@ import ast
 import logging
 from typing import List, TYPE_CHECKING
 
+from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
@@ -69,6 +71,14 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.symbols.extend(tracer().resolve_loaded_symbols(node))
         self.generic_visit([node.args, node.keywords])
 
+    def _get_attr_or_subscript_namespace(self, node: Union[ast.Attribute, ast.Subscript]) -> Optional[NamespaceScope]:
+        with self._push_symbols():
+            self.visit(node.value)
+            symbols = self.symbols
+        if len(symbols) != 1 or symbols[0] is None:
+            return None
+        return nbs().namespaces.get(symbols[0].obj_id, None)
+
     def visit_Attribute(self, node: ast.Attribute):
         # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
         symbols = tracer().resolve_loaded_symbols(node)
@@ -77,12 +87,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             return
         # TODO: this path lacks coverage
         try:
-            with self._push_symbols():
-                self.visit(node.value)
-                symbols = self.symbols
-            if len(symbols) != 1 or symbols[0] is None:
-                return
-            ns = nbs().namespaces.get(symbols[0].obj_id, None)
+            ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
             dsym = ns.lookup_data_symbol_by_name_this_indentation(node.attr, is_subscript=False)
@@ -103,39 +108,25 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             return
         # TODO: this path lacks coverage
         try:
-            if isinstance(node.slice, ast.Index):
-                slice = node.slice.value  # type: ignore
-            else:
-                slice = node.slice  # type: ignore
-            negate = False
-            if isinstance(slice, ast.UnaryOp) and isinstance(slice.op, ast.USub):
-                negate = True
-                slice = slice.operand
-            if not isinstance(slice, (ast.Constant, ast.Str, ast.Num)):
+            slice = resolve_slice_to_constant(node)
+            if slice is None or isinstance(slice, ast.Name):
                 return
-            if isinstance(slice, ast.Constant):
-                slice = slice.value
-            elif isinstance(slice, ast.Num):
-                slice = slice.n  # type: ignore
-            else:  # isinstance(slice, ast.Str):
-                slice = slice.s  # type: ignore
-            if isinstance(slice, int) and negate:
-                slice = -slice  # type: ignore
-                with self._push_symbols():
-                    self.visit(node.value)
-                    symbols = self.symbols
+            with self._push_symbols():
+                self.visit(node.value)
+                symbols = self.symbols
             if len(symbols) != 1 or symbols[0] is None:
                 return
-            ns = nbs().namespaces.get(symbols[0].obj_id, None)
-            if ns is not None:
-                dsym = ns.lookup_data_symbol_by_name_this_indentation(slice, is_subscript=True)
-                if dsym is None and isinstance(slice, int) and slice < 0:
-                    try:
-                        dsym = ns.lookup_data_symbol_by_name_this_indentation(len(ns) + slice, is_subscript=True)
-                    except TypeError:
-                        dsym = None
-                if dsym is not None:
-                    self.symbols.append(dsym)
+            ns = self._get_attr_or_subscript_namespace(node)
+            if ns is None:
+                return
+            dsym = ns.lookup_data_symbol_by_name_this_indentation(slice, is_subscript=True)
+            if dsym is None and isinstance(slice, int) and slice < 0:
+                try:
+                    dsym = ns.lookup_data_symbol_by_name_this_indentation(len(ns) + slice, is_subscript=True)
+                except TypeError:
+                    dsym = None
+            if dsym is not None:
+                self.symbols.append(dsym)
         except Exception as e:
             logger.warning("Exception occurred while resolving node %s: %s", ast.dump(node), e)
 

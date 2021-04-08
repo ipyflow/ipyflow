@@ -5,7 +5,7 @@ from typing import cast, Union, TYPE_CHECKING
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import List, Sequence, Tuple, Union
+    from typing import Any, List, Optional, Sequence, Tuple, Union
     from nbsafety.types import SupportedIndexType
 
 
@@ -71,38 +71,15 @@ class GetAttrSubSymbols(ast.NodeVisitor):
         self.visit(node.value)
 
     def visit_Subscript(self, node):
-        node_slice = node.slice
-        if isinstance(node_slice, ast.Constant):
-            self.symbol_chain.append(node_slice.value)
-        elif isinstance(node_slice, ast.Index):
-            slice_index = node_slice.value
-            if isinstance(slice_index, ast.Str):
-                self.symbol_chain.append(slice_index.s)
-            elif isinstance(slice_index, ast.Num):
-                self.symbol_chain.append(slice_index.n)
-            elif isinstance(slice_index, ast.Tuple):
-                elts = []
-                for v in slice_index.elts:
-                    if isinstance(v, ast.Num):
-                        elts.append(v.n)
-                    elif isinstance(v, ast.Str):
-                        elts.append(v.s)
-                    else:
-                        break
-                else:
-                    self.symbol_chain.append(tuple(elts))
-            elif isinstance(slice_index, ast.Name):
+        resolved = resolve_slice_to_constant(node)
+        if resolved is not None:
+            if isinstance(resolved, ast.Name):
                 # FIXME: hack to make the static checker stop here
                 # In the future, it should try to attempt to resolve
                 # the value of the ast.Name node
-                self.symbol_chain.append(CallPoint(slice_index.id))
+                self.symbol_chain.append(CallPoint(resolved.id))
             else:
-                # give up
-                pass
-                # raise TypeError('unexpected type for node.slice %s' % node_slice)
-        else:
-            # give up
-            pass
+                self.symbol_chain.append(resolved)
         self.visit(node.value)
 
     def visit_Name(self, node):
@@ -123,3 +100,52 @@ def get_attrsub_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Subscript
     if not isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
     return GetAttrSubSymbols()(node)
+
+
+def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIndexType, ast.Name]]:
+    """
+    Version-independent way to get at the slice data
+    """
+    if isinstance(node.slice, ast.Index):
+        slice = node.slice.value  # type: ignore
+    else:
+        slice = node.slice  # type: ignore
+
+    if isinstance(slice, ast.Tuple):
+        elts: Any = []
+        for v in slice.elts:
+            if isinstance(v, ast.Num):
+                elts.append(v.n)
+            elif isinstance(v, ast.Str):
+                elts.append(v.s)
+            elif isinstance(v, ast.Constant):
+                elts.append(v.value)
+            else:
+                return None
+        return tuple(elts)  # type: ignore
+
+    negate = False
+    if isinstance(slice, ast.UnaryOp) and isinstance(slice.op, ast.USub):
+        negate = True
+        slice = slice.operand
+
+    if isinstance(slice, ast.Name):
+        return slice
+
+    if not isinstance(slice, (ast.Constant, ast.Str, ast.Num)):
+        return None
+
+    if isinstance(slice, ast.Constant):
+        slice = slice.value
+    elif isinstance(slice, ast.Num):
+        slice = slice.n  # type: ignore
+        if not isinstance(slice, int):
+            return None
+    elif isinstance(slice, ast.Str):
+        slice = slice.s  # type: ignore
+    else:
+        return None
+
+    if isinstance(slice, int) and negate:
+        slice = -slice  # type: ignore
+    return slice

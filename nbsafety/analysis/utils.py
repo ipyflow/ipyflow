@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from nbsafety.types import SymbolRef
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 def get_symbols_for_references(
@@ -42,7 +43,7 @@ def get_symbols_for_references(
     return symbols, called_symbols
 
 
-def compute_call_chain_live_symbols(live: Set[DataSymbol]):
+def compute_call_chain_live_symbols(live: Set[DataSymbol]) -> Set[DataSymbol]:
     seen = set()
     worklist = list(live)
     while len(worklist) > 0:

@@ -54,7 +54,7 @@ def show_deps(symbols: str):
     else:
         unresolved_symbols = [node]
     for unresolved in unresolved_symbols:
-        dsyms = resolve_rval_symbols(unresolved)
+        dsyms = resolve_rval_symbols(unresolved, update_last_used_cell=False)
         if len(dsyms) == 0:
             print('Could not find symbol(s) for', astunparse.unparse(unresolved))
         for dsym in dsyms:

@@ -5,6 +5,7 @@ from typing import List, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from nbsafety.ipython_utils import cell_counter
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
@@ -220,7 +221,11 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         pass
 
 
-def resolve_rval_symbols(node: Union[str, ast.AST]) -> Set[DataSymbol]:
+def resolve_rval_symbols(node: Union[str, ast.AST], update_last_used_cell: bool = True) -> Set[DataSymbol]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
-    return ResolveRvalSymbols()(node)
+    rval_symbols = ResolveRvalSymbols()(node)
+    if update_last_used_cell:
+        for sym in rval_symbols:
+            sym.last_used_cell_num = cell_counter()
+    return rval_symbols

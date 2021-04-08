@@ -148,4 +148,4 @@ def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIn
 
     if isinstance(slice, int) and negate:
         slice = -slice  # type: ignore
-    return slice
+    return slice  # type: ignore

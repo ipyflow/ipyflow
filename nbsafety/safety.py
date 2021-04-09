@@ -413,6 +413,9 @@ class NotebookSafety(singletons.NotebookSafety):
             - dict (int, str): map from required cell number to code
                 representing dependencies
         """
+        if cell_num not in self.cell_content_by_counter.keys():
+            raise ValueError(f'Cell {cell_num} has not been run yet.')
+
         dependencies: Set[int] = set()
         cell_num_to_dynamic_deps: Dict[int, Set[int]] = defaultdict(set)
         for sym in self.all_data_symbols():

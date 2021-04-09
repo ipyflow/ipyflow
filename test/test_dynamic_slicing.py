@@ -64,3 +64,22 @@ def test_list_mutations():
     run_cell('logging.info(lst)')
     deps = set(nbs().get_cell_dependencies(5).keys())
     assert deps == {2, 3, 4, 5}, 'got %s' % deps
+
+
+def test_imports():
+    run_cell('import numpy as np')
+    run_cell('arr = np.zeros((5,))')
+    run_cell('print(arr * 3)')
+    deps = set(nbs().get_cell_dependencies(3).keys())
+    assert deps == {1, 2, 3}, 'got %s' % deps
+
+
+@skipif_known_failing
+def test_handle_stale():
+    run_cell('a = 1')
+    run_cell('b = 2 * a')
+    run_cell('a = 2')
+    run_cell('print(b)')
+    run_cell('print(b)')
+    deps = set(nbs().get_cell_dependencies(4).keys())
+    assert deps == {1, 2, 4}, 'got %s' % deps

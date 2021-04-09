@@ -89,7 +89,7 @@ class NotebookSafety(singletons.NotebookSafety):
             mode=SafetyRunMode.get(),
         )
         # Note: explicitly adding the types helps PyCharm's built-in code inspection
-        self.trace_messages_enabled = kwargs.pop('trace_messages_enabled', False),
+        self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope()

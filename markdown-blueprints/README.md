@@ -4,11 +4,6 @@
 
 [![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/jupytercon.png)](https://cfp.jupytercon.com/2020/schedule/presentation/274/tuesday-poster-session/)
 
-This repo is made available as a special prerelease for JupyterCon 2020.
-Check out the [tutorial](https://github.com/nbsafety-project/tutorial)
-for a hands-on introduction. Please give `nbsafety` a try, star it, and open issues ---
-this is super helpful in these early stages!
-
 About
 -----
 `nbsafety` adds a layer of protection to computational notebooks by solving the

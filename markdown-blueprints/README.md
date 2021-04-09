@@ -16,9 +16,13 @@ About
 notebooks segment execution into "cells" with implicit dependencies amongst
 themselves. Here's an example in action:
 
-Step 0: modify cell 1     | Step 1: rerun cell 1     | Step 2: rerun cell 2     | Step 3: rerun cell 3
-:------------------------:|:------------------------:|:------------------------:|:------------------------:
-![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-0.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-1.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-2.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-3.png)
+Step 0: modify cell 1     | Step 1: rerun cell 1     
+:------------------------:|:------------------------:
+![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-0.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-1.png)  
+
+Step 2: rerun cell 2     | Step 3: rerun cell 3
+:------------------------:|:------------------------:
+![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-2.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-3.png)
 
 When the first cell is rerun, the second cell now contains a reference to an updated `f` and
 is suggested for re-execution with a turquoise highlight. The third cell contains a reference

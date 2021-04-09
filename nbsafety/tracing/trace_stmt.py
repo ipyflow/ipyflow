@@ -9,7 +9,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.mutation_event import MutationEvent
-from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
+from nbsafety.tracing.symbol_resolver import resolve_rval_symbols, update_usage_info
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
@@ -263,6 +263,7 @@ class TraceStatement:
                             propagate=False
                         )
             # TODO: add mechanism for skipping namespace children in case of list append
+            update_usage_info(nbs().aliases[mutated_obj_id])
             for mutated_sym in nbs().aliases[mutated_obj_id]:
                 mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
         if self._contains_lval():

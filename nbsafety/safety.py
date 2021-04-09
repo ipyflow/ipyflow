@@ -414,16 +414,15 @@ class NotebookSafety(singletons.NotebookSafety):
                 representing dependencies
         """
         dependencies: Set[int] = set()
-        cell_num_to_last_used_symbols: Dict[int, List[DataSymbol]] = defaultdict(list)
+        cell_num_to_dynamic_deps: Dict[int, Set[int]] = defaultdict(set)
         for sym in self.all_data_symbols():
-            if sym.last_used_cell_num <= 0:
-                continue
-            cell_num_to_last_used_symbols[sym.last_used_cell_num].append(sym)
-        self._get_cell_dependencies(cell_num, dependencies, cell_num_to_last_used_symbols)
+            for used_timestamp, version in sym.version_by_used_timestamp.items():
+                cell_num_to_dynamic_deps[used_timestamp].add(version)
+        self._get_cell_dependencies(cell_num, dependencies, cell_num_to_dynamic_deps)
         return {num: self.cell_content_by_counter[num] for num in dependencies}
     
     def _get_cell_dependencies(
-        self, cell_num: int, dependencies: Set[int], cell_num_to_last_used_symbols: Dict[int, List[DataSymbol]]
+        self, cell_num: int, dependencies: Set[int], cell_num_to_dynamic_deps: Dict[int, Set[int]]
     ) -> None:
         """
         For a given cell, this function recursively populates a set of
@@ -448,14 +447,13 @@ class NotebookSafety(singletons.NotebookSafety):
         cell = self.cell_content_by_counter[cell_num]
         live_symbols = self._check_cell_and_resolve_symbols(cell)['live']
         dep_cell_nums = set(
-            dep_symbol.defined_cell_num for dep_symbol in list(live_symbols) + cell_num_to_last_used_symbols[cell_num]
-        )
+            dep_symbol.defined_cell_num for dep_symbol in live_symbols
+        ) | cell_num_to_dynamic_deps[cell_num]
+        logger.error("dynamic cell deps for %d: %s", cell_num, cell_num_to_dynamic_deps[cell_num])
 
         # For each dependent cell, recursively get their dependencies
-        for num in dep_cell_nums:
-            if num in dependencies:
-                continue
-            self._get_cell_dependencies(num, dependencies, cell_num_to_last_used_symbols)
+        for num in dep_cell_nums - dependencies:
+            self._get_cell_dependencies(num, dependencies, cell_num_to_dynamic_deps)
 
     def safe_execute(self, cell: str, run_cell_func):
         ret = None

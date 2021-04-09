@@ -75,9 +75,10 @@ class DataSymbol:
         # The notebook cell number required by this symbol to not be stale
         self.required_cell_num = self.defined_cell_num
 
-        # The execution counter of the most recent cell where the current version of this symbol was used
-        # (-1 means it has only been defined / updated, and not used)
+        # The execution counter of cell where this symbol was last used (-1 means it has net yet been used)
         self.last_used_cell_num = -1
+        # for each usage of this dsym, the version that was used, if different from the timestamp of usage
+        self.version_by_used_timestamp: Dict[int, int] = {}
 
         self.fresher_ancestors: Set[DataSymbol] = set()
         self.namespace_stale_symbols: Set[DataSymbol] = set()
@@ -284,7 +285,6 @@ class DataSymbol:
             return
         # if we get here, no longer implicit
         self._implicit = False
-        self.last_used_cell_num = -1
         # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
         # TODO: check higher-order ancestors too?
         overwrite = overwrite and self not in new_deps

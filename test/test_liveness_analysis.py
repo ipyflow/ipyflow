@@ -46,6 +46,12 @@ def test_comprehension_with_live_elt():
     assert dead == {'y', '_'}
 
 
+def test_subscript_is_live():
+    live, dead = compute_live_dead_symbol_refs('foo[bar] = baz')
+    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
+    assert live == {'bar', 'baz'}
+
+
 if sys.version_info >= (3, 8):
     def test_walrus():
         live, dead = compute_live_dead_symbol_refs("""

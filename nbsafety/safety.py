@@ -139,6 +139,11 @@ class NotebookSafety(singletons.NotebookSafety):
         else:
             return self._cell_counter
 
+    def reset_cell_counter(self):
+        # only called in test context
+        assert not self.settings.store_history
+        self._cell_counter = 1
+
     def set_ast_transformer_raised(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
         ret = self._ast_transformer_raised
         self._ast_transformer_raised = new_val
@@ -395,7 +400,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
   
-    def get_dependencies(self, cell_num: int) -> dict:
+    def get_cell_dependencies(self, cell_num: int) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the last or 
         currently executed cell.
@@ -408,11 +413,18 @@ class NotebookSafety(singletons.NotebookSafety):
             - dict (int, str): map from required cell number to code
                 representing dependencies
         """
-        dependencies = set()
-        self._get_dependencies(cell_num, dependencies)
+        dependencies: Set[int] = set()
+        cell_num_to_last_used_symbols: Dict[int, List[DataSymbol]] = defaultdict(list)
+        for sym in self.all_data_symbols():
+            if sym.last_used_cell_num <= 0:
+                continue
+            cell_num_to_last_used_symbols[sym.last_used_cell_num].append(sym)
+        self._get_cell_dependencies(cell_num, dependencies, cell_num_to_last_used_symbols)
         return {num: self.cell_content_by_counter[num] for num in dependencies}
     
-    def _get_dependencies(self, cell_num: int, dependencies: set) -> None:
+    def _get_cell_dependencies(
+        self, cell_num: int, dependencies: Set[int], cell_num_to_last_used_symbols: Dict[int, List[DataSymbol]]
+    ) -> None:
         """
         For a given cell, this function recursively populates a set of
         cell numbers that the given cell depends on, based on the live symbols.
@@ -420,7 +432,8 @@ class NotebookSafety(singletons.NotebookSafety):
         Args:
             - dependencies (set<int>): set of cell numbers so far that exist
             - cell_num (int): current cell to get dependencies for
-        
+            - cell_num_to_ast_used_symbols (dict<int, list<DataSymbol>>): mapping from cell num to symbols last used in said cell
+
         Returns:
             None
         """
@@ -433,15 +446,16 @@ class NotebookSafety(singletons.NotebookSafety):
 
         # Retrieve cell numbers for the dependent symbols
         cell = self.cell_content_by_counter[cell_num]
-        symbols = self._check_cell_and_resolve_symbols(cell)
-        live_symbols = symbols['live']
-        dep_cell_nums = set([dep_symbol.defined_cell_num for dep_symbol in live_symbols])
-        
+        live_symbols = self._check_cell_and_resolve_symbols(cell)['live']
+        dep_cell_nums = set(
+            dep_symbol.defined_cell_num for dep_symbol in list(live_symbols) + cell_num_to_last_used_symbols[cell_num]
+        )
+
         # For each dependent cell, recursively get their dependencies
         for num in dep_cell_nums:
             if num in dependencies:
                 continue
-            self._get_dependencies(num, dependencies)
+            self._get_cell_dependencies(num, dependencies, cell_num_to_last_used_symbols)
 
     def safe_execute(self, cell: str, run_cell_func):
         ret = None
@@ -466,11 +480,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 # Stage 2.1: resync any defined symbols that could have gotten out-of-sync
                 #  due to tracing being disabled
 
-                from pprint import pprint
-                pprint(self.get_dependencies(self.cell_counter()))
-
-                symbols = self._check_cell_and_resolve_symbols(cell)
-                defined = symbols['dead']
+                defined = self._check_cell_and_resolve_symbols(cell)['dead']
                 self._resync_symbols(defined)
             finally:
                 if not self.settings.store_history:
@@ -528,6 +538,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.show_stale(line)
             elif cmd == "trace_messages":
                 return line_magics.trace_messages(line)
+            elif cmd in ("slice", "make_slice", "gather_slice"):
+                return line_magics.make_slice(line)
             elif cmd == "remove_dependency":
                 return line_magics.remove_dep(line)
             elif cmd in ("add_dependency", "add_dep"):

@@ -98,6 +98,17 @@ def trace_messages(line_: str):
     nbs().trace_messages_enabled = (line[0].lower().startswith("enable"))
 
 
+def make_slice(line: str):
+    try:
+        cell_num = int(line)
+    except:
+        print("Usage: %safety slice <cell_num>")
+        return
+    deps = list(nbs().get_cell_dependencies(cell_num).items())
+    deps.sort()
+    print('\n\n'.join(f'# Cell {cell_num}\n' + content for cell_num, content in deps))
+
+
 def _find_symbols(syms):
     results = []
     for sym in syms:

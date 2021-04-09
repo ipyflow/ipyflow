@@ -64,6 +64,7 @@ def make_safety_fixture(**kwargs) -> 'Tuple[Any, Any]':
         run_cell('import logging')
         for setup_cell in setup_cells:
             run_cell(setup_cell)
+        nbs().reset_cell_counter()
         # yield to execution of the actual test
         if extra_fixture is not None:
             yield from extra_fixture()

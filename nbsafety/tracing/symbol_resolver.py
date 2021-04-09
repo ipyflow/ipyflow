@@ -227,5 +227,5 @@ def resolve_rval_symbols(node: Union[str, ast.AST], update_last_used_cell: bool 
     rval_symbols = ResolveRvalSymbols()(node)
     if update_last_used_cell:
         for sym in rval_symbols:
-            sym.last_used_cell_num = cell_counter()
+            sym.last_used_cell_num = nbs().cell_counter()
     return rval_symbols

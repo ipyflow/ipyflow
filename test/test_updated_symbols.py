@@ -2,7 +2,7 @@
 import logging
 
 from nbsafety.singletons import nbs
-from .utils import make_safety_fixture
+from test.utils import make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)
 

@@ -22,6 +22,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.dead: Set[SymbolRef] = set()
         else:
             self.dead = cast('Set[SymbolRef]', init_killed)
+        # TODO: use the ast context instead of hacking our own (e.g. ast.Load(), ast.Store(), etc.)
         self.in_kill_context = False
         self.inside_attrsub = False
         self.skip_simple_names = False
@@ -43,6 +44,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
 
     def kill_context(self):
         return self.push_attributes(in_kill_context=True)
+
+    def live_context(self):
+        return self.push_attributes(in_kill_context=False)
 
     def attrsub_context(self, inside=True):
         return self.push_attributes(inside_attrsub=inside, skip_simple_names=inside)
@@ -99,6 +103,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.dead.add(target_node.id)
         elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
             self.dead.add(get_attrsub_symbol_chain(target_node))
+            if isinstance(target_node, ast.Subscript):
+                with self.live_context():
+                    self.visit(target_node.slice)
         elif isinstance(target_node, (ast.Tuple, ast.List)):
             for elt in target_node.elts:
                 self.visit_Assign_target(elt)

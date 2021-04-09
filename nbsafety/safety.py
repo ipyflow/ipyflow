@@ -394,6 +394,54 @@ class NotebookSafety(singletons.NotebookSafety):
                 del self.namespaces[dsym.obj_id]
                 self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
+  
+    def get_dependencies(self, cell_num: int) -> dict:
+        """
+        Gets a dictionary object of cell dependencies for the last or 
+        currently executed cell.
+
+        Args:
+            - cell_num (int): cell to get dependencies for, defaults to last
+                execution counter
+        
+        Returns:
+            - dict (int, str): map from required cell number to code
+                representing dependencies
+        """
+        dependencies = set()
+        self._get_dependencies(cell_num, dependencies)
+        return {num: self.cell_content_by_counter[num] for num in dependencies}
+    
+    def _get_dependencies(self, cell_num: int, dependencies: set) -> None:
+        """
+        For a given cell, this function recursively populates a set of
+        cell numbers that the given cell depends on, based on the live symbols.
+
+        Args:
+            - dependencies (set<int>): set of cell numbers so far that exist
+            - cell_num (int): current cell to get dependencies for
+        
+        Returns:
+            None
+        """
+        # Base case: cell already in dependencies
+        if cell_num in dependencies:
+            return
+
+        # Add current cell to dependencies
+        dependencies.add(cell_num)
+
+        # Retrieve cell numbers for the dependent symbols
+        cell = self.cell_content_by_counter[cell_num]
+        symbols = self._check_cell_and_resolve_symbols(cell)
+        live_symbols = symbols['live']
+        dep_cell_nums = set([dep_symbol.defined_cell_num for dep_symbol in live_symbols])
+        
+        # For each dependent cell, recursively get their dependencies
+        for num in dep_cell_nums:
+            if num in dependencies:
+                continue
+            self._get_dependencies(num, dependencies)
 
     def safe_execute(self, cell: str, run_cell_func):
         ret = None
@@ -403,6 +451,7 @@ class NotebookSafety(singletons.NotebookSafety):
             if self._active_cell_id is not None:
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
+
             # Stage 1: Precheck.
             if self._precheck_for_stale(cell) and self.settings.get('skip_unsafe_cells', True):
                 # FIXME: hack to increase cell number
@@ -416,7 +465,12 @@ class NotebookSafety(singletons.NotebookSafety):
                     ret = run_cell_func(cell)
                 # Stage 2.1: resync any defined symbols that could have gotten out-of-sync
                 #  due to tracing being disabled
-                defined = self._check_cell_and_resolve_symbols(cell)['dead']
+
+                from pprint import pprint
+                pprint(self.get_dependencies(self.cell_counter()))
+
+                symbols = self._check_cell_and_resolve_symbols(cell)
+                defined = symbols['dead']
                 self._resync_symbols(defined)
             finally:
                 if not self.settings.store_history:

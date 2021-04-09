@@ -529,10 +529,7 @@ class NotebookSafety(singletons.NotebookSafety):
         def _safety(line_: str):
             # this is to avoid capturing `self` and creating an extra reference to the singleton
             cmd, line = line_.split(' ', 1)
-            if cmd not in line_magic_names:
-                print(line_magics.USAGE)
-                return
-            elif cmd in ("show_deps", "show_dependency", "show_dependencies"):
+            if cmd in ("show_deps", "show_dependency", "show_dependencies"):
                 return line_magics.show_deps(line)
             elif cmd == "show_stale":
                 return line_magics.show_stale(line)
@@ -548,6 +545,11 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.turn_off_warnings_for(line)
             elif cmd == "turn_on_warnings_for":
                 return line_magics.turn_on_warnings_for(line)
+            elif cmd not in line_magic_names:
+                print(line_magics.USAGE)
+                return
+            else:
+                print("We have a magic for %s, but have not yet registered it" % cmd)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _safety.__name__ = _SAFETY_LINE_MAGIC

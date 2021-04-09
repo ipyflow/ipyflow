@@ -28,6 +28,10 @@ show_stale:
 remove_dependency <parent_name> <child_name>:
     - This will remove the dependency between parent variable and the child variable.
 
+slice <cell_num>:
+    - This will print the code necessary to reconstruct <cell_num> using a dynamic
+      code slicing algorithm.
+
 add_dependency <parent_name> <child_name>:
     - This will add the dependency between parent variable and the child variable.
 

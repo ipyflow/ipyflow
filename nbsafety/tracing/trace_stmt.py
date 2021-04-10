@@ -226,6 +226,7 @@ class TraceStatement:
             return
         for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
             logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
+            update_usage_info(mutation_arg_dsyms)
             if mutation_event == MutationEvent.arg_mutate:
                 for mutated_sym in mutation_arg_dsyms:
                     if mutated_sym is None:

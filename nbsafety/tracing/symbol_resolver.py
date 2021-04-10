@@ -220,11 +220,14 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         pass
 
 
-def update_usage_info(symbols: Union[DataSymbol, Set[DataSymbol]]):
+def update_usage_info(symbols: Union[Optional[DataSymbol], Set[Optional[DataSymbol]]]):
     cell_counter = nbs().cell_counter()
-    for sym in (symbols if isinstance(symbols, set) else [symbols]):
+    for sym in (symbols if symbols is not None and isinstance(symbols, set) else [symbols]):
+        if sym is None:
+            continue
         sym.last_used_cell_num = cell_counter
         if sym.defined_cell_num < cell_counter:
+            logger.info('sym `%s` used in cell %d last updated in cell %d', sym, cell_counter, sym.defined_cell_num)
             sym.version_by_used_timestamp[cell_counter] = sym.defined_cell_num
 
 

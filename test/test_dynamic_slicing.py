@@ -83,3 +83,32 @@ def test_handle_stale():
     run_cell('print(b)')
     deps = set(nbs().get_cell_dependencies(4).keys())
     assert deps == {1, 2, 4}, 'got %s' % deps
+
+
+def test_multiple_versions_captured():
+    run_cell('x = 0')
+    run_cell('logging.info(x); y = 7')
+    run_cell('x = 5')
+    run_cell('logging.info(x + y)')
+    deps = set(nbs().get_cell_dependencies(4).keys())
+    assert deps == {1, 2, 3, 4}, 'got %s' % deps
+
+
+@skipif_known_failing
+def test_version_used_when_live():
+    run_cell('x = 0')
+    run_cell("""
+if True:
+    y = 7
+else:
+    # even though this branch is not taken,
+    # liveness-based usage should detect the
+    # version of `x` used at the time it was
+    # live, meaning cell 1 should get included
+    # in the slice
+    logging.info(x)
+""")
+    run_cell('x = 5')
+    run_cell('logging.info(x + y)')
+    deps = set(nbs().get_cell_dependencies(4).keys())
+    assert deps == {1, 2, 3, 4}, 'got %s' % deps

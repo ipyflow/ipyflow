@@ -20,6 +20,15 @@ def run_cell(cell):
     run_cell_(cell)
 
 
+def test_simple():
+    run_cell('a = 1')
+    run_cell('b = 2')
+    run_cell('logging.info(a)')
+    run_cell('c = a + b')
+    deps = set(nbs().get_cell_dependencies(4).keys())
+    assert deps == {1, 2, 4}, 'got %s' % deps
+
+
 def test_dynamic_symbol_usage():
     run_cell('x = 5')
     run_cell("""

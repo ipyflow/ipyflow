@@ -332,9 +332,15 @@ class NotebookSafety(singletons.NotebookSafety):
             'stale': stale_symbols,
         }
 
-    def _precheck_for_stale(self, cell: str):
-        # Precheck process. First obtain the names that need to be checked. Then we check if their
-        # `defined_cell_num` is greater than or equal to required; if not we give a warning and return `True`.
+    def _precheck_for_stale(self, cell: str) -> bool:
+        """
+        This method statically checks the cell to be executed for stale symbols.
+        If any live, stale symbols are detected, it returns `True`. On a syntax
+        error or if no such symbols are detected, return `False`.
+        Furthermore, if this is the second time the user has attempted to execute
+        the exact same code, we assume they want to override this checker and
+        we temporarily mark any stale symbols as being not stale and return `False`.
+        """
         try:
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
@@ -361,6 +367,13 @@ class NotebookSafety(singletons.NotebookSafety):
             for sym in self._prev_cell_stale_symbols:
                 sym.temporary_disable_warnings()
             self._prev_cell_stale_symbols.clear()
+
+        # TODO: For each of the live symbols, record their `defined_cell_num` at the
+        #   time of liveness, i.e. at the time `self.cell_counter()`, for use with the
+        #   dynamic slicer.
+        ###########
+        # CODE HERE
+        ###########
 
         self._last_refused_code = None
         return False

@@ -272,7 +272,8 @@ class TraceStatement:
         elif isinstance(self.stmt_node, ast.Delete):
             self._handle_delete()
         else:
-            resolve_rval_symbols(self.stmt_node)  # make sure usage timestamps get bumped
+            # make sure usage timestamps get bumped
+            resolve_rval_symbols(self.stmt_node)
 
     def finished_execution_hook(self):
         if self.finished:

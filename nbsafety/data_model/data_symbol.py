@@ -48,12 +48,11 @@ class DataSymbol:
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
         self.symbol_type = symbol_type
-        tombstone, obj_ref, has_weakref = self._update_obj_ref_inner(obj)
-        self._tombstone = tombstone
+        self._tombstone = False
+        self._cached_out_of_sync = True
+        obj_ref = self._update_obj_ref_inner(obj)
         self._obj_ref = obj_ref
-        self._has_weakref = has_weakref
-        self.cached_obj_ref = None
-        self._cached_has_weakref = None
+        self._cached_obj_ref = None
         self.cached_obj_id = None
         self.cached_obj_type = None
         if refresh_cached_obj:
@@ -70,13 +69,13 @@ class DataSymbol:
         if self.is_function:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
 
-        self.defined_cell_num = nbs().cell_counter()
+        self._defined_cell_num: int = nbs().cell_counter()
 
         # The notebook cell number required by this symbol to not be stale
-        self.required_cell_num = self.defined_cell_num
+        self.required_cell_num: int = self.defined_cell_num
 
         # The execution counter of cell where this symbol was last used (-1 means it has net yet been used)
-        self.last_used_cell_num = -1
+        self.last_used_cell_num: int = -1
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.version_by_used_timestamp: Dict[int, int] = {}
 
@@ -88,6 +87,7 @@ class DataSymbol:
 
         # Will never be stale if no_warning is True
         self.disable_warnings = False
+        self._temp_disable_warnings = False
 
         nbs().aliases[id(obj)].add(self)
 
@@ -99,6 +99,30 @@ class DataSymbol:
 
     def __hash__(self):
         return hash(self.full_path)
+
+    def temporary_disable_warnings(self):
+        self._temp_disable_warnings = True
+
+    @property
+    def defined_cell_num(self) -> int:
+        # TODO: probably should be renamed
+        #  (see version / timestamp below);
+        #  this isn't the cell num where the symbol
+        #  was defined but where it was last updated
+        return self._defined_cell_num
+
+    @defined_cell_num.setter
+    def defined_cell_num(self, new_defined_cell_num: int) -> None:
+        self._temp_disable_warnings = False
+        self._defined_cell_num = new_defined_cell_num
+
+    @property
+    def version(self) -> int:
+        return self._defined_cell_num
+
+    @property
+    def timestamp(self) -> int:
+        return self._defined_cell_num
 
     @property
     def readable_name(self) -> str:
@@ -128,28 +152,24 @@ class DataSymbol:
     def is_implicit(self):
         return self._implicit
 
-    def _get_obj(self) -> Any:
-        if self._has_weakref:
-            return self._obj_ref()
-        else:
-            return self._obj_ref
+    def get_obj(self) -> Any:
+        return self._obj_ref()
 
-    def _get_cached_obj(self) -> Any:
-        if self._cached_has_weakref:
-            return self.cached_obj_ref()
-        else:
-            return self.cached_obj_ref
+    def get_cached_obj(self) -> Optional[Any]:
+        if self._cached_obj_ref is None:
+            return None
+        return self._cached_obj_ref()
 
     def shallow_clone(self, new_obj, new_containing_scope, symbol_type):
         return self.__class__(self.name, symbol_type, new_obj, new_containing_scope)
 
     @property
     def obj_id(self):
-        return id(self._get_obj())
+        return id(self.get_obj())
 
     @property
     def obj_type(self):
-        return type(self._get_obj())
+        return type(self.get_obj())
 
     @property
     def namespace(self):
@@ -170,7 +190,7 @@ class DataSymbol:
             or self.containing_scope.is_garbage
             # TODO: probably should keep this, but lift any symbols / namespaces in return statements to outer scope
             # or not self.containing_scope.is_globally_accessible
-            or (self._has_weakref and self._get_obj() is None)
+            or (isinstance(self._obj_ref, weakref.ref) and self.get_obj() is None)
         )
 
     @property
@@ -201,10 +221,10 @@ class DataSymbol:
     #         self.call_scope = None
 
     def update_obj_ref(self, obj, refresh_cached=True):
-        tombstone, obj_ref, has_weakref = self._update_obj_ref_inner(obj)
-        self._tombstone = tombstone
+        self._cached_out_of_sync = True
+        self._tombstone = False
+        obj_ref = self._update_obj_ref_inner(obj)
         self._obj_ref = obj_ref
-        self._has_weakref = has_weakref
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             old_ns = nbs().namespaces.get(self.cached_obj_id, None)
             if old_ns is not None:
@@ -213,6 +233,21 @@ class DataSymbol:
             self._handle_aliases()
         if refresh_cached:
             self._refresh_cached_obj()
+
+    def cached_obj_definitely_equal_to_current_obj(self):
+        if not self._cached_out_of_sync or self.obj_id == self.cached_obj_id:
+            return True
+        obj, cached_obj = self.get_obj(), self.get_cached_obj()
+        if obj is None or cached_obj is None:
+            return obj is cached_obj
+        obj_type = type(obj)
+        cached_type = type(cached_obj)
+        if obj_type != cached_type:
+            return False
+        if obj_type == str and len(obj) < 10**5:
+            return obj == cached_obj
+        # TODO: handle other types as well besides str
+        return False
 
     def _handle_aliases(self, readd=True):
         old_aliases = nbs().aliases.get(self.cached_obj_id, None)
@@ -224,14 +259,11 @@ class DataSymbol:
             nbs().aliases[self.obj_id].add(self)
 
     def _update_obj_ref_inner(self, obj):
-        tombstone = False
         try:
             obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
-            has_weakref = True
         except TypeError:
-            obj_ref = obj
-            has_weakref = False
-        return tombstone, obj_ref, has_weakref
+            obj_ref = lambda: obj
+        return obj_ref
 
     def update_stmt_node(self, stmt_node):
         self.stmt_node = stmt_node
@@ -241,10 +273,10 @@ class DataSymbol:
         return stmt_node
 
     def _refresh_cached_obj(self):
-        self.cached_obj_ref = self._obj_ref
+        self._cached_out_of_sync = False
+        self._cached_obj_ref = self._obj_ref
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
-        self._cached_has_weakref = self._has_weakref
 
     def get_call_args(self):
         # TODO: handle lambda, objects w/ __call__, etc
@@ -266,7 +298,7 @@ class DataSymbol:
 
     @property
     def is_stale(self):
-        if self.disable_warnings:
+        if self.disable_warnings or self._temp_disable_warnings:
             return False
         return self.defined_cell_num < self.required_cell_num or len(self.namespace_stale_symbols) > 0
 
@@ -307,9 +339,10 @@ class DataSymbol:
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
 
-    def refresh(self: DataSymbol):
+    def refresh(self: DataSymbol, bump_version=True):
+        if bump_version:
+            self.defined_cell_num = nbs().cell_counter()
         self.fresher_ancestors = set()
-        self.defined_cell_num = nbs().cell_counter()
         self.namespace_stale_symbols = set()
 
     def _propagate_refresh_to_namespace_parents(self, seen: Set[DataSymbol]):

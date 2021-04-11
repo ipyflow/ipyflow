@@ -31,7 +31,7 @@ from nbsafety.tracing.trace_manager import TraceManager
 # from nbsafety.utils.mixins import EnforceSingletonMixin
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, List, Set, Optional, Tuple, Union
+    from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
     from types import FrameType
     CellId = Union[str, int]
 
@@ -142,6 +142,9 @@ class NotebookSafety(singletons.NotebookSafety):
     def reset_cell_counter(self):
         # only called in test context
         assert not self.settings.store_history
+        for sym in self.all_data_symbols():
+            sym.last_used_cell_num = sym.defined_cell_num = sym.required_cell_num = 0
+            sym.version_by_used_timestamp.clear()
         self._cell_counter = 1
 
     def set_ast_transformer_raised(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
@@ -342,12 +345,12 @@ class NotebookSafety(singletons.NotebookSafety):
             self._prev_cell_stale_symbols = stale_symbols
             if len(stale_symbols) > 0:
                 warning_counter = 0
-                for node in self._prev_cell_stale_symbols:
+                for sym in self._prev_cell_stale_symbols:
                     if warning_counter >= _MAX_WARNINGS:
                         logger.warning(f'{len(self._prev_cell_stale_symbols) - warning_counter}'
                                        ' more nodes with stale dependencies skipped...')
                         break
-                    _safety_warning(node)
+                    _safety_warning(sym)
                     warning_counter += 1
                 self.stale_dependency_detected = True
                 self._last_refused_code = cell
@@ -355,16 +358,14 @@ class NotebookSafety(singletons.NotebookSafety):
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers
-            for node in self._prev_cell_stale_symbols:
-                node.defined_cell_num = node.required_cell_num
-                node.namespace_stale_symbols = set()
-                node.fresher_ancestors = set()
+            for sym in self._prev_cell_stale_symbols:
+                sym.temporary_disable_warnings()
             self._prev_cell_stale_symbols.clear()
 
         self._last_refused_code = None
         return False
 
-    def _resync_symbols(self, symbols: Set[DataSymbol]):
+    def _resync_symbols(self, symbols: Iterable[DataSymbol]):
         for dsym in symbols:
             if not dsym.containing_scope.is_global:
                 continue
@@ -377,9 +378,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 if not alias.containing_scope.is_namespace_scope:
                     continue
                 containing_scope = cast(NamespaceScope, alias.containing_scope)
-                if containing_scope._obj_ref is None or containing_scope._obj_ref() is None:
+                containing_obj = containing_scope.get_obj()
+                if containing_obj is None:
                     continue
-                containing_obj = containing_scope._obj_ref()
                 # TODO: handle dict case too
                 if isinstance(containing_obj, list) and containing_obj[-1] is obj:
                     containing_scope.upsert_data_symbol_for_name(
@@ -440,7 +441,7 @@ class NotebookSafety(singletons.NotebookSafety):
             None
         """
         # Base case: cell already in dependencies
-        if cell_num in dependencies:
+        if cell_num in dependencies or cell_num <= 0:
             return
 
         # Add current cell to dependencies
@@ -452,7 +453,7 @@ class NotebookSafety(singletons.NotebookSafety):
         dep_cell_nums = set(
             dep_symbol.defined_cell_num for dep_symbol in live_symbols
         ) | cell_num_to_dynamic_deps[cell_num]
-        logger.error("dynamic cell deps for %d: %s", cell_num, cell_num_to_dynamic_deps[cell_num])
+        logger.info("dynamic cell deps for %d: %s", cell_num, cell_num_to_dynamic_deps[cell_num])
 
         # For each dependent cell, recursively get their dependencies
         for num in dep_cell_nums - dependencies:
@@ -481,8 +482,10 @@ class NotebookSafety(singletons.NotebookSafety):
                 # Stage 2.1: resync any defined symbols that could have gotten out-of-sync
                 #  due to tracing being disabled
 
-                defined = self._check_cell_and_resolve_symbols(cell)['dead']
-                self._resync_symbols(defined)
+                self._resync_symbols([
+                    # TODO: avoid bad performance by only iterating over symbols updated in this cell
+                    sym for sym in self.all_data_symbols() if sym.defined_cell_num == self.cell_counter()
+                ])
             finally:
                 if not self.settings.store_history:
                     self._cell_counter += 1
@@ -491,13 +494,12 @@ class NotebookSafety(singletons.NotebookSafety):
     def _make_cell_magic(self, cell_magic_name):
         # this is to avoid capturing `self` and creating an extra reference to the singleton
         store_history = self.settings.store_history
-        self_ = lambda: singletons.nbs()
 
         def _run_cell_func(cell):
             run_cell(cell, store_history=store_history)
 
         def _dependency_safety(_, cell: str):
-            self_().safe_execute(cell, _run_cell_func)
+            singletons.nbs().safe_execute(cell, _run_cell_func)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _dependency_safety.__name__ = cell_magic_name
@@ -570,8 +572,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def all_data_symbols(self):
         for alias_set in self.aliases.values():
-            for alias in alias_set:
-                yield alias
+            yield from alias_set
 
     def test_and_clear_detected_flag(self):
         ret = self.stale_dependency_detected

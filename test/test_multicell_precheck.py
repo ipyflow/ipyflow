@@ -119,7 +119,7 @@ for i in range(5):
 for foo in lst:
     foo.inc()""",
 
-        3: 'print(lst)',
+        3: 'logging.info(lst)',
     }
 
     for idx, cell in cells.items():
@@ -150,7 +150,6 @@ for foo in lst:
         assert response['fresh_cells'] == [2, 3, 4]
 
     run_cell(cells[4], 4)
-    run_cell('%safety show_deps foo', 1234)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])

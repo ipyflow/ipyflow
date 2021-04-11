@@ -66,7 +66,8 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.visit_AugAssign_or_AnnAssign(node)
 
     def visit_Call(self, node):
-        # TODO: descend further down
+        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
+            self.visit(node.func)
         self.symbols.extend(tracer().resolve_loaded_symbols(node.func))
         self.symbols.extend(tracer().resolve_loaded_symbols(node))
         self.generic_visit([node.args, node.keywords])
@@ -80,7 +81,8 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         return nbs().namespaces.get(symbols[0].obj_id, None)
 
     def visit_Attribute(self, node: ast.Attribute):
-        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
+        if isinstance(node.value, ast.Call):
+            self.visit(node.value)
         symbols = tracer().resolve_loaded_symbols(node)
         if len(symbols) > 0:
             self.symbols.extend(symbols)
@@ -97,7 +99,8 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             logger.warning("Exception occurred while resolving node %s: %s", ast.dump(node), e)
 
     def visit_Subscript(self, node: ast.Subscript):
-        # TODO: we'll ignore args inside of inner calls, e.g. f.g(x, y).h; need to descend further down
+        if isinstance(node.value, ast.Call):
+            self.visit(node.value)
         symbols = tracer().resolve_loaded_symbols(node)
         with self._push_symbols():
             # add slice to RHS to avoid propagating to it

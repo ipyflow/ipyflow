@@ -114,7 +114,7 @@ class TraceStatement:
             ns = NamespaceScope(obj, str(name), scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
-            ns.upsert_data_symbol_for_name(i, inner_dep._get_obj(), deps, self.stmt_node, is_subscript=True)
+            ns.upsert_data_symbol_for_name(i, inner_dep.get_obj(), deps, self.stmt_node, is_subscript=True)
         scope.upsert_data_symbol_for_name(
             name,
             obj,
@@ -243,7 +243,7 @@ class TraceStatement:
                 namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
                 mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
                 if mutated_sym is not None:
-                    mutated_obj = mutated_sym._get_obj()
+                    mutated_obj = mutated_sym.get_obj()
                     mutation_arg_obj = next(iter(mutation_arg_objs))
                     # TODO: replace int check w/ more general "immutable" check
                     if mutation_arg_obj is not None:
@@ -272,9 +272,7 @@ class TraceStatement:
         elif isinstance(self.stmt_node, ast.Delete):
             self._handle_delete()
         else:
-            if len(tracer().node_id_to_saved_store_data) > 0 and nbs().is_develop:
-                logger.warning('saw unexpected state in saved_store_data: %s',
-                               tracer().node_id_to_saved_store_data)
+            resolve_rval_symbols(self.stmt_node)  # make sure usage timestamps get bumped
 
     def finished_execution_hook(self):
         if self.finished:

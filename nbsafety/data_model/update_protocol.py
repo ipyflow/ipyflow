@@ -34,8 +34,9 @@ class UpdateProtocol:
                        self.updated_sym.containing_scope,
                        self.updated_sym.children_by_cell_position.values())
         namespace_refresh = None
+        equal_to_old = self.updated_sym.cached_obj_definitely_equal_to_current_obj()
         if propagate:
-            if self.mutated or self.deleted or self.updated_sym.obj_id != self.updated_sym.cached_obj_id:
+            if self.mutated or self.deleted or not equal_to_old:
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)
             if self.updated_sym.cached_obj_id is not None:
                 # TODO: also condition on non simple assign
@@ -53,7 +54,7 @@ class UpdateProtocol:
         for updated_sym in updated_symbols:
             if not updated_sym.is_stale:
                 updated_sym.refresh()
-        self.updated_sym.refresh()
+        self.updated_sym.refresh(bump_version=not equal_to_old)
         if namespace_refresh is not None:
             for updated_sym in namespace_refresh:
                 for updated_sym_alias in nbs().aliases.get(updated_sym.obj_id, []):

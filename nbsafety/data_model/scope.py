@@ -43,6 +43,9 @@ class Scope:
     def __str__(self):
         return str(self.full_path)
 
+    def __repr__(self):
+        return str(self)
+
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
             raise ValueError('Only namespace scopes carry subscripts')
@@ -316,8 +319,8 @@ class NamespaceScope(Scope):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
-        tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)
-        self._tombstone = tombstone
+        obj_ref, obj_id = self._update_obj_ref_inner(obj)
+        self._tombstone = False
         self._obj_ref = obj_ref
         self.obj_id = obj_id
         nbs().namespaces[obj_id] = self
@@ -368,27 +371,29 @@ class NamespaceScope(Scope):
         else:
             return dsym.is_subscript
 
+    def get_obj(self) -> Any:
+        return self._obj_ref()
+
     def update_obj_ref(self, obj):
-        tombstone, obj_ref, obj_id = self._update_obj_ref_inner(obj)
-        self._tombstone = tombstone
+        obj_ref, obj_id = self._update_obj_ref_inner(obj)
+        self._tombstone = False
         self._obj_ref = obj_ref
         self.obj_id = obj_id
         nbs().namespaces[obj_id] = self
+
+    def _update_obj_ref_inner(self, obj):
+        try:
+            obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
+        except TypeError:
+            obj_ref = lambda: obj
+        obj_id = id(obj)
+        return obj_ref, obj_id
 
     def clear_namespace(self, prev_obj_id):
         if prev_obj_id != self.obj_id and prev_obj_id in nbs().namespaces:
             raise ValueError('precondition failed; namespace should no longer be registered before we can clear')
         self._data_symbol_by_name.clear()
         self._subscript_data_symbol_by_name.clear()
-
-    def _update_obj_ref_inner(self, obj):
-        tombstone = False
-        try:
-            obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
-        except TypeError:
-            obj_ref = lambda: obj
-        obj_id = id(obj)
-        return tombstone, obj_ref, obj_id
 
     def _obj_reference_expired_callback(self, *_):
         self._tombstone = True

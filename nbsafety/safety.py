@@ -526,7 +526,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
         try:
             with TraceManager.instance().tracing_context():
-                with ast_transformer_context([SafetyAstRewriter(self)]):
+                with ast_transformer_context([SafetyAstRewriter()]):
                     yield
         finally:
             # TODO: actually handle errors that occurred in our code while tracing

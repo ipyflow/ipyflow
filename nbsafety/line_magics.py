@@ -51,7 +51,7 @@ def show_deps(symbols: str):
     try:
         node = cast(ast.Expr, ast.parse(symbols).body[0]).value
     except SyntaxError:
-        print('Could not find symbol(s) for', symbols)
+        print('Could not find symbol metadata for', symbols)
         return
     if isinstance(node, ast.Tuple):
         unresolved_symbols = node.elts
@@ -60,7 +60,7 @@ def show_deps(symbols: str):
     for unresolved in unresolved_symbols:
         dsyms = resolve_rval_symbols(unresolved, should_update_usage_info=False)
         if len(dsyms) == 0:
-            print('Could not find symbol(s) for', astunparse.unparse(unresolved))
+            print('Could not find symbol metadata for', astunparse.unparse(unresolved))
         for dsym in dsyms:
             parents = {par for par in dsym.parents if not par.is_anonymous}
             if dsym.required_cell_num > 0:
@@ -118,7 +118,7 @@ def _find_symbols(syms):
     for sym in syms:
         result = nbs().global_scope.lookup_data_symbol_by_name(sym)
         if result is None:
-            print("Cannot find symbol", sym)
+            print("Could not find symbol metadata for", sym)
         results.append(result)
     return results
 
@@ -167,7 +167,7 @@ def turn_off_warnings_for(line_: str):
             data_sym.disable_warnings = True
             print("Warnings are turned off for", data_sym_name)
         else:
-            print("Cannot find symbol", data_sym_name)
+            print("Could not find symbol metadata for", data_sym_name)
 
 
 def turn_on_warnings_for(line_: str):
@@ -181,4 +181,4 @@ def turn_on_warnings_for(line_: str):
             data_sym.disable_warnings = False
             print("Warnings are turned on for", data_sym_name)
         else:
-            print("Cannot find symbol", data_sym_name)
+            print("Could not find symbol metadata for", data_sym_name)

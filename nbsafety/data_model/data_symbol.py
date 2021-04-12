@@ -6,6 +6,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 import weakref
 
+from nbsafety.data_model import sizing
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.singletons import nbs
 
@@ -244,10 +245,13 @@ class DataSymbol:
         cached_type = type(cached_obj)
         if obj_type != cached_type:
             return False
-        if obj_type == str and len(obj) < 10**5:
-            return obj == cached_obj
-        # TODO: handle other types as well besides str
-        return False
+        obj_size_ubound = sizing.sizeof(obj)
+        if obj_size_ubound > sizing.MAX_SIZE:
+            return False
+        cached_obj_size_ubound = sizing.sizeof(cached_obj)
+        if cached_obj_size_ubound > sizing.MAX_SIZE:
+            return False
+        return (obj_size_ubound == cached_obj_size_ubound) and obj == cached_obj
 
     def _handle_aliases(self, readd=True):
         old_aliases = nbs().aliases.get(self.cached_obj_id, None)

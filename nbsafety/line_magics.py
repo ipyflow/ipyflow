@@ -10,12 +10,6 @@ if TYPE_CHECKING:
     from typing import Iterable, List
 
 
-# USAGE = """Options:
-#
-# show_graph:
-#     - This will print out the dependency graph of global variables. Stale nodes are labeled red.
-#       Notice that user might need to call this twice to have it to work.
-
 USAGE = """Options:
 
 show_[deps|dependencies] <symbol_1>, <symbol_2> ...: 
@@ -30,7 +24,7 @@ remove_dependency <parent_name> <child_name>:
 
 slice <cell_num>:
     - This will print the code necessary to reconstruct <cell_num> using a dynamic
-      code slicing algorithm.
+      program slicing algorithm.
 
 add_dependency <parent_name> <child_name>:
     - This will add the dependency between parent variable and the child variable.

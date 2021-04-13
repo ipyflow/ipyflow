@@ -63,7 +63,7 @@
   ],
   "jupyterlab": {
     "extension": true,
-    "outputDir": "./dist"
+    "outputDir": "../../nbsafety/resources/labextension/"
   },
   "version": "0.0.60"
 }

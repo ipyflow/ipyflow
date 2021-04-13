@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from glob import glob
 from setuptools import setup, find_packages
 
 import versioneer
@@ -43,22 +44,22 @@ setup(
         # like `jupyter nbextension install --sys-prefix`
         ("share/jupyter/nbextensions/nbsafety", [
             "nbsafety/resources/nbextension/index.js",
-        ]),
-        ("share/jupyter/nbextensions/nbsafety", [
             "nbsafety/resources/nbextension/index.js.map",
         ]),
         # like `jupyter nbextension enable --sys-prefix`
         ("etc/jupyter/nbconfig/notebook.d", [
             "nbsafety/resources/nbextension/nbsafety.json",
         ]),
+        ("share/jupyter/labextensions/jupyterlab-nbsafety",
+            (
+                ["frontend/labextension/install.json"] + 
+                glob("frontend/labextension/dist/**", recursive=True)
+            )
+        ),
         # like `python -m nbsafety.install --sys-prefix`
         ("share/jupyter/kernels/nbsafety", [
-            "nbsafety/resources/kernel/kernel.json",
-        ]),
-        ("share/jupyter/kernels/nbsafety", [
+            "nbsafety/frontend/labextension/kernel.json",
             "nbsafety/resources/kernel/logo-32x32.png",
-        ]),
-        ("share/jupyter/kernels/nbsafety", [
             "nbsafety/resources/kernel/logo-64x64.png",
         ]),
     ],

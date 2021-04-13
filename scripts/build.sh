@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 pushd ./frontend/labextension
-npm run build
+npm run build:prod
 popd
 pushd ./frontend/nbextension
 npm run build

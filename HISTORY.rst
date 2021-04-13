@@ -224,3 +224,8 @@ History
 * Improved handling for @property getter / setter methods;
 * Fix some spurious warnings;
 * Bugfix for statements involving `del`;
+
+0.0.61 (2021-04-xx)
+* Better handling for deletes;
+* Reduce false positive highlights when updated symbol unchanged;
+* Use new-style labextension, obviating need for separate `jupyter labextension install ...` command;

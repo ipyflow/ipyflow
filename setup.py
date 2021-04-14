@@ -13,19 +13,6 @@ def read_file(fname):
         return f.read()
 
 
-def exclude_directories(lst):
-    files_only_lst = []
-    for i, fname in enumerate(lst):
-        for j, other in enumerate(lst):
-            if i == j:
-                continue
-            if other.startswith(fname):
-                break
-        else:
-            files_only_lst.append(fname)
-    return files_only_lst
-
-
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
 
@@ -64,7 +51,10 @@ setup(
             "nbsafety/resources/nbextension/nbsafety.json",
         ]),
         ("share/jupyter/labextensions/jupyterlab-nbsafety",
-            exclude_directories(glob("nbsafety/resources/labextension/**", recursive=True))
+            glob("nbsafety/resources/labextension/package.json")
+        ),
+        ("share/jupyter/labextensions/jupyterlab-nbsafety/static",
+            glob("nbsafety/resources/labextension/static/*")
         ),
         # like `python -m nbsafety.install --sys-prefix`
         ("share/jupyter/kernels/nbsafety", [

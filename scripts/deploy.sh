@@ -47,7 +47,7 @@ send -- "$(lpass show pypi.org --field=username)\r"
 
 expect "Enter your password:"
 send -- "$(lpass show pypi.org --field=password)\r"
-expect eof
+expect
 EOF
 
 pushd ./frontend/labextension

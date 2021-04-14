@@ -2,7 +2,7 @@
 .PHONY: clean build deploy check check_no_typing test tests deps devdeps typecheck checkall testall uitest version bump markdown kernel nbext
 
 clean:
-	rm -rf build/ dist/ nbsafety.egg-info/
+	rm -rf build/ dist/ nbsafety.egg-info/ nbsafety/resources/nbextension nbsafety/resources/labextension
 
 build: clean version
 	./scripts/build.sh

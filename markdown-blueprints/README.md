@@ -40,11 +40,6 @@ Install
 pip install nbsafety
 ```
 
-If using JupyterLab, we highly recommend installing the companion extension:
-```bash
-jupyter labextension install jupyterlab-nbsafety  # optional but highly recommended if using JupyterLab
-```
-
 Interface
 ---------
 The JupyterLab extension and bundled Jupyter notebook extension both show cells
@@ -57,8 +52,7 @@ Running
 -------
 
 Because `nbsafety` is implemented as a custom Jupyter kernel, it works for both
-Jupyter notebooks and JupyterLab (if using JupyterLab, the additional
-labextension is recommended).  To run an `nbsafety` kernel, select "Python 3
+Jupyter notebooks and JupyterLab. To run an `nbsafety` kernel, select "Python 3
 (nbsafety)" from the list of notebook types in Jupyter's "New" dropdown
 dialogue.  For JupyterLab, similarly select "Python 3 (nbsafety)" from the list
 of available kernels in the Launcher tab.

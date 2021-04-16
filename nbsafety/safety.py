@@ -2,6 +2,7 @@
 import ast
 from collections import defaultdict
 from contextlib import contextmanager
+from dataclasses import dataclass
 import inspect
 import logging
 import re
@@ -74,11 +75,17 @@ class NotebookSafetySettings(NamedTuple):
         return getattr(self, key, default)
 
 
+@dataclass
+class MutableNotebookSafetySettings:
+    trace_messages_enabled: bool
+    highlights_enabled: bool
+
+
 class NotebookSafety(singletons.NotebookSafety):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
         super().__init__()
-        self.settings = NotebookSafetySettings(
+        self.settings: NotebookSafetySettings = NotebookSafetySettings(
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
             use_comm=use_comm,
@@ -88,8 +95,11 @@ class NotebookSafety(singletons.NotebookSafety):
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             mode=SafetyRunMode.get(),
         )
-        # Note: explicitly adding the types helps PyCharm's built-in code inspection
-        self.trace_messages_enabled: bool = kwargs.pop('trace_messages_enabled', False)
+        self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
+            trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
+            highlights_enabled=kwargs.pop('highlights_enabled', True),
+        )
+        # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope()
@@ -121,11 +131,19 @@ class NotebookSafety(singletons.NotebookSafety):
 
     @property
     def is_develop(self) -> bool:
-        return self.settings.get('mode', SafetyRunMode.PRODUCTION) == SafetyRunMode.DEVELOP
+        return self.settings.mode == SafetyRunMode.DEVELOP
 
     @property
     def is_test(self) -> bool:
-        return self.settings.get('test_context', False)
+        return self.settings.test_context
+
+    @property
+    def trace_messages_enabled(self) -> bool:
+        return self.mut_settings.trace_messages_enabled
+
+    @trace_messages_enabled.setter
+    def trace_messages_enabled(self, new_val) -> None:
+        self.mut_settings.trace_messages_enabled = new_val
 
     def get_first_full_symbol(self, obj_id: int) -> Optional[DataSymbol]:
         for alias in self.aliases.get(obj_id, []):
@@ -186,7 +204,7 @@ class NotebookSafety(singletons.NotebookSafety):
             if cell_id is not None:
                 self._counters_by_cell_id[cell_id] = self._last_execution_counter
             cells_by_id = request['content_by_cell_id']
-            if self.settings.get('backwards_cell_staleness_propagation', True):
+            if self.settings.backwards_cell_staleness_propagation:
                 order_index_by_id = None
                 last_cell_exec_position_idx = -1
             else:
@@ -205,6 +223,13 @@ class NotebookSafety(singletons.NotebookSafety):
         cells_by_id: Dict[CellId, str],
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None
     ) -> Dict[str, Any]:
+        if not self.mut_settings.highlights_enabled:
+            return {
+                'stale_cells': [],
+                'fresh_cells': [],
+                'stale_links': {},
+                'refresher_links': {},
+            }
         stale_cells = set()
         fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
@@ -230,7 +255,7 @@ class NotebookSafety(singletons.NotebookSafety):
         refresher_links: Dict[CellId, List[CellId]] = defaultdict(list)
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
-            if self.settings.get('naive_refresher_computation', False):
+            if self.settings.naive_refresher_computation:
                 refresher_cell_ids = self._naive_compute_refresher_cells(
                     stale_cell_id,
                     stale_syms,
@@ -482,7 +507,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 self._active_cell_id = None
 
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell) and self.settings.get('skip_unsafe_cells', True):
+            if self._precheck_for_stale(cell) and self.settings.skip_unsafe_cells:
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')
@@ -544,13 +569,18 @@ class NotebookSafety(singletons.NotebookSafety):
 
         def _safety(line_: str):
             # this is to avoid capturing `self` and creating an extra reference to the singleton
-            cmd, line = line_.split(' ', 1)
+            try:
+                cmd, line = line_.split(' ', 1)
+            except ValueError:
+                cmd, line = line_, ''
             if cmd in ("show_deps", "show_dependency", "show_dependencies"):
                 return line_magics.show_deps(line)
             elif cmd == "show_stale":
                 return line_magics.show_stale(line)
             elif cmd == "trace_messages":
                 return line_magics.trace_messages(line)
+            elif cmd in ("hls", "nohls", "highlight", "highlights"):
+                return line_magics.set_highlights(cmd, line)
             elif cmd in ("slice", "make_slice", "gather_slice"):
                 return line_magics.make_slice(line)
             elif cmd == "remove_dependency":
@@ -573,7 +603,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     @property
     def dependency_tracking_enabled(self):
-        return self.settings.get('track_dependencies', True)
+        return self.settings.track_dependencies
 
     @property
     def cell_magic_name(self):

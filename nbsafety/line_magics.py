@@ -96,6 +96,20 @@ def trace_messages(line_: str):
     nbs().trace_messages_enabled = (line[0].lower().startswith("enable"))
 
 
+def set_highlights(cmd: str, rest: str):
+    if cmd == 'hls':
+        nbs().mut_settings.highlights_enabled = True
+    elif cmd == 'nohls':
+        nbs().mut_settings.highlights_enabled = False
+    else:
+        if rest in ('on', 'enable', 'enabled'):
+            nbs().mut_settings.highlights_enabled = True
+        elif rest in ('off', 'disable', 'disabled'):
+            nbs().mut_settings.highlights_enabled = False
+        else:
+            print("Usage: %safety [hls|nohls]")
+
+
 def make_slice(line: str):
     try:
         cell_num = int(line)

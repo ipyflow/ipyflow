@@ -83,6 +83,7 @@ class MutableNotebookSafetySettings:
 
 class NotebookSafety(singletons.NotebookSafety):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
+
     def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
         super().__init__()
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
@@ -107,7 +108,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.ast_node_by_id: Dict[int, ast.AST] = {}
-        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+        self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(
+            dict)
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.stale_dependency_detected = False
@@ -163,6 +165,7 @@ class NotebookSafety(singletons.NotebookSafety):
         for sym in self.all_data_symbols():
             sym.last_used_cell_num = sym.defined_cell_num = sym.required_cell_num = 0
             sym.version_by_used_timestamp.clear()
+            sym.version_by_liveness_timestamp.clear()
         self._cell_counter = 1
 
     def set_ast_transformer_raised(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
@@ -172,7 +175,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def get_position(self, frame: FrameType):
         try:
-            cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
+            cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split(
+                '-')[3]]
             return cell_num, frame.f_lineno
         except KeyError as e:
             print(frame.f_code.co_filename)
@@ -182,7 +186,8 @@ class NotebookSafety(singletons.NotebookSafety):
         if self._recorded_cell_name_to_cell_num:
             return
         self._recorded_cell_name_to_cell_num = True
-        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]] = self.cell_counter()
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split(
+            '-')[3]] = self.cell_counter()
 
     def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
@@ -198,7 +203,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def handle(self, request, comm=None):
         if request['type'] == 'change_active_cell':
-            self.set_active_cell(request['active_cell_id'], position_idx=request.get('active_cell_order_idx', -1))
+            self.set_active_cell(request['active_cell_id'], position_idx=request.get(
+                'active_cell_order_idx', -1))
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
             if cell_id is not None:
@@ -210,7 +216,8 @@ class NotebookSafety(singletons.NotebookSafety):
             else:
                 order_index_by_id = request['order_index_by_cell_id']
                 last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
-            response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id)
+            response = self.check_and_link_multiple_cells(
+                cells_by_id, order_index_by_id)
             response['type'] = 'cell_freshness'
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             if comm is not None:
@@ -233,7 +240,8 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_cells = set()
         fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
+        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(
+            set)
         for cell_id, cell_content in cells_by_id.items():
             if (order_index_by_cell_id is not None and
                     order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx):
@@ -263,7 +271,8 @@ class NotebookSafety(singletons.NotebookSafety):
                     order_index_by_cell_id=order_index_by_cell_id
                 )
             else:
-                refresher_cell_ids = set.union(*(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
+                refresher_cell_ids = set.union(
+                    *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells
@@ -277,7 +286,8 @@ class NotebookSafety(singletons.NotebookSafety):
                         continue
                     new_stale_links |= stale_links[refresher_cell_id]
                 new_stale_links.discard(stale_cell_id)
-                stale_link_changes = stale_link_changes or original_length != len(new_stale_links)
+                stale_link_changes = stale_link_changes or original_length != len(
+                    new_stale_links)
                 stale_links[stale_cell_id] = new_stale_links
         for stale_cell_id in stale_cells:
             stale_links[stale_cell_id] -= stale_cells
@@ -310,7 +320,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             concated_content = f'{cell_content}\n\n{stale_cell_content}'
             try:
-                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)['stale']
+                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)[
+                    'stale']
             except SyntaxError:
                 continue
             if concated_stale_symbols < stale_symbols:
@@ -331,10 +342,12 @@ class NotebookSafety(singletons.NotebookSafety):
     def _get_max_defined_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
         max_defined_cell_num = -1
         for dsym in symbols:
-            max_defined_cell_num = max(max_defined_cell_num, dsym.defined_cell_num)
+            max_defined_cell_num = max(
+                max_defined_cell_num, dsym.defined_cell_num)
             if dsym.obj_id in self.namespaces:
                 namespace_scope = self.namespaces[dsym.obj_id]
-                max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_defined_timestamp)
+                max_defined_cell_num = max(
+                    max_defined_cell_num, namespace_scope.max_defined_timestamp)
         return max_defined_cell_num
 
     def _check_cell_and_resolve_symbols(
@@ -344,8 +357,10 @@ class NotebookSafety(singletons.NotebookSafety):
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
-        live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
-        live_symbols = live_symbols.union(compute_call_chain_live_symbols(called_symbols))
+        live_symbols, called_symbols = get_symbols_for_references(
+            live_symbol_refs, self.global_scope)
+        live_symbols = live_symbols.union(
+            compute_call_chain_live_symbols(called_symbols))
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, self.global_scope, only_add_successful_resolutions=True
@@ -393,12 +408,11 @@ class NotebookSafety(singletons.NotebookSafety):
                 sym.temporary_disable_warnings()
             self._prev_cell_stale_symbols.clear()
 
-        # TODO: For each of the live symbols, record their `defined_cell_num` at the
-        #   time of liveness, i.e. at the time `self.cell_counter()`, for use with the
-        #   dynamic slicer.
-        ###########
-        # CODE HERE
-        ###########
+        # For each of the live symbols, record their `defined_cell_num`
+        # at the time of liveness, for use with the dynamic slicer.
+        for sym in live_symbols:
+            sym.version_by_liveness_timestamp[self.cell_counter(
+            )] = sym.defined_cell_num
 
         self._last_refused_code = None
         return False
@@ -438,7 +452,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 del self.namespaces[dsym.obj_id]
                 self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
-  
+
     def get_cell_dependencies(self, cell_num: int) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the last or 
@@ -447,7 +461,7 @@ class NotebookSafety(singletons.NotebookSafety):
         Args:
             - cell_num (int): cell to get dependencies for, defaults to last
                 execution counter
-        
+
         Returns:
             - dict (int, str): map from required cell number to code
                 representing dependencies
@@ -457,14 +471,20 @@ class NotebookSafety(singletons.NotebookSafety):
 
         dependencies: Set[int] = set()
         cell_num_to_dynamic_deps: Dict[int, Set[int]] = defaultdict(set)
+        cell_num_to_static_deps: Dict[int, Set[int]] = defaultdict(set)
+
         for sym in self.all_data_symbols():
             for used_timestamp, version in sym.version_by_used_timestamp.items():
                 cell_num_to_dynamic_deps[used_timestamp].add(version)
-        self._get_cell_dependencies(cell_num, dependencies, cell_num_to_dynamic_deps)
+            for live_timestamp, version in sym.version_by_liveness_timestamp.items():
+                cell_num_to_static_deps[live_timestamp].add(version)
+
+        self._get_cell_dependencies(
+            cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)
         return {num: self.cell_content_by_counter[num] for num in dependencies}
-    
+
     def _get_cell_dependencies(
-        self, cell_num: int, dependencies: Set[int], cell_num_to_dynamic_deps: Dict[int, Set[int]]
+        self, cell_num: int, dependencies: Set[int], cell_num_to_dynamic_deps: Dict[int, Set[int]], cell_num_to_static_deps: Dict[int, Set[int]]
     ) -> None:
         """
         For a given cell, this function recursively populates a set of
@@ -473,7 +493,10 @@ class NotebookSafety(singletons.NotebookSafety):
         Args:
             - dependencies (set<int>): set of cell numbers so far that exist
             - cell_num (int): current cell to get dependencies for
-            - cell_num_to_ast_used_symbols (dict<int, list<DataSymbol>>): mapping from cell num to symbols last used in said cell
+            - cell_num_to_dynamic_deps (dict<int, set<int>>): mapping from cell 
+            num to version of cells where its symbols were used
+            - cell_num_to_static_deps (dict<int, set<int>>): mapping from cell 
+            num to version of cells where its symbols were defined
 
         Returns:
             None
@@ -490,12 +513,19 @@ class NotebookSafety(singletons.NotebookSafety):
         live_symbols = self._check_cell_and_resolve_symbols(cell)['live']
         dep_cell_nums = set(
             dep_symbol.defined_cell_num for dep_symbol in live_symbols
-        ) | cell_num_to_dynamic_deps[cell_num]
-        logger.info("dynamic cell deps for %d: %s", cell_num, cell_num_to_dynamic_deps[cell_num])
+        )
+        # Add dynamic and static dependencies
+        dep_cell_nums = dep_cell_nums | cell_num_to_dynamic_deps[cell_num]
+        dep_cell_nums = dep_cell_nums | cell_num_to_static_deps[cell_num]
+        logger.info("dynamic cell deps for %d: %s", cell_num,
+                    cell_num_to_dynamic_deps[cell_num])
+        logger.info("static cell deps for %d: %s", cell_num,
+                    cell_num_to_static_deps[cell_num])
 
         # For each dependent cell, recursively get their dependencies
         for num in dep_cell_nums - dependencies:
-            self._get_cell_dependencies(num, dependencies, cell_num_to_dynamic_deps)
+            self._get_cell_dependencies(
+                num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)
 
     def safe_execute(self, cell: str, run_cell_func):
         ret = None
@@ -565,7 +595,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self._gc()
 
     def _make_line_magic(self):
-        line_magic_names = [f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])]
+        line_magic_names = [f[0] for f in inspect.getmembers(
+            line_magics) if inspect.isfunction(f[1])]
 
         def _safety(line_: str):
             # this is to avoid capturing `self` and creating an extra reference to the singleton

@@ -103,7 +103,6 @@ def test_multiple_versions_captured():
     assert deps == {1, 2, 3, 4}, 'got %s' % deps
 
 
-@skipif_known_failing
 def test_version_used_when_live():
     run_cell('x = 0')
     run_cell("""

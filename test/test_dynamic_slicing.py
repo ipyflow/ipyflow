@@ -138,3 +138,12 @@ else:
     run_cell('logging.info(y)')
     deps = set(nbs().get_cell_dependencies(4).keys())
     assert deps == {1, 2, 4}, 'got %s' % deps
+
+
+@skipif_known_failing
+def test_parent_usage_includes_child_update():
+    run_cell('lst = [3]')
+    run_cell('lst[0] += 1')
+    run_cell('lst2 = lst + [5]')
+    deps = set(nbs().get_cell_dependencies(3).keys())
+    assert deps == {1, 2, 3}, 'got %s' % deps

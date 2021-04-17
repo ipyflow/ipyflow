@@ -47,6 +47,9 @@ devdeps:
 	pip install -e .
 	pip install -r requirements-dev.txt
 
+dev: devdeps build
+	./scripts/extlink.sh
+
 kernel:
 	python -m nbsafety.install --sys-prefix
 

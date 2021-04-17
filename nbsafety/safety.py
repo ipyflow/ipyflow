@@ -509,14 +509,8 @@ class NotebookSafety(singletons.NotebookSafety):
         dependencies.add(cell_num)
 
         # Retrieve cell numbers for the dependent symbols
-        cell = self.cell_content_by_counter[cell_num]
-        live_symbols = self._check_cell_and_resolve_symbols(cell)['live']
-        dep_cell_nums = set(
-            dep_symbol.defined_cell_num for dep_symbol in live_symbols
-        )
         # Add dynamic and static dependencies
-        dep_cell_nums = dep_cell_nums | cell_num_to_dynamic_deps[cell_num]
-        dep_cell_nums = dep_cell_nums | cell_num_to_static_deps[cell_num]
+        dep_cell_nums = cell_num_to_dynamic_deps[cell_num] | cell_num_to_static_deps[cell_num]
         logger.info("dynamic cell deps for %d: %s", cell_num,
                     cell_num_to_dynamic_deps[cell_num])
         logger.info("static cell deps for %d: %s", cell_num,

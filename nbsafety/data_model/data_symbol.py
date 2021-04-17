@@ -80,6 +80,9 @@ class DataSymbol:
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.version_by_used_timestamp: Dict[int, int] = {}
 
+        # History of definitions at time of liveness
+        self.version_by_liveness_timestamp: Dict[int, int] = {}
+
         self.fresher_ancestors: Set[DataSymbol] = set()
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 

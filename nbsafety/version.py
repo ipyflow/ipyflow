@@ -16,3 +16,6 @@ def make_version_tuple(vstr=None):
         except ValueError:
             break
     return tuple(components)
+
+
+version = '.'.join(str(d) for d in make_version_tuple())

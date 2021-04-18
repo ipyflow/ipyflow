@@ -4,21 +4,21 @@
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/ nbsafety/resources/nbextension nbsafety/resources/labextension
 
-build: clean version
+build: clean
 	./scripts/build.sh
 
 version:
 	./scripts/build-version.py
 
 bump:
-	./scripts/build-version.py --bump --tag
+	./scripts/bump.sh
 
 markdown:
 	# ref: https://github.com/andreasbm/readme
 	npx @appnest/readme generate -i markdown-blueprints/README.md -o README.md
 	npx @appnest/readme generate -i markdown-blueprints/CONTRIBUTORS.md -o CONTRIBUTORS.md
 
-deploy: build
+deploy: version build
 	./scripts/deploy.sh
 
 typecheck:

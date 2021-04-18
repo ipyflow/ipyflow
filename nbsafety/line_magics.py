@@ -39,8 +39,9 @@ turn_off_warnings_for  <variable_name> <variable_name2> ...:
 
 
 def show_deps(symbols: str):
+    usage = 'Usage: %safety show_[deps|dependencies] <symbol_1>[, <symbol_2> ...]'
     if len(symbols) == 0:
-        print("Usage: %safety show_[deps|dependencies] <symbol_1>[, <symbol_2> ...]")
+        print(usage)
         return
     try:
         node = cast(ast.Expr, ast.parse(symbols).body[0]).value
@@ -61,21 +62,22 @@ def show_deps(symbols: str):
                 dsym_extra_info = 'defined {}; required {}'.format(dsym.defined_cell_num, dsym.required_cell_num)
             else:
                 dsym_extra_info = 'defined in cell {}'.format(dsym.defined_cell_num)
-            print("Symbol {} ({}) is dependent on {}".format(
+            print('Symbol {} ({}) is dependent on {}'.format(
                 dsym.full_namespace_path,
                 dsym_extra_info,
-                parents or "nothing"
+                parents or 'nothing'
             ))
 
 
 def show_stale(line_: str):
+    usage = 'Usage: %safety show_stale [global|all]'
     line = line_.split()
     if len(line) == 0 or line[0] == 'global':
         dsym_sets: Iterable[Iterable[DataSymbol]] = [nbs().global_scope.all_data_symbols_this_indentation()]
     elif line[0] == 'all':
         dsym_sets = nbs().aliases.values()
     else:
-        print("Usage: %safety show_stale [global|all]")
+        print(usage)
         return
     stale_set = set()
     for dsym_set in dsym_sets:
@@ -83,38 +85,48 @@ def show_stale(line_: str):
             if data_sym.is_stale and not data_sym.is_anonymous:
                 stale_set.add(data_sym)
     if not stale_set:
-        print("No symbol has stale dependencies for now!")
+        print('No symbol has stale dependencies for now!')
     else:
-        print("Symbol(s) with stale dependencies are:", stale_set)
+        print('Symbol(s) with stale dependencies are:', stale_set)
 
 
 def trace_messages(line_: str):
     line = line_.split()
+    usage = 'Usage: %safety trace_messages [enable|disable]'
     if len(line) != 1:
-        print("Usage: %safety trace_messages [enabled|disabled]")
+        print(usage)
         return
-    nbs().trace_messages_enabled = (line[0].lower().startswith("enable"))
+    setting = line[0].lower()
+    if setting == 'on' or setting.startswith('enable'):
+        nbs().trace_messages_enabled = True
+    elif setting == 'off' or setting.startswith('disable'):
+        nbs().trace_messages_enabled = False
+    else:
+        print(usage)
 
 
 def set_highlights(cmd: str, rest: str):
+    usage = 'Usage: %safety [hls|nohls]'
     if cmd == 'hls':
         nbs().mut_settings.highlights_enabled = True
     elif cmd == 'nohls':
         nbs().mut_settings.highlights_enabled = False
     else:
-        if rest in ('on', 'enable', 'enabled'):
+        rest = rest.lower()
+        if rest == 'on' or rest.startswith('enable'):
             nbs().mut_settings.highlights_enabled = True
-        elif rest in ('off', 'disable', 'disabled'):
+        elif rest == 'off' or rest.startswith('disable'):
             nbs().mut_settings.highlights_enabled = False
         else:
-            print("Usage: %safety [hls|nohls]")
+            print(usage)
 
 
 def make_slice(line: str):
+    usage = 'Usage: %safety slice <cell_num>'
     try:
         cell_num = int(line)
     except:
-        print("Usage: %safety slice <cell_num>")
+        print(usage)
         return
     deps = list(nbs().get_cell_dependencies(cell_num).items())
     deps.sort()
@@ -126,22 +138,23 @@ def _find_symbols(syms):
     for sym in syms:
         result = nbs().global_scope.lookup_data_symbol_by_name(sym)
         if result is None:
-            print("Could not find symbol metadata for", sym)
+            print('Could not find symbol metadata for', sym)
         results.append(result)
     return results
 
 
 def remove_dep(line_: str):
+    usage = 'Usage: %safety remove_dependency <parent_name> <child_name>'
     line = line_.split()
     if len(line) != 2:
-        print("Usage: %safety remove_dependency <parent_name> <child_name>")
+        print(usage)
         return
     results = _find_symbols(line)
     if len(results) != len(line):
         return
     parent_data_sym, child_data_sym = results
     if parent_data_sym not in child_data_sym.parents:
-        print("Two symbols do not have a dependency relation")
+        print('Two symbols do not have a dependency relation')
         return
     for children in parent_data_sym.children_by_cell_position.values():
         children.remove(child_data_sym)
@@ -149,44 +162,47 @@ def remove_dep(line_: str):
 
 
 def add_dep(line_: str):
+    usage = 'Usage: %safety add_dependency <parent_name> <child_name>'
     line = line_.split()
     if len(line) != 2:
-        print("Usage: %safety add_dependency <parent_name> <child_name>")
+        print(usage)
         return
     results = _find_symbols(line)
     if len(results) != len(line):
         return
     parent_data_sym, child_data_sym = results
     if parent_data_sym in child_data_sym.parents:
-        print("Two symbols already have a dependency relation")
+        print('Two symbols already have a dependency relation')
         return
     parent_data_sym.children_by_cell_position[-1].add(child_data_sym)
     child_data_sym.parents.add(parent_data_sym)
 
 
 def turn_off_warnings_for(line_: str):
+    usage = 'Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...'
     line = line_.split()
     if len(line) <= 1:
-        print("Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ...")
+        print(usage)
         return
     for data_sym_name in line:
         data_sym = nbs().global_scope.lookup_data_symbol_by_name(data_sym_name)
         if data_sym:
             data_sym.disable_warnings = True
-            print("Warnings are turned off for", data_sym_name)
+            print('Warnings are turned off for', data_sym_name)
         else:
-            print("Could not find symbol metadata for", data_sym_name)
+            print('Could not find symbol metadata for', data_sym_name)
 
 
 def turn_on_warnings_for(line_: str):
+    usage = 'Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...'
     line = line_.split()
     if len(line) == 0:
-        print("Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ...")
+        print(usage)
         return
     for data_sym_name in line:
         data_sym = nbs().global_scope.lookup_data_symbol_by_name(data_sym_name)
         if data_sym:
             data_sym.disable_warnings = False
-            print("Warnings are turned on for", data_sym_name)
+            print('Warnings are turned on for', data_sym_name)
         else:
-            print("Could not find symbol metadata for", data_sym_name)
+            print('Could not find symbol metadata for', data_sym_name)

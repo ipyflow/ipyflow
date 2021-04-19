@@ -71,9 +71,6 @@ class NotebookSafetySettings(NamedTuple):
     skip_unsafe_cells: bool
     mode: SafetyRunMode
 
-    def get(self, key, default):
-        return getattr(self, key, default)
-
 
 @dataclass
 class MutableNotebookSafetySettings:
@@ -108,8 +105,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_scopes: Set[NamespaceScope] = set()
         self.garbage_namespace_obj_ids: Set[int] = set()
         self.ast_node_by_id: Dict[int, ast.AST] = {}
-        self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(
-            dict)
+        self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.stale_dependency_detected = False
@@ -175,8 +171,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def get_position(self, frame: FrameType):
         try:
-            cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split(
-                '-')[3]]
+            cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
             return cell_num, frame.f_lineno
         except KeyError as e:
             print(frame.f_code.co_filename)
@@ -186,8 +181,7 @@ class NotebookSafety(singletons.NotebookSafety):
         if self._recorded_cell_name_to_cell_num:
             return
         self._recorded_cell_name_to_cell_num = True
-        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split(
-            '-')[3]] = self.cell_counter()
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]] = self.cell_counter()
 
     def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
@@ -203,8 +197,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def handle(self, request, comm=None):
         if request['type'] == 'change_active_cell':
-            self.set_active_cell(request['active_cell_id'], position_idx=request.get(
-                'active_cell_order_idx', -1))
+            self.set_active_cell(request['active_cell_id'], position_idx=request.get('active_cell_order_idx', -1))
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
             if cell_id is not None:
@@ -216,8 +209,7 @@ class NotebookSafety(singletons.NotebookSafety):
             else:
                 order_index_by_id = request['order_index_by_cell_id']
                 last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
-            response = self.check_and_link_multiple_cells(
-                cells_by_id, order_index_by_id)
+            response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id)
             response['type'] = 'cell_freshness'
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             if comm is not None:
@@ -286,8 +278,7 @@ class NotebookSafety(singletons.NotebookSafety):
                         continue
                     new_stale_links |= stale_links[refresher_cell_id]
                 new_stale_links.discard(stale_cell_id)
-                stale_link_changes = stale_link_changes or original_length != len(
-                    new_stale_links)
+                stale_link_changes = stale_link_changes or original_length != len(new_stale_links)
                 stale_links[stale_cell_id] = new_stale_links
         for stale_cell_id in stale_cells:
             stale_links[stale_cell_id] -= stale_cells
@@ -320,8 +311,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             concated_content = f'{cell_content}\n\n{stale_cell_content}'
             try:
-                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)[
-                    'stale']
+                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)['stale']
             except SyntaxError:
                 continue
             if concated_stale_symbols < stale_symbols:
@@ -359,8 +349,7 @@ class NotebookSafety(singletons.NotebookSafety):
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
         live_symbols, called_symbols = get_symbols_for_references(
             live_symbol_refs, self.global_scope)
-        live_symbols = live_symbols.union(
-            compute_call_chain_live_symbols(called_symbols))
+        live_symbols = live_symbols.union(compute_call_chain_live_symbols(called_symbols))
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, self.global_scope, only_add_successful_resolutions=True
@@ -411,8 +400,7 @@ class NotebookSafety(singletons.NotebookSafety):
         # For each of the live symbols, record their `defined_cell_num`
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
-            sym.version_by_liveness_timestamp[self.cell_counter(
-            )] = sym.defined_cell_num
+            sym.version_by_liveness_timestamp[self.cell_counter()] = sym.defined_cell_num
 
         self._last_refused_code = None
         return False
@@ -484,7 +472,11 @@ class NotebookSafety(singletons.NotebookSafety):
         return {num: self.cell_content_by_counter[num] for num in dependencies}
 
     def _get_cell_dependencies(
-        self, cell_num: int, dependencies: Set[int], cell_num_to_dynamic_deps: Dict[int, Set[int]], cell_num_to_static_deps: Dict[int, Set[int]]
+        self,
+        cell_num: int,
+        dependencies: Set[int],
+        cell_num_to_dynamic_deps: Dict[int, Set[int]],
+        cell_num_to_static_deps: Dict[int, Set[int]],
     ) -> None:
         """
         For a given cell, this function recursively populates a set of
@@ -511,9 +503,9 @@ class NotebookSafety(singletons.NotebookSafety):
         # Retrieve cell numbers for the dependent symbols
         # Add dynamic and static dependencies
         dep_cell_nums = cell_num_to_dynamic_deps[cell_num] | cell_num_to_static_deps[cell_num]
-        logger.info("dynamic cell deps for %d: %s", cell_num,
+        logger.info('dynamic cell deps for %d: %s', cell_num,
                     cell_num_to_dynamic_deps[cell_num])
-        logger.info("static cell deps for %d: %s", cell_num,
+        logger.info('static cell deps for %d: %s', cell_num,
                     cell_num_to_static_deps[cell_num])
 
         # For each dependent cell, recursively get their dependencies
@@ -589,8 +581,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._gc()
 
     def _make_line_magic(self):
-        line_magic_names = [f[0] for f in inspect.getmembers(
-            line_magics) if inspect.isfunction(f[1])]
+        line_magic_names = [f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])]
 
         def _safety(line_: str):
             # this is to avoid capturing `self` and creating an extra reference to the singleton
@@ -598,29 +589,28 @@ class NotebookSafety(singletons.NotebookSafety):
                 cmd, line = line_.split(' ', 1)
             except ValueError:
                 cmd, line = line_, ''
-            if cmd in ("show_deps", "show_dependency", "show_dependencies"):
+            if cmd in ('deps', 'show_deps', 'show_dependency', 'show_dependencies'):
                 return line_magics.show_deps(line)
-            elif cmd == "show_stale":
+            elif cmd in ('stale', 'show_stale'):
                 return line_magics.show_stale(line)
-            elif cmd == "trace_messages":
+            elif cmd == 'trace_messages':
                 return line_magics.trace_messages(line)
-            elif cmd in ("hls", "nohls", "highlight", "highlights"):
+            elif cmd in ('hls', 'nohls', 'highlight', 'highlights'):
                 return line_magics.set_highlights(cmd, line)
-            elif cmd in ("slice", "make_slice", "gather_slice"):
+            elif cmd in ('slice', 'make_slice', 'gather_slice'):
                 return line_magics.make_slice(line)
-            elif cmd == "remove_dependency":
+            elif cmd == 'remove_dependency':
                 return line_magics.remove_dep(line)
-            elif cmd in ("add_dependency", "add_dep"):
+            elif cmd in ('add_dependency', 'add_dep'):
                 return line_magics.add_dep(line)
-            elif cmd == "turn_off_warnings_for":
+            elif cmd == 'turn_off_warnings_for':
                 return line_magics.turn_off_warnings_for(line)
-            elif cmd == "turn_on_warnings_for":
+            elif cmd == 'turn_on_warnings_for':
                 return line_magics.turn_on_warnings_for(line)
-            elif cmd not in line_magic_names:
-                print(line_magics.USAGE)
-                return
+            elif cmd in line_magic_names:
+                print('We have a magic for %s, but have not yet registered it' % cmd)
             else:
-                print("We have a magic for %s, but have not yet registered it" % cmd)
+                print(line_magics.USAGE)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _safety.__name__ = _SAFETY_LINE_MAGIC
@@ -651,7 +641,7 @@ class NotebookSafety(singletons.NotebookSafety):
         for obj_id in self.garbage_namespace_obj_ids:
             garbage_ns = self.namespaces.pop(obj_id, None)
             if garbage_ns is not None:
-                logger.info("collect ns %s", garbage_ns)
+                logger.info('collect ns %s', garbage_ns)
                 garbage_ns.clear_namespace(obj_id)
         self.garbage_namespace_obj_ids.clear()
         # while True:
@@ -667,7 +657,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _gc(self):
         for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
-                logger.info("collect sym %s", dsym)
+                logger.info('collect sym %s', dsym)
                 dsym.collect_self_garbage()
 
     def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: Union[str, int], is_subscript: bool):

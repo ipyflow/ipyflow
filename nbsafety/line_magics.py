@@ -12,11 +12,11 @@ if TYPE_CHECKING:
 
 USAGE = """Options:
 
-show_[deps|dependencies] <symbol_1>, <symbol_2> ...: 
+[deps|show_deps|show_dependencies] <symbol_1>, <symbol_2> ...: 
     - This will print out the dependencies for given symbols.
       Multiple symbols should be separated with commas.
 
-show_stale: 
+[stale|show_stale]: 
     - This will print out all the global variables that are stale. 
 
 remove_dependency <parent_name> <child_name>:

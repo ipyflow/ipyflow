@@ -226,6 +226,8 @@ class DataSymbol:
 
     def update_obj_ref(self, obj, refresh_cached=True):
         self._cached_out_of_sync = True
+        if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
+            nbs().cells_needing_typecheck |= nbs().cell_id_by_live_symbol.get(self, set())
         self._tombstone = False
         obj_ref = self._update_obj_ref_inner(obj)
         self._obj_ref = obj_ref

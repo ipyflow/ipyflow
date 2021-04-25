@@ -29,7 +29,6 @@ from nbsafety.run_mode import SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
-# from nbsafety.utils.mixins import EnforceSingletonMixin
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
@@ -67,6 +66,7 @@ class NotebookSafetySettings(NamedTuple):
     use_comm: bool
     backwards_cell_staleness_propagation: bool
     track_dependencies: bool
+    mark_typecheck_failures_unsafe: bool
     naive_refresher_computation: bool
     skip_unsafe_cells: bool
     mode: SafetyRunMode
@@ -89,6 +89,7 @@ class NotebookSafety(singletons.NotebookSafety):
             use_comm=use_comm,
             backwards_cell_staleness_propagation=True,
             track_dependencies=True,
+            mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
             naive_refresher_computation=False,
             skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             mode=SafetyRunMode.get(),
@@ -108,6 +109,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
+        self.cell_id_by_live_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
+        self.cells_needing_typecheck: Set[CellId] = set()
         self.stale_dependency_detected = False
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
@@ -232,11 +235,12 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_cells = set()
         fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(
-            set)
+        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         for cell_id, cell_content in cells_by_id.items():
-            if (order_index_by_cell_id is not None and
-                    order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx):
+            if (
+                order_index_by_cell_id is not None
+                and order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx
+            ):
                 continue
             try:
                 symbols = self._check_cell_and_resolve_symbols(cell_content)
@@ -284,6 +288,10 @@ class NotebookSafety(singletons.NotebookSafety):
             stale_links[stale_cell_id] -= stale_cells
             for refresher_cell_id in stale_links[stale_cell_id]:
                 refresher_links[refresher_cell_id].append(stale_cell_id)
+        if self.settings.mark_typecheck_failures_unsafe:
+            # TODO: actually do the type checking
+            #  nested symbols in particular will need some thought
+            self.cells_needing_typecheck.clear()
         return {
             'stale_cells': list(stale_cells),
             'fresh_cells': fresh_cells,
@@ -361,7 +369,7 @@ class NotebookSafety(singletons.NotebookSafety):
             'stale': stale_symbols,
         }
 
-    def _precheck_for_stale(self, cell: str) -> bool:
+    def _precheck_for_stale(self, cell: str, cell_id: Optional[CellId]) -> bool:
         """
         This method statically checks the cell to be executed for stale symbols.
         If any live, stale symbols are detected, it returns `True`. On a syntax
@@ -400,6 +408,8 @@ class NotebookSafety(singletons.NotebookSafety):
         # For each of the live symbols, record their `defined_cell_num`
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
+            if cell_id is not None:
+                self.cell_id_by_live_symbol[sym].add(cell_id)
             sym.version_by_liveness_timestamp[self.cell_counter()] = sym.defined_cell_num
 
         self._last_refused_code = None
@@ -518,12 +528,13 @@ class NotebookSafety(singletons.NotebookSafety):
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = self.cell_counter()
 
+            cell_id = self._active_cell_id
             if self._active_cell_id is not None:
                 self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
 
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell) and self.settings.skip_unsafe_cells:
+            if self._precheck_for_stale(cell, cell_id) and self.settings.skip_unsafe_cells:
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')

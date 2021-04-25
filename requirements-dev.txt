@@ -1,6 +1,5 @@
 flake8
 ipytest
-mypy
 numpy
 pandas
 py

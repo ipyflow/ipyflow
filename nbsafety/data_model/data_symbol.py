@@ -229,6 +229,8 @@ class DataSymbol:
             self._refresh_cached_obj()
 
     def get_ref_count(self):
+        if self.obj is None:
+            return -1
         return sys.getrefcount(self.obj) - 1 - len(nbs().aliases[self.obj_id]) - (self.obj_id in nbs().namespaces)
 
     def prev_obj_definitely_equal_to_current_obj(self, prev_obj: Optional[Any]) -> bool:

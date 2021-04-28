@@ -104,7 +104,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_scopes: Set[NamespaceScope] = set()
-        self.garbage_namespace_obj_ids: Set[int] = set()
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.cell_content_by_counter: Dict[int, str] = {}
@@ -641,28 +640,12 @@ class NotebookSafety(singletons.NotebookSafety):
         self.stale_dependency_detected = False
         return ret
 
-    def _namespace_gc(self):
-        for obj_id in self.garbage_namespace_obj_ids:
-            garbage_ns = self.namespaces.pop(obj_id, None)
-            if garbage_ns is not None:
-                logger.error('collect ns %s', garbage_ns)
-                garbage_ns.clear_namespace(obj_id)
-        self.garbage_namespace_obj_ids.clear()
-        # while True:
-        #     for obj_id in self.garbage_namespace_obj_ids:
-        #         self.namespaces.pop(obj_id, None)
-        #     self.garbage_namespace_obj_ids.clear()
-        #     for obj_id, namespace in self.namespaces.items():
-        #         if namespace.is_garbage:
-        #             self.garbage_namespace_obj_ids.add(namespace.obj_id)
-        #     if len(self.garbage_namespace_obj_ids) == 0:
-        #         break
-
     def _gc(self):
-        for dsym in list(self.all_data_symbols()):
-            if dsym.is_garbage:
-                logger.error('collect sym %s', dsym)
-                dsym.collect_self_garbage()
+        # Need to do the garbage check and the collection separately
+        garbage_syms = [dsym for dsym in self.all_data_symbols() if dsym.is_garbage]
+        for dsym in garbage_syms:
+            logger.info('collect sym %s', dsym)
+            dsym.collect_self_garbage()
 
     def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: Union[str, int], is_subscript: bool):
         try:

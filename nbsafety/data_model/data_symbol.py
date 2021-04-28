@@ -2,6 +2,7 @@
 import ast
 from collections import defaultdict
 from enum import Enum
+import itertools
 import logging
 import sys
 from typing import cast, TYPE_CHECKING
@@ -182,33 +183,28 @@ class DataSymbol:
 
     @property
     def is_garbage(self):
-        return (
-            self._tombstone
-            or self.containing_scope.is_garbage
-            # TODO: probably should keep this, but lift any symbols / namespaces in return statements to outer scope
-            # or not self.containing_scope.is_globally_accessible
-            or (self.symbol_type != DataSymbolType.ANONYMOUS and self.get_ref_count() == 0)
-        )
+        return self._tombstone or self.get_ref_count() == 0
 
     @property
     def is_globally_accessible(self):
         return self.containing_scope.is_globally_accessible
 
-    def _obj_reference_expired_callback(self, *_):
-        # just write a tombstone here; we'll do a batch collect after the main part of the cell is done running
-        # can potentially support GC in the background further down the line
-        self._tombstone = True
-
     def collect_self_garbage(self):
-        for parent in self.parents:
-            for parent_children in parent.children_by_cell_position.values():
-                parent_children.discard(self)
-        for self_children in self.children_by_cell_position.values():
-            for child in self_children:
-                child.parents.discard(self)
-        # kill the alias but leave the namespace
-        # namespace needs to stick around to properly handle the staleness propagation protocol
-        self._handle_aliases(readd=False)
+        """
+        Just null out the reference to obj; we need to keep the edges
+        and namespace relationships around for staleness propagation.
+        """
+        # TODO: ideally we should figure out how to GC the symbols themselves
+        #  and remove them from the symbol graph, to keep this from getting
+        #  too large. One idea is that a symbol can be GC'd if its reachable
+        #  descendants are all tombstone'd, and likewise a namespace can be
+        #  GC'd if all of its children are GC'able as per prior criterion.
+        self._tombstone = True
+        ns = nbs().namespaces.get(self.obj_id, None)
+        if ns is not None:
+            ns._tombstone = True
+            ns.obj = None
+        self.obj = None
 
     # def update_type(self, new_type):
     #     self.symbol_type = new_type
@@ -233,11 +229,7 @@ class DataSymbol:
             self._refresh_cached_obj()
 
     def get_ref_count(self):
-        refcount_from_namespace = 0
-        ns = nbs().namespaces.get(self.obj_id, None)
-        if ns is not None and ns.obj is self.obj:
-            refcount_from_namespace = 1
-        return sys.getrefcount(self.obj) - 1 - len(nbs().aliases[self.obj_id]) - refcount_from_namespace
+        return sys.getrefcount(self.obj) - 1 - len(nbs().aliases[self.obj_id]) - (self.obj_id in nbs().namespaces)
 
     def prev_obj_definitely_equal_to_current_obj(self, prev_obj: Optional[Any]) -> bool:
         if prev_obj is None:
@@ -258,14 +250,13 @@ class DataSymbol:
             return False
         return (obj_size_ubound == cached_obj_size_ubound) and self.obj == prev_obj
 
-    def _handle_aliases(self, readd=True):
+    def _handle_aliases(self):
         old_aliases = nbs().aliases.get(self.cached_obj_id, None)
         if old_aliases is not None:
             old_aliases.discard(self)
             if len(old_aliases) == 0:
                 del nbs().aliases[self.cached_obj_id]
-        if readd:
-            nbs().aliases[self.obj_id].add(self)
+        nbs().aliases[self.obj_id].add(self)
 
     def update_stmt_node(self, stmt_node):
         self.stmt_node = stmt_node

@@ -280,4 +280,3 @@ class TraceStatement:
         tracer().seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
         tracer().after_stmt_reset_hook()
-        nbs()._namespace_gc()

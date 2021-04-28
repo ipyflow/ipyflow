@@ -268,10 +268,6 @@ class Scope:
         return self.parent_scope is None
 
     @property
-    def is_garbage(self):
-        return False
-
-    @property
     def is_globally_accessible(self):
         return self.is_global or (self.is_namespace_scope and self.parent_scope.is_globally_accessible)
 
@@ -305,8 +301,8 @@ class Scope:
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, dc: DataSymbol) -> str:
-        return str(dc.name)
+    def make_namespace_qualified_name(self, dsym: DataSymbol) -> str:
+        return str(dsym.name)
 
 
 class NamespaceScope(Scope):
@@ -319,6 +315,7 @@ class NamespaceScope(Scope):
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
         self.obj = obj
+        self.cached_obj_id = id(obj)
         nbs().namespaces[id(obj)] = self
         self._tombstone = False
         self.max_defined_timestamp = 0
@@ -355,7 +352,7 @@ class NamespaceScope(Scope):
 
     @property
     def obj_id(self):
-        return id(self.obj)
+        return self.cached_obj_id
 
     @property
     def is_garbage(self):
@@ -371,14 +368,10 @@ class NamespaceScope(Scope):
 
     def update_obj_ref(self, obj):
         self._tombstone = False
+        nbs().namespaces.pop(self.cached_obj_id, None)
         self.obj = obj
-        nbs().namespaces[id(obj)] = self
-
-    def clear_namespace(self, prev_obj_id):
-        if prev_obj_id != self.obj_id and prev_obj_id in nbs().namespaces:
-            raise ValueError('precondition failed; namespace should no longer be registered before we can clear')
-        self._data_symbol_by_name.clear()
-        self._subscript_data_symbol_by_name.clear()
+        self.cached_obj_id = id(obj)
+        nbs().namespaces[self.cached_obj_id] = self
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
@@ -399,11 +392,11 @@ class NamespaceScope(Scope):
     def fresh_copy(self, obj: Any):
         return NamespaceScope(obj, self.scope_name, self.parent_scope)
 
-    def make_namespace_qualified_name(self, dc: DataSymbol):
+    def make_namespace_qualified_name(self, dsym: DataSymbol):
         path = self.full_namespace_path
-        name = str(dc.name)
+        name = str(dsym.name)
         if path:
-            if dc.is_subscript:
+            if dsym.is_subscript:
                 return f'{path}[{name}]'
             else:
                 return f'{path}.{name}'

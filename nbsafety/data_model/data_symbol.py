@@ -3,8 +3,8 @@ import ast
 from collections import defaultdict
 from enum import Enum
 import logging
+import sys
 from typing import cast, TYPE_CHECKING
-import weakref
 
 from nbsafety.data_model import sizing
 from nbsafety.data_model.update_protocol import UpdateProtocol
@@ -12,7 +12,7 @@ from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
     from nbsafety.types import SupportedIndexType
-    from typing import Any, Dict, Optional, Set, Union
+    from typing import Any, Dict, Optional, Set
 
     # avoid circular imports
     from nbsafety.data_model.scope import Scope, NamespaceScope
@@ -31,6 +31,9 @@ class DataSymbolType(Enum):
 
 
 class DataSymbol:
+
+    NULL = object()
+
     def __init__(
         self,
         name: SupportedIndexType,
@@ -49,11 +52,9 @@ class DataSymbol:
         # print(containing_scope, name, obj, is_subscript)
         self.name = name
         self.symbol_type = symbol_type
+        self.obj = obj
         self._tombstone = False
         self._cached_out_of_sync = True
-        obj_ref = self._update_obj_ref_inner(obj)
-        self._obj_ref = obj_ref
-        self._cached_obj_ref = None
         self.cached_obj_id = None
         self.cached_obj_type = None
         if refresh_cached_obj:
@@ -156,24 +157,16 @@ class DataSymbol:
     def is_implicit(self):
         return self._implicit
 
-    def get_obj(self) -> Any:
-        return self._obj_ref()
-
-    def get_cached_obj(self) -> Optional[Any]:
-        if self._cached_obj_ref is None:
-            return None
-        return self._cached_obj_ref()
-
     def shallow_clone(self, new_obj, new_containing_scope, symbol_type):
         return self.__class__(self.name, symbol_type, new_obj, new_containing_scope)
 
     @property
     def obj_id(self):
-        return id(self.get_obj())
+        return id(self.obj)
 
     @property
     def obj_type(self):
-        return type(self.get_obj())
+        return type(self.obj)
 
     @property
     def namespace(self):
@@ -194,7 +187,7 @@ class DataSymbol:
             or self.containing_scope.is_garbage
             # TODO: probably should keep this, but lift any symbols / namespaces in return statements to outer scope
             # or not self.containing_scope.is_globally_accessible
-            or (isinstance(self._obj_ref, weakref.ref) and self.get_obj() is None)
+            or (self.symbol_type != DataSymbolType.ANONYMOUS and self.get_ref_count() == 0)
         )
 
     @property
@@ -229,8 +222,7 @@ class DataSymbol:
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
             nbs().cells_needing_typecheck |= nbs().cell_id_by_live_symbol.get(self, set())
         self._tombstone = False
-        obj_ref = self._update_obj_ref_inner(obj)
-        self._obj_ref = obj_ref
+        self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             old_ns = nbs().namespaces.get(self.cached_obj_id, None)
             if old_ns is not None:
@@ -240,23 +232,31 @@ class DataSymbol:
         if refresh_cached:
             self._refresh_cached_obj()
 
-    def cached_obj_definitely_equal_to_current_obj(self):
+    def get_ref_count(self):
+        refcount_from_namespace = 0
+        ns = nbs().namespaces.get(self.obj_id, None)
+        if ns is not None and ns.obj is self.obj:
+            refcount_from_namespace = 1
+        return sys.getrefcount(self.obj) - 1 - len(nbs().aliases[self.obj_id]) - refcount_from_namespace
+
+    def prev_obj_definitely_equal_to_current_obj(self, prev_obj: Optional[Any]) -> bool:
+        if prev_obj is None:
+            return False
         if not self._cached_out_of_sync or self.obj_id == self.cached_obj_id:
             return True
-        obj, cached_obj = self.get_obj(), self.get_cached_obj()
-        if obj is None or cached_obj is None:
-            return obj is cached_obj
-        obj_type = type(obj)
-        cached_type = type(cached_obj)
-        if obj_type != cached_type:
+        if self.obj is None or prev_obj is DataSymbol.NULL:
+            return self.obj is None and prev_obj is DataSymbol.NULL
+        obj_type = type(self.obj)
+        prev_type = type(prev_obj)
+        if obj_type != prev_type:
             return False
-        obj_size_ubound = sizing.sizeof(obj)
+        obj_size_ubound = sizing.sizeof(self.obj)
         if obj_size_ubound > sizing.MAX_SIZE:
             return False
-        cached_obj_size_ubound = sizing.sizeof(cached_obj)
+        cached_obj_size_ubound = sizing.sizeof(prev_obj)
         if cached_obj_size_ubound > sizing.MAX_SIZE:
             return False
-        return (obj_size_ubound == cached_obj_size_ubound) and obj == cached_obj
+        return (obj_size_ubound == cached_obj_size_ubound) and self.obj == prev_obj
 
     def _handle_aliases(self, readd=True):
         old_aliases = nbs().aliases.get(self.cached_obj_id, None)
@@ -267,13 +267,6 @@ class DataSymbol:
         if readd:
             nbs().aliases[self.obj_id].add(self)
 
-    def _update_obj_ref_inner(self, obj):
-        try:
-            obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
-        except TypeError:
-            obj_ref = lambda: obj
-        return obj_ref
-
     def update_stmt_node(self, stmt_node):
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
@@ -283,7 +276,7 @@ class DataSymbol:
 
     def _refresh_cached_obj(self):
         self._cached_out_of_sync = False
-        self._cached_obj_ref = self._obj_ref
+        # don't keep an actual ref to avoid bumping prefcount
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
 
@@ -319,7 +312,7 @@ class DataSymbol:
         return True
 
     def update_deps(
-        self, new_deps: Set['DataSymbol'], overwrite=True, mutated=False, deleted=False, propagate=True
+        self, new_deps: Set['DataSymbol'], prev_obj=None, overwrite=True, mutated=False, deleted=False, propagate=True
     ):
         # skip updates for imported symbols
         if self.is_import:
@@ -344,7 +337,7 @@ class DataSymbol:
             new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
         self.required_cell_num = -1
-        UpdateProtocol(self, new_deps, mutated, deleted)(propagate=propagate)
+        UpdateProtocol(self, new_deps, prev_obj, mutated, deleted)(propagate=propagate)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
 

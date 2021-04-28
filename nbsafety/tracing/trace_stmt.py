@@ -22,7 +22,7 @@ logger.setLevel(logging.WARNING)
 
 class TraceStatement:
     def __init__(self, frame: FrameType, stmt_node: ast.stmt):
-        self.frame = frame
+        self.frame: FrameType = frame
         self.stmt_node = stmt_node
         self.class_scope: Optional[NamespaceScope] = None
         self.lambda_call_point_deps_done_once = False
@@ -114,7 +114,7 @@ class TraceStatement:
             ns = NamespaceScope(obj, str(name), scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
-            ns.upsert_data_symbol_for_name(i, inner_dep.get_obj(), deps, self.stmt_node, is_subscript=True)
+            ns.upsert_data_symbol_for_name(i, inner_dep.obj, deps, self.stmt_node, is_subscript=True)
         scope.upsert_data_symbol_for_name(
             name,
             obj,
@@ -201,9 +201,8 @@ class TraceStatement:
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
-                class_obj_id = id(class_ref)
-                self.class_scope.obj_id = class_obj_id
-                nbs().namespaces[class_obj_id] = self.class_scope
+                self.class_scope.obj = class_ref
+                nbs().namespaces[id(class_ref)] = self.class_scope
             try:
                 scope, name, obj, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame, ctx=ast.Store())
                 scope.upsert_data_symbol_for_name(
@@ -243,7 +242,7 @@ class TraceStatement:
                 namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
                 mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
                 if mutated_sym is not None:
-                    mutated_obj = mutated_sym.get_obj()
+                    mutated_obj = mutated_sym.obj
                     mutation_arg_obj = next(iter(mutation_arg_objs))
                     # TODO: replace int check w/ more general "immutable" check
                     if mutation_arg_obj is not None:
@@ -278,9 +277,7 @@ class TraceStatement:
     def finished_execution_hook(self):
         if self.finished:
             return
-        # print('finishing stmt', self.stmt_node)
         tracer().seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
         tracer().after_stmt_reset_hook()
         nbs()._namespace_gc()
-        # self.safety._gc()

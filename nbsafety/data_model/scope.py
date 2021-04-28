@@ -4,7 +4,6 @@ import inspect
 import itertools
 import logging
 from typing import TYPE_CHECKING
-import weakref
 
 from IPython import get_ipython
 try:
@@ -192,7 +191,7 @@ class Scope:
             is_anonymous=is_anonymous,
             class_scope=class_scope
         )
-        dsym, old_dsym, old_id = self._upsert_data_symbol_for_name_inner(
+        dsym, prev_dsym, prev_obj = self._upsert_data_symbol_for_name_inner(
             name,
             obj,
             deps,
@@ -200,7 +199,7 @@ class Scope:
             stmt_node,
             implicit=implicit,
         )
-        dsym.update_deps(deps, overwrite=overwrite, propagate=propagate)
+        dsym.update_deps(deps, prev_obj=prev_obj, overwrite=overwrite, propagate=propagate)
         return dsym
 
     def _upsert_data_symbol_for_name_inner(
@@ -211,23 +210,23 @@ class Scope:
         symbol_type: DataSymbolType,
         stmt_node: ast.AST,
         implicit: bool = False,
-    ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[int]]:
-        old_id = None
-        old_dsym = self.lookup_data_symbol_by_name_this_indentation(
+    ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[Any]]:
+        prev_obj = None
+        prev_dsym = self.lookup_data_symbol_by_name_this_indentation(
             name, is_subscript=symbol_type == DataSymbolType.SUBSCRIPT, skip_cloned_lookup=True,
         )
         if implicit and symbol_type != DataSymbolType.ANONYMOUS:
-            assert old_dsym is None, 'expected None, got %s' % old_dsym
-        if old_dsym is not None and self.is_globally_accessible:
-            old_id = old_dsym.cached_obj_id
+            assert prev_dsym is None, 'expected None, got %s' % prev_dsym
+        if prev_dsym is not None and self.is_globally_accessible:
+            prev_obj = DataSymbol.NULL if prev_dsym.obj is None else prev_dsym.obj
             # TODO: handle case where new dc is of different type
-            if name in self.data_symbol_by_name(old_dsym.is_subscript) and old_dsym.symbol_type == symbol_type:
-                old_dsym.update_obj_ref(obj, refresh_cached=False)
+            if name in self.data_symbol_by_name(prev_dsym.is_subscript) and prev_dsym.symbol_type == symbol_type:
+                prev_dsym.update_obj_ref(obj, refresh_cached=False)
                 # old_dsym.update_type(symbol_type)
                 # if we're updating a pre-existing one, it should not be an implicit upsert
                 assert stmt_node is not None
-                old_dsym.update_stmt_node(stmt_node)
-                return old_dsym, old_dsym, old_id
+                prev_dsym.update_stmt_node(stmt_node)
+                return prev_dsym, prev_dsym, prev_obj
             else:
                 # In this case, we are copying from a class and we need the dsym from which we are copying
                 # as able to propagate to the new dsym.
@@ -247,7 +246,7 @@ class Scope:
                 # If we do this, then we should go back to explicitly adding the dep as follows:
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
-                deps.add(old_dsym)
+                deps.add(prev_dsym)
         if isinstance(self, NamespaceScope) and symbol_type == DataSymbolType.DEFAULT and self.cloned_from is not None:
             # add the cloned symbol as a dependency of the symbol about to b ecreated
             new_dep = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name, is_subscript=False)
@@ -257,7 +256,7 @@ class Scope:
             name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False, implicit=implicit
         )
         self.put(name, dsym)
-        return dsym, old_dsym, old_id
+        return dsym, prev_dsym, prev_obj
 
     def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
         dsym = self._data_symbol_by_name.pop(name, None)
@@ -319,11 +318,9 @@ class NamespaceScope(Scope):
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
-        obj_ref, obj_id = self._update_obj_ref_inner(obj)
+        self.obj = obj
+        nbs().namespaces[id(obj)] = self
         self._tombstone = False
-        self._obj_ref = obj_ref
-        self.obj_id = obj_id
-        nbs().namespaces[obj_id] = self
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 
@@ -332,32 +329,33 @@ class NamespaceScope(Scope):
         return True
 
     def __len__(self):
-        obj = self._obj_ref()
-        if not isinstance(obj, (dict, list, tuple)):
-            raise TypeError("tried to get length of non-container namespace %s: %s", self, obj)
-        return len(obj)
+        if not isinstance(self.obj, (dict, list, tuple)):
+            raise TypeError("tried to get length of non-container namespace %s: %s", self, self.obj)
+        return len(self.obj)
 
-    def _iter_inner(self, obj):
-        for i in range(len(obj)):
+    def _iter_inner(self):
+        for i in range(len(self.obj)):
             yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
 
     def __iter__(self):
-        obj = self._obj_ref()
-        if not isinstance(obj, (list, tuple)):
-            raise TypeError("tried to iterate through non-sequence namespace %s: %s", self, obj)
+        if not isinstance(self.obj, (list, tuple)):
+            raise TypeError("tried to iterate through non-sequence namespace %s: %s", self, self.obj)
         # do the validation before starting the generator part so that we raise immediately
-        return self._iter_inner(obj)
+        return self._iter_inner()
 
-    def _items_inner(self, obj):
-        for key in obj.keys():
+    def _items_inner(self):
+        for key in self.obj.keys():
             yield key, self.lookup_data_symbol_by_name_this_indentation(key, is_subscript=True)
 
     def items(self):
-        obj = self._obj_ref()
-        if not isinstance(obj, dict):
-            raise TypeError("tried to get iterate through items of non-dict namespace: %s", obj)
+        if not isinstance(self.obj, dict):
+            raise TypeError("tried to get iterate through items of non-dict namespace: %s", self.obj)
         # do the validation before starting the generator part so that we raise immediately
-        return self._items_inner(obj)
+        return self._items_inner()
+
+    @property
+    def obj_id(self):
+        return id(self.obj)
 
     @property
     def is_garbage(self):
@@ -371,37 +369,16 @@ class NamespaceScope(Scope):
         else:
             return dsym.is_subscript
 
-    def get_obj(self) -> Any:
-        return self._obj_ref()
-
     def update_obj_ref(self, obj):
-        obj_ref, obj_id = self._update_obj_ref_inner(obj)
         self._tombstone = False
-        self._obj_ref = obj_ref
-        self.obj_id = obj_id
-        nbs().namespaces[obj_id] = self
-
-    def _update_obj_ref_inner(self, obj):
-        try:
-            obj_ref = weakref.ref(obj, self._obj_reference_expired_callback)
-        except TypeError:
-            obj_ref = lambda: obj
-        obj_id = id(obj)
-        return obj_ref, obj_id
+        self.obj = obj
+        nbs().namespaces[id(obj)] = self
 
     def clear_namespace(self, prev_obj_id):
         if prev_obj_id != self.obj_id and prev_obj_id in nbs().namespaces:
             raise ValueError('precondition failed; namespace should no longer be registered before we can clear')
         self._data_symbol_by_name.clear()
         self._subscript_data_symbol_by_name.clear()
-
-    def _obj_reference_expired_callback(self, *_):
-        self._tombstone = True
-        safety = nbs_check_init()
-        if safety is None:
-            # can happen e.g. if program is exiting
-            return
-        safety.garbage_namespace_obj_ids.add(self.obj_id)
 
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
@@ -444,7 +421,7 @@ class NamespaceScope(Scope):
         else:
             ret = self._data_symbol_by_name.get(name, None)
         if not skip_cloned_lookup and ret is None and self.cloned_from is not None and not is_subscript and isinstance(name, str):
-            if name not in getattr(self._obj_ref(), '__dict__', {}):
+            if name not in getattr(self.obj, '__dict__', {}):
                 # only fall back to the class sym if it's not present in the corresponding obj for this scope
                 ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name, is_subscript=is_subscript)
         return ret
@@ -453,8 +430,8 @@ class NamespaceScope(Scope):
         logger.info("delete %s from %s", name, self)
         if is_subscript:
             dsym = self._subscript_data_symbol_by_name.pop(name, None)
-            if dsym is None and name == -1 and isinstance(self._obj_ref(), list):
-                name = len(self._obj_ref())  # it will have already been deleted, so don't subtract 1
+            if dsym is None and name == -1 and isinstance(self.obj, list):
+                name = len(self.obj)  # it will have already been deleted, so don't subtract 1
                 dsym = self._subscript_data_symbol_by_name.pop(name, None)
             if dsym is not None:
                 dsym.update_deps(set(), deleted=True)

@@ -428,7 +428,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 if not alias.containing_scope.is_namespace_scope:
                     continue
                 containing_scope = cast(NamespaceScope, alias.containing_scope)
-                containing_obj = containing_scope.get_obj()
+                containing_obj = containing_scope.obj
                 if containing_obj is None:
                     continue
                 # TODO: handle dict case too
@@ -551,6 +551,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     # TODO: avoid bad performance by only iterating over symbols updated in this cell
                     sym for sym in self.all_data_symbols() if sym.defined_cell_num == self.cell_counter()
                 ])
+                self._gc()
             finally:
                 if not self.settings.store_history:
                     self._cell_counter += 1
@@ -581,15 +582,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 with ast_transformer_context([SafetyAstRewriter()]):
                     yield
         finally:
-            # TODO: actually handle errors that occurred in our code while tracing
-            # if not self.trace_state_manager.error_occurred:
-            self._reset_trace_state_hook()
-
-    def _reset_trace_state_hook(self):
-        # this assert doesn't hold anymore now that tracing could be disabled inside of something
-        # assert len(self.attr_trace_manager.stack) == 0
-        TraceManager.clear_instance()
-        self._gc()
+            TraceManager.clear_instance()
 
     def _make_line_magic(self):
         line_magic_names = [f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])]
@@ -652,7 +645,7 @@ class NotebookSafety(singletons.NotebookSafety):
         for obj_id in self.garbage_namespace_obj_ids:
             garbage_ns = self.namespaces.pop(obj_id, None)
             if garbage_ns is not None:
-                logger.info('collect ns %s', garbage_ns)
+                logger.error('collect ns %s', garbage_ns)
                 garbage_ns.clear_namespace(obj_id)
         self.garbage_namespace_obj_ids.clear()
         # while True:
@@ -668,7 +661,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _gc(self):
         for dsym in list(self.all_data_symbols()):
             if dsym.is_garbage:
-                logger.info('collect sym %s', dsym)
+                logger.error('collect sym %s', dsym)
                 dsym.collect_self_garbage()
 
     def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: Union[str, int], is_subscript: bool):

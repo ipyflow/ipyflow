@@ -5,7 +5,7 @@ from typing import cast, TYPE_CHECKING
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Set
+    from typing import Any, Set
 
     # avoid circular imports
     from nbsafety.data_model.data_symbol import DataSymbol
@@ -20,11 +20,13 @@ class UpdateProtocol:
         self,
         updated_sym: DataSymbol,
         new_deps: Set[DataSymbol],
+        prev_obj: Any,
         mutated: bool,
         deleted: bool,
     ):
         self.updated_sym = updated_sym
         self.new_deps = new_deps
+        self.prev_obj = prev_obj
         self.mutated = mutated
         self.deleted = deleted
         self.seen: Set[DataSymbol] = set()
@@ -34,7 +36,7 @@ class UpdateProtocol:
                        self.updated_sym.containing_scope,
                        self.updated_sym.children_by_cell_position.values())
         namespace_refresh = None
-        equal_to_old = self.updated_sym.cached_obj_definitely_equal_to_current_obj()
+        equal_to_old = self.updated_sym.prev_obj_definitely_equal_to_current_obj(self.prev_obj)
         if propagate:
             if self.mutated or self.deleted or not equal_to_old:
                 self._collect_updated_symbols(self.updated_sym, skip_aliases=not self.mutated)

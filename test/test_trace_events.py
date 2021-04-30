@@ -75,9 +75,9 @@ def test_recorded_events_two_stmts():
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
-        TraceEvent.before_literal,
+        TraceEvent.before_list_literal,
         *([TraceEvent.list_elt] * 3),
-        TraceEvent.after_literal,
+        TraceEvent.after_list_literal,
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
 
@@ -123,15 +123,15 @@ def test_list_nested_in_dict():
     assert RECORDED_EVENTS == [
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
-        TraceEvent.before_literal,
+        TraceEvent.before_dict_literal,
 
         TraceEvent.dict_key,
-        TraceEvent.before_literal,
+        TraceEvent.before_list_literal,
         *([TraceEvent.list_elt] * 3),
-        TraceEvent.after_literal,
+        TraceEvent.after_list_literal,
         TraceEvent.dict_value,
 
-        TraceEvent.after_literal,
+        TraceEvent.after_dict_literal,
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
@@ -153,19 +153,35 @@ def foo(x):
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.before_call,
-        TraceEvent.before_literal,
+        TraceEvent.before_list_literal,
         TraceEvent.list_elt,
-        TraceEvent.after_literal,
+        TraceEvent.after_list_literal,
         TraceEvent.argument,
         TraceEvent.call,
         TraceEvent.before_stmt,
         TraceEvent.before_return,
-        TraceEvent.before_literal,
+        TraceEvent.before_list_literal,
         TraceEvent.list_elt,
-        TraceEvent.after_literal,
+        TraceEvent.after_list_literal,
         TraceEvent.after_return,
         TraceEvent.return_,
         TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
+        TraceEvent.after_stmt,
+    ], 'unexpected events; got %s' % RECORDED_EVENTS
+
+
+def test_lambda_in_tuple():
+    assert RECORDED_EVENTS == []
+    run_cell('x = (lambda: 42,)')
+    assert RECORDED_EVENTS == [
+        TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
+        TraceEvent.before_tuple_literal,
+        TraceEvent.before_lambda,
+        TraceEvent.after_lambda,
+        TraceEvent.tuple_elt,
+        TraceEvent.after_tuple_literal,
+        TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS

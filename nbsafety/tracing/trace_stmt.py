@@ -50,21 +50,20 @@ class TraceStatement:
             # so we make it immediately
             return old_scope.make_child_scope(self.stmt_node.name, obj_id=-1)
 
-        if not isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # TODO: probably the right thing is to check is whether a lambda appears somewhere inside the ast node
-            # if not isinstance(self.ast_node, ast.Lambda):
-            #     raise TypeError('unexpected type for ast node %s' % self.ast_node)
-            return old_scope
-        func_name = self.stmt_node.name
+        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            func_name = self.stmt_node.name
+        else:
+            func_name = None
         func_cell = nbs().statement_to_func_cell.get(id(self.stmt_node), None)
         if func_cell is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
         if not func_cell.is_function:
+            msg = 'got non-function symbol %s for name %s' % (func_cell.full_path, func_name)
             if nbs().is_develop:
-                raise TypeError('got non-function symbol %s for name %s' % (func_cell.full_path, func_name))
+                raise TypeError(msg)
             else:
-                # TODO: log an error to a file
+                logger.warning(msg)
                 return old_scope
         if not self.finished:
             func_cell.create_symbols_for_call_args()

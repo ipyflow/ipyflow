@@ -28,6 +28,7 @@ class DataSymbolType(Enum):
     FUNCTION = 'function'
     CLASS = 'class'
     IMPORT = 'import'
+    LAMBDA = 'lambda'
     ANONYMOUS = 'anonymous'
 
 
@@ -264,6 +265,9 @@ class DataSymbol:
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
         if self.is_function:
+            # TODO: in the case of lambdas, there will not necessarily be one
+            #  symbol for a given statement. We need a more precise way to determine
+            #  the symbol being called than by looking at the stmt in question.
             nbs().statement_to_func_cell[id(stmt_node)] = self
         return stmt_node
 
@@ -274,10 +278,10 @@ class DataSymbol:
         self.cached_obj_type = self.obj_type
 
     def get_call_args(self):
-        # TODO: handle lambda, objects w/ __call__, etc
+        assert self.is_function
         args = set()
-        if self.is_function:
-            assert isinstance(self.stmt_node, ast.FunctionDef)
+        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            # TODO: handle lambda
             for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
                 args.add(arg.arg)
             if self.stmt_node.args.vararg is not None:
@@ -287,6 +291,7 @@ class DataSymbol:
         return args
 
     def create_symbols_for_call_args(self):
+        assert self.is_function
         for arg in self.get_call_args():
             # TODO: ideally we should try to pass the object here
             self.call_scope.upsert_data_symbol_for_name(arg, None, set(), self.stmt_node, False, propagate=False)

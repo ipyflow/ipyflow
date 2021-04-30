@@ -154,6 +154,36 @@ def test_lambda_params_not_live():
     assert_not_detected('`y` is not live in the lambda expr')
 
 
+def test_lambda_arg():
+    run_cell('x = 5')
+    run_cell('y = 7')
+    run_cell('lam = lambda x: x * 2')
+    run_cell('z = lam(y + 3)')
+    run_cell('x = 42')
+    run_cell('logging.info(z)')
+    assert_not_detected('`z` independent of updated `x`')
+    run_cell('y = 43')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on old value of `y`')
+
+
+def test_lambda_scope():
+    run_cell("""
+def foo(x):
+    return lambda: x + 5
+""")
+    run_cell('x = 5')
+    run_cell('y = 7')
+    run_cell('lam = foo(y)')
+    run_cell('z = lam()')
+    run_cell('x = 42')
+    run_cell('logging.info(z)')
+    assert_not_detected('`z` independent of updated `x`')
+    run_cell('y = 43')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on old value of `y`')
+
+
 def test_fundef_params_not_live():
     run_cell('x = 0')
     run_cell('y = x + 6')

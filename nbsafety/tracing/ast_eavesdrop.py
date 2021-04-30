@@ -275,8 +275,35 @@ class AstEavesdropper(ast.NodeTransformer):
             )
         return node
 
-    def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Tuple], should_inner_visit=True):
-        # TODO: what about set literals?
+    def visit_Lambda(self, node: ast.Lambda):
+        assert isinstance(getattr(node, 'ctx', ast.Load()), ast.Load)
+        visited = self.generic_visit(node)
+        with fast.location_of(node):
+            subscripted_node = self._make_tuple_event_for(
+                visited, TraceEvent.before_lambda, orig_node_id=id(node)
+            )
+            return fast.Call(
+                func=self._emitter_ast(),
+                args=[TraceEvent.after_lambda.to_ast(), self._get_copy_id_ast(node)],
+                keywords=fast.kwargs(ret=subscripted_node),
+            )
+
+    @staticmethod
+    def _ast_container_to_literal_trace_evt(
+        node: Union[ast.Dict, ast.List, ast.Set, ast.Tuple], before: bool
+    ) -> TraceEvent:
+        if isinstance(node, ast.Dict):
+            return TraceEvent.before_dict_literal if before else TraceEvent.after_dict_literal
+        elif isinstance(node, ast.List):
+            return TraceEvent.before_list_literal if before else TraceEvent.after_list_literal
+        elif isinstance(node, ast.Set):
+            return TraceEvent.before_set_literal if before else TraceEvent.after_set_literal
+        elif isinstance(node, ast.Tuple):
+            return TraceEvent.before_tuple_literal if before else TraceEvent.after_tuple_literal
+        else:
+            raise TypeError('invalid ast node: %s', ast.dump(node))
+
+    def visit_literal(self, node: Union[ast.Dict, ast.List, ast.Set, ast.Tuple], should_inner_visit=True):
         maybe_visited: ast.AST = node
         if should_inner_visit:
             maybe_visited = self.generic_visit(node)
@@ -284,21 +311,38 @@ class AstEavesdropper(ast.NodeTransformer):
             return maybe_visited
         with fast.location_of(node):
             subscripted_node = self._make_tuple_event_for(
-                maybe_visited, TraceEvent.before_literal, orig_node_id=id(node)
+                maybe_visited, self._ast_container_to_literal_trace_evt(node, before=True), orig_node_id=id(node)
             )
             return fast.Call(
                 func=self._emitter_ast(),
-                args=[TraceEvent.after_literal.to_ast(), self._get_copy_id_ast(node)],
+                args=[
+                    self._ast_container_to_literal_trace_evt(node, before=False).to_ast(),
+                    self._get_copy_id_ast(node)
+                ],
                 keywords=fast.kwargs(ret=subscripted_node),
             )
 
-    def visit_Tuple(self, node: ast.Tuple):
-        return self.visit_List_or_Tuple(node)
-
     def visit_List(self, node: ast.List):
-        return self.visit_List_or_Tuple(node)
+        return self.visit_List_or_Set_or_Tuple(node)
 
-    def visit_List_or_Tuple(self, node: Union[ast.List, ast.Tuple]):
+    def visit_Set(self, node: ast.Set):
+        return self.visit_List_or_Set_or_Tuple(node)
+
+    def visit_Tuple(self, node: ast.Tuple):
+        return self.visit_List_or_Set_or_Tuple(node)
+
+    @staticmethod
+    def _ast_container_to_elt_trace_evt(node: Union[ast.List, ast.Set, ast.Tuple]) -> TraceEvent:
+        if isinstance(node, ast.List):
+            return TraceEvent.list_elt
+        elif isinstance(node, ast.Set):
+            return TraceEvent.set_elt
+        elif isinstance(node, ast.Tuple):
+            return TraceEvent.tuple_elt
+        else:
+            raise TypeError('invalid ast node: %s', ast.dump(node))
+
+    def visit_List_or_Set_or_Tuple(self, node: Union[ast.List, ast.Set, ast.Tuple]):
         traced_elts: List[ast.expr] = []
         is_load = isinstance(getattr(node, 'ctx', ast.Load()), ast.Load)
         saw_starred = False
@@ -315,7 +359,7 @@ class AstEavesdropper(ast.NodeTransformer):
                 traced_elts.append(fast.Call(
                     func=self._emitter_ast(),
                     args=[
-                        TraceEvent.list_elt.to_ast() if isinstance(node, ast.List) else TraceEvent.tuple_elt.to_ast(),
+                        self._ast_container_to_elt_trace_evt(node).to_ast(),
                         self._get_copy_id_ast(elt),
                     ],
                     keywords=fast.kwargs(

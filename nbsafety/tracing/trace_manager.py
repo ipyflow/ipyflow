@@ -609,7 +609,8 @@ class TraceManager(BaseTraceManager):
         # that will happen in the 'after chain' handler
         self.lexical_call_stack.pop()
 
-    @register_handler(TraceEvent.before_literal)
+    # Note: we don't trace set literals
+    @register_handler((TraceEvent.before_dict_literal, TraceEvent.before_list_literal, TraceEvent.before_tuple_literal))
     def before_literal(self, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
@@ -617,8 +618,8 @@ class TraceManager(BaseTraceManager):
         with self.lexical_literal_stack.push():
             self.active_literal_scope = NamespaceScope(None, NamespaceScope.ANONYMOUS, parent_scope)
 
-    @register_handler(TraceEvent.after_literal)
-    def after_literal(self, literal: Any, node_id: NodeId, *_, **__):
+    @register_handler((TraceEvent.after_dict_literal, TraceEvent.after_list_literal, TraceEvent.after_tuple_literal))
+    def after_literal(self, literal: Union[dict, list, tuple], node_id: NodeId, *_, **__):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return literal
         try:
@@ -698,6 +699,16 @@ class TraceManager(BaseTraceManager):
         if index is not None:
             scope.scope_name = str(index)
         return obj
+
+    @register_handler(TraceEvent.after_lambda)
+    def after_lambda(self, obj: Any, _lambda_id: int, frame: FrameType, *_, **__):
+        self.active_scope.upsert_data_symbol_for_name(
+            '<lambda_sym_%d>' % id(obj),
+            obj,
+            set(),
+            self.prev_trace_stmt_in_cur_frame.stmt_node,
+            is_function_def=True,
+        )
 
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):

@@ -183,7 +183,7 @@ class TraceManager(BaseTraceManager):
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = nbs().global_scope
                 self.active_scope: Scope = nbs().global_scope
-                self.inside_lambda = False
+                self.inside_anonymous_call = False
 
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
@@ -222,7 +222,7 @@ class TraceManager(BaseTraceManager):
         with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda
             #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
-            self.inside_lambda = not isinstance(
+            self.inside_anonymous_call = not isinstance(
                 trace_stmt.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
             )
             self.cur_frame_original_scope = new_scope
@@ -243,7 +243,7 @@ class TraceManager(BaseTraceManager):
 
     def _handle_return_transition(self, trace_stmt: TraceStatement, ret: Any):
         try:
-            inside_lambda = self.inside_lambda
+            inside_anonymous_call = self.inside_anonymous_call
             return_to_stmt: TraceStatement = self.call_stack.get_field('prev_trace_stmt_in_cur_frame')
             assert return_to_stmt is not None
             if self.prev_event != TraceEvent.exception:
@@ -251,10 +251,17 @@ class TraceManager(BaseTraceManager):
                 # no need to track dependencies in this case
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
                     return_to_stmt.class_scope = cast(NamespaceScope, self.cur_frame_original_scope)
-                elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_lambda:
+                elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_anonymous_call:
                     if not trace_stmt.lambda_call_point_deps_done_once:
                         trace_stmt.lambda_call_point_deps_done_once = True
-                        rvals = resolve_rval_symbols(trace_stmt.stmt_node)
+                        maybe_lambda_sym = nbs().statement_to_func_cell.get(id(trace_stmt.stmt_node), None)
+                        maybe_lambda_node = None
+                        if maybe_lambda_sym is not None:
+                            maybe_lambda_node = maybe_lambda_sym.stmt_node
+                        if inside_anonymous_call and maybe_lambda_node is not None and isinstance(maybe_lambda_node, ast.Lambda):
+                            rvals = resolve_rval_symbols(maybe_lambda_node.body)
+                        else:
+                            rvals = resolve_rval_symbols(trace_stmt.stmt_node)
                         dsym_to_attach = None
                         if len(rvals) == 1:
                             dsym_to_attach = next(iter(rvals))
@@ -701,14 +708,24 @@ class TraceManager(BaseTraceManager):
         return obj
 
     @register_handler(TraceEvent.after_lambda)
-    def after_lambda(self, obj: Any, _lambda_id: int, frame: FrameType, *_, **__):
-        self.active_scope.upsert_data_symbol_for_name(
+    def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
+        sym_deps = []
+        node = nbs().ast_node_by_id[lambda_node_id]
+        for kw_default in node.args.defaults:  # type: ignore
+            sym_deps.extend(self.resolve_loaded_symbols(kw_default))
+        sym = self.active_scope.upsert_data_symbol_for_name(
             '<lambda_sym_%d>' % id(obj),
             obj,
-            set(),
+            set(sym_deps),
             self.prev_trace_stmt_in_cur_frame.stmt_node,
             is_function_def=True,
+            propagate=False,
         )
+        # FIXME: this is super brittle. We're passing in a stmt node to update the mapping from
+        #  stmt_node to function symbol, but simultaneously forcing the lambda symbol to hold
+        #  a reference to the lambda in order to help with symbol resolution later
+        sym.stmt_node = node
+        self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):

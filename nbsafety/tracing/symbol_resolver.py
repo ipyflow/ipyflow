@@ -140,19 +140,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.symbols.extend(tracer().resolve_loaded_symbols(node))
 
     def visit_Lambda(self, node):
-        with self._push_symbols():
-            self.visit(node.body)
-            self.visit(node.args)
-            to_add = set(self.symbols)
-        # remove node.arguments
-        with self._push_symbols():
-            self.visit(node.args.args)
-            self.visit(node.args.vararg)
-            self.visit(node.args.kwonlyargs)
-            self.visit(node.args.kwarg)
-            discard_set = set(self.symbols)
-        # throw away anything appearing in lambda body that isn't bound
-        self.symbols.extend(to_add - discard_set)
+        self.symbols.extend(tracer().resolve_loaded_symbols(node))
 
     def visit_GeneratorExp(self, node):
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)

@@ -54,20 +54,20 @@ class TraceStatement:
             func_name = self.stmt_node.name
         else:
             func_name = None
-        func_cell = nbs().statement_to_func_cell.get(id(self.stmt_node), None)
-        if func_cell is None:
+        func_sym = nbs().statement_to_func_cell.get(id(self.stmt_node), None)
+        if func_sym is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
-        if not func_cell.is_function:
-            msg = 'got non-function symbol %s for name %s' % (func_cell.full_path, func_name)
+        if not func_sym.is_function:
+            msg = 'got non-function symbol %s for name %s' % (func_sym.full_path, func_name)
             if nbs().is_develop:
                 raise TypeError(msg)
             else:
                 logger.warning(msg)
                 return old_scope
         if not self.finished:
-            func_cell.create_symbols_for_call_args()
-        return func_cell.call_scope
+            func_sym.create_symbols_for_call_args()
+        return func_sym.call_scope
 
     def _handle_assign_target_for_deps(
         self,

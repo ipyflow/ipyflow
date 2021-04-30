@@ -71,6 +71,29 @@ logging.info(f'The best model was {best_model} with an accuracy of {best_acc}.')
     assert_detected('`models` depends on stale `eval_model_1`')
 
 
+# TODO: to get this working properly, post-call argument
+#  symbols need to have dependencies on pre-call argument
+#  symbols. The place to do this is in `DataSymbol.create_symbols_for_call_args(...)`
+@skipif_known_failing
+def test_passed_sym_captured_as_dep_for_mutated_obj():
+    run_cell("""
+class Foo:
+    def __init__(self, x):
+        self.x = x
+        
+def mutate(foo, x):
+    foo.x = x
+""")
+    run_cell('foo = Foo(5)')
+    run_cell('y = 7')
+    run_cell('mutate(foo, y)')
+    run_cell('logging.info(foo.x)')
+    assert_not_detected()
+    run_cell('y = 42')
+    run_cell('logging.info(foo.x)')
+    assert_detected('`foo.x` depends on old value of `y`')
+
+
 def test_subscript_dependency():
     run_cell('lst = [0, 1, 2]')
     run_cell('x = 5')
@@ -180,6 +203,25 @@ def foo(x):
     run_cell('logging.info(z)')
     assert_not_detected('`z` independent of updated `x`')
     run_cell('y = 43')
+    run_cell('logging.info(z)')
+    assert_detected('`z` depends on old value of `y`')
+
+
+def test_lambda_with_kwarg_scope():
+    run_cell('w = 99')
+    run_cell("""
+def foo(x):
+    lam = lambda t=w: t + x + 5
+    return lam
+""")
+    run_cell('x = 5')
+    run_cell('y = 7')
+    run_cell('lam = foo(y)')
+    run_cell('z = lam()')
+    run_cell('x = 42')
+    run_cell('logging.info(z)')
+    assert_not_detected('`z` independent of updated `x`')
+    run_cell('w = 43')
     run_cell('logging.info(z)')
     assert_detected('`z` depends on old value of `y`')
 

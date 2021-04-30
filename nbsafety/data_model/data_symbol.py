@@ -43,6 +43,7 @@ class DataSymbol:
         obj: Any,
         containing_scope: Scope,
         stmt_node: Optional[ast.AST] = None,
+        # TODO: also keep a reference to the target node?
         parents: Optional[Set[DataSymbol]] = None,
         refresh_cached_obj: bool = False,
         implicit: bool = False,
@@ -287,8 +288,7 @@ class DataSymbol:
     def get_call_args(self):
         assert self.is_function
         args = set()
-        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # TODO: handle lambda
+        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
             for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
                 args.add(arg.arg)
             if self.stmt_node.args.vararg is not None:
@@ -300,7 +300,9 @@ class DataSymbol:
     def create_symbols_for_call_args(self):
         assert self.is_function
         for arg in self.get_call_args():
-            # TODO: ideally we should try to pass the object here
+            # TODO: ideally we should try pass the actual objects to the DataSymbol ctor.
+            #  Will require matching the signature with the actual call,
+            #  which will be tricky I guess.
             self.call_scope.upsert_data_symbol_for_name(arg, None, set(), self.stmt_node, False, propagate=False)
 
     @property

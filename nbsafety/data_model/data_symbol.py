@@ -97,6 +97,13 @@ class DataSymbol:
         self._temp_disable_warnings = False
 
         nbs().aliases[id(obj)].add(self)
+        if isinstance(self.name, str) and not self.is_anonymous and not self.containing_scope.is_namespace_scope:
+            ns = nbs().namespaces.get(self.obj_id, None)
+            if ns is not None and ns.scope_name == 'self':
+                # hack to get a better name than `self.whatever` for fields of this object
+                # not ideal because it relies on the `self` convention but is probably
+                # acceptable for the use case of improving readable names
+                ns.scope_name = self.name
 
     def __repr__(self) -> str:
         return f'<{self.readable_name}>'

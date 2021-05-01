@@ -64,11 +64,11 @@ class Scope:
             return self.parent_scope.non_namespace_parent_scope
         return self.parent_scope
 
-    def make_child_scope(self, scope_name, obj_id=None) -> Scope:
-        if obj_id is None:
+    def make_child_scope(self, scope_name, obj=None) -> Scope:
+        if obj is None:
             return Scope(scope_name, parent_scope=self)
         else:
-            return NamespaceScope(obj_id, scope_name, parent_scope=self)
+            return NamespaceScope(obj, scope_name, parent_scope=self)
 
     def put(self, name: SupportedIndexType, val: DataSymbol):
         self._data_symbol_by_name[name] = val
@@ -316,10 +316,17 @@ class NamespaceScope(Scope):
         self.child_clones: List[NamespaceScope] = []
         self.obj = obj
         self.cached_obj_id = id(obj)
+        if obj is not None and not isinstance(obj, int) and id(obj) in nbs().namespaces:
+            msg = 'namespace already registered for %s' % obj
+            if nbs().is_develop:
+                raise ValueError(msg)
+            else:
+                logger.warning(msg)
         nbs().namespaces[id(obj)] = self
         self._tombstone = False
         self.max_defined_timestamp = 0
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
+        self.namespace_stale_symbols: Set[DataSymbol] = set()
 
     def __bool__(self):
         # in order to override if __len__ returns 0
@@ -420,7 +427,6 @@ class NamespaceScope(Scope):
         return ret
 
     def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
-        logger.info("delete %s from %s", name, self)
         if is_subscript:
             dsym = self._subscript_data_symbol_by_name.pop(name, None)
             if dsym is None and name == -1 and isinstance(self.obj, list):

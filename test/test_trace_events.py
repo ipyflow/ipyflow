@@ -40,7 +40,7 @@ def patched_emit_event_fixture():
 # Reset dependency graph before each test
 _safety_fixture, run_cell_ = make_safety_fixture(
     extra_fixture=patched_emit_event_fixture,
-    trace_messages_enabled=True,
+    # trace_messages_enabled=True,
 )
 
 

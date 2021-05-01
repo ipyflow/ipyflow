@@ -120,6 +120,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             if len(symbols) != 1 or symbols[0] is None:
                 return
             ns = self._get_attr_or_subscript_namespace(node)
+            print('ns id:', ns.obj, ns.obj_id, id(ns))
             if ns is None:
                 return
             dsym = ns.lookup_data_symbol_by_name_this_indentation(slice, is_subscript=True)

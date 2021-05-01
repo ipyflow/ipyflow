@@ -48,7 +48,7 @@ class TraceStatement:
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return old_scope.make_child_scope(self.stmt_node.name, obj_id=-1)
+            return old_scope.make_child_scope(self.stmt_node.name, obj=-1)
 
         if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             func_name = self.stmt_node.name

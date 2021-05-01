@@ -2,18 +2,17 @@
 import ast
 from collections import defaultdict
 from enum import Enum
-import itertools
 import logging
 import sys
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model import sizing
 from nbsafety.data_model.update_protocol import UpdateProtocol
-from nbsafety.singletons import nbs
+from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from nbsafety.types import SupportedIndexType
-    from typing import Any, Dict, Optional, Set
+    from typing import Any, Dict, List, Optional, Set
 
     # avoid circular imports
     from nbsafety.data_model.scope import Scope, NamespaceScope
@@ -88,7 +87,6 @@ class DataSymbol:
         self.version_by_liveness_timestamp: Dict[int, int] = {}
 
         self.fresher_ancestors: Set[DataSymbol] = set()
-        self.namespace_stale_symbols: Set[DataSymbol] = set()
 
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
@@ -117,6 +115,22 @@ class DataSymbol:
 
     def temporary_disable_warnings(self):
         self._temp_disable_warnings = True
+
+    @property
+    def namespace_stale_symbols(self) -> Set[DataSymbol]:
+        ns = nbs().namespaces.get(self.obj_id, None)
+        if ns is None:
+            return set()
+        else:
+            return ns.namespace_stale_symbols
+
+    @namespace_stale_symbols.setter
+    def namespace_stale_symbols(self, new_val: Set[DataSymbol]) -> None:
+        ns = nbs().namespaces.get(self.obj_id, None)
+        if ns is None:
+            return
+        else:
+            ns.namespace_stale_symbols = new_val
 
     @property
     def defined_cell_num(self) -> int:
@@ -229,10 +243,11 @@ class DataSymbol:
         self._tombstone = False
         self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
-            old_ns = nbs().namespaces.get(self.cached_obj_id, None)
-            if old_ns is not None:
-                _ = old_ns.fresh_copy(obj)
-                old_ns._tombstone = True
+            if self.obj_id not in nbs().namespaces:
+                # don't overwrite existing namespace for this obj
+                old_ns = nbs().namespaces.get(self.cached_obj_id, None)
+                if old_ns is not None:
+                    _ = old_ns.fresh_copy(obj)
             self._handle_aliases()
         if refresh_cached:
             self._refresh_cached_obj()
@@ -285,25 +300,80 @@ class DataSymbol:
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
 
-    def get_call_args(self):
-        assert self.is_function
-        args = set()
-        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
-                args.add(arg.arg)
-            if self.stmt_node.args.vararg is not None:
-                args.add(self.stmt_node.args.vararg.arg)
-            if self.stmt_node.args.kwarg is not None:
-                args.add(self.stmt_node.args.kwarg.arg)
+    def get_definition_args(self) -> List[str]:
+        assert self.is_function and isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+        args = []
+        for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
+            args.append(arg.arg)
+        if self.stmt_node.args.vararg is not None:
+            args.append(self.stmt_node.args.vararg.arg)
+        if self.stmt_node.args.kwarg is not None:
+            args.append(self.stmt_node.args.kwarg.arg)
         return args
 
-    def create_symbols_for_call_args(self):
+    def _match_call_args_with_definition_args(self):
+        assert self.is_function and isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+        caller_node = self._get_calling_ast_node()
+        if not isinstance(caller_node, ast.Call):
+            return []
+        def_args = self.stmt_node.args.args
+        if len(self.stmt_node.args.defaults) > 0:
+            def_args = def_args[:-len(self.stmt_node.args.defaults)]
+        if len(def_args) > 0 and def_args[0].arg == 'self':
+            # FIXME: this is bad and I should feel bad
+            def_args = def_args[1:]
+        for def_arg, call_arg in zip(def_args, caller_node.args):
+            if isinstance(call_arg, ast.Starred):
+                # give up
+                # TODO: handle this case
+                break
+            yield def_arg.arg, tracer().resolve_loaded_symbols(call_arg)
+        seen_keys = set()
+        for keyword in caller_node.keywords:
+            key, value = keyword.arg, keyword.value
+            if value is None:
+                continue
+            seen_keys.add(key)
+            yield key, tracer().resolve_loaded_symbols(value)
+        for key, value in zip(self.stmt_node.args.args[-len(self.stmt_node.args.defaults):], self.stmt_node.args.defaults):
+            if key.arg in seen_keys:
+                continue
+            yield key.arg, tracer().resolve_loaded_symbols(value)
+
+    def _get_calling_ast_node(self) -> Optional[ast.AST]:
+        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if self.name == '__getitem__':
+                # TODO: handle case where we're looking for a subscript for the calling node
+                return None
+            for decorator in self.stmt_node.decorator_list:
+                if isinstance(decorator, ast.Name) and decorator.id == 'property':
+                    # TODO: handle case where we're looking for an attribute for the calling node
+                    return None
+        lexical_call_stack = tracer().lexical_call_stack
+        if len(lexical_call_stack) == 0:
+            return None
+        prev_node_id_in_cur_frame_lexical = lexical_call_stack.get_field('prev_node_id_in_cur_frame_lexical')
+        caller_ast_node = nbs().ast_node_by_id.get(prev_node_id_in_cur_frame_lexical, None)
+        if caller_ast_node is None or not isinstance(caller_ast_node, ast.Call):
+            return None
+        return caller_ast_node
+
+    def create_symbols_for_call_args(self) -> None:
         assert self.is_function
-        for arg in self.get_call_args():
+        seen_def_args = set()
+        logger.info('create symbols for call to %s', self)
+        for def_arg, deps in self._match_call_args_with_definition_args():
+            seen_def_args.add(def_arg)
             # TODO: ideally we should try pass the actual objects to the DataSymbol ctor.
             #  Will require matching the signature with the actual call,
             #  which will be tricky I guess.
-            self.call_scope.upsert_data_symbol_for_name(arg, None, set(), self.stmt_node, False, propagate=False)
+            obj = deps[0].obj if len(deps) == 1 else None
+            logger.info('def arg %s matched with %s with deps %s', def_arg, obj, deps)
+            self.call_scope.upsert_data_symbol_for_name(def_arg, obj, set(deps), self.stmt_node, propagate=False)
+        for def_arg in self.get_definition_args():
+            if def_arg in seen_def_args:
+                continue
+            self.call_scope.upsert_data_symbol_for_name(def_arg, None, set(), self.stmt_node, propagate=False)
 
     @property
     def is_stale(self):

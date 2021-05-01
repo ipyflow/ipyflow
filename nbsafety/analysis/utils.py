@@ -55,7 +55,7 @@ def compute_call_chain_live_symbols(live: Set[DataSymbol]) -> Set[DataSymbol]:
         if not called_dsym.is_function:
             continue
         live_refs, _ = compute_live_dead_symbol_refs(
-            cast(ast.FunctionDef, called_dsym.stmt_node).body, called_dsym.get_call_args()
+            cast(ast.FunctionDef, called_dsym.stmt_node).body, set(called_dsym.get_definition_args())
         )
         live_symbols, called_symbols = get_symbols_for_references(live_refs, called_dsym.call_scope)
         worklist.extend(called_symbols)

@@ -214,10 +214,8 @@ class TraceManager(BaseTraceManager):
         self.node_id_to_saved_dict_key.clear()
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
-        node_before_call = nbs().ast_node_by_id[self.prev_node_id_in_cur_frame]
-        if hasattr(node_before_call, 'ctx') and isinstance(getattr(node_before_call, 'ctx'), ast.Del):
-            self.node_id_to_saved_del_data.pop(self.prev_node_id_in_cur_frame, None)
-        self.node_id_to_saved_del_data.clear()  # ensures we only handle del's and not delitem's
+        # ensures we only handle del's and not delitem's
+        self.node_id_to_saved_del_data.clear()
         new_scope = trace_stmt.get_post_call_scope()
         with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda

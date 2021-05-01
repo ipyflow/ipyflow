@@ -74,7 +74,6 @@ logging.info(f'The best model was {best_model} with an accuracy of {best_acc}.')
 # TODO: to get this working properly, post-call argument
 #  symbols need to have dependencies on pre-call argument
 #  symbols. The place to do this is in `DataSymbol.create_symbols_for_call_args(...)`
-@skipif_known_failing
 def test_passed_sym_captured_as_dep_for_mutated_obj():
     run_cell("""
 class Foo:
@@ -632,9 +631,11 @@ def func(x, y=a):
     logging.info(b[0])
     e = [c[0] + d[0]]
     f = [x[0] + y[0]]
+    %safety show_deps f[0]
     return f
 # z = func(c)""")
     run_cell('z = func(c)')
+    run_cell('%safety show_deps z[0]')
     run_cell('logging.info(z[0])')
     assert_not_detected()
     run_cell('logging.info(z)')
@@ -2151,6 +2152,17 @@ def test_list_sum_simple():
     assert_not_detected()
     run_cell("logging.info(lst[3])")
     assert_detected()
+
+
+# TODO: where was I going with this?
+# def test_getitem_call():
+#     run_cell("""
+# class Foo:
+#     def __getitem__(self, x):
+#         return 42
+# """)
+#     run_cell('foo = Foo()')
+#     run_cell('x = foo[0]')
 
 
 if sys.version_info >= (3, 8):

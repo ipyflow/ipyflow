@@ -472,9 +472,11 @@ class NotebookSafety(singletons.NotebookSafety):
 
         for sym in self.all_data_symbols():
             for used_timestamp, version in sym.version_by_used_timestamp.items():
-                cell_num_to_dynamic_deps[used_timestamp].add(version)
+                if version < used_timestamp:
+                    cell_num_to_dynamic_deps[used_timestamp].add(version)
             for live_timestamp, version in sym.version_by_liveness_timestamp.items():
-                cell_num_to_static_deps[live_timestamp].add(version)
+                if version < live_timestamp:
+                    cell_num_to_static_deps[live_timestamp].add(version)
 
         self._get_cell_dependencies(
             cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)

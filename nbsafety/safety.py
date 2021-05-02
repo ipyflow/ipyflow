@@ -452,7 +452,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
 
-    def create_dag_metadata(self) -> Dict[int, Dict[str, Union[List[int], Dict[str, Dict[str, str]]]]]:
+    def create_dag_metadata(self) -> Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]]:
         cell_num_to_used_imports: Dict[int, Set[DataSymbol]] = defaultdict(set)
         cell_num_to_dynamic_inputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
         cell_num_to_dynamic_outputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
@@ -478,7 +478,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     # TODO: distinguished between used / unused outputs?
                     cell_num_to_dynamic_outputs[version].add(top_level_sym)
 
-        cell_metadata: Dict[int, Dict[str, Union[List[int], Dict[str, Dict[str, str]]]]] = {}
+        cell_metadata: Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]] = {}
         all_relevant_cells = (
             cell_num_to_used_imports.keys() |
             cell_num_to_dynamic_inputs.keys() |

@@ -59,7 +59,16 @@ def get_type_annotation(obj):
         if obj_type == dict:
             key_ann = _resolve_container_types(typing.List, _get_contained_type_annotations(obj.keys()))
             value_ann = _resolve_container_types(typing.List, _get_contained_type_annotations(obj.values()))
-            return typing.Dict[key_ann.__args__, value_ann.__args__]
+            key_args = getattr(key_ann, '__args__', None)
+            value_args = getattr(value_ann, '__args__', None)
+            if key_args is None or value_args is None:
+                return typing.Dict
+            else:
+                if len(key_args) == 1:
+                    key_args = key_args[0]
+                if len(value_args) == 1:
+                    value_args = value_args[0]
+                return typing.Dict[key_args, value_args]
         elif obj_type == tuple:
             return _resolve_tuple_types(_get_contained_type_annotations(obj))
         else:
@@ -71,21 +80,36 @@ def get_type_annotation(obj):
 
 
 def make_annotation_string(ann) -> str:
-    if hasattr(ann, '__name__'):
+    if ann is type(None):
+        ret = 'None'
+    elif hasattr(ann, '__name__'):
         ret = ann.__name__
     elif hasattr(ann, '_name'):
         ret = ann._name
+        if ret is None:
+            args = ann.__args__
+            if args[-1] is type(None) and len(args) == 2:
+                ret = 'Optional'
+            else:
+                ret = 'Union'
+    elif ann is ...:
+        ret = '...'
     else:
         ret = str(ann)
 
-    if hasattr(ann, '__module__'):
-        module = ann.__module__
-        if module not in ('typing', 'builtins'):
-            ret = f'{module}.{ret}'
+    module = getattr(ann, '__module__', None)
+    if module is not None and module not in ('typing', 'builtins'):
+        ret = f'{module}.{ret}'
 
-    if hasattr(ann, '__args__'):
-        args_anns = []
-        for arg in ann.__args__:
-            args_anns.append(make_annotation_string(arg))
-        ret = f'{ret}[{", ".join(args_anns)}]'
+    ann_args = getattr(ann, '__args__', None)
+    if ann_args is not None:
+        ann_args = list(ann_args)
+        if ret == 'Optional' and len(ann_args) > 0:
+            ann_args = ann_args[:-1]
+        if len(ann_args) > 0:
+            args_anns = []
+            for arg in ann_args:
+                args_anns.append(make_annotation_string(arg))
+            should_sort = ret == 'Union'
+            ret = f'{ret}[{", ".join(sorted(args_anns) if should_sort else args_anns)}]'
     return ret

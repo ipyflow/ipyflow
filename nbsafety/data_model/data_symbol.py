@@ -82,6 +82,8 @@ class DataSymbol:
         self.last_used_cell_num: int = -1
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.version_by_used_timestamp: Dict[int, int] = {}
+        # each time this symbol was updated, store its new version so we know which cells updated it
+        self.created_versions: Set[int] = set()
 
         # History of definitions at time of liveness
         self.version_by_liveness_timestamp: Dict[int, int] = {}
@@ -172,6 +174,54 @@ class DataSymbol:
     @property
     def is_import(self):
         return self.symbol_type == DataSymbolType.IMPORT
+
+    @property
+    def imported_module(self) -> str:
+        if not self.is_import:
+            raise ValueError('only IMPORT symbols have `imported_module` property')
+        if isinstance(self.stmt_node, ast.Import):
+            for alias in self.stmt_node.names:
+                name = alias.asname or alias.name
+                if name == self.name:
+                    return alias.name
+            raise ValueError('Unable to find module for symbol %s is stmt %s' % (self, ast.dump(self.stmt_node)))
+        elif isinstance(self.stmt_node, ast.ImportFrom):
+            return self.stmt_node.module
+        else:
+            raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
+
+    @property
+    def imported_symbol_original_name(self) -> str:
+        if not self.is_import:
+            raise ValueError('only IMPORT symbols have `imported_symbol_original_name` property')
+        if isinstance(self.stmt_node, ast.Import):
+            return self.imported_module
+        elif isinstance(self.stmt_node, ast.ImportFrom):
+            for alias in self.stmt_node.names:
+                name = alias.asname or alias.name
+                if name == self.name:
+                    return alias.name
+            raise ValueError('Unable to find module for symbol %s is stmt %s' % (self, ast.dump(self.stmt_node)))
+        else:
+            raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
+
+    def get_import_string(self) -> str:
+        if not self.is_import:
+            raise ValueError('only IMPORT symbols support recreating the import string')
+        module = self.imported_module
+        if isinstance(self.stmt_node, ast.Import):
+            if module == self.name:
+                return f'import {module}'
+            else:
+                return f'import {module} as {self.name}'
+        elif isinstance(self.stmt_node, ast.ImportFrom):
+            original_symbol_name = self.imported_symbol_original_name
+            if original_symbol_name == self.name:
+                return f'from {module} import {original_symbol_name}'
+            else:
+                return f'from {module} import {original_symbol_name} as {self.name}'
+        else:
+            raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
 
     @property
     def is_anonymous(self):
@@ -421,6 +471,7 @@ class DataSymbol:
     def refresh(self: DataSymbol, bump_version=True):
         if bump_version:
             self.defined_cell_num = nbs().cell_counter()
+            self.created_versions.add(self.defined_cell_num)
         self.fresher_ancestors = set()
         self.namespace_stale_symbols = set()
 

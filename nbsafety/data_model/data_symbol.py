@@ -27,7 +27,6 @@ class DataSymbolType(Enum):
     FUNCTION = 'function'
     CLASS = 'class'
     IMPORT = 'import'
-    LAMBDA = 'lambda'
     ANONYMOUS = 'anonymous'
 
 
@@ -204,6 +203,16 @@ class DataSymbol:
             raise ValueError('Unable to find module for symbol %s is stmt %s' % (self, ast.dump(self.stmt_node)))
         else:
             raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
+
+    def get_top_level(self) -> Optional[DataSymbol]:
+        if not self.containing_scope.is_namespace_scope:
+            return self
+        else:
+            containing_scope = cast('NamespaceScope', self.containing_scope)
+            for alias in nbs().aliases[containing_scope.obj_id]:
+                if alias.is_globally_accessible:
+                    return alias.get_top_level()
+            return None
 
     def get_import_string(self) -> str:
         if not self.is_import:

@@ -452,7 +452,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
 
-    def create_dag_metadata(self) -> Dict[int, Dict[str, Union[List[int], List[str]]]]:
+    def create_dag_metadata(self) -> Dict[int, Dict[str, Union[List[int], Dict[str, Dict[str, str]]]]]:
         cell_num_to_used_imports: Dict[int, Set[DataSymbol]] = defaultdict(set)
         cell_num_to_dynamic_inputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
         cell_num_to_dynamic_outputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
@@ -478,7 +478,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     # TODO: distinguished between used / unused outputs?
                     cell_num_to_dynamic_outputs[version].add(top_level_sym)
 
-        cell_metadata: Dict[int, Dict[str, Union[List[int], List[str]]]] = {}
+        cell_metadata: Dict[int, Dict[str, Union[List[int], Dict[str, Dict[str, str]]]]] = {}
         all_relevant_cells = (
             cell_num_to_used_imports.keys() |
             cell_num_to_dynamic_inputs.keys() |
@@ -488,8 +488,16 @@ class NotebookSafety(singletons.NotebookSafety):
         )
         for cell_num in all_relevant_cells:
             cell_imports = [dsym.get_import_string() for dsym in cell_num_to_used_imports[cell_num]]
-            input_symbols = [str(dsym) for dsym in cell_num_to_dynamic_inputs[cell_num]]
-            output_symbols = [str(dsym) for dsym in cell_num_to_dynamic_outputs[cell_num]]
+            input_symbols = {
+                str(dsym): {
+                    'type': dsym.get_type_annotation_string()
+                } for dsym in cell_num_to_dynamic_inputs[cell_num]
+            }
+            output_symbols = {
+                str(dsym): {
+                    'type': dsym.get_type_annotation_string()
+                } for dsym in cell_num_to_dynamic_outputs[cell_num]
+            }
             parent_cells = list(cell_num_to_dynamic_cell_parents[cell_num])
             child_cells = list(cell_num_to_dynamic_cell_children[cell_num])
             cell_metadata[cell_num] = {

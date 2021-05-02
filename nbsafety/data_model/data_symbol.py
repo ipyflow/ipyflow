@@ -6,13 +6,14 @@ import logging
 import sys
 from typing import cast, TYPE_CHECKING
 
+from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
 from nbsafety.data_model import sizing
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from nbsafety.types import SupportedIndexType
-    from typing import Any, Dict, List, Optional, Set
+    from typing import Any, Dict, Iterable, List, Optional, Set
 
     # avoid circular imports
     from nbsafety.data_model.scope import Scope, NamespaceScope
@@ -250,6 +251,12 @@ class DataSymbol:
     @property
     def obj_type(self):
         return type(self.obj)
+
+    def get_type_annotation(self):
+        return get_type_annotation(self.obj)
+
+    def get_type_annotation_string(self) -> str:
+        return make_annotation_string(self.get_type_annotation())
 
     @property
     def namespace(self):

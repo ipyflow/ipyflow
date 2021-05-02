@@ -92,12 +92,13 @@ def make_annotation_string(ann) -> str:
                 ret = 'Optional'
             else:
                 ret = 'Union'
-        elif ret.startswith('typing') and '.' in ret and '[' in ret:
-            ret = ret.split('.')[1].split('[')[0]
     elif ann is ...:
         ret = '...'
     else:
         ret = str(ann)
+
+    if ret.startswith('typing') and '.' in ret and '[' in ret:
+        ret = ret.split('.')[1].split('[')[0]
 
     module = getattr(ann, '__module__', None)
     if module is not None and module not in ('typing', 'builtins'):

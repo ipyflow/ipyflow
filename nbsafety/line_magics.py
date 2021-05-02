@@ -1,6 +1,7 @@
 # -*- coding: future_annotations -*-
 import ast
 import astunparse
+import json
 from typing import cast, TYPE_CHECKING
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.singletons import nbs
@@ -119,6 +120,10 @@ def set_highlights(cmd: str, rest: str):
             nbs().mut_settings.highlights_enabled = False
         else:
             print(usage)
+
+
+def make_cell_dag():
+    print(json.dumps(nbs().create_dag_metadata(), indent=2))
 
 
 def make_slice(line: str):

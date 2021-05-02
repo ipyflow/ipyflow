@@ -113,7 +113,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self.stale_dependency_detected = False
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
-        self._counters_by_cell_id: Dict[CellId, int] = {}
+        self._counter_by_cell_id: Dict[CellId, int] = {}
+        self._cell_id_by_counter: Dict[int, CellId] = {}
         self._active_cell_id: Optional[str] = None
         if cell_magic_name is None:
             self._cell_magic = None
@@ -203,7 +204,8 @@ class NotebookSafety(singletons.NotebookSafety):
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
             if cell_id is not None:
-                self._counters_by_cell_id[cell_id] = self._last_execution_counter
+                self._counter_by_cell_id[cell_id] = self._last_execution_counter
+                self._cell_id_by_counter[self._last_execution_counter] = cell_id
             cells_by_id = request['content_by_cell_id']
             if self.settings.backwards_cell_staleness_propagation:
                 order_index_by_id = None
@@ -248,7 +250,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_cells.add(cell_id)
                 elif (self._get_max_defined_cell_num_for_symbols(symbols['live']) >
-                      self._counters_by_cell_id.get(cell_id, cast(int, float('inf')))):
+                      self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))):
                     fresh_cells.append(cell_id)
                 for dead_sym in dead_symbols:
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
@@ -450,6 +452,55 @@ class NotebookSafety(singletons.NotebookSafety):
                 self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
 
+    def create_dag_metadata(self) -> Dict[int, Dict[str, Union[List[int], List[str]]]]:
+        cell_num_to_used_imports: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        cell_num_to_dynamic_inputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        cell_num_to_dynamic_outputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        cell_num_to_dynamic_cell_parents: Dict[int, Set[int]] = defaultdict(set)
+        cell_num_to_dynamic_cell_children: Dict[int, Set[int]] = defaultdict(set)
+
+        for sym in self.all_data_symbols():
+            top_level_sym = sym.get_top_level()
+            if top_level_sym is None or not top_level_sym.is_globally_accessible or top_level_sym.is_anonymous:
+                # TODO: also skip lambdas
+                continue
+            for used_timestamp, version in sym.version_by_used_timestamp.items():
+                if top_level_sym.is_import:
+                    cell_num_to_used_imports[used_timestamp].add(top_level_sym)
+                else:
+                    if version < used_timestamp:
+                        cell_num_to_dynamic_cell_parents[used_timestamp].add(version)
+                        cell_num_to_dynamic_inputs[used_timestamp].add(top_level_sym)
+                        cell_num_to_dynamic_cell_children[version].add(used_timestamp)
+                    cell_num_to_dynamic_outputs[version].add(top_level_sym)
+            if not top_level_sym.is_import:
+                for version in sym.created_versions:
+                    # TODO: distinguished between used / unused outputs?
+                    cell_num_to_dynamic_outputs[version].add(top_level_sym)
+
+        cell_metadata: Dict[int, Dict[str, Union[List[int], List[str]]]] = {}
+        all_relevant_cells = (
+            cell_num_to_used_imports.keys() |
+            cell_num_to_dynamic_inputs.keys() |
+            cell_num_to_dynamic_outputs.keys() |
+            cell_num_to_dynamic_cell_parents.keys() |
+            cell_num_to_dynamic_cell_children.keys()
+        )
+        for cell_num in all_relevant_cells:
+            cell_imports = [dsym.get_import_string() for dsym in cell_num_to_used_imports[cell_num]]
+            input_symbols = [str(dsym) for dsym in cell_num_to_dynamic_inputs[cell_num]]
+            output_symbols = [str(dsym) for dsym in cell_num_to_dynamic_outputs[cell_num]]
+            parent_cells = list(cell_num_to_dynamic_cell_parents[cell_num])
+            child_cells = list(cell_num_to_dynamic_cell_children[cell_num])
+            cell_metadata[cell_num] = {
+                'cell_imports': cell_imports,
+                'input_symbols': input_symbols,
+                'output_symbols': output_symbols,
+                'parent_cells': parent_cells,
+                'child_cells': child_cells,
+            }
+        return cell_metadata
+
     def get_cell_dependencies(self, cell_num: int) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the last or 
@@ -479,7 +530,8 @@ class NotebookSafety(singletons.NotebookSafety):
                     cell_num_to_static_deps[live_timestamp].add(version)
 
         self._get_cell_dependencies(
-            cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)
+            cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps
+        )
         return {num: self.cell_content_by_counter[num] for num in dependencies}
 
     def _get_cell_dependencies(
@@ -531,7 +583,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
             cell_id = self._active_cell_id
             if self._active_cell_id is not None:
-                self._counters_by_cell_id[self._active_cell_id] = self._last_execution_counter
+                self._counter_by_cell_id[self._active_cell_id] = self._last_execution_counter
                 self._active_cell_id = None
 
             # Stage 1: Precheck.
@@ -602,6 +654,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.trace_messages(line)
             elif cmd in ('hls', 'nohls', 'highlight', 'highlights'):
                 return line_magics.set_highlights(cmd, line)
+            elif cmd in ('dag', 'make_dag', 'cell_dag', 'make_cell_dag'):
+                return line_magics.make_cell_dag()
             elif cmd in ('slice', 'make_slice', 'gather_slice'):
                 return line_magics.make_slice(line)
             elif cmd == 'remove_dependency':

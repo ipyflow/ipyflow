@@ -7,7 +7,8 @@ def _make_annotation_str_for_obj(obj):
 
 
 def test_dict():
-    assert _make_annotation_str_for_obj({}) == 'Dict'
+    empty = _make_annotation_str_for_obj({})
+    assert empty == 'Dict', 'got %s' % empty
     assert _make_annotation_str_for_obj({1: 2}) == 'Dict[int, int]'
     assert _make_annotation_str_for_obj({1: 2, 2: 3.0}) == 'Dict[int, float]'
     ann_str = _make_annotation_str_for_obj({1: 2, 2: 3.0, 'foo': 'bar'})

@@ -97,15 +97,21 @@ def make_annotation_string(ann) -> str:
     else:
         ret = str(ann)
 
+    if ret.startswith('typing') and '.' in ret and '[' in ret:
+        ret = ret.split('.')[1].split('[')[0]
+
     module = getattr(ann, '__module__', None)
     if module is not None and module not in ('typing', 'builtins'):
         ret = f'{module}.{ret}'
 
     ann_args = getattr(ann, '__args__', None)
     if ann_args is not None:
-        ann_args = list(ann_args)
-        if ret == 'Optional' and len(ann_args) > 0:
-            ann_args = ann_args[:-1]
+        ann_args = [arg for arg in ann_args if not isinstance(arg, typing.TypeVar)]
+        if ret in ('Optional', 'Union') and len(ann_args) > 0 and ann_args[-1] is type(None):
+            if len(ann_args) == 2:
+                ann_args = ann_args[:-1]
+            if len(ann_args) == 1:
+                ret = 'Optional'
         if len(ann_args) > 0:
             args_anns = []
             for arg in ann_args:

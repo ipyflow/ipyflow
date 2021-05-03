@@ -23,10 +23,10 @@ def run_cell(cell, cell_id=None, **kwargs):
 
 def test_int_change_to_str_triggers_typecheck():
     run_cell('a = 1', 1)
-    assert not nbs().cells_needing_typecheck
+    assert not nbs().get_cell_ids_needing_typecheck()
     run_cell('b = 2', 2)
-    assert not nbs().cells_needing_typecheck
+    assert not nbs().get_cell_ids_needing_typecheck()
     run_cell('logging.info(a + b)', 3)
-    assert not nbs().cells_needing_typecheck
+    assert not nbs().get_cell_ids_needing_typecheck()
     run_cell('b = "b"', 4)
-    assert nbs().cells_needing_typecheck == {3}
+    assert nbs().get_cell_ids_needing_typecheck() == {3}

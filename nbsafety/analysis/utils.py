@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 import ast
+import itertools
 import logging
 import sys
 from typing import cast, TYPE_CHECKING
@@ -43,26 +44,27 @@ def get_symbols_for_references(
     return symbols, called_symbols
 
 
-def compute_call_chain_live_symbols(live: Set[DataSymbol]) -> Set[DataSymbol]:
+def compute_call_chain_live_symbols_and_cells(live: Set[DataSymbol]) -> Tuple[Set[DataSymbol], Set[int]]:
     seen = set()
     worklist = list(live)
+    live = set(live)
     while len(worklist) > 0:
         called_dsym = worklist.pop()
         if called_dsym in seen:
             continue
-        seen.add(called_dsym)
         # TODO: handle callable classes
         if not called_dsym.is_function:
             continue
+        seen.add(called_dsym)
         live_refs, _ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_dsym.stmt_node).body, set(called_dsym.get_definition_args())
         )
         live_symbols, called_symbols = get_symbols_for_references(live_refs, called_dsym.call_scope)
         worklist.extend(called_symbols)
-        live_symbols = set(sym for sym in live_symbols if sym.is_globally_accessible)
-        called_symbols = set(sym for sym in called_symbols if sym.is_globally_accessible)
-        live |= live_symbols.union(called_symbols)
-    return live
+        live |= {
+            sym for sym in itertools.chain(live_symbols, called_symbols) if sym.is_globally_accessible
+        }
+    return live, {called_dsym.defined_cell_num for called_dsym in seen}
 
 
 class ContainsNamedExprVisitor(ast.NodeVisitor):

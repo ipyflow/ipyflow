@@ -13,7 +13,7 @@ from IPython.core.magic import register_cell_magic, register_line_magic
 
 from nbsafety.analysis import (
     compute_live_dead_symbol_refs,
-    compute_call_chain_live_symbols,
+    compute_call_chain_live_symbols_and_cells,
     get_symbols_for_references,
 )
 from nbsafety.ipython_utils import (
@@ -38,26 +38,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-_MAX_WARNINGS = 10
 _SAFETY_LINE_MAGIC = 'safety'
-
 _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
-
-
-def _safety_warning(node: DataSymbol):
-    if not node.is_stale:
-        raise ValueError('Expected node with stale ancestor; got %s' % node)
-    if node.defined_cell_num < 1:
-        return
-    fresher_symbols = node.fresher_ancestors
-    if len(fresher_symbols) == 0:
-        fresher_symbols = node.namespace_stale_symbols
-    logger.warning(
-        f'`{node.readable_name}` defined in cell {node.defined_cell_num} may depend on '
-        f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
-        f'(latest update in cell {node.required_cell_num}).'
-        f'\n\n(Run cell again to override and execute anyway.)'
-    )
 
 
 class NotebookSafetySettings(NamedTuple):
@@ -66,9 +48,10 @@ class NotebookSafetySettings(NamedTuple):
     use_comm: bool
     backwards_cell_staleness_propagation: bool
     track_dependencies: bool
+    mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
+    mark_phantom_cell_usages_unsafe: bool
     naive_refresher_computation: bool
-    skip_unsafe_cells: bool
     mode: SafetyRunMode
 
 
@@ -76,6 +59,14 @@ class NotebookSafetySettings(NamedTuple):
 class MutableNotebookSafetySettings:
     trace_messages_enabled: bool
     highlights_enabled: bool
+
+
+class CheckerResult(NamedTuple):
+    live: Set[DataSymbol]
+    live_cells: Set[int]
+    live_cells_from_calls: Set[int]
+    dead: Set[DataSymbol]
+    stale: Set[DataSymbol]
 
 
 class NotebookSafety(singletons.NotebookSafety):
@@ -89,9 +80,10 @@ class NotebookSafety(singletons.NotebookSafety):
             use_comm=use_comm,
             backwards_cell_staleness_propagation=True,
             track_dependencies=True,
+            mark_stale_symbol_usages_unsafe=kwargs.pop('mark_stale_symbol_usages_unsafe', True),
             mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
+            mark_phantom_cell_usages_unsafe=kwargs.pop('mark_phantom_cell_usages_unsafe', False),
             naive_refresher_computation=False,
-            skip_unsafe_cells=kwargs.pop('skip_unsafe', True),
             mode=SafetyRunMode.get(),
         )
         self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
@@ -108,9 +100,9 @@ class NotebookSafety(singletons.NotebookSafety):
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self.cell_id_by_live_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
-        self.cells_needing_typecheck: Set[CellId] = set()
-        self.stale_dependency_detected = False
+        self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
+        self.cell_counters_needing_typecheck: Set[int] = set()
+        self.safety_issue_detected = False
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
         self._counter_by_cell_id: Dict[CellId, int] = {}
@@ -203,9 +195,6 @@ class NotebookSafety(singletons.NotebookSafety):
             self.set_active_cell(request['active_cell_id'], position_idx=request.get('active_cell_order_idx', -1))
         elif request['type'] == 'cell_freshness':
             cell_id = request.get('executed_cell_id', None)
-            if cell_id is not None:
-                self._counter_by_cell_id[cell_id] = self._last_execution_counter
-                self._cell_id_by_counter[self._last_execution_counter] = cell_id
             cells_by_id = request['content_by_cell_id']
             if self.settings.backwards_cell_staleness_propagation:
                 order_index_by_id = None
@@ -244,12 +233,12 @@ class NotebookSafety(singletons.NotebookSafety):
             ):
                 continue
             try:
-                symbols = self._check_cell_and_resolve_symbols(cell_content)
-                stale_symbols, dead_symbols = symbols['stale'], symbols['dead']
+                checker_result = self._check_cell_and_resolve_symbols(cell_content)
+                stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_cells.add(cell_id)
-                elif (self._get_max_defined_cell_num_for_symbols(symbols['live']) >
+                elif (self._get_max_defined_cell_num_for_symbols(checker_result.live) >
                       self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))):
                     fresh_cells.append(cell_id)
                 for dead_sym in dead_symbols:
@@ -292,7 +281,7 @@ class NotebookSafety(singletons.NotebookSafety):
         if self.settings.mark_typecheck_failures_unsafe:
             # TODO: actually do the type checking
             #  nested symbols in particular will need some thought
-            self.cells_needing_typecheck.clear()
+            self.cell_counters_needing_typecheck.clear()
         return {
             'stale_cells': list(stale_cells),
             'fresh_cells': fresh_cells,
@@ -320,7 +309,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             concated_content = f'{cell_content}\n\n{stale_cell_content}'
             try:
-                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content)['stale']
+                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content).stale
             except SyntaxError:
                 continue
             if concated_stale_symbols < stale_symbols:
@@ -349,72 +338,126 @@ class NotebookSafety(singletons.NotebookSafety):
                     max_defined_cell_num, namespace_scope.max_defined_timestamp)
         return max_defined_cell_num
 
-    def _check_cell_and_resolve_symbols(
-        self,
-        cell: Union[ast.Module, str]
-    ) -> Dict[str, Set[DataSymbol]]:
+    def _check_cell_and_resolve_symbols(self, cell: Union[ast.Module, str]) -> CheckerResult:
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
-        live_symbols, called_symbols = get_symbols_for_references(
-            live_symbol_refs, self.global_scope)
-        live_symbols = live_symbols.union(compute_call_chain_live_symbols(called_symbols))
+        live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
+        live_symbols_from_calls, live_cells_from_calls = compute_call_chain_live_symbols_and_cells(called_symbols)
+        live_symbols = live_symbols | live_symbols_from_calls
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, self.global_scope, only_add_successful_resolutions=True
         )
         stale_symbols = set(dsym for dsym in live_symbols if dsym.is_stale)
-        return {
-            'live': live_symbols,
-            'dead': dead_symbols,
-            'stale': stale_symbols,
-        }
+        return CheckerResult(
+            live=live_symbols,
+            live_cells={sym.defined_cell_num for sym in live_symbols},
+            live_cells_from_calls=live_cells_from_calls,
+            dead=dead_symbols,
+            stale=stale_symbols,
+        )
 
-    def _precheck_for_stale(self, cell: str, cell_id: Optional[CellId]) -> bool:
+    _MAX_STALE_SYM_WARNINGS = 10
+    _MAX_STALE_CELL_WARNINGS = 10
+
+    @staticmethod
+    def _stale_sym_warning(sym: DataSymbol):
+        if not sym.is_stale:
+            raise ValueError('Expected node with stale ancestor; got %s' % sym)
+        if sym.defined_cell_num < 1:
+            return
+        fresher_symbols = sym.fresher_ancestors
+        if len(fresher_symbols) == 0:
+            # TODO: use `fresher_symbols` of namespace_stale_symbols?
+            fresher_symbols = sym.namespace_stale_symbols
+        logger.warning(
+            f'`{sym.readable_name}` defined in cell {sym.defined_cell_num} may depend on '
+            f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
+            f'(latest update in cell {sym.required_cell_num}).'
+            f'\n\n(Run cell again to override and execute anyway.)'
+        )
+
+    @staticmethod
+    def _stale_cell_warning(cell_execs: Set[int]):
+        if len(cell_execs) < 2:
+            raise ValueError('Expected cell that was executed at least twice')
+        logger.warning(
+            f'Detected usages of symbols across same cell executed multiple times (timestamps {cell_execs}) '
+        )
+
+    def _safety_precheck_cell(self, cell: str, cell_id: Optional[CellId]) -> bool:
         """
-        This method statically checks the cell to be executed for stale symbols.
-        If any live, stale symbols are detected, it returns `True`. On a syntax
-        error or if no such symbols are detected, return `False`.
-        Furthermore, if this is the second time the user has attempted to execute
-        the exact same code, we assume they want to override this checker and
-        we temporarily mark any stale symbols as being not stale and return `False`.
+        This method statically checks the cell to be executed for stale symbols and other safety issues.
+        If any safety issues are detected, it returns `True`. Otherwise (or on syntax error), return `False`.
+        Furthermore, if this is the second time the user has attempted to execute the exact same code, we
+        assume they want to override this checker. In the case of stale symbols, we temporarily mark any
+        stale symbols as being not stale and return `False`.
         """
         try:
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
             return False
-        symbols = self._check_cell_and_resolve_symbols(cell_ast)
-        stale_symbols, live_symbols = symbols['stale'], symbols['live']
+        checker_result = self._check_cell_and_resolve_symbols(cell_ast)
+        stale_symbols, live_symbols, live_cells = checker_result.stale, checker_result.live, checker_result.live_cells
+        stale_sym_usage_warning_counter = 0
+        phantom_cell_usage_warning_counter = 0
         if self._last_refused_code is None or cell != self._last_refused_code:
-            self._prev_cell_stale_symbols = stale_symbols
-            if len(stale_symbols) > 0:
-                warning_counter = 0
+            if self.settings.mark_stale_symbol_usages_unsafe:
+                self._prev_cell_stale_symbols = stale_symbols
                 for sym in self._prev_cell_stale_symbols:
-                    if warning_counter >= _MAX_WARNINGS:
-                        logger.warning(f'{len(self._prev_cell_stale_symbols) - warning_counter}'
-                                       ' more nodes with stale dependencies skipped...')
+                    if stale_sym_usage_warning_counter >= self._MAX_STALE_SYM_WARNINGS:
+                        logger.warning(f'{len(self._prev_cell_stale_symbols) - stale_sym_usage_warning_counter}'
+                                       ' more symbols with stale dependencies skipped...')
                         break
-                    _safety_warning(sym)
-                    warning_counter += 1
-                self.stale_dependency_detected = True
-                self._last_refused_code = cell
-                return True
+                    self._stale_sym_warning(sym)
+                    stale_sym_usage_warning_counter += 1
+            if self.settings.mark_phantom_cell_usages_unsafe:
+                used_cell_counters_by_cell_id = defaultdict(set)
+                used_cell_counters_by_cell_id[cell_id].add(self.cell_counter())
+                for cell_num in live_cells:
+                    used_cell_counters_by_cell_id[self._cell_id_by_counter[cell_num]].add(cell_num)
+                phantom_cell_info = {
+                    cell_id: cell_execs
+                    for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
+                    if len(cell_execs) >= 2
+                }
+                for used_cell_execs in phantom_cell_info.values():
+                    if phantom_cell_usage_warning_counter >= self._MAX_STALE_CELL_WARNINGS:
+                        logger.warning(f'{len(phantom_cell_info) - phantom_cell_usage_warning_counter} '
+                                       'more cells with symbol usages from phantom cells skipped...')
+                        break
+                    self._stale_cell_warning(used_cell_execs)
+                    phantom_cell_usage_warning_counter += 1
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers
+            # TODO: temporary allow executions depending on phantom cells?
             for sym in self._prev_cell_stale_symbols:
                 sym.temporary_disable_warnings()
             self._prev_cell_stale_symbols.clear()
 
+        if stale_sym_usage_warning_counter + phantom_cell_usage_warning_counter > 0:
+            self.safety_issue_detected = True
+            self._last_refused_code = cell
+            return True
+
         # For each of the live symbols, record their `defined_cell_num`
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
-            if cell_id is not None:
-                self.cell_id_by_live_symbol[sym].add(cell_id)
+            self.cell_counter_by_live_symbol[sym].add(self.cell_counter())
             sym.version_by_liveness_timestamp[self.cell_counter()] = sym.defined_cell_num
 
         self._last_refused_code = None
         return False
+
+    def get_cell_ids_needing_typecheck(self) -> Set[CellId]:
+        cell_ids_needing_typecheck = set()
+        for cell_counter in self.cell_counters_needing_typecheck:
+            cell_id = self._cell_id_by_counter[cell_counter]
+            if self._counter_by_cell_id[cell_id] == cell_id:
+                cell_ids_needing_typecheck.add(cell_id)
+        return cell_ids_needing_typecheck
 
     def _resync_symbols(self, symbols: Iterable[DataSymbol]):
         for dsym in symbols:
@@ -592,10 +635,11 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_id = self._active_cell_id
             if self._active_cell_id is not None:
                 self._counter_by_cell_id[self._active_cell_id] = self._last_execution_counter
+                self._cell_id_by_counter[self._last_execution_counter] = self._active_cell_id
                 self._active_cell_id = None
 
             # Stage 1: Precheck.
-            if self._precheck_for_stale(cell, cell_id) and self.settings.skip_unsafe_cells:
+            if self._safety_precheck_cell(cell, cell_id) and self.settings.mark_stale_symbol_usages_unsafe:
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 return run_cell_func('None')
@@ -700,8 +744,8 @@ class NotebookSafety(singletons.NotebookSafety):
             yield from alias_set
 
     def test_and_clear_detected_flag(self):
-        ret = self.stale_dependency_detected
-        self.stale_dependency_detected = False
+        ret = self.safety_issue_detected
+        self.safety_issue_detected = False
         return ret
 
     def _gc(self):

@@ -191,7 +191,7 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
         5: 'x = 43',
         6: 'foo = foo.set_x(10)',
     }
-    with override_settings(skip_unsafe_cells=False):
+    with override_settings(mark_stale_symbol_usages_unsafe=False):
         for idx, cell in cells.items():
             run_cell(cell, idx)
         response = nbs().check_and_link_multiple_cells(cells)

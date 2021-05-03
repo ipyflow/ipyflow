@@ -305,7 +305,7 @@ class DataSymbol:
     def update_obj_ref(self, obj, refresh_cached=True):
         self._cached_out_of_sync = True
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
-            nbs().cells_needing_typecheck |= nbs().cell_id_by_live_symbol.get(self, set())
+            nbs().cell_counters_needing_typecheck |= nbs().cell_counter_by_live_symbol.get(self, set())
         self._tombstone = False
         self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:

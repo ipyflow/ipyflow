@@ -180,7 +180,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
-        self.active_cell_position_idx = position_idx
+        if position_idx is not None:
+            self.active_cell_position_idx = position_idx
 
     def _comm_target(self, comm, open_msg):
         @comm.on_msg

@@ -13,6 +13,14 @@ class SafeKernel(IPythonKernel):
         super().__init__(**kwargs)
         NotebookSafety.instance(use_comm=True)
 
+    def init_metadata(self, parent):
+        """
+        Don't actually change the metadata; we just want to get the cell id
+        out of the execution request.
+        """
+        nbs().set_active_cell(parent['metadata']['cellId'], position_idx=None)
+        return super().init_metadata(parent)
+
     def do_execute(self, code, silent, store_history=False, user_expressions=None, allow_stdin=False):
         super_ = super()
 

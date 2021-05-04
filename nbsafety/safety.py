@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import inspect
 import logging
 import re
+import shlex
+import subprocess
 from typing import cast, TYPE_CHECKING, NamedTuple
 
 from IPython import get_ipython
@@ -98,16 +100,19 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_scopes: Set[NamespaceScope] = set()
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
+        # TODO: we have a lot of fields concerning cells; they should probably get their own
+        #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         self.cell_counters_needing_typecheck: Set[int] = set()
-        self.safety_issue_detected = False
-        self.active_cell_position_idx = -1
-        self._last_execution_counter = 0
+        self._typecheck_error_cells: Set[CellId] = set()
         self._counter_by_cell_id: Dict[CellId, int] = {}
         self._cell_id_by_counter: Dict[int, CellId] = {}
         self._active_cell_id: Optional[str] = None
+        self.active_cell_position_idx = -1
+        self._last_execution_counter = 0
+        self.safety_issue_detected = False
         if cell_magic_name is None:
             self._cell_magic = None
         else:
@@ -119,6 +124,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._recorded_cell_name_to_cell_num = True
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._ast_transformer_raised: Optional[Exception] = None
+        self._saved_debug_message: Optional[str] = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
@@ -213,7 +219,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def check_and_link_multiple_cells(
         self,
-        cells_by_id: Dict[CellId, str],
+        content_by_cell_id: Dict[CellId, str],
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None
     ) -> Dict[str, Any]:
         if not self.mut_settings.highlights_enabled:
@@ -227,7 +233,8 @@ class NotebookSafety(singletons.NotebookSafety):
         fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
-        for cell_id, cell_content in cells_by_id.items():
+        cell_ids_needing_typecheck = self.get_cell_ids_needing_typecheck()
+        for cell_id, cell_content in content_by_cell_id.items():
             if (
                 order_index_by_cell_id is not None
                 and order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx
@@ -239,11 +246,32 @@ class NotebookSafety(singletons.NotebookSafety):
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_cells.add(cell_id)
-                elif (self._get_max_defined_cell_num_for_symbols(checker_result.live) >
-                      self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))):
-                    fresh_cells.append(cell_id)
+
                 for dead_sym in dead_symbols:
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
+
+                if self.settings.mark_typecheck_failures_unsafe and cell_id in cell_ids_needing_typecheck:
+                    typecheck_slice = self._build_typecheck_slice(cell_id, content_by_cell_id, checker_result)
+                    try:
+                        # TODO: parse the output in order to pass up to the user
+                        ret = subprocess.call(f"mypy -c {shlex.quote(typecheck_slice)}", shell=True)
+                        if ret == 0:
+                            self._typecheck_error_cells.discard(cell_id)
+                        else:
+                            self._typecheck_error_cells.add(cell_id)
+                    except Exception as e:
+                        logger.info('Exception ocurred during type checking: %s', e)
+                        self._typecheck_error_cells.discard(cell_id)
+
+                if self.settings.mark_phantom_cell_usages_unsafe:
+                    # TODO: implement phantom cell usage detection here
+                    pass
+
+                if (
+                    self._get_max_defined_cell_num_for_symbols(checker_result.live) >
+                    self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
+                ) and cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
+                    fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
@@ -254,7 +282,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 refresher_cell_ids = self._naive_compute_refresher_cells(
                     stale_cell_id,
                     stale_syms,
-                    cells_by_id,
+                    content_by_cell_id,
                     order_index_by_cell_id=order_index_by_cell_id
                 )
             else:
@@ -283,8 +311,13 @@ class NotebookSafety(singletons.NotebookSafety):
             # TODO: actually do the type checking
             #  nested symbols in particular will need some thought
             self.cell_counters_needing_typecheck.clear()
+        for typecheck_error_cell in self._typecheck_error_cells:
+            if typecheck_error_cell not in stale_links:
+                stale_links[typecheck_error_cell] = set()
         return {
-            'stale_cells': list(stale_cells),
+            # TODO: we should probably have separate fields for stale vs non-typechecking cells,
+            #  or at least change the name to a more general "unsafe_cells" or equivalent
+            'stale_cells': list(stale_cells | self._typecheck_error_cells),
             'fresh_cells': fresh_cells,
             'stale_links': {
                 stale_cell_id: list(refresher_cell_ids)
@@ -338,6 +371,22 @@ class NotebookSafety(singletons.NotebookSafety):
                 max_defined_cell_num = max(
                     max_defined_cell_num, namespace_scope.max_defined_timestamp)
         return max_defined_cell_num
+
+    def _build_typecheck_slice(
+        self, cell_id: CellId, content_by_cell_id: Dict[CellId, str], checker_result: CheckerResult
+    ) -> str:
+        live_cell_counters = {self._counter_by_cell_id[cell_id]}
+        for live_cell_num in checker_result.live_cells_from_calls:
+            live_cell_id = self._cell_id_by_counter[live_cell_num]
+            if self._counter_by_cell_id[live_cell_id] == live_cell_num:
+                live_cell_counters.add(live_cell_num)
+        live_cell_ids = [self._cell_id_by_counter[ctr] for ctr in sorted(live_cell_counters)]
+        top_level_symbols = {sym.get_top_level() for sym in checker_result.live}
+        top_level_symbols.discard(None)
+        return '{type_declarations}\n\n{content}'.format(
+            type_declarations='\n'.join(f'{sym.name}: {sym.get_type_annotation_string()}' for sym in top_level_symbols),
+            content='\n'.join(content_by_cell_id[cell_id] for cell_id in live_cell_ids),
+        )
 
     def _check_cell_and_resolve_symbols(self, cell: Union[ast.Module, str]) -> CheckerResult:
         if isinstance(cell, str):
@@ -395,6 +444,9 @@ class NotebookSafety(singletons.NotebookSafety):
         assume they want to override this checker. In the case of stale symbols, we temporarily mark any
         stale symbols as being not stale and return `False`.
         """
+        # TODO: there is a lot of potential for code sharing between this and `check_and_link_multiple_cells`;
+        #  we should improve the abstractions and take advantage of this. Right now we need to add bespoke code
+        #  for various kinds of unsafe interaction detection in both places.
         try:
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
@@ -430,6 +482,9 @@ class NotebookSafety(singletons.NotebookSafety):
                         break
                     self._stale_cell_warning(used_cell_execs)
                     phantom_cell_usage_warning_counter += 1
+            if self.settings.mark_typecheck_failures_unsafe:
+                # TODO: implement typechecking here, same as in `check_and_link_multiple_cells`
+                pass
         else:
             # Instead of breaking the dependency chain, simply refresh the nodes
             # with stale deps to their required cell numbers
@@ -454,9 +509,9 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def get_cell_ids_needing_typecheck(self) -> Set[CellId]:
         cell_ids_needing_typecheck = set()
-        for cell_counter in self.cell_counters_needing_typecheck:
-            cell_id = self._cell_id_by_counter[cell_counter]
-            if self._counter_by_cell_id[cell_id] == cell_id:
+        for cell_ctr in self.cell_counters_needing_typecheck:
+            cell_id = self._cell_id_by_counter[cell_ctr]
+            if self._counter_by_cell_id[cell_id] == cell_ctr:
                 cell_ids_needing_typecheck.add(cell_id)
         return cell_ids_needing_typecheck
 
@@ -629,6 +684,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)
 
     def safe_execute(self, cell: str, run_cell_func):
+        if self._saved_debug_message is not None:
+            logger.error(self._saved_debug_message)
+            self._saved_debug_message = None
         ret = None
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = self.cell_counter()

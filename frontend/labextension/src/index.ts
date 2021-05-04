@@ -107,7 +107,7 @@ const addStaleOutputInteraction = (elem: Element,
   attachCleanupListener(elem, evt, listener);
 };
 
-const addStaleOutputInteractions = (elem: HTMLElement) => {
+const addStaleOutputInteractions = (elem: HTMLElement, linkedInputClass: string) => {
   addStaleOutputInteraction(
       getJpInputCollapser(elem), getJpOutputCollapser(elem), 'mouseover', 'add', linkedStaleClass
   );
@@ -117,11 +117,11 @@ const addStaleOutputInteractions = (elem: HTMLElement) => {
 
   addStaleOutputInteraction(
       getJpOutputCollapser(elem), getJpInputCollapser(elem),
-      'mouseover', 'add', linkedRefresherClass
+      'mouseover', 'add', linkedInputClass
   );
   addStaleOutputInteraction(
       getJpOutputCollapser(elem), getJpInputCollapser(elem),
-      'mouseout', 'remove', linkedRefresherClass
+      'mouseout', 'remove', linkedInputClass
   );
 };
 
@@ -157,9 +157,13 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: [string],
                                   collapserFun: (elem: HTMLElement) => Element,
                                   evt: "mouseover" | "mouseout",
                                   add_or_remove: "add" | "remove",
-                                  css: string) => {
+                                  staleCells: [string]) => {
   const listener = () => {
     for (const linkedId of linkedElems) {
+      let css = linkedRefresherClass;
+      if (staleCells.indexOf(linkedId) > -1) {
+        css = linkedStaleClass;
+      }
       collapserFun(cellsById[linkedId]).firstElementChild.classList[add_or_remove](css);
     }
   };
@@ -210,8 +214,8 @@ const connectToComm = (
     });
     const payload = {
       type: 'change_active_cell',
-      'active_cell_id': newActiveCell.id,
-      'active_cell_order_idx': newActiveCellOrderIdx
+      active_cell_id: newActiveCell.id,
+      active_cell_order_idx: newActiveCellOrderIdx
     }
     comm.send(payload);
   }
@@ -264,56 +268,58 @@ const connectToComm = (
           elem.classList.add(staleClass);
           elem.classList.add(freshClass);
           elem.classList.remove(refresherInputClass);
+          addStaleOutputInteractions(elem, linkedStaleClass);
         } else if (freshCells.indexOf(id) > -1) {
           elem.classList.add(refresherInputClass);
           elem.classList.add(freshClass);
-
-          addStaleOutputInteractions(elem);
+          addStaleOutputInteractions(elem, linkedRefresherClass);
         }
 
         if (staleLinks.hasOwnProperty(id)) {
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-              'mouseover', 'add', linkedRefresherClass
+              'mouseover', 'add', staleCells
           );
 
           addUnsafeCellInteraction(
               getJpOutputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-              'mouseover', 'add', linkedRefresherClass
+              'mouseover', 'add', staleCells
           );
 
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-              'mouseout', 'remove', linkedRefresherClass
+              'mouseout', 'remove', staleCells
           );
 
           addUnsafeCellInteraction(
               getJpOutputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-              'mouseout', 'remove', linkedRefresherClass
+              'mouseout', 'remove', staleCells
           );
         }
 
         if (refresherLinks.hasOwnProperty(id)) {
-          elem.classList.add(refresherClass);
-          elem.classList.add(freshClass);
+          if (staleCells.indexOf(id) === -1) {
+            elem.classList.add(refresherClass);
+            elem.classList.add(freshClass);
+          }
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpInputCollapser,
-              'mouseover', 'add', linkedStaleClass
+              'mouseover', 'add', staleCells
           );
 
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpOutputCollapser,
-              'mouseover', 'add', linkedStaleClass,
+              'mouseover', 'add', staleCells,
           );
 
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpInputCollapser,
-              'mouseout', 'remove', linkedStaleClass
+              'mouseout', 'remove', staleCells
           );
 
           addUnsafeCellInteraction(
               getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpOutputCollapser,
-              'mouseout', 'remove', linkedStaleClass
+              'mouseout', 'remove', staleCells
           );
         }
       }

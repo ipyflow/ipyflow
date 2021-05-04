@@ -472,6 +472,14 @@ class TraceManager(BaseTraceManager):
             return
         logger.info('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
         sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
+        
+        # Resolve symbol if necessary
+        if sym_for_obj is None and obj_name is not None:
+            sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
+
+        if sym_for_obj is not None and sym_for_obj.defined_cell_num < nbs().cell_counter():
+            sym_for_obj.version_by_used_timestamp[nbs().cell_counter()] = sym_for_obj.defined_cell_num
+        
         is_subscript = (event == TraceEvent.subscript)
         obj_id = id(obj)
         if self.top_level_node_id_for_chain is None:
@@ -486,6 +494,7 @@ class TraceManager(BaseTraceManager):
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         self.active_scope = scope
+
         if ctx in ('Store', 'AugStore'):
             logger.info(
                 "save store data for node id %d: %s, %s, %s, %s",

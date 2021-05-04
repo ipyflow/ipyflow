@@ -45,7 +45,6 @@ def foo():
     assert deps == {1, 2, 3, 4}, 'got %s' % deps
 
 
-@skipif_known_failing
 def test_nested_symbol_usage():
     run_cell('lst = [1, 2, 3, 4, 5]')
     run_cell('lst[1] = 3')
@@ -54,7 +53,6 @@ def test_nested_symbol_usage():
     assert deps == {1, 2, 3}, 'got %s' % deps
 
 
-@skipif_known_failing
 def test_nested_symbol_usage_with_variable_subscript():
     run_cell('x = 1')
     run_cell('lst = [1, 2, 3, 4, 5]')
@@ -140,10 +138,29 @@ else:
     assert deps == {1, 2, 4}, 'got %s' % deps
 
 
-@skipif_known_failing
 def test_parent_usage_includes_child_update():
     run_cell('lst = [3]')
     run_cell('lst[0] += 1')
     run_cell('lst2 = lst + [5]')
     deps = set(nbs().get_cell_dependencies(3).keys())
     assert deps == {1, 2, 3}, 'got %s' % deps
+
+def test_object_subscripting():
+    run_cell("""
+class Foo:
+    def __init__(self):
+        self.counter = 0
+        
+    def inc(self):
+        self.counter += 1
+
+    def bar(self):
+        return {'baz': 0}
+""")
+    run_cell("obj = Foo()")
+    run_cell("name = 'baz'")
+    run_cell("obj.bar()[name]")
+    run_cell("something_i_dont_care_about = obj.bar()[name]")
+    run_cell("something_i_care_about = obj.bar()[name]")
+    deps = set(nbs().get_cell_dependencies(6).keys())
+    assert deps == {1, 2, 3, 6}, 'got %s' % deps

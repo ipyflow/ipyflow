@@ -105,3 +105,11 @@ class Foo:
     run_cell('logging.info(foo[0])')
     run_cell('foo[1] = 2')
     run_cell('del foo[-1]')
+
+
+def test_empty_return():
+    run_cell("""
+def foo():
+    return
+""")
+    run_cell('x = foo()')

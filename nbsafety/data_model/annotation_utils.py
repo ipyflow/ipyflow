@@ -75,6 +75,8 @@ def get_type_annotation(obj):
             return _resolve_container_types(
                 _CONTAINER_TYPES[obj_type], _get_contained_type_annotations(obj)
             )
+    elif obj_type is type:
+        return typing.Type[obj]
     else:
         return obj_type
 
@@ -97,11 +99,11 @@ def make_annotation_string(ann) -> str:
     else:
         ret = str(ann)
 
-    if ret.startswith('typing') and '.' in ret and '[' in ret:
+    if ret.startswith('typing.') and '[' in ret:
         ret = ret.split('.')[1].split('[')[0]
 
     module = getattr(ann, '__module__', None)
-    if module is not None and module not in ('typing', 'builtins'):
+    if module is not None and module not in ('typing', 'builtins', '__main__'):
         ret = f'{module}.{ret}'
 
     ann_args = getattr(ann, '__args__', None)

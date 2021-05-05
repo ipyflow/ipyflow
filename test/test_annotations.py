@@ -42,3 +42,14 @@ def test_tuple():
     assert _make_annotation_str_for_obj((3, 4, 5.0)) == 'Tuple[int, int, float]'
     assert _make_annotation_str_for_obj((3, 4, 5, 6)) == 'Tuple[int, ...]'
     assert _make_annotation_str_for_obj((3, 4, 5, 6.0)) == 'Tuple[float, ...]'
+
+
+class Foo:
+    pass
+
+
+def test_class():
+    ann_str = _make_annotation_str_for_obj(Foo)
+    assert ann_str == 'Type[{prefix}.Foo]'.format(prefix=__name__), 'got %s' % ann_str
+    assert _make_annotation_str_for_obj((Foo, Foo())) == 'Tuple[Type[{prefix}.Foo], {prefix}.Foo]'.format(prefix=__name__)
+    assert _make_annotation_str_for_obj([Foo, Foo()]) == 'List[Union[Type[{prefix}.Foo], {prefix}.Foo]]'.format(prefix=__name__)

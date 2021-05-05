@@ -4,6 +4,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 import inspect
+import json
 import logging
 import re
 import shlex
@@ -19,6 +20,7 @@ from nbsafety.analysis import (
     get_symbols_for_references,
 )
 from nbsafety.ipython_utils import (
+    CellNotRunYetError,
     ast_transformer_context,
     cell_counter,
     run_cell,
@@ -622,7 +624,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 representing dependencies
         """
         if cell_num not in self.cell_content_by_counter.keys():
-            raise ValueError(f'Cell {cell_num} has not been run yet.')
+            raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
         dependencies: Set[int] = set()
         cell_num_to_dynamic_deps: Dict[int, Set[int]] = defaultdict(set)
@@ -751,12 +753,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _make_line_magic(self):
         line_magic_names = [f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])]
 
-        def _safety(line_: str):
-            # this is to avoid capturing `self` and creating an extra reference to the singleton
-            try:
-                cmd, line = line_.split(' ', 1)
-            except ValueError:
-                cmd, line = line_, ''
+        def _handle(cmd, line):
             if cmd in ('deps', 'show_deps', 'show_dependency', 'show_dependencies'):
                 return line_magics.show_deps(line)
             elif cmd in ('stale', 'show_stale'):
@@ -766,7 +763,7 @@ class NotebookSafety(singletons.NotebookSafety):
             elif cmd in ('hls', 'nohls', 'highlight', 'highlights'):
                 return line_magics.set_highlights(cmd, line)
             elif cmd in ('dag', 'make_dag', 'cell_dag', 'make_cell_dag'):
-                return line_magics.make_cell_dag()
+                return json.dumps(self.create_dag_metadata(), indent=2)
             elif cmd in ('slice', 'make_slice', 'gather_slice'):
                 return line_magics.make_slice(line)
             elif cmd == 'remove_dependency':
@@ -778,9 +775,35 @@ class NotebookSafety(singletons.NotebookSafety):
             elif cmd == 'turn_on_warnings_for':
                 return line_magics.turn_on_warnings_for(line)
             elif cmd in line_magic_names:
-                print('We have a magic for %s, but have not yet registered it' % cmd)
+                logger.warning('We have a magic for %s, but have not yet registered it', cmd)
+                return None
             else:
-                print(line_magics.USAGE)
+                logger.warning(line_magics.USAGE)
+                return None
+
+        def _safety(line: str):
+            # this is to avoid capturing `self` and creating an extra reference to the singleton
+            try:
+                cmd, line = line.split(' ', 1)
+            except ValueError:
+                cmd, line = line, ''
+            try:
+                line, fname = line.split('>', 1)
+            except ValueError:
+                line, fname = line, None
+            line = line.strip()
+            if fname is not None:
+                fname = fname.strip()
+
+            outstr = _handle(cmd, line)
+            if outstr is None:
+                return
+
+            if fname is None:
+                print(outstr)
+            else:
+                with open(fname, 'w') as f:
+                    f.write(outstr)
 
         # FIXME (smacke): probably not a great idea to rely on this
         _safety.__name__ = _SAFETY_LINE_MAGIC

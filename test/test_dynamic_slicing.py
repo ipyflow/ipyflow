@@ -165,7 +165,6 @@ class Foo:
     deps = set(nbs().get_cell_dependencies(6).keys())
     assert deps == {1, 2, 3, 6}, 'got %s' % deps
 
-@skipif_known_failing
 def test_complicated_subscripting():
     run_cell("""
 class Foo:
@@ -202,4 +201,47 @@ class Bar:
     run_cell("the_dictionary = {'something': 1}")
     run_cell("Foo().new(0).foo(1)")
     deps = set(nbs().get_cell_dependencies(5).keys())
-    assert deps == {1, 2, 3, 4, 5}, 'got %s' % deps
+    assert deps == {1, 2, 4, 5}, 'got %s' % deps
+
+def test_complicated_subscripting_use_conditional():
+    run_cell("""
+class Foo:
+    def __init__(self):
+        self.counter = 0
+        
+    def inc(self):
+        self.counter += 1
+
+    def bar(self, indicator):
+        if indicator == 1:
+            return the_dictionary
+        else:
+            return x + 5
+    
+    def new(self, indicator):
+        if indicator == 1:
+            return Foo()
+        
+        return Bar()
+""")
+    run_cell("""
+class Bar:
+    def __init__(self):
+        self.counter = 0
+    
+    def foo(self, indicator):
+        if indicator == 1:
+            return the_dictionary
+        
+        return Foo()
+""")
+    run_cell("x = 1")
+    run_cell("the_dictionary = {'something': 1}")
+    run_cell("""
+y = Foo().new(0).foo(1)
+z = Foo().new(1).bar(0)
+""")
+    run_cell("print(z)")
+    deps = set(nbs().get_cell_dependencies(6).keys())
+    assert deps == {1, 2, 3, 4, 5, 6}, 'got %s' % deps
+    

@@ -15,7 +15,11 @@ logger.setLevel(logging.WARNING)
 class SafetyAstRewriter(ast.NodeTransformer):
     def visit(self, node: 'ast.AST'):
         try:
-            mapper = StatementMapper(nbs().statement_cache[nbs().cell_counter()], nbs().ast_node_by_id)
+            mapper = StatementMapper(
+                nbs().statement_cache[nbs().cell_counter()],
+                nbs().ast_node_by_id,
+                nbs().parent_node_by_id,
+            )
             orig_to_copy_mapping = mapper(node)
             # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
             # modifies existing ones), since StatementInserter relies on being able to map these

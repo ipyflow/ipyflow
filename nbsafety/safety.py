@@ -100,8 +100,9 @@ class NotebookSafety(singletons.NotebookSafety):
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_scopes: Set[NamespaceScope] = set()
+        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
-        self.statement_cache: 'Dict[int, Dict[int, ast.stmt]]' = defaultdict(dict)
+        self.parent_node_by_id: Dict[int, ast.AST] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}

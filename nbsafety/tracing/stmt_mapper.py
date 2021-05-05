@@ -1,3 +1,4 @@
+# -*- coding: future_annotations -*-
 import ast
 import copy
 from typing import TYPE_CHECKING
@@ -7,12 +8,15 @@ if TYPE_CHECKING:
 
 
 class StatementMapper(ast.NodeVisitor):
-    def __init__(self, line_to_stmt_map: 'Dict[int, ast.stmt]', id_map: 'Dict[int, ast.AST]'):
+    def __init__(
+        self, line_to_stmt_map: Dict[int, ast.stmt], id_map: Dict[int, ast.AST], parent_map: Dict[int, ast.AST]
+    ):
         self.line_to_stmt_map = line_to_stmt_map
         self.id_map = id_map
-        self.traversal: 'List[ast.AST]' = []
+        self.parent_map = parent_map
+        self.traversal: List[ast.AST] = []
 
-    def __call__(self, node: 'ast.AST') -> 'Dict[int, ast.AST]':
+    def __call__(self, node: ast.AST) -> Dict[int, ast.AST]:
         # for some bizarre reason we need to visit once to clear empty nodes apparently
         self.visit(node)
         self.traversal.clear()
@@ -32,6 +36,8 @@ class StatementMapper(ast.NodeVisitor):
                 # to yield trace frames that use the lineno of the first decorator
                 for decorator in getattr(nc, 'decorator_list', []):
                     self.line_to_stmt_map[decorator.lineno] = nc
+            # for child in getattr(nc, 'body', []):
+            #     self.parent_map[]
         return orig_to_copy_mapping
 
     def visit(self, node):

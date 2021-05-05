@@ -1,11 +1,15 @@
 # -*- coding: future_annotations -*-
 import ast
+from typing import TYPE_CHECKING
 
 from nbsafety.tracing.stmt_mapper import StatementMapper
 
+if TYPE_CHECKING:
+    from typing import Dict
 
-def compute_lineno_to_stmt_mapping(code: str) -> 'Dict[int, ast.stmt]':
-    mapper = StatementMapper({}, {})
+
+def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:
+    mapper = StatementMapper({}, {}, {})
     mapper(ast.parse(code))
     return mapper.line_to_stmt_map
 

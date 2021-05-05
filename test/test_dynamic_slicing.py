@@ -145,6 +145,7 @@ def test_parent_usage_includes_child_update():
     deps = set(nbs().get_cell_dependencies(3).keys())
     assert deps == {1, 2, 3}, 'got %s' % deps
 
+
 def test_object_subscripting():
     run_cell("""
 class Foo:
@@ -164,6 +165,7 @@ class Foo:
     run_cell("something_i_care_about = obj.bar()[name]")
     deps = set(nbs().get_cell_dependencies(6).keys())
     assert deps == {1, 2, 3, 6}, 'got %s' % deps
+
 
 def test_complicated_subscripting():
     run_cell("""
@@ -202,6 +204,7 @@ class Bar:
     run_cell("Foo().new(0).foo(1)")
     deps = set(nbs().get_cell_dependencies(5).keys())
     assert deps == {1, 2, 4, 5}, 'got %s' % deps
+
 
 def test_complicated_subscripting_use_conditional():
     run_cell("""

@@ -364,6 +364,8 @@ class AstEavesdropper(ast.NodeTransformer):
         return self.visit_literal(node, should_inner_visit=False)
 
     def visit_Return(self, node: ast.Return):
+        if node.value is None:
+            return node
         with fast.location_of(node):
             node.value = fast.Call(
                 func=self._emitter_ast(),

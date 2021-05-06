@@ -123,7 +123,7 @@ class Scope:
             if dsym is not None and next_dsym is None:
                 # HUGE HACK: prevents us from checking namespace symbols unless entire namespace is stale
                 # TODO: get rid of this check once namespace symbols created for dictionary literals
-                if dsym.is_stale and dsym.defined_cell_num >= dsym.required_cell_num:
+                if dsym.is_stale and dsym.timestamp >= dsym.required_timestamp:
                     dsym = None
                 break
             dsym, next_dsym = next_dsym, None
@@ -324,7 +324,7 @@ class NamespaceScope(Scope):
                 logger.warning(msg)
         nbs().namespaces[id(obj)] = self
         self._tombstone = False
-        self.max_defined_timestamp = 0
+        self.max_descendent_timestamp = nbs().cell_counter()
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 
@@ -387,12 +387,8 @@ class NamespaceScope(Scope):
             return self._data_symbol_by_name
 
     def clone(self, obj: Any):
-        cloned = NamespaceScope(obj, nbs())
-        cloned.__dict__ = dict(self.__dict__)
+        cloned = NamespaceScope(obj, self.scope_name, self.parent_scope)
         cloned.cloned_from = self
-        cloned.update_obj_ref(obj)
-        cloned._data_symbol_by_name = {}
-        cloned._subscript_data_symbol_by_name = {}
         self.child_clones.append(cloned)
         return cloned
 
@@ -472,7 +468,7 @@ class NamespaceScope(Scope):
         val.containing_scope = self
 
     def refresh(self):
-        self.max_defined_timestamp = nbs().cell_counter()
+        self.max_descendent_timestamp = nbs().cell_counter()
 
     def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> Optional[NamespaceScope]:
         # TODO: test this properly

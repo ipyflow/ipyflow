@@ -65,10 +65,10 @@ def show_deps(symbols: str) -> Optional[str]:
             logger.warning('Could not find symbol metadata for %s', astunparse.unparse(unresolved).strip())
         for dsym in dsyms:
             parents = {par for par in dsym.parents if not par.is_anonymous}
-            if dsym.required_cell_num > 0:
-                dsym_extra_info = 'defined {}; required {}'.format(dsym.defined_cell_num, dsym.required_cell_num)
+            if dsym.required_timestamp > 0:
+                dsym_extra_info = 'last updated {}; required {}'.format(dsym.timestamp, dsym.required_timestamp)
             else:
-                dsym_extra_info = 'defined in cell {}'.format(dsym.defined_cell_num)
+                dsym_extra_info = 'defined in cell {}'.format(dsym.timestamp)
             statements.append(
                 'Symbol {} ({}) is dependent on {}'.format(
                     dsym.full_namespace_path,

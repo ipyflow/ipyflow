@@ -482,8 +482,8 @@ class TraceManager(BaseTraceManager):
         if sym_for_obj is None and obj_name is not None:
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
-        if sym_for_obj is not None and sym_for_obj.defined_cell_num < nbs().cell_counter():
-            sym_for_obj.version_by_used_timestamp[nbs().cell_counter()] = sym_for_obj.defined_cell_num
+        if sym_for_obj is not None and sym_for_obj.timestamp < nbs().cell_counter():
+            sym_for_obj.version_by_used_timestamp[nbs().cell_counter()] = sym_for_obj.timestamp_excluding_ns_descendents
         
         is_subscript = (event == TraceEvent.subscript)
         obj_id = id(obj)

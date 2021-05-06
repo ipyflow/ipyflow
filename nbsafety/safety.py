@@ -99,7 +99,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()
-        self.updated_scopes: Set[NamespaceScope] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
@@ -163,7 +162,7 @@ class NotebookSafety(singletons.NotebookSafety):
         # only called in test context
         assert not self.settings.store_history
         for sym in self.all_data_symbols():
-            sym.last_used_cell_num = sym.defined_cell_num = sym.required_cell_num = 0
+            sym.last_used_cell_num = sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = 0
             sym.version_by_used_timestamp.clear()
             sym.version_by_liveness_timestamp.clear()
         self._cell_counter = 1
@@ -368,12 +367,10 @@ class NotebookSafety(singletons.NotebookSafety):
     def _get_max_defined_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
         max_defined_cell_num = -1
         for dsym in symbols:
-            max_defined_cell_num = max(
-                max_defined_cell_num, dsym.defined_cell_num)
+            max_defined_cell_num = max(max_defined_cell_num, dsym.timestamp)
             if dsym.obj_id in self.namespaces:
                 namespace_scope = self.namespaces[dsym.obj_id]
-                max_defined_cell_num = max(
-                    max_defined_cell_num, namespace_scope.max_defined_timestamp)
+                max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_descendent_timestamp)
         return max_defined_cell_num
 
     def _build_typecheck_slice(
@@ -406,7 +403,7 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_symbols = set(dsym for dsym in live_symbols if dsym.is_stale)
         return CheckerResult(
             live=live_symbols,
-            live_cells={sym.defined_cell_num for sym in live_symbols},
+            live_cells={sym.timestamp for sym in live_symbols},
             live_cells_from_calls=live_cells_from_calls,
             dead=dead_symbols,
             stale=stale_symbols,
@@ -419,7 +416,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _stale_sym_warning(sym: DataSymbol):
         if not sym.is_stale:
             raise ValueError('Expected node with stale ancestor; got %s' % sym)
-        if sym.defined_cell_num < 1:
+        if sym.timestamp < 1:
             return
         fresher_symbols = sym.fresher_ancestors
         if len(fresher_symbols) == 0:
@@ -427,9 +424,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 *[ns_stale.fresher_ancestors for ns_stale in sym.namespace_stale_symbols]
             )
         logger.warning(
-            f'`{sym.readable_name}` defined in cell {sym.defined_cell_num} may depend on '
+            f'`{sym.readable_name}` defined in cell {sym.timestamp} may depend on '
             f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
-            f'(latest update in cell {max(dep.defined_cell_num for dep in fresher_symbols)}).'
+            f'(latest update in cell {max(dep.timestamp for dep in fresher_symbols)}).'
             f'\n\n(Run cell again to override and execute anyway.)'
         )
 
@@ -507,7 +504,7 @@ class NotebookSafety(singletons.NotebookSafety):
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
             self.cell_counter_by_live_symbol[sym].add(self.cell_counter())
-            sym.version_by_liveness_timestamp[self.cell_counter()] = sym.defined_cell_num
+            sym.version_by_liveness_timestamp[self.cell_counter()] = sym.timestamp
 
         self._last_refused_code = None
         return False
@@ -530,15 +527,15 @@ class NotebookSafety(singletons.NotebookSafety):
             if dsym.obj_id == id(obj):
                 continue
             for alias in self.aliases[dsym.cached_obj_id] | self.aliases[dsym.obj_id]:
-                if not alias.containing_scope.is_namespace_scope:
+                containing_namespace = alias.containing_namespace
+                if containing_namespace is None:
                     continue
-                containing_scope = cast(NamespaceScope, alias.containing_scope)
-                containing_obj = containing_scope.obj
+                containing_obj = containing_namespace.obj
                 if containing_obj is None:
                     continue
                 # TODO: handle dict case too
                 if isinstance(containing_obj, list) and containing_obj[-1] is obj:
-                    containing_scope.upsert_data_symbol_for_name(
+                    containing_namespace.upsert_data_symbol_for_name(
                         len(containing_obj) - 1,
                         obj,
                         set(alias.parents),
@@ -549,11 +546,6 @@ class NotebookSafety(singletons.NotebookSafety):
             self.aliases[dsym.cached_obj_id].discard(dsym)
             self.aliases[dsym.obj_id].discard(dsym)
             self.aliases[id(obj)].add(dsym)
-            namespace = self.namespaces.get(dsym.obj_id, None)
-            if namespace is not None:
-                namespace.update_obj_ref(obj)
-                del self.namespaces[dsym.obj_id]
-                self.namespaces[namespace.obj_id] = namespace
             dsym.update_obj_ref(obj)
 
     def create_dag_metadata(self) -> Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]]:
@@ -718,7 +710,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
                 self._resync_symbols([
                     # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                    sym for sym in self.all_data_symbols() if sym.defined_cell_num == self.cell_counter()
+                    sym for sym in self.all_data_symbols() if sym.timestamp == self.cell_counter()
                 ])
                 self._gc()
             finally:
@@ -743,7 +735,6 @@ class NotebookSafety(singletons.NotebookSafety):
     @contextmanager
     def _tracing_context(self):
         self.updated_symbols.clear()
-        self.updated_scopes.clear()
         self._recorded_cell_name_to_cell_num = False
 
         try:

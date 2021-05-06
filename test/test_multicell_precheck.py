@@ -140,7 +140,7 @@ for foo in lst:
     run_cell(cells[5], 5)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [2, 3, 4]
+    assert response['fresh_cells'] == [2, 3, 4], 'got %s' % response['fresh_cells']
 
     if force_subscript_symbol_creation:
         cells[6] = 'lst[-1]'
@@ -239,3 +239,21 @@ def test_updated_namespace_after_subscript_dep_removed():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
+
+
+def test_equal_update_does_not_induce_fresh_cell():
+    cells = {
+        0: 'x = ["f"] + ["o"] * 10',
+        1: 'y = x + list("bar")',
+        2: 'print(y)',
+        3: 'y = list("".join(y))',
+    }
+    for idx, cell in cells.items():
+        run_cell(cell, idx)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('y = ["f"]', 4)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 3]

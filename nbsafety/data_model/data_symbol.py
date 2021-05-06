@@ -13,7 +13,7 @@ from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from nbsafety.types import SupportedIndexType
-    from typing import Any, Dict, Iterable, List, Optional, Set
+    from typing import Any, Dict, List, Optional, Set
 
     # avoid circular imports
     from nbsafety.data_model.scope import Scope, NamespaceScope
@@ -73,17 +73,16 @@ class DataSymbol:
         if self.is_function:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
 
-        self._defined_cell_num: int = nbs().cell_counter()
+        self._timestamp: int = nbs().cell_counter()
+        self._defined_cell_num = self._timestamp
 
-        # The notebook cell number required by this symbol to not be stale
-        self.required_cell_num: int = self.defined_cell_num
+        # The necessary last-updated timestamp / cell counter for this symbol to not be stale
+        self.required_timestamp: int = self.timestamp
 
         # The execution counter of cell where this symbol was last used (-1 means it has net yet been used)
         self.last_used_cell_num: int = -1
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.version_by_used_timestamp: Dict[int, int] = {}
-        # each time this symbol was updated, store its new version so we know which cells updated it
-        self.created_versions: Set[int] = set()
 
         # History of definitions at time of liveness
         self.version_by_liveness_timestamp: Dict[int, int] = {}
@@ -99,7 +98,7 @@ class DataSymbol:
 
         nbs().aliases[id(obj)].add(self)
         if isinstance(self.name, str) and not self.is_anonymous and not self.containing_scope.is_namespace_scope:
-            ns = nbs().namespaces.get(self.obj_id, None)
+            ns = self.namespace
             if ns is not None and ns.scope_name == 'self':
                 # hack to get a better name than `self.whatever` for fields of this object
                 # not ideal because it relies on the `self` convention but is probably
@@ -120,40 +119,18 @@ class DataSymbol:
 
     @property
     def namespace_stale_symbols(self) -> Set[DataSymbol]:
-        ns = nbs().namespaces.get(self.obj_id, None)
-        if ns is None:
-            return set()
-        else:
-            return ns.namespace_stale_symbols
-
-    @namespace_stale_symbols.setter
-    def namespace_stale_symbols(self, new_val: Set[DataSymbol]) -> None:
-        ns = nbs().namespaces.get(self.obj_id, None)
-        if ns is None:
-            return
-        else:
-            ns.namespace_stale_symbols = new_val
+        ns = self.namespace
+        return set() if ns is None else ns.namespace_stale_symbols
 
     @property
-    def defined_cell_num(self) -> int:
-        # TODO: probably should be renamed
-        #  (see version / timestamp below);
-        #  this isn't the cell num where the symbol
-        #  was defined but where it was last updated
-        return self._defined_cell_num
-
-    @defined_cell_num.setter
-    def defined_cell_num(self, new_defined_cell_num: int) -> None:
-        self._temp_disable_warnings = False
-        self._defined_cell_num = new_defined_cell_num
-
-    @property
-    def version(self) -> int:
-        return self._defined_cell_num
+    def timestamp_excluding_ns_descendents(self):
+        return self._timestamp
 
     @property
     def timestamp(self) -> int:
-        return self._defined_cell_num
+        ts = self._timestamp
+        ns = self.namespace
+        return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
     @property
     def readable_name(self) -> str:
@@ -261,6 +238,13 @@ class DataSymbol:
     @property
     def namespace(self):
         return nbs().namespaces.get(self.obj_id, None)
+
+    @property
+    def containing_namespace(self) -> Optional[NamespaceScope]:
+        if self.containing_scope.is_namespace_scope:
+            return cast('NamespaceScope', self.containing_scope)
+        else:
+            return None
 
     @property
     def full_path(self):
@@ -445,7 +429,7 @@ class DataSymbol:
     def is_stale(self):
         if self.disable_warnings or self._temp_disable_warnings:
             return False
-        return self.defined_cell_num < self.required_cell_num or len(self.namespace_stale_symbols) > 0
+        return self.timestamp < self.required_timestamp or len(self.namespace_stale_symbols) > 0
 
     def should_mark_stale(self, updated_dep):
         if self.disable_warnings:
@@ -455,7 +439,7 @@ class DataSymbol:
         return True
 
     def update_deps(
-        self, new_deps: Set['DataSymbol'], prev_obj=None, overwrite=True, mutated=False, deleted=False, propagate=True
+        self, new_deps: Set[DataSymbol], prev_obj=None, overwrite=True, mutated=False, deleted=False, propagate=True
     ):
         # skip updates for imported symbols
         if self.is_import:
@@ -479,36 +463,27 @@ class DataSymbol:
                 continue
             new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
-        self.required_cell_num = -1
-        UpdateProtocol(self, new_deps, prev_obj, mutated, deleted)(propagate=propagate)
+        self.required_timestamp = -1
+        equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
+        self.refresh(bump_version=not equal_to_old, refresh_namespace=True)
+        if propagate and (mutated or deleted or not equal_to_old):
+            UpdateProtocol(self)(new_deps, mutated)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
 
-    def refresh(self: DataSymbol, bump_version=True):
+    def refresh(self: DataSymbol, bump_version=True, refresh_namespace=False):
+        self._temp_disable_warnings = False
+        self.fresher_ancestors.clear()
         if bump_version:
-            self.defined_cell_num = nbs().cell_counter()
-            self.created_versions.add(self.defined_cell_num)
-        self.fresher_ancestors = set()
-        self.namespace_stale_symbols = set()
-
-    def _propagate_refresh_to_namespace_parents(self, seen: Set[DataSymbol]):
-        if self in seen:
-            return
-        # print('refresh propagate', self)
-        seen.add(self)
-        for self_alias in nbs().aliases[self.obj_id]:
-            containing_scope: NamespaceScope = cast('NamespaceScope', self_alias.containing_scope)
-            if not containing_scope.is_namespace_scope:
-                continue
-            # if containing_scope.max_defined_timestamp == nbs().cell_counter():
-            #     return
-            containing_scope.max_defined_timestamp = nbs().cell_counter()
-            containing_namespace_obj_id = containing_scope.obj_id
-            # print('containing namespaces:', nbs().aliases[containing_namespace_obj_id])
-            for alias in nbs().aliases[containing_namespace_obj_id]:
-                alias.namespace_stale_symbols.discard(self)
-                if not alias.is_stale:
-                    alias.defined_cell_num = nbs().cell_counter()
-                    alias.fresher_ancestors = set()
-                # print('working on', alias, '; stale?', alias.is_stale, alias.namespace_stale_symbols)
-                alias._propagate_refresh_to_namespace_parents(seen)
+            self._timestamp = nbs().cell_counter()
+        if refresh_namespace:
+            for dsym in self.namespace_stale_symbols:
+                # this is to handle cases like `x = x.mutate(42)`, where
+                # we could have changed some member of x but returned the
+                # original object -- in this case, just assume that all
+                # the stale namespace descendents are no longer stale, as
+                # this is likely the user intention. For an example, see
+                # `test_external_object_update_propagates_to_stale_namespace_symbols()`
+                # in `test_multicell_precheck.py`
+                dsym.refresh(refresh_namespace=True)
+            self.namespace_stale_symbols.clear()

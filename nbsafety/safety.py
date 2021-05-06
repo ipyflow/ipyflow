@@ -422,12 +422,13 @@ class NotebookSafety(singletons.NotebookSafety):
             return
         fresher_symbols = sym.fresher_ancestors
         if len(fresher_symbols) == 0:
-            # TODO: use `fresher_symbols` of namespace_stale_symbols?
-            fresher_symbols = sym.namespace_stale_symbols
+            fresher_symbols = set().union(
+                *[ns_stale.fresher_ancestors for ns_stale in sym.namespace_stale_symbols]
+            )
         logger.warning(
             f'`{sym.readable_name}` defined in cell {sym.defined_cell_num} may depend on '
             f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
-            f'(latest update in cell {sym.required_cell_num}).'
+            f'(latest update in cell {max(dep.defined_cell_num for dep in fresher_symbols)}).'
             f'\n\n(Run cell again to override and execute anyway.)'
         )
 

@@ -281,6 +281,7 @@ class NotebookSafety(singletons.NotebookSafety):
         refresher_links: Dict[CellId, List[CellId]] = defaultdict(list)
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
+            refresher_cell_ids: Set[CellId] = set()
             if self.settings.naive_refresher_computation:
                 refresher_cell_ids = self._naive_compute_refresher_cells(
                     stale_cell_id,
@@ -289,7 +290,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     order_index_by_cell_id=order_index_by_cell_id
                 )
             else:
-                refresher_cell_ids = set.union(
+                refresher_cell_ids = refresher_cell_ids.union(
                     *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
@@ -422,7 +423,7 @@ class NotebookSafety(singletons.NotebookSafety):
             return
         fresher_symbols = sym.fresher_ancestors
         if len(fresher_symbols) == 0:
-            fresher_symbols = set().union(
+            fresher_symbols = fresher_symbols.union(
                 *[ns_stale.fresher_ancestors for ns_stale in sym.namespace_stale_symbols]
             )
         logger.warning(

@@ -259,3 +259,37 @@ def test_non_relevant_child_symbol_modified():
     run_cell('logging.info(lst[1])')
     deps = set(nbs().get_cell_dependencies(7).keys())
     assert deps == {1, 4, 7}, 'got %s' % deps
+
+
+def test_dynamic_only_increment():
+    orig_enabled = nbs().mut_settings.static_slicing_enabled
+    try:
+        nbs().mut_settings.static_slicing_enabled = False
+        run_cell('x = 0')
+        run_cell('x += 1')
+        run_cell('logging.info(x)')
+        deps = set(nbs().get_cell_dependencies(3).keys())
+        assert deps == {1, 2, 3}, 'got %s' % deps
+    finally:
+        nbs().mut_settings.static_slicing_enabled = orig_enabled
+
+
+def test_dynamic_only_variable_subscript():
+    orig_enabled = nbs().mut_settings.static_slicing_enabled
+    try:
+        nbs().mut_settings.static_slicing_enabled = False
+        run_cell('lst = [0, 1, 2]')
+        run_cell('x = 0')
+        run_cell('lst[x] += 1')
+        run_cell('lst[x] += 1')
+        run_cell('x += 1')
+        run_cell('lst[x] += 1')
+        run_cell('x -= 1')
+        run_cell('lst[x] += 1')
+        run_cell('lst[x] += 1')
+        run_cell('x += 1')
+        run_cell('logging.info(lst[x])')
+        deps = set(nbs().get_cell_dependencies(11).keys())
+        assert deps == {1, 2, 5, 6, 7, 10, 11}, 'got %s' % deps
+    finally:
+        nbs().mut_settings.static_slicing_enabled = orig_enabled

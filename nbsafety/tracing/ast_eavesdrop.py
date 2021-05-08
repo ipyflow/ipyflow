@@ -5,6 +5,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 import sys
 
+from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.utils import fast
 
@@ -160,6 +161,13 @@ class AstEavesdropper(ast.NodeTransformer):
             if isinstance(node.value, ast.Name):
                 extra_args = fast.kwargs(obj_name=fast.Str(node.value.id))
 
+            subscript_name = None
+            if isinstance(node, ast.Subscript):
+                slice_val = resolve_slice_to_constant(node)
+                if isinstance(slice_val, ast.Name):
+                    # TODO: this should be more general than just simple ast.Name subscripts
+                    subscript_name = slice_val.id
+
             with self.attrsub_context(node):
                 node.value = fast.Call(
                     func=self._emitter_ast(),
@@ -170,6 +178,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     keywords=fast.kwargs(
                         ret=self.visit(node.value),
                         attr_or_subscript=attr_or_sub,
+                        subscript_name=fast.Constant(subscript_name),
                         ctx=fast.Str(node.ctx.__class__.__name__),
                         call_context=fast.NameConstant(call_context),
                         top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol)

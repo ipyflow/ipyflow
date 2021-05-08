@@ -462,6 +462,7 @@ class TraceManager(BaseTraceManager):
         event: TraceEvent,
         *_,
         attr_or_subscript,
+        subscript_name: Optional[str],
         ctx: str,
         call_context: bool,
         top_level_node_id: NodeId,
@@ -483,9 +484,17 @@ class TraceManager(BaseTraceManager):
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
         if sym_for_obj is not None and sym_for_obj.timestamp < nbs().cell_counter():
-            sym_for_obj.version_by_used_timestamp[nbs().cell_counter()] = sym_for_obj.timestamp_excluding_ns_descendents
+            sym_for_obj.timestamp_by_used_time[nbs().cell_counter()] = sym_for_obj.timestamp_excluding_ns_descendents
         
         is_subscript = (event == TraceEvent.subscript)
+
+        if is_subscript and subscript_name is not None:
+            # TODO: this ensures we capture the usage of simple name subscripts, but what about more complicated ones?
+            #  Also, ideally we should be wrapping every loaded ast.Name into somthing that updates its
+            #  version_by_used_timestamp
+            sym_for_slice = self.cur_frame_original_scope.lookup_data_symbol_by_name_this_indentation(subscript_name)
+            sym_for_slice.timestamp_by_used_time[nbs().cell_counter()] = sym_for_slice.timestamp
+
         obj_id = id(obj)
         if self.top_level_node_id_for_chain is None:
             self.top_level_node_id_for_chain = top_level_node_id

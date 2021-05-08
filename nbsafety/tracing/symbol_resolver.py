@@ -218,7 +218,7 @@ def update_usage_info(symbols: Union[Optional[DataSymbol], Set[Optional[DataSymb
             continue
         sym.last_used_cell_num = cell_counter
         logger.info('sym `%s` used in cell %d last updated in cell %d', sym, cell_counter, sym.timestamp)
-        sym.version_by_used_timestamp[cell_counter] = sym.timestamp
+        sym.timestamp_by_used_time[cell_counter] = sym.timestamp
 
 
 def resolve_rval_symbols(node: Union[str, ast.AST], should_update_usage_info: bool = True) -> Set[DataSymbol]:

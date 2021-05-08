@@ -74,6 +74,8 @@ class DataSymbol:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
 
         self._timestamp: int = nbs().cell_counter()
+        # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
+        self._version: int = 0
         self._defined_cell_num = self._timestamp
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be stale
@@ -82,10 +84,11 @@ class DataSymbol:
         # The execution counter of cell where this symbol was last used (-1 means it has net yet been used)
         self.last_used_cell_num: int = -1
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
-        self.version_by_used_timestamp: Dict[int, int] = {}
-
+        self.timestamp_by_used_time: Dict[int, int] = {}
         # History of definitions at time of liveness
-        self.version_by_liveness_timestamp: Dict[int, int] = {}
+        self.timestamp_by_liveness_time: Dict[int, int] = {}
+        # All timestamps associated with this symbol
+        self.updated_timestamps: Set[int] = set()
 
         self.fresher_ancestors: Set[DataSymbol] = set()
 
@@ -465,6 +468,8 @@ class DataSymbol:
             self.parents.add(new_parent)
         self.required_timestamp = -1
         equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
+        if mutated or isinstance(self.stmt_node, ast.AugAssign):
+            self.timestamp_by_used_time[nbs().cell_counter()] = self.timestamp
         self.refresh(bump_version=not equal_to_old, refresh_namespace=True)
         if propagate and (mutated or deleted or not equal_to_old):
             UpdateProtocol(self)(new_deps, mutated)
@@ -476,6 +481,8 @@ class DataSymbol:
         self.fresher_ancestors.clear()
         if bump_version:
             self._timestamp = nbs().cell_counter()
+            self.updated_timestamps.add(self._timestamp)
+            self._version += 1
         if refresh_namespace:
             for dsym in self.namespace_stale_symbols:
                 # this is to handle cases like `x = x.mutate(42)`, where

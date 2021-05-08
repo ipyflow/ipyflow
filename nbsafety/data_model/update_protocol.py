@@ -45,6 +45,7 @@ class UpdateProtocol:
         for dsym in updated_symbols:
             if dsym.is_import or dsym in self.seen:
                 continue
+            dsym.updated_timestamps.add(nbs().cell_counter())
             self.seen.add(dsym)
             containing_ns = dsym.containing_namespace
             if containing_ns is None:

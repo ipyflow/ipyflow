@@ -63,6 +63,7 @@ class NotebookSafetySettings(NamedTuple):
 class MutableNotebookSafetySettings:
     trace_messages_enabled: bool
     highlights_enabled: bool
+    static_slicing_enabled: bool
 
 
 class CheckerResult(NamedTuple):
@@ -93,6 +94,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             highlights_enabled=kwargs.pop('highlights_enabled', True),
+            static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, NamespaceScope] = {}
@@ -163,8 +165,8 @@ class NotebookSafety(singletons.NotebookSafety):
         assert not self.settings.store_history
         for sym in self.all_data_symbols():
             sym.last_used_cell_num = sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = 0
-            sym.version_by_used_timestamp.clear()
-            sym.version_by_liveness_timestamp.clear()
+            sym.timestamp_by_used_time.clear()
+            sym.timestamp_by_liveness_time.clear()
         self._cell_counter = 1
 
     def set_ast_transformer_raised(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
@@ -504,7 +506,7 @@ class NotebookSafety(singletons.NotebookSafety):
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
             self.cell_counter_by_live_symbol[sym].add(self.cell_counter())
-            sym.version_by_liveness_timestamp[self.cell_counter()] = sym.timestamp
+            sym.timestamp_by_liveness_time[self.cell_counter()] = sym.timestamp
 
         self._last_refused_code = None
         return False
@@ -560,19 +562,19 @@ class NotebookSafety(singletons.NotebookSafety):
             if top_level_sym is None or not top_level_sym.is_globally_accessible or top_level_sym.is_anonymous:
                 # TODO: also skip lambdas
                 continue
-            for used_timestamp, version in sym.version_by_used_timestamp.items():
+            for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
                 if top_level_sym.is_import:
-                    cell_num_to_used_imports[used_timestamp].add(top_level_sym)
+                    cell_num_to_used_imports[used_time].add(top_level_sym)
                 else:
-                    if version < used_timestamp:
-                        cell_num_to_dynamic_cell_parents[used_timestamp].add(version)
-                        cell_num_to_dynamic_inputs[used_timestamp].add(top_level_sym)
-                        cell_num_to_dynamic_cell_children[version].add(used_timestamp)
-                    cell_num_to_dynamic_outputs[version].add(top_level_sym)
+                    if sym_timestamp_when_used < used_time:
+                        cell_num_to_dynamic_cell_parents[used_time].add(sym_timestamp_when_used)
+                        cell_num_to_dynamic_inputs[used_time].add(top_level_sym)
+                        cell_num_to_dynamic_cell_children[sym_timestamp_when_used].add(used_time)
+                    cell_num_to_dynamic_outputs[sym_timestamp_when_used].add(top_level_sym)
             if not top_level_sym.is_import:
-                for version in sym.created_versions:
+                for updated_time in sym.updated_timestamps:
                     # TODO: distinguished between used / unused outputs?
-                    cell_num_to_dynamic_outputs[version].add(top_level_sym)
+                    cell_num_to_dynamic_outputs[updated_time].add(top_level_sym)
 
         cell_metadata: Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]] = {}
         all_relevant_cells = (
@@ -626,12 +628,13 @@ class NotebookSafety(singletons.NotebookSafety):
         cell_num_to_static_deps: Dict[int, Set[int]] = defaultdict(set)
 
         for sym in self.all_data_symbols():
-            for used_timestamp, version in sym.version_by_used_timestamp.items():
-                if version < used_timestamp:
-                    cell_num_to_dynamic_deps[used_timestamp].add(version)
-            for live_timestamp, version in sym.version_by_liveness_timestamp.items():
-                if version < live_timestamp:
-                    cell_num_to_static_deps[live_timestamp].add(version)
+            for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
+                if sym_timestamp_when_used < used_time:
+                    cell_num_to_dynamic_deps[used_time].add(sym_timestamp_when_used)
+            if self.mut_settings.static_slicing_enabled:
+                for liveness_time, sym_timestamp_when_used in sym.timestamp_by_liveness_time.items():
+                    if sym_timestamp_when_used < liveness_time:
+                        cell_num_to_static_deps[liveness_time].add(sym_timestamp_when_used)
 
         self._get_cell_dependencies(
             cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps

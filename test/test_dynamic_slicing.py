@@ -244,7 +244,18 @@ class Bar:
 y = Foo().new(0).foo(1)
 z = Foo().new(1).bar(0)
 """)
-    run_cell("print(z)")
+    run_cell("logging.info(z)")
     deps = set(nbs().get_cell_dependencies(6).keys())
     assert deps == {1, 2, 3, 4, 5, 6}, 'got %s' % deps
-    
+
+
+def test_non_relevant_child_symbol_modified():
+    run_cell('lst = [0, 1, 2]')
+    run_cell('lst[0] += 1')
+    run_cell('lst[0] += 1')
+    run_cell('lst[1] += 1')
+    run_cell('lst[0] += 1')
+    run_cell('lst[0] += 1')
+    run_cell('logging.info(lst[1])')
+    deps = set(nbs().get_cell_dependencies(7).keys())
+    assert deps == {1, 4, 7}, 'got %s' % deps

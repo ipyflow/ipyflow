@@ -24,7 +24,8 @@ from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal
 if TYPE_CHECKING:
     from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
     from types import FrameType
-    AttrSubVal = Union[str, int]
+    from nbsafety.types import SupportedIndexType
+    AttrSubVal = SupportedIndexType
     NodeId = int
     ObjId = int
     MutationCandidate = Tuple[Tuple[int, ObjId, Optional[str]], MutationEvent, Set[DataSymbol], List[Any]]
@@ -324,7 +325,7 @@ class TraceManager(BaseTraceManager):
 
     def resolve_store_or_del_data_for_target(
         self, target: Union[str, int, ast.AST], frame: FrameType, ctx: Union[ast.Del, ast.Store] = ast.Store()
-    ) -> Tuple[Scope, Union[str, int], Any, bool]:
+    ) -> Tuple[Scope, AttrSubVal, Any, bool]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
             if isinstance(ctx, ast.Store):
@@ -461,8 +462,7 @@ class TraceManager(BaseTraceManager):
         _frame_: FrameType,
         event: TraceEvent,
         *_,
-        attr_or_subscript,
-        subscript_name: Optional[str],
+        attr_or_subscript: AttrSubVal,
         ctx: str,
         call_context: bool,
         top_level_node_id: NodeId,
@@ -487,13 +487,6 @@ class TraceManager(BaseTraceManager):
             sym_for_obj.timestamp_by_used_time[nbs().cell_counter()] = sym_for_obj.timestamp_excluding_ns_descendents
         
         is_subscript = (event == TraceEvent.subscript)
-
-        if is_subscript and subscript_name is not None:
-            # TODO: this ensures we capture the usage of simple name subscripts, but what about more complicated ones?
-            #  Also, ideally we should be wrapping every loaded ast.Name into somthing that updates its
-            #  version_by_used_timestamp
-            sym_for_slice = self.cur_frame_original_scope.lookup_data_symbol_by_name_this_indentation(subscript_name)
-            sym_for_slice.timestamp_by_used_time[nbs().cell_counter()] = sym_for_slice.timestamp
 
         obj_id = id(obj)
         if self.top_level_node_id_for_chain is None:

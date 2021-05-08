@@ -178,10 +178,12 @@ class AstEavesdropper(ast.NodeTransformer):
                     keywords=fast.kwargs(
                         ret=self.visit(node.value),
                         attr_or_subscript=attr_or_sub,
-                        subscript_name=fast.NameConstant(subscript_name) if subscript_name is None else fast.Str(subscript_name),
                         ctx=fast.Str(node.ctx.__class__.__name__),
                         call_context=fast.NameConstant(call_context),
-                        top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol)
+                        top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol),
+                        subscript_name=(
+                            fast.NameConstant(subscript_name) if subscript_name is None else fast.Str(subscript_name)
+                        ),
                     ) + extra_args
                 )
         # end fast.location_of(node.value)

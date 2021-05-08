@@ -37,6 +37,7 @@ from nbsafety.tracing.trace_manager import TraceManager
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
     from types import FrameType
+    from nbsafety.types import SupportedIndexType
     CellId = Union[str, int]
 
 logger = logging.getLogger(__name__)
@@ -834,7 +835,7 @@ class NotebookSafety(singletons.NotebookSafety):
             logger.info('collect sym %s', dsym)
             dsym.collect_self_garbage()
 
-    def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: Union[str, int], is_subscript: bool):
+    def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: SupportedIndexType, is_subscript: bool):
         try:
             if is_subscript:
                 # TODO: more complete list of things that are checkable

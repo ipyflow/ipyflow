@@ -115,6 +115,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._counter_by_cell_id: Dict[CellId, int] = {}
         self._cell_id_by_counter: Dict[int, CellId] = {}
         self._active_cell_id: Optional[str] = None
+        self._run_cells: Set[CellId] = set()
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
         self.safety_issue_detected = False
@@ -240,6 +241,8 @@ class NotebookSafety(singletons.NotebookSafety):
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         cell_ids_needing_typecheck = self.get_cell_ids_needing_typecheck()
         for cell_id, cell_content in content_by_cell_id.items():
+            if cell_id not in self._run_cells:
+                continue
             if (
                 order_index_by_cell_id is not None
                 and order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx
@@ -293,7 +296,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 )
             else:
                 refresher_cell_ids = refresher_cell_ids.union(
-                    *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms))
+                    *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)
+                )
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells
@@ -424,7 +428,7 @@ class NotebookSafety(singletons.NotebookSafety):
         fresher_symbols = sym.fresher_ancestors
         if len(fresher_symbols) == 0:
             fresher_symbols = fresher_symbols.union(
-                *[ns_stale.fresher_ancestors for ns_stale in sym.namespace_stale_symbols]
+                *(ns_stale.fresher_ancestors for ns_stale in sym.namespace_stale_symbols)
             )
         logger.warning(
             f'`{sym.readable_name}` defined in cell {sym.timestamp} may depend on '
@@ -706,6 +710,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
+                self._run_cells.add(cell_id)
                 self.cell_content_by_counter[self._last_execution_counter] = cell
                 with self._tracing_context():
                     ret = run_cell_func(cell)

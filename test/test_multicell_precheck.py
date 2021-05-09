@@ -40,17 +40,16 @@ def test_simple():
     cells = {
         0: 'x = 0',
         1: 'y = x + 1',
-        2: 'x = 42',
-        3: 'logging.info(y)',
+        2: 'logging.info(y)',
+        3: 'x = 42',
     }
-    run_cell(cells[0])
-    run_cell(cells[1])
-    run_cell(cells[2])
+    for i in range(len(cells)):
+        run_cell(cells[i], cell_id=i)
     response = nbs().check_and_link_multiple_cells(cells)
-    assert response['stale_cells'] == [3]
-    assert response['fresh_cells'] == []
-    assert response['stale_links'] == {3: [1]}
-    assert response['refresher_links'] == {1: [3]}
+    assert response['stale_cells'] == [2]
+    assert response['fresh_cells'] == [1]
+    assert response['stale_links'] == {2: [1]}
+    assert response['refresher_links'] == {1: [2]}
 
 
 def test_refresh_after_exception_fixed():
@@ -203,13 +202,13 @@ def test_symbol_on_both_sides_of_assignment():
     cells = {
         0: 'x = 0',
         1: 'y = x + 1',
-        2: 'x = 42',
+        2: 'y += 7',
+        3: 'x = 42',
     }
     for idx, cell in cells.items():
         run_cell(cell, idx)
-    cells[3] = 'y += 7'
     response = nbs().check_and_link_multiple_cells(cells)
-    assert response['stale_cells'] == [3]
+    assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1]
     assert list(response['refresher_links'].keys()) == [1]
 

@@ -240,12 +240,14 @@ class TraceStatement:
             # themselves namespace children.
             if isinstance(mutation_event, (ListAppend, ListExtend)):
                 propagate_to_namespace_descendents = False
-                orig_len = mutation_event.orig_len
                 namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
                 mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
                 if mutated_sym is not None:
                     mutated_obj = mutated_sym.obj
-                    for upsert_pos in range(orig_len, len(mutated_obj)):
+                    for upsert_pos in range(
+                        mutation_event.orig_len if isinstance(mutation_event, ListExtend) else len(mutated_obj) - 1,
+                        len(mutated_obj)
+                    ):
                         if namespace_scope is None:
                             namespace_scope = NamespaceScope(
                                 mutated_obj,

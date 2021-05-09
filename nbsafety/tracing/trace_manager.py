@@ -519,7 +519,7 @@ class TraceManager(BaseTraceManager):
             mutation_event: MutationEvent = StandardMutation()
             if isinstance(obj, list):
                 if attr_or_subscript == 'append':
-                    mutation_event = ListAppend(len(obj))
+                    mutation_event = ListAppend()
                 elif attr_or_subscript == 'extend':
                     mutation_event = ListExtend(len(obj))
             # save off event counter and obj_id

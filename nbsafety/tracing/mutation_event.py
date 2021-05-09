@@ -9,9 +9,7 @@ class StandardMutation(MutationEvent):
 
 
 class ListAppend(MutationEvent):
-    def __init__(self, orig_len: int) -> None:
-        super().__init__()
-        self.orig_len: int = orig_len
+    pass
 
 
 class ListExtend(MutationEvent):

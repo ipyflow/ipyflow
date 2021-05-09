@@ -1,8 +1,13 @@
 # -*- coding: future_annotations -*-
 import logging
+from typing import TYPE_CHECKING
 
+from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.singletons import nbs
 from test.utils import assert_bool, make_safety_fixture, skipif_known_failing
+
+if TYPE_CHECKING:
+    from typing import Optional, Set
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -23,7 +28,7 @@ def assert_not_detected(msg=''):
     assert_bool(not stale_detected(), msg=msg)
 
 
-def lookup_symbols(val):
+def lookup_symbols(val) -> Optional[Set[DataSymbol]]:
     safety = nbs()
     alias_set = {alias for alias in safety.aliases.get(id(val), []) if not alias.is_anonymous}
     if len(alias_set) == 0:
@@ -31,11 +36,22 @@ def lookup_symbols(val):
     return alias_set
 
 
-def lookup_symbol(val):
+def lookup_symbol(val) -> Optional[DataSymbol]:
     alias_set = lookup_symbols(val)
     if alias_set is None or len(alias_set) == 0:
         return None
-    return next(iter(alias_set))
+    alias = None
+    for alias in alias_set:
+        # try to find one that isn't anonymous or
+        # associated with anonymous parent to avoid
+        # e.g. <literal_sym_12345> in tests
+        containing_ns = alias.containing_namespace
+        if containing_ns is not None and next(iter(nbs().aliases[containing_ns.obj_id])).is_anonymous:
+            continue
+        if alias.is_anonymous:
+            continue
+        return alias
+    return alias
 
 
 # ref: https://gist.github.com/golobor/397b5099d42da476a4e6
@@ -160,3 +176,12 @@ def test_nested_symbol_created_for_symbol_already_existing():
     x_names = {sym.readable_name for sym in x_syms}
     assert 'x' in x_names, 'could not find `x` in set of names %s' % x_names
     assert 'lst[2][1]' in x_names, 'could not find `lst[2][1]` in set of names %s' % x_names
+
+
+def test_list_append_extend():
+    run_cell('lst = []')
+    run_cell('lst.append(42)')
+    run_cell('lst.extend([43, 44])')
+    assert lookup_symbol(42).readable_name == 'lst[0]'
+    assert lookup_symbol(43).readable_name == 'lst[1]'
+    assert lookup_symbol(44).readable_name == 'lst[2]'

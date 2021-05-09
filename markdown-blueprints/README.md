@@ -40,10 +40,10 @@ pip install nbsafety
 
 Interface
 ---------
-The kernel ships with an extension that shows highlights cells with live
-references to stale symbols with red UI elements. It furthermore uses turquoise
-highlights for cells with live references to updated symbols, as well as for
-cells that resolve staleness.
+The kernel ships with an extension that highlights cells with live references
+to stale symbols using red UI elements. It furthermore uses turquoise highlights
+for cells with live references to updated symbols, as well as for cells that
+resolve staleness.
 
 Running
 -------

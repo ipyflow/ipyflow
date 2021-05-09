@@ -1240,6 +1240,15 @@ def test_list_mutation():
     assert_detected('lst depends on stale x')
 
 
+def test_list_mutation_extend():
+    run_cell('lst = []')
+    run_cell('x = 42')
+    run_cell('lst.extend([x])')
+    run_cell('x = 43')
+    run_cell('logging.info(lst)')
+    assert_detected('`lst` depends on stale `x`')
+
+
 def test_list_mutation_2():
     run_cell('lst = list(range(5))')
     run_cell('x = lst + [42, 43]')
@@ -1255,6 +1264,16 @@ def test_list_mutation_from_attr():
 for word in s.split('X'):
     lst.append(word.strip())
 """)
+    run_cell('s = "foobar"')
+    run_cell('logging.info(lst)')
+    assert_detected('`lst` depends on stale `s`')
+
+
+@skipif_known_failing
+def test_list_mutation_extend_from_attr():
+    run_cell('s = "hello X world X how X are X you X today?"')
+    run_cell('lst = []')
+    run_cell('lst.extend(word.strip() for word in s.split("X"))')
     run_cell('s = "foobar"')
     run_cell('logging.info(lst)')
     assert_detected('`lst` depends on stale `s`')
@@ -2137,6 +2156,20 @@ def f(x, y):
     run_cell('foo.baz = 84')
     run_cell('logging.info(w)')
     assert_detected('`w` depends on stale `foo.baz`')
+
+
+def test_list_extend():
+    run_cell('lst = [0, 1, 2]')
+    run_cell('x = lst[1] + 1')
+    run_cell('lst.extend(i for i in range(3, 10))')
+    run_cell('logging.info(x)')
+    assert_not_detected()
+    run_cell('logging.info(lst[1])')
+    assert_not_detected()
+    run_cell('y = lst[8] + 1')
+    run_cell('lst[8] += 42')
+    run_cell('logging.info(y)')
+    assert_detected('`y` depends on stale `lst[8]`')
 
 
 @skipif_known_failing

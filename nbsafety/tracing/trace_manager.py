@@ -591,8 +591,6 @@ class TraceManager(BaseTraceManager):
             return
         self.num_args_seen += 1
         arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
-        if not isinstance(arg_node, (ast.Attribute, ast.Subscript, ast.Call, ast.Name, ast.Num, ast.Constant, ast.Str)):
-            return
         if len(self.mutation_candidates) == 0:
             return
 
@@ -600,13 +598,10 @@ class TraceManager(BaseTraceManager):
             assert self.active_scope is self.cur_frame_original_scope
             arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
             if arg_dsym is None:
-                arg_dsym = self.active_scope.upsert_data_symbol_for_name(
+                self.active_scope.upsert_data_symbol_for_name(
                     arg_node.id, arg_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, implicit=True
                 )
-            arg_dsyms = [arg_dsym]
-        else:
-            arg_dsyms = self.node_id_to_loaded_symbols.get(arg_node_id, [])
-        self.mutation_candidates[-1][-2].update(arg_dsyms)
+        self.mutation_candidates[-1][-2].update(resolve_rval_symbols(arg_node))
         self.mutation_candidates[-1][-1].append(arg_obj)
 
     @register_handler(TraceEvent.before_call)

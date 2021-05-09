@@ -1,10 +1,14 @@
 # -*- coding: future_annotations -*-
 from contextlib import contextmanager
 import logging
+from typing import TYPE_CHECKING
 
 from nbsafety.safety import NotebookSafetySettings
 from nbsafety.singletons import nbs
-from .utils import make_safety_fixture, skipif_known_failing
+from test.utils import make_safety_fixture, skipif_known_failing
+
+if TYPE_CHECKING:
+    from typing import Dict
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -36,6 +40,11 @@ def run_cell(cell, cell_id=None, **kwargs):
     run_cell_(cell, **kwargs)
 
 
+def run_all_cells(cells: Dict[int, str], **kwargs):
+    for cell_id in sorted(cells.keys()):
+        run_cell(cells[cell_id], cell_id=cell_id, **kwargs)
+
+
 def test_simple():
     cells = {
         0: 'x = 0',
@@ -43,8 +52,7 @@ def test_simple():
         2: 'logging.info(y)',
         3: 'x = 42',
     }
-    for i in range(len(cells)):
-        run_cell(cells[i], cell_id=i)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1]
@@ -72,10 +80,7 @@ def test_refresh_after_val_changed():
         2: 'logging.info(y)',
         3: 'y = 42',
     }
-    run_cell(cells[0], 0)
-    run_cell(cells[1], 1)
-    run_cell(cells[2], 2)
-    run_cell(cells[3], 3)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['fresh_cells'] == [2]
 
@@ -88,8 +93,7 @@ def test_inner_mutation_considered_fresh():
         3: 'logging.info(lst)',
         4: 'lst_0.append(42)',
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3]
@@ -121,8 +125,7 @@ for foo in lst:
         3: 'logging.info(lst)',
     }
 
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
+    run_all_cells(cells)
 
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
@@ -161,8 +164,7 @@ def test_no_freshness_for_alias_assignment_post_mutation():
         1: 'y = x',
         2: 'x.append(5)',
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == []
@@ -173,8 +175,7 @@ def test_fresh_after_import():
         0: 'x = np.random.random(10)',
         1: 'import numpy as np'
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx, ignore_exceptions=True)
+    run_all_cells(cells, ignore_exceptions=True)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [0]
@@ -191,8 +192,7 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
         6: 'foo = foo.set_x(10)',
     }
     with override_settings(mark_stale_symbol_usages_unsafe=False):
-        for idx, cell in cells.items():
-            run_cell(cell, idx)
+        run_all_cells(cells)
         response = nbs().check_and_link_multiple_cells(cells)
         assert response['stale_cells'] == []
         assert response['fresh_cells'] == [2, 4]
@@ -205,8 +205,7 @@ def test_symbol_on_both_sides_of_assignment():
         2: 'y += 7',
         3: 'x = 42',
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1]
@@ -220,8 +219,7 @@ def test_updated_namespace_after_subscript_dep_removed():
         2: 'logging.info(d[5])',
         3: 'x = 9',
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1]
@@ -247,8 +245,7 @@ def test_equal_update_does_not_induce_fresh_cell():
         2: 'print(y)',
         3: 'y = list("".join(y))',
     }
-    for idx, cell in cells.items():
-        run_cell(cell, idx)
+    run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == []
@@ -256,3 +253,37 @@ def test_equal_update_does_not_induce_fresh_cell():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3]
+
+
+def test_list_append():
+    cells = {
+        0: 'lst = [0, 1]',
+        1: 'x = lst[1] + 1',
+        2: 'print(x)',
+        3: 'lst.append(2)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('lst[1] += 42', 4)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [2]
+    assert response['fresh_cells'] == [1, 3]
+
+
+def test_list_extend():
+    cells = {
+        0: 'lst = [0, 1]',
+        1: 'x = lst[1] + 1',
+        2: 'print(x)',
+        3: 'lst.extend([2, 3, 4])',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('lst[1] += 42', 4)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [2]
+    assert response['fresh_cells'] == [1, 3]

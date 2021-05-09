@@ -479,7 +479,9 @@ class DataSymbol:
             self.timestamp_by_used_time[nbs().cell_counter()] = self.timestamp
         self.refresh(
             bump_version=not equal_to_old,
-            refresh_descendent_namespaces=True,
+            # rationale: if this is a mutation for which we have more precise information,
+            # then we don't need to update the ns descendents as this will already have happened
+            refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents),
             refresh_namespace_stale=not mutated,
         )
         if propagate and (mutated or deleted or not equal_to_old):

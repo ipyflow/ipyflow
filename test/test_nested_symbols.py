@@ -43,10 +43,10 @@ def lookup_symbol(val) -> Optional[DataSymbol]:
     alias = None
     for alias in alias_set:
         # try to find one that isn't anonymous or
-        # associated with anonymous parent to avoid
+        # associated with anonymous namespace to avoid
         # e.g. <literal_sym_12345> in tests
         containing_ns = alias.containing_namespace
-        if containing_ns is not None and next(iter(nbs().aliases[containing_ns.obj_id])).is_anonymous:
+        if containing_ns is not None and containing_ns.scope_name.startswith('<anonymous'):
             continue
         if alias.is_anonymous:
             continue
@@ -182,6 +182,9 @@ def test_list_append_extend():
     run_cell('lst = []')
     run_cell('lst.append(42)')
     run_cell('lst.extend([43, 44])')
-    assert lookup_symbol(42).readable_name == 'lst[0]'
-    assert lookup_symbol(43).readable_name == 'lst[1]'
-    assert lookup_symbol(44).readable_name == 'lst[2]'
+    name = lookup_symbol(42).readable_name
+    assert name == 'lst[0]', 'got %s' % name
+    name = lookup_symbol(43).readable_name
+    assert name == 'lst[1]', 'got %s' % name
+    name = lookup_symbol(44).readable_name
+    assert name == 'lst[2]', 'got %s' % name

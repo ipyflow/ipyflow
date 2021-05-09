@@ -188,3 +188,20 @@ def test_list_append_extend():
     assert name == 'lst[1]', 'got %s' % name
     name = lookup_symbol(44).readable_name
     assert name == 'lst[2]', 'got %s' % name
+
+
+def test_list_insert():
+    run_cell('lst = [0, 1, 2, 4, 5, 6]')
+    name = lookup_symbol(2).readable_name
+    assert name == 'lst[2]', 'got %s' % name
+    name = lookup_symbol(4).readable_name
+    assert name == 'lst[3]', 'got %s' % name
+    dsym = lookup_symbol(3)
+    assert dsym is None
+    run_cell('lst.insert(3, 3)')
+    name = lookup_symbol(2).readable_name
+    assert name == 'lst[2]', 'got %s' % name
+    name = lookup_symbol(3).readable_name
+    assert name == 'lst[3]', 'got %s' % name
+    name = lookup_symbol(4).readable_name
+    assert name == 'lst[4]', 'got %s' % name

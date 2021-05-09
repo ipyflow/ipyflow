@@ -171,7 +171,7 @@ class Scope:
         self,
         name: SupportedIndexType,
         obj: Any,
-        deps: Set[DataSymbol],
+        deps: Iterable[DataSymbol],
         stmt_node: ast.AST,
         overwrite: bool = True,
         is_subscript: bool = False,
@@ -191,10 +191,11 @@ class Scope:
             is_anonymous=is_anonymous,
             class_scope=class_scope
         )
+        deps = set(deps)  # make a copy since we mutate it (see below fixme)
         dsym, prev_dsym, prev_obj = self._upsert_data_symbol_for_name_inner(
             name,
             obj,
-            deps,
+            deps,  # FIXME: this updates deps, which is super super hacky
             symbol_type,
             stmt_node,
             implicit=implicit,
@@ -253,7 +254,7 @@ class Scope:
             if new_dep is not None:
                 deps.add(new_dep)
         dsym = DataSymbol(
-            name, symbol_type, obj, self, stmt_node=stmt_node, parents=deps, refresh_cached_obj=False, implicit=implicit
+            name, symbol_type, obj, self, stmt_node=stmt_node, refresh_cached_obj=False, implicit=implicit
         )
         self.put(name, dsym)
         return dsym, prev_dsym, prev_obj

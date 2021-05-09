@@ -14,7 +14,7 @@ from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety import singletons
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
-from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, StandardMutation
+from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, StandardMutation
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stack import TraceStack
@@ -522,6 +522,8 @@ class TraceManager(BaseTraceManager):
                     mutation_event = ListAppend()
                 elif attr_or_subscript == 'extend':
                     mutation_event = ListExtend(len(obj))
+                elif attr_or_subscript == 'insert':
+                    mutation_event = ListInsert()
             # save off event counter and obj_id
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
@@ -561,7 +563,12 @@ class TraceManager(BaseTraceManager):
                 return
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
             if call_context and len(self.mutation_candidates) > 0:
-                (evt_counter, obj_id, obj_name), mutation_event, recorded_arg_dsyms, recorded_arg_objs = self.mutation_candidates.pop()
+                (
+                    (evt_counter, obj_id, obj_name),
+                    mutation_event,
+                    recorded_arg_dsyms,
+                    recorded_arg_objs,
+                ) = self.mutation_candidates.pop()
                 if evt_counter == self.trace_event_counter:
                     if obj is None:
                         if isinstance(mutation_event, StandardMutation):
@@ -575,6 +582,8 @@ class TraceManager(BaseTraceManager):
                                         mutation_event = ArgMutate()
                             except:
                                 pass
+                        elif isinstance(mutation_event, ListInsert):
+                            mutation_event.insert_pos = recorded_arg_objs[0]
                         self.mutations.append((obj_id, mutation_event, recorded_arg_dsyms, recorded_arg_objs))
                     else:
                         if self.sym_for_obj_calling_method is not None:
@@ -662,7 +671,7 @@ class TraceManager(BaseTraceManager):
                         inner_symbols.update(resolve_rval_symbols(inner_key_node))
                 self.node_id_to_loaded_symbols.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
-                if isinstance(i, (int, str)):
+                if isinstance(i, (int, str)):  # TODO: perform more general check for SupportedIndexType
                     self.active_literal_scope.upsert_data_symbol_for_name(
                         i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, is_subscript=True
                     )
@@ -724,7 +733,7 @@ class TraceManager(BaseTraceManager):
         sym = self.active_scope.upsert_data_symbol_for_name(
             '<lambda_sym_%d>' % id(obj),
             obj,
-            set(sym_deps),
+            sym_deps,
             self.prev_trace_stmt_in_cur_frame.stmt_node,
             is_function_def=True,
             propagate=False,

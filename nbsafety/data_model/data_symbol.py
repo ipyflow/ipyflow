@@ -43,7 +43,6 @@ class DataSymbol:
         containing_scope: Scope,
         stmt_node: Optional[ast.AST] = None,
         # TODO: also keep a reference to the target node?
-        parents: Optional[Set[DataSymbol]] = None,
         refresh_cached_obj: bool = False,
         implicit: bool = False,
     ):
@@ -64,9 +63,7 @@ class DataSymbol:
         self.containing_scope = containing_scope
         self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
-        if parents is None:
-            parents = set()
-        self.parents: Set[DataSymbol] = parents
+        self.parents: Set[DataSymbol] = set()
         self.children_by_cell_position: Dict[int, Set[DataSymbol]] = defaultdict(set)
 
         self.call_scope: Optional[Scope] = None
@@ -422,7 +419,7 @@ class DataSymbol:
             #  which will be tricky I guess.
             obj = deps[0].obj if len(deps) == 1 else None
             logger.info('def arg %s matched with %s with deps %s', def_arg, obj, deps)
-            self.call_scope.upsert_data_symbol_for_name(def_arg, obj, set(deps), self.stmt_node, propagate=False)
+            self.call_scope.upsert_data_symbol_for_name(def_arg, obj, deps, self.stmt_node, propagate=False)
         for def_arg in self.get_definition_args():
             if def_arg in seen_def_args:
                 continue
@@ -466,7 +463,7 @@ class DataSymbol:
             for parent in self.parents - new_deps:
                 for parent_children in parent.children_by_cell_position.values():
                     parent_children.discard(self)
-            self.parents = set()
+            self.parents.clear()
 
         for new_parent in new_deps - self.parents:
             if new_parent is None:

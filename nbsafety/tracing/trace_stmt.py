@@ -8,7 +8,7 @@ from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
-from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend
+from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols, update_usage_info
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
@@ -219,11 +219,63 @@ class TraceStatement:
                 logger.warning('exception while handling store: %s', e)
                 pass
 
+    def _handle_list_mutation(
+        self,
+        mutation_event: Union[ListAppend, ListExtend, ListInsert],
+        mutated_obj_id: int,
+        mutation_upsert_deps: Set[DataSymbol],
+    ):
+        namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
+        mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
+        if mutated_sym is None:
+            return
+        mutated_obj = mutated_sym.obj
+        if isinstance(mutation_event, (ListAppend, ListExtend)):
+            for upsert_pos in range(
+                mutation_event.orig_len if isinstance(mutation_event, ListExtend) else len(mutated_obj) - 1,
+                len(mutated_obj)
+            ):
+                if namespace_scope is None:
+                    namespace_scope = NamespaceScope(
+                        mutated_obj,
+                        mutated_sym.name,
+                        parent_scope=mutated_sym.containing_scope
+                    )
+                logger.info(
+                    "upsert %s to %s with deps %s", len(mutated_obj) - 1, namespace_scope, mutation_upsert_deps
+                )
+                namespace_scope.upsert_data_symbol_for_name(
+                    upsert_pos,
+                    mutated_obj[upsert_pos],
+                    mutation_upsert_deps,
+                    self.stmt_node,
+                    overwrite=False,
+                    is_subscript=True,
+                    propagate=False,
+                )
+        elif isinstance(mutation_event, ListInsert):
+            for idx in range(len(mutated_obj) - 1, mutation_event.insert_pos, -1):
+                subsym = namespace_scope._subscript_data_symbol_by_name.pop(idx - 1, None)
+                if subsym is None:
+                    continue
+                subsym.name = idx
+                namespace_scope._subscript_data_symbol_by_name[idx] = subsym
+                subsym.refresh()
+            namespace_scope.upsert_data_symbol_for_name(
+                mutation_event.insert_pos,
+                mutated_obj[mutation_event.insert_pos],
+                mutation_upsert_deps,
+                self.stmt_node,
+                overwrite=False,
+                is_subscript=True,
+                propagate=False,
+            )
+
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:
             return
         for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
-            propagate_to_namespace_descendents = True
+            propagate_to_namespace_descendents = not isinstance(mutation_event, (ListAppend, ListExtend, ListInsert))
             logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
             update_usage_info(mutation_arg_dsyms)
             if isinstance(mutation_event, ArgMutate):
@@ -238,32 +290,11 @@ class TraceStatement:
             # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
-            if isinstance(mutation_event, (ListAppend, ListExtend)):
-                propagate_to_namespace_descendents = False
-                namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
-                mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
-                if mutated_sym is not None:
-                    mutated_obj = mutated_sym.obj
-                    for upsert_pos in range(
-                        mutation_event.orig_len if isinstance(mutation_event, ListExtend) else len(mutated_obj) - 1,
-                        len(mutated_obj)
-                    ):
-                        if namespace_scope is None:
-                            namespace_scope = NamespaceScope(
-                                mutated_obj,
-                                mutated_sym.name,
-                                parent_scope=mutated_sym.containing_scope
-                            )
-                        logger.info("upsert %s to %s", len(mutated_obj) - 1, namespace_scope)
-                        namespace_scope.upsert_data_symbol_for_name(
-                            upsert_pos,
-                            mutated_obj[upsert_pos],
-                            set(),
-                            self.stmt_node,
-                            overwrite=False,
-                            is_subscript=True,
-                            propagate=False
-                        )
+            if isinstance(mutation_event, (ListAppend, ListExtend, ListInsert)):
+                mutation_upsert_deps: Set[DataSymbol] = set()
+                if isinstance(mutation_event, (ListAppend, ListInsert)):
+                    mutation_arg_dsyms, mutation_upsert_deps = mutation_upsert_deps, mutation_arg_dsyms
+                self._handle_list_mutation(mutation_event, mutated_obj_id, mutation_upsert_deps)
             update_usage_info(nbs().aliases[mutated_obj_id])
             for mutated_sym in nbs().aliases[mutated_obj_id]:
                 mutated_sym.update_deps(

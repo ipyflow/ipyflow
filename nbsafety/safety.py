@@ -151,6 +151,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.mut_settings.trace_messages_enabled = new_val
 
     def get_first_full_symbol(self, obj_id: int) -> Optional[DataSymbol]:
+        # TODO: also avoid anonymous namespaces?
         for alias in self.aliases.get(obj_id, []):
             if not alias.is_anonymous:
                 return alias
@@ -542,14 +543,10 @@ class NotebookSafety(singletons.NotebookSafety):
                     continue
                 # TODO: handle dict case too
                 if isinstance(containing_obj, list) and containing_obj[-1] is obj:
-                    containing_namespace.upsert_data_symbol_for_name(
-                        len(containing_obj) - 1,
-                        obj,
-                        set(alias.parents),
-                        alias.stmt_node,
-                        is_subscript=True,
-                        propagate=False
-                    )
+                    containing_namespace._subscript_data_symbol_by_name.pop(alias.name, None)
+                    alias.name = len(containing_obj) - 1
+                    alias.update_obj_ref(obj)
+                    containing_namespace._subscript_data_symbol_by_name[alias.name] = alias
             self.aliases[dsym.cached_obj_id].discard(dsym)
             self.aliases[dsym.obj_id].discard(dsym)
             self.aliases[id(obj)].add(dsym)

@@ -10,7 +10,7 @@ from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
 if TYPE_CHECKING:
-    from typing import Iterable, List, Optional
+    from typing import Iterable, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -65,15 +65,21 @@ def show_deps(symbols: str) -> Optional[str]:
             logger.warning('Could not find symbol metadata for %s', astunparse.unparse(unresolved).strip())
         for dsym in dsyms:
             parents = {par for par in dsym.parents if not par.is_anonymous}
+            children: Set[DataSymbol] = set()
+            children = children.union(
+                *({child for child in children if not child.is_anonymous}
+                  for children in dsym.children_by_cell_position.values())
+            )
             if dsym.required_timestamp > 0:
                 dsym_extra_info = 'last updated {}; required {}'.format(dsym.timestamp, dsym.required_timestamp)
             else:
                 dsym_extra_info = 'defined in cell {}'.format(dsym.timestamp)
             statements.append(
-                'Symbol {} ({}) is dependent on {}'.format(
+                'Symbol {} ({}) is dependent on {} and is a parent of {}'.format(
                     dsym.full_namespace_path,
                     dsym_extra_info,
-                    parents or 'nothing'
+                    parents or 'nothing',
+                    children or 'nothing',
                 )
             )
     if len(statements) == 0:

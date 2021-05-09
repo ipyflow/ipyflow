@@ -1,4 +1,9 @@
 # -*- coding: future_annotations -*-
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from typing import Optional
+
 
 class MutationEvent:
     pass
@@ -19,7 +24,9 @@ class ListExtend(MutationEvent):
 
 
 class ListInsert(MutationEvent):
-    pass
+    def __init__(self, insert_pos: Optional[int] = None):
+        super().__init__()
+        self.insert_pos = insert_pos
 
 
 class ArgMutate(MutationEvent):

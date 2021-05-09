@@ -38,6 +38,7 @@ class UpdateProtocol:
             'for symbol %s: mutated=%s; updated_symbols=%s', self.updated_sym, mutated, directly_updated_symbols
         )
         updated_symbols_with_ancestors = set(self.seen)
+        logger.warning('all updated symbols for symbol %s: %s', self.updated_sym, updated_symbols_with_ancestors)
         nbs().updated_symbols |= self.seen
         for updated_sym in directly_updated_symbols:
             if not updated_sym.is_stale and updated_sym is not self.updated_sym:

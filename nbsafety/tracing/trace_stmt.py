@@ -8,7 +8,7 @@ from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.singletons import nbs, tracer
-from nbsafety.tracing.mutation_event import MutationEvent
+from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols, update_usage_info
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
@@ -223,9 +223,10 @@ class TraceStatement:
         if not nbs().dependency_tracking_enabled:
             return
         for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
+            propagate_to_namespace_descendents = True
             logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
             update_usage_info(mutation_arg_dsyms)
-            if mutation_event == MutationEvent.arg_mutate:
+            if isinstance(mutation_event, ArgMutate):
                 for mutated_sym in mutation_arg_dsyms:
                     if mutated_sym is None:
                         continue
@@ -237,14 +238,14 @@ class TraceStatement:
             # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
-            if mutation_event == MutationEvent.list_append and len(mutation_arg_objs) == 1:
+            if isinstance(mutation_event, (ListAppend, ListExtend)):
+                propagate_to_namespace_descendents = False
+                orig_len = mutation_event.orig_len
                 namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
                 mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
                 if mutated_sym is not None:
                     mutated_obj = mutated_sym.obj
-                    mutation_arg_obj = next(iter(mutation_arg_objs))
-                    # TODO: replace int check w/ more general "immutable" check
-                    if mutation_arg_obj is not None:
+                    for upsert_pos in range(orig_len, len(mutated_obj)):
                         if namespace_scope is None:
                             namespace_scope = NamespaceScope(
                                 mutated_obj,
@@ -253,18 +254,22 @@ class TraceStatement:
                             )
                         logger.info("upsert %s to %s", len(mutated_obj) - 1, namespace_scope)
                         namespace_scope.upsert_data_symbol_for_name(
-                            len(mutated_obj) - 1,
-                            mutation_arg_obj,
+                            upsert_pos,
+                            mutated_obj[upsert_pos],
                             set(),
                             self.stmt_node,
                             overwrite=False,
                             is_subscript=True,
                             propagate=False
                         )
-            # TODO: add mechanism for skipping namespace children in case of list append
             update_usage_info(nbs().aliases[mutated_obj_id])
             for mutated_sym in nbs().aliases[mutated_obj_id]:
-                mutated_sym.update_deps(mutation_arg_dsyms, overwrite=False, mutated=True)
+                mutated_sym.update_deps(
+                    mutation_arg_dsyms,
+                    overwrite=False,
+                    mutated=True,
+                    propagate_to_namespace_descendents=propagate_to_namespace_descendents,
+                )
         if self._contains_lval():
             self._make_lval_data_symbols()
         elif isinstance(self.stmt_node, ast.Delete):

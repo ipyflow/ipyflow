@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Set
+    from typing import Iterable, Set
 
     # avoid circular imports
     from nbsafety.data_model.data_symbol import DataSymbol
@@ -19,7 +19,11 @@ class UpdateProtocol:
         self.updated_sym = updated_sym
         self.seen: Set[DataSymbol] = set()
 
-    def __call__(self, new_deps: Set[DataSymbol], mutated: bool) -> None:
+    def __call__(self, new_deps: Set[DataSymbol], mutated: bool, propagate_to_namespace_descendents: bool) -> None:
+        # in most cases, mutated implies that we should propagate to namespace descendents, since we
+        # do not know how the mutation affects the namespace members. The exception is for specific
+        # known events such as 'list.append()' or 'list.extend()' since we know these do not update
+        # the namespace members.
         logger.warning(
             "updated sym %s (containing scope %s) with children %s",
             self.updated_sym,
@@ -27,7 +31,9 @@ class UpdateProtocol:
             self.updated_sym.children_by_cell_position.values(),
         )
         directly_updated_symbols = nbs().aliases[self.updated_sym.obj_id] if mutated else {self.updated_sym}
-        self._collect_updated_symbols_and_refresh_namespaces(directly_updated_symbols)
+        self._collect_updated_symbols_and_refresh_namespaces(
+            directly_updated_symbols, propagate_to_namespace_descendents
+        )
         logger.warning(
             'for symbol %s: mutated=%s; updated_symbols=%s', self.updated_sym, mutated, directly_updated_symbols
         )
@@ -40,7 +46,9 @@ class UpdateProtocol:
         for dsym in updated_symbols_with_ancestors:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
 
-    def _collect_updated_symbols_and_refresh_namespaces(self, updated_symbols: Set[DataSymbol]) -> None:
+    def _collect_updated_symbols_and_refresh_namespaces(
+        self, updated_symbols: Iterable[DataSymbol], refresh_descendent_namespaces: bool
+    ) -> None:
         logger.warning('collecting updated symbols and namespaces for %s', updated_symbols)
         for dsym in updated_symbols:
             if dsym.is_import or dsym in self.seen:
@@ -48,12 +56,19 @@ class UpdateProtocol:
             dsym.updated_timestamps.add(nbs().cell_counter())
             self.seen.add(dsym)
             containing_ns = dsym.containing_namespace
-            if containing_ns is None:
-                continue
-            logger.warning('containing scope for %s: %s; ids %s, %s', dsym, containing_ns, dsym.obj_id, containing_ns.obj_id)
-            containing_ns.namespace_stale_symbols.discard(dsym)
-            containing_ns.max_descendent_timestamp = nbs().cell_counter()
-            self._collect_updated_symbols_and_refresh_namespaces(nbs().aliases[containing_ns.obj_id])
+            if containing_ns is not None:
+                logger.warning('containing scope for %s: %s; ids %s, %s', dsym, containing_ns, dsym.obj_id, containing_ns.obj_id)
+                containing_ns.namespace_stale_symbols.discard(dsym)
+                containing_ns.max_descendent_timestamp = nbs().cell_counter()
+                self._collect_updated_symbols_and_refresh_namespaces(
+                    nbs().aliases[containing_ns.obj_id], refresh_descendent_namespaces
+                )
+            if refresh_descendent_namespaces:
+                dsym_ns = dsym.namespace
+                if dsym_ns is not None:
+                    self._collect_updated_symbols_and_refresh_namespaces(
+                        dsym_ns.all_data_symbols_this_indentation(), refresh_descendent_namespaces
+                    )
 
     def _propagate_staleness_to_namespace_parents(self, dsym: DataSymbol, skip_seen_check=False):
         if not skip_seen_check and dsym in self.seen:

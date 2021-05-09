@@ -442,7 +442,14 @@ class DataSymbol:
         return True
 
     def update_deps(
-        self, new_deps: Set[DataSymbol], prev_obj=None, overwrite=True, mutated=False, deleted=False, propagate=True
+        self,
+        new_deps: Set[DataSymbol],
+        prev_obj=None,
+        overwrite=True,
+        mutated=False,
+        deleted=False,
+        propagate_to_namespace_descendents=False,
+        propagate=True,
     ):
         # skip updates for imported symbols
         if self.is_import:
@@ -470,27 +477,35 @@ class DataSymbol:
         equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.timestamp_by_used_time[nbs().cell_counter()] = self.timestamp
-        self.refresh(bump_version=not equal_to_old, refresh_namespace=True)
+        self.refresh(
+            bump_version=not equal_to_old,
+            refresh_descendent_namespaces=True,
+            refresh_namespace_stale=not mutated,
+        )
         if propagate and (mutated or deleted or not equal_to_old):
-            UpdateProtocol(self)(new_deps, mutated)
+            UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
 
-    def refresh(self: DataSymbol, bump_version=True, refresh_namespace=False):
+    def refresh(self: DataSymbol, bump_version=True, refresh_descendent_namespaces=False, refresh_namespace_stale=True):
         self._temp_disable_warnings = False
         self.fresher_ancestors.clear()
         if bump_version:
             self._timestamp = nbs().cell_counter()
             self.updated_timestamps.add(self._timestamp)
             self._version += 1
-        if refresh_namespace:
-            for dsym in self.namespace_stale_symbols:
-                # this is to handle cases like `x = x.mutate(42)`, where
-                # we could have changed some member of x but returned the
-                # original object -- in this case, just assume that all
-                # the stale namespace descendents are no longer stale, as
-                # this is likely the user intention. For an example, see
-                # `test_external_object_update_propagates_to_stale_namespace_symbols()`
-                # in `test_multicell_precheck.py`
-                dsym.refresh(refresh_namespace=True)
-            self.namespace_stale_symbols.clear()
+        if refresh_descendent_namespaces:
+            ns = self.namespace
+            if ns is not None:
+                for dsym in ns.all_data_symbols_this_indentation():
+                    # this is to handle cases like `x = x.mutate(42)`, where
+                    # we could have changed some member of x but returned the
+                    # original object -- in this case, just assume that all
+                    # the stale namespace descendents are no longer stale, as
+                    # this is likely the user intention. For an example, see
+                    # `test_external_object_update_propagates_to_stale_namespace_symbols()`
+                    # in `test_multicell_precheck.py`
+                    if not dsym.is_stale or refresh_namespace_stale:
+                        dsym.refresh(refresh_descendent_namespaces=True)
+            if refresh_namespace_stale:
+                self.namespace_stale_symbols.clear()

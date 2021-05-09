@@ -1241,10 +1241,12 @@ def test_list_mutation():
 
 
 def test_list_mutation_extend():
-    run_cell('lst = []')
-    run_cell('x = 42')
-    run_cell('lst.extend([x])')
-    run_cell('x = 43')
+    run_cell('lst = [0, 1]')
+    run_cell('x = lst[0] + 7')
+    run_cell('lst.extend([2, 3, 4, x])')
+    run_cell('logging.info(x)')
+    assert_not_detected()
+    run_cell('x = 77')
     run_cell('logging.info(lst)')
     assert_detected('`lst` depends on stale `x`')
 
@@ -1271,6 +1273,7 @@ for word in s.split('X'):
 
 @skipif_known_failing
 def test_list_mutation_extend_from_attr():
+    # for this one, we somehow have to avoid disabling tracing which is hard
     run_cell('s = "hello X world X how X are X you X today?"')
     run_cell('lst = []')
     run_cell('lst.extend(word.strip() for word in s.split("X"))')
@@ -1698,7 +1701,7 @@ def test_no_class_false_positives():
     run_cell("""
 try:
     class Foo:
-        print(y)
+        logging.info(y)
 except:
     pass
 """)
@@ -2161,7 +2164,7 @@ def f(x, y):
 def test_list_extend():
     run_cell('lst = [0, 1, 2]')
     run_cell('x = lst[1] + 1')
-    run_cell('lst.extend(i for i in range(3, 10))')
+    run_cell('lst.extend([3, 4, 5, 6, 7, 8, 9])')
     run_cell('logging.info(x)')
     assert_not_detected()
     run_cell('logging.info(lst[1])')

@@ -29,7 +29,7 @@ def fake_func(y):
 
 new_xs = [fake_func(x) for _ in range(5)]
 
-print(new_xs[0])
+logging.info(new_xs[0])
 """)
 
 

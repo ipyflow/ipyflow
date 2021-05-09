@@ -9,12 +9,12 @@ from typing import cast, TYPE_CHECKING
 
 import astunparse
 
-from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
+from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety import singletons
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
-from nbsafety.tracing.mutation_event import MutationEvent
+from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, StandardMutation
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.tracing.trace_stack import TraceStack
@@ -24,6 +24,7 @@ from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal
 if TYPE_CHECKING:
     from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
     from types import FrameType
+    from nbsafety.tracing.mutation_event import MutationEvent
     from nbsafety.types import SupportedIndexType
     AttrSubVal = SupportedIndexType
     NodeId = int
@@ -64,7 +65,7 @@ class BaseTraceManager(singletons.TraceManager):
 
     _MANAGER_CLASS_REGISTERED = False
     EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
-    EVENT_HANDLERS_BY_CLASS: Dict[Type['BaseTraceManager'], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
+    EVENT_HANDLERS_BY_CLASS: Dict[Type[BaseTraceManager], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
 
     EVENT_LOGGER = logging.getLogger('events')
     EVENT_LOGGER.setLevel(logging.WARNING)
@@ -515,9 +516,12 @@ class TraceManager(BaseTraceManager):
             self.node_id_to_saved_del_data[top_level_node_id] = (scope, attr_or_subscript, is_subscript)
             return
         if call_context:
-            mutation_event = MutationEvent.normal
-            if isinstance(obj, list) and attr_or_subscript == 'append':
-                mutation_event = MutationEvent.list_append
+            mutation_event: MutationEvent = StandardMutation()
+            if isinstance(obj, list):
+                if attr_or_subscript == 'append':
+                    mutation_event = ListAppend(len(obj))
+                elif attr_or_subscript == 'extend':
+                    mutation_event = ListExtend(len(obj))
             # save off event counter and obj_id
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
@@ -560,7 +564,7 @@ class TraceManager(BaseTraceManager):
                 (evt_counter, obj_id, obj_name), mutation_event, recorded_arg_dsyms, recorded_arg_objs = self.mutation_candidates.pop()
                 if evt_counter == self.trace_event_counter:
                     if obj is None:
-                        if mutation_event == MutationEvent.normal:
+                        if isinstance(mutation_event, StandardMutation):
                             try:
                                 top_level_sym = nbs().get_first_full_symbol(self.first_obj_id_in_chain)
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
@@ -568,7 +572,7 @@ class TraceManager(BaseTraceManager):
                                     #  i.e. allow-list for arg mutations, starting with np.random.seed?
                                     if len(recorded_arg_dsyms) > 0:
                                         # only make this an arg mutation event if it looks like there's an arg to mutate
-                                        mutation_event = MutationEvent.arg_mutate
+                                        mutation_event = ArgMutate()
                             except:
                                 pass
                         self.mutations.append((obj_id, mutation_event, recorded_arg_dsyms, recorded_arg_objs))

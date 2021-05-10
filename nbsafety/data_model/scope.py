@@ -363,6 +363,10 @@ class NamespaceScope(Scope):
         return self.cached_obj_id
 
     @property
+    def is_anonymous(self):
+        return self.scope_name == NamespaceScope.ANONYMOUS
+
+    @property
     def is_garbage(self):
         return self._tombstone or self.obj_id not in nbs().aliases or self.obj_id not in nbs().namespaces
 

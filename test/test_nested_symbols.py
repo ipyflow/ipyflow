@@ -46,7 +46,7 @@ def lookup_symbol(val) -> Optional[DataSymbol]:
         # associated with anonymous namespace to avoid
         # e.g. <literal_sym_12345> in tests
         containing_ns = alias.containing_namespace
-        if containing_ns is not None and containing_ns.scope_name.startswith('<anonymous'):
+        if containing_ns is not None and containing_ns.is_anonymous:
             continue
         if alias.is_anonymous:
             continue

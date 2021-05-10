@@ -89,7 +89,7 @@ class TraceStatement:
         logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
-            if namespace_for_upsert is not None and namespace_for_upsert.scope_name == NamespaceScope.ANONYMOUS:
+            if namespace_for_upsert is not None and namespace_for_upsert.is_anonymous:
                 namespace_for_upsert.scope_name = str(name)
                 namespace_for_upsert.parent_scope = scope
 

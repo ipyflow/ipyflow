@@ -200,7 +200,9 @@ class Scope:
             stmt_node,
             implicit=implicit,
         )
-        dsym.update_deps(deps, prev_obj=prev_obj, overwrite=overwrite, propagate=propagate)
+        dsym.update_deps(
+            deps, prev_obj=prev_obj, overwrite=overwrite, propagate=propagate, refresh=not implicit
+        )
         return dsym
 
     def _upsert_data_symbol_for_name_inner(
@@ -325,7 +327,8 @@ class NamespaceScope(Scope):
                 logger.warning(msg)
         nbs().namespaces[id(obj)] = self
         self._tombstone = False
-        self.max_descendent_timestamp = nbs().cell_counter()
+        # this timestamp needs to be bumped in DataSymbol refresh()
+        self.max_descendent_timestamp = -1
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 

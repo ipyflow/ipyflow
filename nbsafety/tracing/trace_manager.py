@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedDelData = Tuple[NamespaceScope, AttrSubVal, bool]
-    SavedComplexSymbolLoadData = Tuple[NamespaceScope, Tuple[AttrSubVal, bool]]
+    SavedComplexSymbolLoadData = Tuple[Tuple[NamespaceScope, Any], Tuple[AttrSubVal, bool]]
 
 
 logger = logging.getLogger(__name__)
@@ -406,7 +406,7 @@ class TraceManager(BaseTraceManager):
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(self, obj_attr_or_sub) -> Optional[DataSymbol]:
         if self.saved_complex_symbol_load_data is None:
             return None
-        scope, (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_data
+        (scope, obj), (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_data
         self.saved_complex_symbol_load_data = None
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
             attr_or_subscript, is_subscript=is_subscript, skip_cloned_lookup=True,
@@ -417,14 +417,15 @@ class TraceManager(BaseTraceManager):
                 attr_or_subscript, is_subscript, skip_cloned_lookup=False,
             )
             parents = set() if parent is None else {parent}
+            is_default_dict = isinstance(obj, defaultdict)
             data_sym = scope.upsert_data_symbol_for_name(
                 attr_or_subscript,
                 obj_attr_or_sub,
                 parents,
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
                 is_subscript=is_subscript,
-                propagate=False,
-                implicit=True,
+                propagate=is_default_dict,
+                implicit=not is_default_dict,
             )
             logger.info("create implicit sym %s", data_sym)
         elif data_sym.obj_id != id(obj_attr_or_sub):
@@ -541,13 +542,14 @@ class TraceManager(BaseTraceManager):
                         self.prev_trace_stmt_in_cur_frame.stmt_node,
                         is_subscript=is_subscript,
                         is_anonymous=obj_name is None,
+                        propagate=False,
                         implicit=True,
                     )
                 if sym_for_obj is not None:
                     self.sym_for_obj_calling_method = sym_for_obj
         else:
             logger.info("saved load data: %s, %s, %s", scope, attr_or_subscript, is_subscript)
-            self.saved_complex_symbol_load_data = (scope, (attr_or_subscript, is_subscript))
+            self.saved_complex_symbol_load_data = ((scope, obj), (attr_or_subscript, is_subscript))
 
     @register_handler(TraceEvent.after_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):

@@ -129,7 +129,7 @@ for foo in lst:
 
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == []
+    assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
 
     cells[4] = 'x.inc()'
     run_cell(cells[4], 4)
@@ -242,7 +242,7 @@ def test_equal_update_does_not_induce_fresh_cell():
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',
-        2: 'print(y)',
+        2: 'logging.info(y)',
         3: 'y = list("".join(y))',
     }
     run_all_cells(cells)
@@ -259,7 +259,7 @@ def test_list_append():
     cells = {
         0: 'lst = [0, 1]',
         1: 'x = lst[1] + 1',
-        2: 'print(x)',
+        2: 'logging.info(x)',
         3: 'lst.append(2)',
     }
     run_all_cells(cells)
@@ -276,7 +276,7 @@ def test_list_extend():
     cells = {
         0: 'lst = [0, 1]',
         1: 'x = lst[1] + 1',
-        2: 'print(x)',
+        2: 'logging.info(x)',
         3: 'lst.extend([2, 3, 4])',
     }
     run_all_cells(cells)
@@ -287,3 +287,15 @@ def test_list_extend():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1, 3]
+
+
+def test_implicit_subscript_symbol_does_not_bump_ts():
+    cells = {
+        0: 'lst = [] + [0, 1]',
+        1: 'logging.info(lst)',
+        2: 'logging.info(lst[0])',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []

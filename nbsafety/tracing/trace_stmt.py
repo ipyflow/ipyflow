@@ -77,7 +77,7 @@ class TraceStatement:
     ) -> None:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
-            scope, name, obj, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame)
+            scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
@@ -102,7 +102,7 @@ class TraceStatement:
 
     def _handle_starred_assign_target(self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]):
         try:
-            scope, name, obj, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame)
+            scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
@@ -171,7 +171,7 @@ class TraceStatement:
         assert isinstance(self.stmt_node, ast.Delete)
         for target in self.stmt_node.targets:
             try:
-                scope, name, _, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame, ctx=ast.Del())
+                scope, name, _, is_subscript = tracer().resolve_del_data_for_target(target)
                 scope.delete_data_symbol_for_name(name, is_subscript=is_subscript)
             except KeyError as e:
                 # this will happen if, e.g., a __delitem__ triggered a call
@@ -203,7 +203,7 @@ class TraceStatement:
                 self.class_scope.obj = class_ref
                 nbs().namespaces[id(class_ref)] = self.class_scope
             try:
-                scope, name, obj, is_subscript = tracer().resolve_store_or_del_data_for_target(target, self.frame, ctx=ast.Store())
+                scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
                 scope.upsert_data_symbol_for_name(
                     name, obj, rval_deps, self.stmt_node,
                     overwrite=should_overwrite,

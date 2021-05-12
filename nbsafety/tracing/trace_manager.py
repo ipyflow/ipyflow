@@ -324,36 +324,34 @@ class TraceManager(BaseTraceManager):
             ref = id(ref)
         return ref
 
-    def resolve_store_or_del_data_for_target(
-        self, target: Union[str, int, ast.AST], frame: FrameType, ctx: Union[ast.Del, ast.Store] = ast.Store()
+    def resolve_store_data_for_target(
+        self, target: Union[str, int, ast.AST], frame: FrameType
     ) -> Tuple[Scope, AttrSubVal, Any, bool]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
-            if isinstance(ctx, ast.Store):
-                obj = frame.f_locals[target]
-            else:
-                obj = None
+            obj = frame.f_locals[target]
             return self.cur_frame_original_scope, target, obj, False
+        (
+            scope, obj, attr_or_sub, is_subscript
+        ) = self.node_id_to_saved_store_data[target]
+        attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+        if attr_or_sub_obj is None:
+            scope_to_use = scope
         else:
-            if isinstance(ctx, ast.Store):
-                (
-                    scope, obj, attr_or_sub, is_subscript
-                ) = self.node_id_to_saved_store_data[target]
-                attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
-            else:
-                assert isinstance(ctx, ast.Del)
-                (
-                    scope, attr_or_sub, is_subscript
-                ) = self.node_id_to_saved_del_data[target]
-                attr_or_sub_obj = None
-            if attr_or_sub_obj is None:
-                scope_to_use = scope
-            else:
-                scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
-            if scope_to_use is None:
-                # Nobody before `scope` has it, so we'll insert it at this level
-                scope_to_use = scope
-            return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
+            scope_to_use = scope.get_earliest_ancestor_containing(id(attr_or_sub_obj), is_subscript)
+        if scope_to_use is None:
+            # Nobody before `scope` has it, so we'll insert it at this level
+            scope_to_use = scope
+        return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
+
+    def resolve_del_data_for_target(self, target: Union[str, int, ast.AST]) -> Tuple[Scope, AttrSubVal, Any, bool]:
+        target = self._partial_resolve_ref(target)
+        if isinstance(target, str):
+            return self.cur_frame_original_scope, target, None, False
+        (
+            scope, attr_or_sub, is_subscript
+        ) = self.node_id_to_saved_del_data[target]
+        return scope, attr_or_sub, None, is_subscript
 
     def resolve_loaded_symbols(self, symbol_ref: Union[str, int, ast.AST, DataSymbol]) -> List[DataSymbol]:
         if isinstance(symbol_ref, DataSymbol):

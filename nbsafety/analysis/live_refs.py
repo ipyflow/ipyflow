@@ -101,7 +101,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
                 # hack to avoid marking `b` as live when objects are same,
                 # or when it was detected that rhs symbol wasn't actually updated
                 if lhs.obj is rhs.obj:
+                    # it's a no-op, so treat it as such
                     this_assign_live.clear()
+                    this_assign_dead.clear()
         this_assign_dead -= this_assign_live
         self.live |= this_assign_live
         self.dead |= this_assign_dead

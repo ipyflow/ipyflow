@@ -13,8 +13,8 @@ otherwise the return float('inf').
 """
 
 
-def sizeof_list_or_set_or_tuple(obj: Union[List[Any], Set[Any], Tuple[Any, ...]]) -> Union[float, int]:
-    total_size: Union[float, int] = len(obj)
+def sizeof_list_or_set_or_tuple(obj: Union[List[Any], Set[Any], Tuple[Any, ...]]) -> float:
+    total_size: float = len(obj)
     for elt in obj:
         if total_size > MAX_SIZE:
             break
@@ -22,8 +22,8 @@ def sizeof_list_or_set_or_tuple(obj: Union[List[Any], Set[Any], Tuple[Any, ...]]
     return total_size if total_size <= MAX_SIZE else float('inf')
 
 
-def sizeof_dict(obj: Dict[Any, Any]) -> Union[float, int]:
-    total_size: Union[float, int] = len(obj)
+def sizeof_dict(obj: Dict[Any, Any]) -> float:
+    total_size: float = len(obj)
     for k, v in obj.items():
         if total_size > MAX_SIZE:
             break
@@ -31,9 +31,9 @@ def sizeof_dict(obj: Dict[Any, Any]) -> Union[float, int]:
     return total_size if total_size <= MAX_SIZE else float('inf')
 
 
-def sizeof(obj: Any) -> Union[float, int]:
-    sz: Union[float, int] = float('inf')
-    if isinstance(obj, float):
+def sizeof(obj: Any) -> float:
+    sz: float = float('inf')
+    if isinstance(obj, (int, float)):
         sz = 1
     elif isinstance(obj, str):
         sz = len(obj)

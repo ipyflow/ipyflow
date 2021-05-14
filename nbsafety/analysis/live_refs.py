@@ -1,10 +1,13 @@
 # -*- coding: future_annotations -*-
 import ast
+import itertools
 import logging
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.data_model.scope import Scope
 
 if TYPE_CHECKING:
     from typing import List, Optional, Set, Tuple, Union
@@ -16,8 +19,9 @@ logger.setLevel(logging.ERROR)
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
-    def __init__(self, init_killed: Optional[Set[str]] = None):
+    def __init__(self, scope: Optional[Scope] = None, init_killed: Optional[Set[str]] = None):
         self.live: Set[SymbolRef] = set()
+        self.scope = scope
         if init_killed is None:
             self.dead: Set[SymbolRef] = set()
         else:
@@ -80,6 +84,24 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             with self.kill_context():
                 for target in targets:
                     self.visit_Assign_target(target)
+        # TODO: ideally under the current abstraction we should
+        #  not be resolving static references to symbols here
+        if (
+            self.scope is not None
+            and len(this_assign_live) == 1
+            and len(this_assign_dead) == 1
+            and not (this_assign_dead <= self.dead)
+        ):
+            lhs, rhs = [
+                get_symbols_for_references(x, self.scope, only_add_successful_resolutions=True)[0]
+                for x in (this_assign_dead, this_assign_live)
+            ]
+            if len(lhs) == 1 and len(rhs) == 1:
+                lhs, rhs = [next(iter(x)) for x in (lhs, rhs)]
+                # hack to avoid marking `b` as live when objects are same,
+                # or when it was detected that rhs symbol wasn't actually updated
+                if lhs.obj is rhs.obj:
+                    this_assign_live.clear()
         this_assign_dead -= this_assign_live
         self.live |= this_assign_live
         self.dead |= this_assign_dead
@@ -206,9 +228,58 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.live.add(node.arg)
 
 
+def get_symbols_for_references(
+        symbol_refs: Set[SymbolRef],
+        scope: Scope,
+        only_add_successful_resolutions: bool = False,
+) -> Tuple[Set[DataSymbol], Set[DataSymbol]]:
+    symbols = set()
+    called_symbols = set()
+    for symbol_ref in symbol_refs:
+        success = True
+        if isinstance(symbol_ref, str):
+            dsym = scope.lookup_data_symbol_by_name(symbol_ref)
+            called_dsym = None
+        elif isinstance(symbol_ref, AttrSubSymbolChain):
+            dsym, called_dsym, success = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
+        else:
+            logger.warning('invalid type for ref %s', symbol_ref)
+            continue
+        if dsym is not None:
+            if success or not only_add_successful_resolutions:
+                symbols.add(dsym)
+        if called_dsym is not None:
+            called_symbols.add(called_dsym)
+    return symbols, called_symbols
+
+
+def compute_call_chain_live_symbols_and_cells(live: Set[DataSymbol]) -> Tuple[Set[DataSymbol], Set[int]]:
+    seen = set()
+    worklist = list(live)
+    live = set(live)
+    while len(worklist) > 0:
+        called_dsym = worklist.pop()
+        if called_dsym in seen:
+            continue
+        # TODO: handle callable classes
+        if not called_dsym.is_function:
+            continue
+        seen.add(called_dsym)
+        live_refs, _ = compute_live_dead_symbol_refs(
+            cast(ast.FunctionDef, called_dsym.stmt_node).body, init_killed=set(called_dsym.get_definition_args())
+        )
+        live_symbols, called_symbols = get_symbols_for_references(live_refs, called_dsym.call_scope)
+        worklist.extend(called_symbols)
+        live |= {
+            sym for sym in itertools.chain(live_symbols, called_symbols) if sym.is_globally_accessible
+        }
+    return live, {called_dsym.timestamp for called_dsym in seen}
+
+
 def compute_live_dead_symbol_refs(
-        code: Union[ast.Module, List[ast.stmt], str],
-        init_killed: Optional[Set[str]] = None
+    code: Union[ast.Module, List[ast.stmt], str],
+    scope: Scope = None,
+    init_killed: Optional[Set[str]] = None,
 ) -> Tuple[Set[SymbolRef], Set[SymbolRef]]:
     if init_killed is None:
         init_killed = set()
@@ -216,4 +287,4 @@ def compute_live_dead_symbol_refs(
         code = ast.parse(code)
     elif isinstance(code, list):
         code = ast.Module(body=code)
-    return ComputeLiveSymbolRefs(init_killed)(code)
+    return ComputeLiveSymbolRefs(scope=scope, init_killed=init_killed)(code)

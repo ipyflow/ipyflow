@@ -299,3 +299,19 @@ def test_implicit_subscript_symbol_does_not_bump_ts():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == []
+
+
+def test_liveness_skipped_for_simple_assignment_involving_aliases():
+    cells = {
+        0: 'lst = [1, 2, 3]',
+        1: 'lst2 = lst',
+        2: 'lst.append(4)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('lst = [1, 2, 3, 4]', 4)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [1, 2]

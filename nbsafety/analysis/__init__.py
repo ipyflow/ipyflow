@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 from .symbol_edges import get_symbol_edges
 from .attr_symbols import AttrSubSymbolChain, CallPoint, get_attrsub_symbol_chain
-from .live_refs import compute_live_dead_symbol_refs
-from .utils import compute_call_chain_live_symbols_and_cells, get_symbols_for_references, stmt_contains_lval
+from .live_refs import (
+    compute_live_dead_symbol_refs, compute_call_chain_live_symbols_and_cells, get_symbols_for_references
+)

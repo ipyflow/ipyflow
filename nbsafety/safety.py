@@ -14,7 +14,7 @@ from typing import cast, TYPE_CHECKING, NamedTuple
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from nbsafety.analysis import (
+from nbsafety.analysis.live_refs import (
     compute_live_dead_symbol_refs,
     compute_call_chain_live_symbols_and_cells,
     get_symbols_for_references,
@@ -400,7 +400,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _check_cell_and_resolve_symbols(self, cell: Union[ast.Module, str]) -> CheckerResult:
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
-        live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell)
+        live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell, scope=self.global_scope)
         live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
         live_symbols_from_calls, live_cells_from_calls = compute_call_chain_live_symbols_and_cells(called_symbols)
         live_symbols = live_symbols | live_symbols_from_calls

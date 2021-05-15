@@ -8,6 +8,7 @@ import inspect
 import json
 import logging
 import re
+import sys
 import shlex
 import subprocess
 from typing import cast, TYPE_CHECKING, NamedTuple
@@ -78,7 +79,7 @@ class CheckerResult(NamedTuple):
 class NotebookSafety(singletons.NotebookSafety):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
 
-    def __init__(self, cell_magic_name=None, use_comm=False, **kwargs):
+    def __init__(self, cell_magic_name=None, use_comm=False, settrace=None, **kwargs):
         super().__init__()
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
             store_history=kwargs.pop('store_history', True),
@@ -98,6 +99,7 @@ class NotebookSafety(singletons.NotebookSafety):
             static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
+        self.settrace = settrace or sys.settrace
         self.namespaces: Dict[int, NamespaceScope] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope()
@@ -720,6 +722,9 @@ class NotebookSafety(singletons.NotebookSafety):
                     sym for sym in self.all_data_symbols() if sym.timestamp == self.cell_counter()
                 ])
                 self._gc()
+            except Exception as e:
+                if self.is_develop:
+                    logger.warning('Exception: %s', e)
             finally:
                 if not self.settings.store_history:
                     self._cell_counter += 1

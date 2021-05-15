@@ -3,6 +3,7 @@ import ast
 import builtins
 from collections import defaultdict
 from contextlib import contextmanager
+import functools
 import logging
 import sys
 from typing import cast, TYPE_CHECKING
@@ -91,6 +92,8 @@ class BaseTraceManager(singletons.TraceManager):
         self._event_handlers = self.EVENT_HANDLERS_BY_CLASS[self.__class__]
         self.tracing_enabled = False
         self.tracing_reset_pending = False
+        self.sys_tracer = self._sys_tracer
+        self.existing_tracer = None
 
     def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
         event = TraceEvent(evt) if isinstance(evt, str) else evt
@@ -112,25 +115,48 @@ class BaseTraceManager(singletons.TraceManager):
     def _make_stack(self):
         return TraceStack(self)
 
-    def _enable_tracing(self):
-        assert not self.tracing_enabled
+    def _make_composed_tracer(self, existing_tracer):
+
+        @functools.wraps(self._sys_tracer)
+        def _composed_tracer(frame: FrameType, evt: str, arg: Any, **kwargs):
+            existing_tracer(frame, evt, arg, **kwargs)
+            return self._sys_tracer(frame, evt, arg, **kwargs)
+        return _composed_tracer
+
+    def _settrace_patch(self, trace_func):
+        # called by third-party tracers
+        if self.tracing_enabled:
+            self._enable_tracing(existing_tracer=trace_func)
+        else:
+            nbs().settrace(trace_func)
+
+    def _enable_tracing(self, existing_tracer=None):
+        if existing_tracer is None:
+            assert not self.tracing_enabled
         self.tracing_enabled = True
-        sys.settrace(self._sys_tracer)
+        self.existing_tracer = existing_tracer or sys.gettrace()
+        if self.existing_tracer is not None:
+            self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
+        nbs().settrace(self.sys_tracer)
 
     def _disable_tracing(self, check_enabled=True):
         if check_enabled:
             assert self.tracing_enabled
+            assert sys.gettrace() is self.sys_tracer
         self.tracing_enabled = False
-        sys.settrace(None)
+        nbs().settrace(self.existing_tracer)
 
     @contextmanager
     def tracing_context(self):
+        old_settrace = sys.settrace
         try:
             setattr(builtins, EMIT_EVENT, self._emit_event)
+            sys.settrace = self._settrace_patch
             self._enable_tracing()
             yield
         finally:
             delattr(builtins, EMIT_EVENT)
+            sys.settrace = old_settrace
             self._disable_tracing(check_enabled=False)
 
     def _attempt_to_reenable_tracing(self, frame: FrameType):
@@ -836,7 +862,7 @@ class TraceManager(BaseTraceManager):
         if event == TraceEvent.call:
             self.call_depth += 1
             if self.call_depth == 1:
-                return self._sys_tracer
+                return self.sys_tracer
 
         if event == TraceEvent.return_:
             self.call_depth -= 1
@@ -856,7 +882,7 @@ class TraceManager(BaseTraceManager):
                 self.EVENT_LOGGER.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
                 if nbs().is_develop:
                     raise e
-                return self._sys_tracer
+                return self.sys_tracer
 
         trace_stmt = self.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
@@ -875,7 +901,7 @@ class TraceManager(BaseTraceManager):
                 return None
             trace_stmt.node_id_for_last_call = self.prev_node_id_in_cur_frame
         self.state_transition_hook(event, trace_stmt, ret_obj)
-        return self._sys_tracer
+        return self.sys_tracer
 
 
 assert not BaseTraceManager._MANAGER_CLASS_REGISTERED

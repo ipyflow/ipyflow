@@ -57,6 +57,7 @@ def test_recorded_events_simple():
     assert RECORDED_EVENTS == []
     run_cell('logging.info("foo")')
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -73,6 +74,7 @@ def test_recorded_events_two_stmts():
     run_cell('x = [1, 2, 3]')
     run_cell('logging.info(x)')
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.before_list_literal,
@@ -81,6 +83,7 @@ def test_recorded_events_two_stmts():
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
 
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -96,6 +99,7 @@ def test_nested_chains_no_call():
     assert RECORDED_EVENTS == []
     run_cell('logging.info("foo is %s", logging.info("foo"))')
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -121,6 +125,7 @@ def test_list_nested_in_dict():
     assert RECORDED_EVENTS == []
     run_cell('x = {1: [2, 3, 4]}')
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.before_dict_literal,
@@ -144,12 +149,14 @@ def foo(x):
     return [x]
 """)
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
     RECORDED_EVENTS.clear()
     run_cell('foo([42])')
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.before_call,
@@ -175,6 +182,7 @@ def test_lambda_in_tuple():
     assert RECORDED_EVENTS == []
     run_cell('x = (lambda: 42,)')
     assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.before_tuple_literal,

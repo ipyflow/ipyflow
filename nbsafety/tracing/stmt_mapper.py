@@ -5,14 +5,22 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Dict, List, Set
+    from nbsafety.types import CellId
 
 
 class StatementMapper(ast.NodeVisitor):
     def __init__(
-        self, line_to_stmt_map: Dict[int, ast.stmt], id_map: Dict[int, ast.AST], parent_map: Dict[int, ast.AST]
+        self,
+        cell_id: CellId,
+        line_to_stmt_map: Dict[int, ast.stmt],
+        id_map: Dict[int, ast.AST],
+        cell_id_by_ast_id: Dict[int, CellId],
+        parent_map: Dict[int, ast.AST],
     ):
+        self._cell_id = cell_id
         self.line_to_stmt_map = line_to_stmt_map
         self.id_map = id_map
+        self.cell_id_by_ast_id = cell_id_by_ast_id
         self.parent_map = parent_map
         self.traversal: List[ast.AST] = []
 
@@ -30,6 +38,7 @@ class StatementMapper(ast.NodeVisitor):
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
             self.id_map[id(nc)] = nc
+            self.cell_id_by_ast_id[id(nc)] = self._cell_id
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

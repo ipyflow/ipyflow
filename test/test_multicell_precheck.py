@@ -194,7 +194,7 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
     with override_settings(mark_stale_symbol_usages_unsafe=False):
         run_all_cells(cells)
         response = nbs().check_and_link_multiple_cells(cells)
-        assert response['stale_cells'] == []
+        assert response['stale_cells'] == [], 'got %s' % response['stale_cells']
         assert response['fresh_cells'] == [2, 4]
 
 
@@ -311,7 +311,7 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == []
-    run_cell('lst = [1, 2, 3, 4]', 4)
+    run_cell('lst = [1, 2, 3, 4]', 3)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [1, 2]
+    assert response['fresh_cells'] == [1], 'got %s' % response['fresh_cells']

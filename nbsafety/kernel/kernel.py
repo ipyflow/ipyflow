@@ -1,4 +1,6 @@
 # -*- coding: future_annotations -*-
+import asyncio
+import inspect
 from ipykernel.ipkernel import IPythonKernel
 from nbsafety.version import __version__
 from nbsafety.safety import NotebookSafety
@@ -12,6 +14,9 @@ class SafeKernel(IPythonKernel):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         NotebookSafety.instance(use_comm=True)
+        import nest_asyncio
+        # ref: https://github.com/erdewit/nest_asyncio
+        nest_asyncio.apply()
 
     def init_metadata(self, parent):
         """
@@ -21,9 +26,19 @@ class SafeKernel(IPythonKernel):
         nbs().set_active_cell(parent['metadata']['cellId'], position_idx=None)
         return super().init_metadata(parent)
 
-    def do_execute(self, code, silent, store_history=False, user_expressions=None, allow_stdin=False):
-        super_ = super()
+    if inspect.iscoroutinefunction(IPythonKernel.do_execute):
+        async def do_execute(self, code, silent, store_history=False, user_expressions=None, allow_stdin=False):
+            super_ = super()
 
-        def _run_cell_func(cell):
-            return super_.do_execute(cell, silent, store_history, user_expressions, allow_stdin)
-        return nbs().safe_execute(code, _run_cell_func)
+            async def _run_cell_func(cell):
+                return await super_.do_execute(cell, silent, store_history, user_expressions, allow_stdin)
+            return await nbs().safe_execute(code, True, _run_cell_func)
+    else:
+        def do_execute(self, code, silent, store_history=False, user_expressions=None, allow_stdin=False):
+            super_ = super()
+
+            def _run_cell_func(cell):
+                return super_.do_execute(cell, silent, store_history, user_expressions, allow_stdin)
+            return next(iter(asyncio.get_event_loop().run_until_complete(
+                asyncio.wait([nbs().safe_execute(code, False, _run_cell_func)])
+            )[0]))

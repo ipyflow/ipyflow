@@ -5,4 +5,5 @@ ipython
 jupyter
 jupyterlab>=3.0
 mypy
+nest_asyncio
 traitlets

@@ -9,7 +9,8 @@ class SafetyRunMode(Enum):
 
     @staticmethod
     def get():
-        if SafetyRunMode.DEVELOP.value in os.environ and str(os.environ[SafetyRunMode.DEVELOP.value]) == '1':
-            return SafetyRunMode.DEVELOP
-        else:
-            return SafetyRunMode.PRODUCTION
+        return SafetyRunMode.DEVELOP
+        # if SafetyRunMode.DEVELOP.value in os.environ and str(os.environ[SafetyRunMode.DEVELOP.value]) == '1':
+        #     return SafetyRunMode.DEVELOP
+        # else:
+        #     return SafetyRunMode.PRODUCTION

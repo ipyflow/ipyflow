@@ -55,6 +55,18 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
+def _is_ipython_file(fname: str) -> bool:
+    if fname.startswith('<ipython-input'):
+        # notebook cells have filenames that appear as '<ipython-input...>'
+        # in older versions of ipykernel as well as for cell magics
+        return True
+    if 'ipykernel_' in fname:
+        # newer ipykernel versions use temporary files, such as:
+        # /var/folders/25/4974g6g53f99f4q4knr5knp40000gn/T/ipykernel_60327/2548828418.py
+        # FIXME: this is quite brittle; need better way to detect if ipython code is executing
+        return True
+    return False
+
 
 def _finish_tracing_reset():
     # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
@@ -91,7 +103,7 @@ class BaseTraceManager(singletons.TraceManager):
                 if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
                     raise exc
                 else:
-                    logger.error('Exception occurred: %s' % exc)
+                    logger.error('Exception occurred: %s', str(exc))
                 new_ret = None
             if new_ret is not None:
                 kwargs['ret'] = new_ret
@@ -129,8 +141,7 @@ class BaseTraceManager(singletons.TraceManager):
             assert evt == 'call', 'expected call; got event %s' % evt
             self._attempt_to_reenable_tracing(frame)
             return None
-        # notebook cells have filenames that appear as '<ipython-input...>'
-        if evt == 'line' or not frame.f_code.co_filename.startswith('<ipython-input'):
+        if evt == 'line' or not _is_ipython_file(frame.f_code.co_filename):
             return None
 
         return self._emit_event(evt, 0, _frame=frame, ret=arg)
@@ -282,7 +293,7 @@ class TraceManager(BaseTraceManager):
                                 # logger.error("prev seen outer: %s", ast.dump(nbs().ast_node_by_id[call_node_id]))
                                 total_args = len(call_node.args) + len(call_node.keywords)
                                 num_args_seen = self.call_stack.get_field('num_args_seen')
-                                logger.info("num args seen: %d", num_args_seen)
+                                logger.warning("num args seen: %d", num_args_seen)
                                 if total_args == num_args_seen:
                                     return_to_node_id = call_node_id
                                 else:
@@ -377,7 +388,7 @@ class TraceManager(BaseTraceManager):
             return ns
         class_scope = nbs().namespaces.get(id(obj.__class__), None)
         if class_scope is not None:
-            # logger.info(
+            # logger.warning(
             #     'found class scope %s containing %s',
             #     class_scope, list(class_scope.all_data_symbols_this_indentation())
             # )
@@ -411,7 +422,7 @@ class TraceManager(BaseTraceManager):
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
             attr_or_subscript, is_subscript=is_subscript, skip_cloned_lookup=True,
         )
-        logger.info("found sym %s in scope %s", data_sym, scope)
+        logger.warning("found sym %s in scope %s", data_sym, scope)
         if data_sym is None:
             parent = scope.lookup_data_symbol_by_name_this_indentation(
                 attr_or_subscript, is_subscript, skip_cloned_lookup=False,
@@ -427,7 +438,7 @@ class TraceManager(BaseTraceManager):
                 propagate=is_default_dict,
                 implicit=not is_default_dict,
             )
-            logger.info("create implicit sym %s", data_sym)
+            logger.warning("create implicit sym %s", data_sym)
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
@@ -447,6 +458,10 @@ class TraceManager(BaseTraceManager):
     def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
+
+    @register_handler(TraceEvent.init_cell)
+    def init_cell(self, _obj, _node_id, frame: FrameType, _event, cell_id: Union[str, int], **__):
+        nbs().set_name_to_cell_num_mapping(frame)
 
     @register_handler(TraceEvent.after_assign_rhs)
     def after_assign_rhs(self, obj: Any, *_, **__):
@@ -476,7 +491,7 @@ class TraceManager(BaseTraceManager):
             self.node_id_to_loaded_symbols.pop(node_id, None)
         if obj is None:
             return
-        logger.info('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
+        logger.warning('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
         sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
         
         # Resolve symbol if necessary
@@ -503,7 +518,7 @@ class TraceManager(BaseTraceManager):
         self.active_scope = scope
 
         if ctx in ('Store', 'AugStore'):
-            logger.info(
+            logger.warning(
                 "save store data for node id %d: %s, %s, %s, %s",
                 top_level_node_id, scope, obj, attr_or_subscript, is_subscript
             )
@@ -511,7 +526,7 @@ class TraceManager(BaseTraceManager):
             return
         elif ctx == 'Del':
             # logger.error("save del data for node %s", ast.dump(nbs().ast_node_by_id[top_level_node_id]))
-            logger.info("save del data for node id %d", top_level_node_id)
+            logger.warning("save del data for node id %d", top_level_node_id)
             self.node_id_to_saved_del_data[top_level_node_id] = (scope, attr_or_subscript, is_subscript)
             return
         if call_context:
@@ -548,7 +563,7 @@ class TraceManager(BaseTraceManager):
                 if sym_for_obj is not None:
                     self.sym_for_obj_calling_method = sym_for_obj
         else:
-            logger.info("saved load data: %s, %s, %s", scope, attr_or_subscript, is_subscript)
+            logger.warning("saved load data: %s, %s, %s", scope, attr_or_subscript, is_subscript)
             self.saved_complex_symbol_load_data = ((scope, obj), (attr_or_subscript, is_subscript))
 
     @register_handler(TraceEvent.after_complex_symbol)
@@ -570,7 +585,7 @@ class TraceManager(BaseTraceManager):
                     recorded_arg_objs,
                 ) = self.mutation_candidates.pop()
                 if evt_counter == self.trace_event_counter:
-                    if obj is None:
+                    if obj is None or id(obj) == obj_id:
                         if isinstance(mutation_event, StandardMutation):
                             try:
                                 top_level_sym = nbs().get_first_full_symbol(self.first_obj_id_in_chain)
@@ -648,7 +663,7 @@ class TraceManager(BaseTraceManager):
             return literal
         try:
             self.active_literal_scope.update_obj_ref(literal)
-            logger.info("create literal scope %s", self.active_literal_scope)
+            logger.warning("create literal scope %s", self.active_literal_scope)
             starred_idx = -1
             starred_namespace = None
             for (i, inner_obj), (inner_key_node, inner_val_node) in match_container_obj_or_namespace_with_literal_nodes(
@@ -782,7 +797,7 @@ class TraceManager(BaseTraceManager):
         self.tracing_reset_pending = False
         call_depth = 0
         while frame is not None:
-            if frame.f_code.co_filename.startswith('<ipython-input'):
+            if _is_ipython_file(frame.f_code.co_filename):
                 call_depth += 1
             frame = frame.f_back
         if nbs().is_develop:
@@ -813,9 +828,8 @@ class TraceManager(BaseTraceManager):
         **__
     ):
         # right now, this should only be enabled for notebook code
-        assert frame.f_code.co_filename.startswith('<ipython-input')
+        assert _is_ipython_file(frame.f_code.co_filename), 'got %s' % frame.f_code.co_filename
         assert self.tracing_enabled or event == TraceEvent.after_stmt
-        nbs().maybe_set_name_to_cell_num_mapping(frame)
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
@@ -830,6 +844,8 @@ class TraceManager(BaseTraceManager):
                 return
 
         cell_num, lineno = nbs().get_position(frame)
+        if cell_num is None:
+            return None
 
         if event == TraceEvent.after_stmt:
             assert stmt_node is not None

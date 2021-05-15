@@ -499,12 +499,13 @@ class DataSymbol:
         bump_version=True,
         refresh_descendent_namespaces=False,
         refresh_namespace_stale=True,
-        seen: Set[DataSymbol]=None,
+        timestamp: Optional[int] = None,
+        seen: Set[DataSymbol] = None,
     ):
         self._temp_disable_warnings = False
         self.fresher_ancestors.clear()
         if bump_version:
-            self._timestamp = nbs().cell_counter()
+            self._timestamp = nbs().cell_counter() if timestamp is None else timestamp
             ns = self.containing_namespace
             if ns is not None:
                 ns.max_descendent_timestamp = self._timestamp
@@ -527,6 +528,6 @@ class DataSymbol:
                     # `test_external_object_update_propagates_to_stale_namespace_symbols()`
                     # in `test_multicell_precheck.py`
                     if not dsym.is_stale or refresh_namespace_stale:
-                        dsym.refresh(refresh_descendent_namespaces=True, seen=seen)
+                        dsym.refresh(refresh_descendent_namespaces=True, timestamp=self._timestamp, seen=seen)
             if refresh_namespace_stale:
                 self.namespace_stale_symbols.clear()

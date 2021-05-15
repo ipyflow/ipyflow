@@ -29,7 +29,7 @@ def assert_bool(val, msg=''):
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
-def make_safety_fixture(**kwargs) -> 'Tuple[Any, Any]':
+def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
     os.environ[SafetyRunMode.DEVELOP.value] = '1'
 
     def run_cell(code, ignore_exceptions=False):

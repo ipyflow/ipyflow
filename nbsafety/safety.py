@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 import ast
+import asyncio
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -37,8 +38,7 @@ from nbsafety.tracing.trace_manager import TraceManager
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
     from types import FrameType
-    from nbsafety.types import SupportedIndexType
-    CellId = Union[str, int]
+    from nbsafety.types import CellId, SupportedIndexType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -104,6 +104,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_symbols: Set[DataSymbol] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
+        self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
@@ -177,19 +178,16 @@ class NotebookSafety(singletons.NotebookSafety):
         self._ast_transformer_raised = new_val
         return ret
 
-    def get_position(self, frame: FrameType):
+    def get_position(self, frame: FrameType) -> Tuple[Optional[int], int]:
         try:
-            cell_num = self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]]
+            cell_num = self._cell_name_to_cell_num_mapping.get(frame.f_code.co_filename, None)
             return cell_num, frame.f_lineno
         except KeyError as e:
             logger.error('key error while retrieving cell for %s', frame.f_code.co_filename)
             raise e
 
-    def maybe_set_name_to_cell_num_mapping(self, frame: FrameType):
-        if self._recorded_cell_name_to_cell_num:
-            return
-        self._recorded_cell_name_to_cell_num = True
-        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename.split('-')[3]] = self.cell_counter()
+    def set_name_to_cell_num_mapping(self, frame: FrameType):
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = self.cell_counter()
 
     def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
@@ -277,8 +275,8 @@ class NotebookSafety(singletons.NotebookSafety):
                     pass
 
                 if (
-                    self._get_max_defined_cell_num_for_symbols(checker_result.live) >
-                    self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
+                        self._get_max_timestamp_cell_num_for_symbols(checker_result.live) >
+                        self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
                 ) and cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
                     fresh_cells.append(cell_id)
             except SyntaxError:
@@ -372,14 +370,11 @@ class NotebookSafety(singletons.NotebookSafety):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def _get_max_defined_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
-        max_defined_cell_num = -1
+    def _get_max_timestamp_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
+        max_timestamp = -1
         for dsym in symbols:
-            max_defined_cell_num = max(max_defined_cell_num, dsym.timestamp)
-            if dsym.obj_id in self.namespaces:
-                namespace_scope = self.namespaces[dsym.obj_id]
-                max_defined_cell_num = max(max_defined_cell_num, namespace_scope.max_descendent_timestamp)
-        return max_defined_cell_num
+            max_timestamp = max(max_timestamp, dsym.timestamp)
+        return max_timestamp
 
     def _build_typecheck_slice(
         self, cell_id: CellId, content_by_cell_id: Dict[CellId, str], checker_result: CheckerResult
@@ -685,7 +680,7 @@ class NotebookSafety(singletons.NotebookSafety):
             self._get_cell_dependencies(
                 num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)
 
-    def safe_execute(self, cell: str, run_cell_func):
+    async def safe_execute(self, cell: str, is_async: bool, run_cell_func):
         if self._saved_debug_message is not None:
             logger.error(self._saved_debug_message)
             self._saved_debug_message = None
@@ -703,14 +698,20 @@ class NotebookSafety(singletons.NotebookSafety):
             if self._safety_precheck_cell(cell, cell_id) and self.settings.mark_stale_symbol_usages_unsafe:
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
-                return run_cell_func('None')
+                if is_async:
+                    return await run_cell_func('None')
+                else:
+                    return run_cell_func('None')
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
                 self._run_cells.add(cell_id)
                 self.cell_content_by_counter[self._last_execution_counter] = cell
-                with self._tracing_context():
-                    ret = run_cell_func(cell)
+                with self._tracing_context(cell_id):
+                    if is_async:
+                        ret = await run_cell_func(cell)
+                    else:
+                        ret = run_cell_func(cell)
                 # Stage 2.1: resync any defined symbols that could have gotten out-of-sync
                 #  due to tracing being disabled
 
@@ -732,20 +733,22 @@ class NotebookSafety(singletons.NotebookSafety):
             run_cell(cell, store_history=store_history)
 
         def _dependency_safety(_, cell: str):
-            singletons.nbs().safe_execute(cell, _run_cell_func)
+            asyncio.get_event_loop().run_until_complete(
+                asyncio.wait([singletons.nbs().safe_execute(cell, False, _run_cell_func)])
+            )
 
         # FIXME (smacke): probably not a great idea to rely on this
         _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
     @contextmanager
-    def _tracing_context(self):
+    def _tracing_context(self, cell_id: CellId):
         self.updated_symbols.clear()
         self._recorded_cell_name_to_cell_num = False
 
         try:
             with TraceManager.instance().tracing_context():
-                with ast_transformer_context([SafetyAstRewriter()]):
+                with ast_transformer_context([SafetyAstRewriter(cell_id)]):
                     yield
         finally:
             TraceManager.clear_instance()

@@ -191,6 +191,9 @@ class NotebookSafety(singletons.NotebookSafety):
     def set_name_to_cell_num_mapping(self, frame: FrameType):
         self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = self.cell_counter()
 
+    def is_cell_file(self, fname: str) -> bool:
+        return fname in self._cell_name_to_cell_num_mapping
+
     def set_active_cell(self, cell_id, position_idx=-1):
         self._active_cell_id = cell_id
         if position_idx is not None:

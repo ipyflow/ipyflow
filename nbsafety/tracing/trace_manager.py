@@ -56,19 +56,6 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
-def _is_ipython_file(fname: str) -> bool:
-    if fname.startswith('<ipython-input'):
-        # notebook cells have filenames that appear as '<ipython-input...>'
-        # in older versions of ipykernel as well as for cell magics
-        return True
-    if 'ipykernel_' in fname:
-        # newer ipykernel versions use temporary files, such as:
-        # /var/folders/25/4974g6g53f99f4q4knr5knp40000gn/T/ipykernel_60327/2548828418.py
-        # FIXME: this is quite brittle; need better way to detect if ipython code is executing
-        return True
-    return False
-
-
 def _finish_tracing_reset():
     # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
     pass
@@ -167,7 +154,7 @@ class BaseTraceManager(singletons.TraceManager):
             assert evt == 'call', 'expected call; got event %s' % evt
             self._attempt_to_reenable_tracing(frame)
             return None
-        if evt == 'line' or not _is_ipython_file(frame.f_code.co_filename):
+        if evt == 'line' or not nbs().is_cell_file(frame.f_code.co_filename):
             return None
 
         return self._emit_event(evt, 0, _frame=frame, ret=arg)
@@ -823,7 +810,7 @@ class TraceManager(BaseTraceManager):
         self.tracing_reset_pending = False
         call_depth = 0
         while frame is not None:
-            if _is_ipython_file(frame.f_code.co_filename):
+            if nbs().is_cell_file(frame.f_code.co_filename):
                 call_depth += 1
             frame = frame.f_back
         if nbs().is_develop:
@@ -854,7 +841,7 @@ class TraceManager(BaseTraceManager):
         **__
     ):
         # right now, this should only be enabled for notebook code
-        assert _is_ipython_file(frame.f_code.co_filename), 'got %s' % frame.f_code.co_filename
+        assert nbs().is_cell_file(frame.f_code.co_filename), 'got %s' % frame.f_code.co_filename
         assert self.tracing_enabled or event == TraceEvent.after_stmt
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda

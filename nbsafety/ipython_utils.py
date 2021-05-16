@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 
 if TYPE_CHECKING:
-    from typing import Callable, List, Optional, Union, Type
+    from typing import Callable, List, Optional
 
 
 def _ipython():
@@ -24,23 +24,14 @@ class _IpythonState:
         self.cell_counter = None
 
     @contextmanager
-    def ast_transformer_context(
-        self, transformers: Union[List[Union[ast.NodeTransformer, Type]], ast.NodeTransformer, Type]
-    ):
-        if not isinstance(transformers, list):
-            transformers = [transformers]
-        transformers = [t if isinstance(t, ast.NodeTransformer) else t() for t in transformers]
+    def ast_transformer_context(self, transformers: List[ast.NodeTransformer]):
         old = _ipython().ast_transformers
         _ipython().ast_transformers = old + transformers
         yield
         _ipython().ast_transformers = old
 
     @contextmanager
-    def input_transformer_context(
-        self, transformers: Union[List[Callable[[List[str]], List[str]]], Callable[[List[str]], List[str]]]
-    ):
-        if not isinstance(transformers, list):
-            transformers = [transformers]
+    def input_transformer_context(self, transformers: List[Callable[[List[str]], List[str]]]):
         old = _ipython().input_transformers_post
         _ipython().input_transformers_post = old + transformers
         yield

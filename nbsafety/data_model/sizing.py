@@ -39,4 +39,6 @@ def sizeof(obj: Any) -> float:
         sz = len(obj)
     elif isinstance(obj, (list, set, tuple)):
         sz = sizeof_list_or_set_or_tuple(obj)
+    elif isinstance(obj, dict):
+        sz = sizeof_dict(obj)
     return sz if sz <= MAX_SIZE else float('inf')

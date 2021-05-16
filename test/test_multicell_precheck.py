@@ -223,7 +223,7 @@ def test_updated_namespace_after_subscript_dep_removed():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1]
-    cells[1] = 'd = {5: 5}'
+    cells[1] = 'd = {5: 6}'
     run_cell(cells[1], 1)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
@@ -238,7 +238,7 @@ def test_updated_namespace_after_subscript_dep_removed():
     assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
 
 
-def test_equal_update_does_not_induce_fresh_cell():
+def test_equal_list_update_does_not_induce_fresh_cell():
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',
@@ -250,6 +250,23 @@ def test_equal_update_does_not_induce_fresh_cell():
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == []
     run_cell('y = ["f"]', 4)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2, 3]
+
+
+def test_equal_dict_update_does_not_induce_fresh_cell():
+    cells = {
+        0: 'x = {"foo": 42, "bar": 43}',
+        1: 'y = x | {"baz": 44}',
+        2: 'logging.info(y)',
+        3: 'y = dict(y.items())',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
+    run_cell('y = {"foo": 99}', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3]

@@ -102,7 +102,7 @@ class BaseTraceManager(singletons.TraceManager):
     def _make_stack(self):
         return TraceStack(self)
 
-    def _make_composed_tracer(self, existing_tracer):
+    def _make_composed_tracer(self, existing_tracer):  # pragma: no cover
 
         @functools.wraps(self._sys_tracer)
         def _composed_tracer(frame: FrameType, evt: str, arg: Any, **kwargs):
@@ -116,7 +116,7 @@ class BaseTraceManager(singletons.TraceManager):
                 return my_ret
         return _composed_tracer
 
-    def settrace_patch(self, trace_func):
+    def settrace_patch(self, trace_func):  # pragma: no cover
         # called by third-party tracers
         self.existing_tracer = trace_func
         if self.tracing_enabled:

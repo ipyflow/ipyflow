@@ -137,11 +137,11 @@ def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIn
 
     if isinstance(slice, ast.Constant):
         slice = slice.value
-    elif isinstance(slice, ast.Num):
+    elif isinstance(slice, ast.Num):  # pragma: no cover
         slice = slice.n  # type: ignore
         if not isinstance(slice, int):
             return None
-    elif isinstance(slice, ast.Str):
+    elif isinstance(slice, ast.Str):  # pragma: no cover
         slice = slice.s  # type: ignore
     else:
         return None

@@ -37,7 +37,7 @@ jobs:
       # only run on ubuntu-latest; should be same for any OS, and
       # mypy seems to have issues on windows 3.6.x specifically
       # wherein it gives a false positive syntax error
-      if: matrix.os == 'unbuntu-latest'
+      if: matrix.os == 'ubuntu-latest'
       run: make typecheck
     - name: Compute coverage and run tests with ipytest (excluding typing)
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.9.x'}}

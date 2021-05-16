@@ -258,7 +258,7 @@ def test_equal_list_update_does_not_induce_fresh_cell():
 def test_equal_dict_update_does_not_induce_fresh_cell():
     cells = {
         0: 'x = {"foo": 42, "bar": 43}',
-        1: 'y = x | {"baz": 44}',
+        1: 'y = dict(set(x.items()) | set({"baz": 44}.items()))',
         2: 'logging.info(y)',
         3: 'y = dict(y.items())',
     }

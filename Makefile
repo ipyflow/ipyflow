@@ -28,6 +28,14 @@ typecheck:
 check_no_typing:
 	./scripts/runtests.sh
 
+coverage:
+	rm -f .coverage
+	./scripts/runtests.sh --coverage
+	coverage report
+
+xmlcov: coverage
+	coverage xml
+
 check: typecheck check_no_typing
 
 uicheck:

@@ -106,23 +106,34 @@ class BaseTraceManager(singletons.TraceManager):
 
         @functools.wraps(self._sys_tracer)
         def _composed_tracer(frame: FrameType, evt: str, arg: Any, **kwargs):
-            existing_tracer(frame, evt, arg, **kwargs)
-            return self._sys_tracer(frame, evt, arg, **kwargs)
+            existing_ret = existing_tracer(frame, evt, arg, **kwargs)
+            if not self.tracing_enabled:
+                return existing_ret
+            my_ret = self._sys_tracer(frame, evt, arg, **kwargs)
+            if my_ret is None and evt == 'call':
+                return existing_ret
+            else:
+                return my_ret
         return _composed_tracer
 
-    def _settrace_patch(self, trace_func):
+    def settrace_patch(self, trace_func):
         # called by third-party tracers
+        self.existing_tracer = trace_func
         if self.tracing_enabled:
-            self._enable_tracing(existing_tracer=trace_func)
+            if trace_func is None:
+                self._disable_tracing()
+            self._enable_tracing(check_disabled=False, existing_tracer=trace_func)
         else:
             nbs().settrace(trace_func)
 
-    def _enable_tracing(self, existing_tracer=None):
-        if existing_tracer is None:
+    def _enable_tracing(self, check_disabled=True, existing_tracer=None):
+        if check_disabled:
             assert not self.tracing_enabled
         self.tracing_enabled = True
         self.existing_tracer = existing_tracer or sys.gettrace()
-        if self.existing_tracer is not None:
+        if self.existing_tracer is None:
+            self.sys_tracer = self._sys_tracer
+        else:
             self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
         nbs().settrace(self.sys_tracer)
 
@@ -138,7 +149,7 @@ class BaseTraceManager(singletons.TraceManager):
         old_settrace = sys.settrace
         try:
             setattr(builtins, EMIT_EVENT, self._emit_event)
-            sys.settrace = self._settrace_patch
+            sys.settrace = self.settrace_patch
             self._enable_tracing()
             yield
         finally:

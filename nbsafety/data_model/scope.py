@@ -11,9 +11,9 @@ try:
 except ImportError:
     pandas = None
 
-from nbsafety.analysis import AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
-from nbsafety.singletons import nbs, nbs_check_init
+from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union

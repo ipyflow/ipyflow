@@ -1,7 +1,16 @@
 # -*- coding: utf-8 -*-
 
-# need PYTHONPATH="." for this to work
 import builtins
+import sys
+
+if '--coverage' in sys.argv:
+    import coverage
+    cov = coverage.Coverage()
+    cov.start()
+    setattr(builtins, '__codecov', cov)
+    sys.argv.remove('--coverage')
+
+# need PYTHONPATH="." for this to work
 try:
     import test
 except ImportError:
@@ -23,4 +32,8 @@ if __name__ == '__main__':
     # Extreme hack to keep the zero exit status around
     import sys
     import builtins
+    cov = getattr(builtins, '__codecov', None)
+    if cov is not None:
+        cov.stop()
+        cov.save()
     sys.exit(0) if getattr(builtins, '__exit_zero') else sys.exit(1)

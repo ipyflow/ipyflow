@@ -1,0 +1,17 @@
+[run]
+# uses Python tracer which works better with nbsafety's tracer
+timid = True
+source = nbsafety
+omit = 
+    nbsafety/__init__.py
+    nbsafety/install.py
+    nbsafety/kernel/*
+    nbsafety/types.py
+    nbsafety/version.py
+    nbsafety/_version.py
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    except .*:

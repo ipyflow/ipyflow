@@ -1,5 +1,5 @@
 
-[![](https://github.com/nbsafety-project/nbsafety/workflows/master/badge.svg)](https://github.com/nbsafety-project/nbsafety/actions)
+[![](https://github.com/nbsafety-project/nbsafety/workflows/nbsafety/badge.svg)](https://github.com/nbsafety-project/nbsafety/actions)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
 [![License: BSD3](https://img.shields.io/badge/License-BSD3-maroon.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![](https://img.shields.io/pypi/v/nbsafety.svg)](https://pypi.org/project/nbsafety)

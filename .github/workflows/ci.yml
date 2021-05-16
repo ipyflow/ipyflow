@@ -1,4 +1,4 @@
-name: master
+name: nbsafety
 
 on: [push, pull_request]
 
@@ -34,9 +34,24 @@ jobs:
         #flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
         flake8 . --exit-zero
     - name: Run type checker with mypy
-      # skip for windows 3.6.x; mypy seems to have some issue that
-      # gives a false positive syntax error
-      if: matrix.os != 'windows-latest'
+      # only run on ubuntu-latest; should be same for any OS, and
+      # mypy seems to have issues on windows 3.6.x specifically
+      # wherein it gives a false positive syntax error
+      if: matrix.os == 'unbuntu-latest'
       run: make typecheck
-    - name: Run tests with ipytest
+    - name: Compute coverage and run tests with ipytest (excluding typing)
+      if: matrix.os == 'ubuntu-latest' && ${{ matrix.python-version }} == '3.9.x'
+      run: make xmlcov
+    - name: Run tests with ipytest, excluding typing and coverage
+      if: ! (matrix.os == 'ubuntu-latest' && ${{ matrix.python-version }} == '3.9.x')
       run: make check_no_typing
+    - name: Upload coverage report
+      if: matrix.os == 'ubuntu-latest' && ${{ matrix.python-version }} == '3.9.x'
+      uses: codecov/codecov-action@v1
+      with:
+        token: '${{ secrets.CODECOV_TOKEN }}'
+        files: ./coverage.xml
+        env_vars: PYTHON
+        name: codecov-umbrella
+        fail_ci_if_error: true
+        verbose: true

@@ -116,7 +116,7 @@ class BaseTraceManager(singletons.TraceManager):
                 return my_ret
         return _composed_tracer
 
-    def settrace_patch(self, trace_func):  # pragma: no cover
+    def _settrace_patch(self, trace_func):  # pragma: no cover
         # called by third-party tracers
         self.existing_tracer = trace_func
         if self.tracing_enabled:
@@ -145,16 +145,23 @@ class BaseTraceManager(singletons.TraceManager):
         nbs().settrace(self.existing_tracer)
 
     @contextmanager
-    def tracing_context(self):
-        old_settrace = sys.settrace
+    def _patch_sys_settrace(self):
+        original_settrace = sys.settrace
         try:
-            setattr(builtins, EMIT_EVENT, self._emit_event)
-            sys.settrace = self.settrace_patch
-            self._enable_tracing()
+            sys.settrace = self._settrace_patch
             yield
         finally:
+            sys.settrace = original_settrace
+
+    @contextmanager
+    def tracing_context(self):
+        setattr(builtins, EMIT_EVENT, self._emit_event)
+        try:
+            with self._patch_sys_settrace():
+                self._enable_tracing()
+                yield
+        finally:
             delattr(builtins, EMIT_EVENT)
-            sys.settrace = old_settrace
             self._disable_tracing(check_enabled=False)
 
     def _attempt_to_reenable_tracing(self, frame: FrameType):

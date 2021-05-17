@@ -45,11 +45,17 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def _make_tuple_event_for(self, node: ast.AST, event: TraceEvent, orig_node_id=None, **kwargs):
         with fast.location_of(node):
-            tuple_node = fast.Tuple([fast.Call(
-                func=self._emitter_ast(),
-                args=[event.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
-                keywords=[] if len(kwargs) == 0 else fast.kwargs(**kwargs),
-            ), node], ast.Load())
+            tuple_node = fast.Tuple(
+                [
+                    fast.Call(
+                        func=self._emitter_ast(),
+                        args=[event.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
+                        keywords=[] if len(kwargs) == 0 else fast.kwargs(**kwargs),
+                    ),
+                    node,
+                ],
+                ast.Load()
+            )
             slc: Union[ast.Constant, ast.Num, ast.Index] = fast.Num(1)
             if sys.version_info < (3, 9):
                 slc = fast.Index(slc)
@@ -89,7 +95,7 @@ class AstEavesdropper(ast.NodeTransformer):
             if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
                 elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
                 elts = [_maybe_convert_ast_subscript(elt) for elt in elts]
-                attr_or_sub = fast.Tuple(elts)
+                attr_or_sub = fast.Tuple(elts, ast.Load())
         return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(

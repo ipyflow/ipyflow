@@ -319,7 +319,7 @@ class NamespaceScope(Scope):
         self.child_clones: List[NamespaceScope] = []
         self.obj = obj
         self.cached_obj_id = id(obj)
-        if obj is not None and not isinstance(obj, int) and id(obj) in nbs().namespaces:
+        if obj is not None and not isinstance(obj, int) and id(obj) in nbs().namespaces:  # pragma: no cover
             msg = 'namespace already registered for %s' % obj
             if nbs().is_develop:
                 raise ValueError(msg)
@@ -337,7 +337,7 @@ class NamespaceScope(Scope):
         return True
 
     def __len__(self):
-        if not isinstance(self.obj, (dict, list, tuple)):
+        if not isinstance(self.obj, (dict, list, tuple)):  # pragma: no cover
             raise TypeError("tried to get length of non-container namespace %s: %s", self, self.obj)
         return len(self.obj)
 
@@ -346,7 +346,7 @@ class NamespaceScope(Scope):
             yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
 
     def __iter__(self):
-        if not isinstance(self.obj, (list, tuple)):
+        if not isinstance(self.obj, (list, tuple)):  # pragma: no cover
             raise TypeError("tried to iterate through non-sequence namespace %s: %s", self, self.obj)
         # do the validation before starting the generator part so that we raise immediately
         return self._iter_inner()
@@ -356,7 +356,7 @@ class NamespaceScope(Scope):
             yield key, self.lookup_data_symbol_by_name_this_indentation(key, is_subscript=True)
 
     def items(self):
-        if not isinstance(self.obj, dict):
+        if not isinstance(self.obj, dict):  # pragma: no cover
             raise TypeError("tried to get iterate through items of non-dict namespace: %s", self.obj)
         # do the validation before starting the generator part so that we raise immediately
         return self._items_inner()
@@ -454,24 +454,12 @@ class NamespaceScope(Scope):
             dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
         return itertools.chain(*dsym_collections_to_chain)
 
-    @property
-    def num_subscript_symbols(self):
-        return len(self._subscript_data_symbol_by_name)
-
-    @property
-    def num_dotted_symbols(self):
-        return len(self._data_symbol_by_name)
-
-    @property
-    def num_symbols(self):
-        return self.num_dotted_symbols + self.num_subscript_symbols
-
     def put(self, name: SupportedIndexType, val: DataSymbol):
         if val.is_subscript:
             self._subscript_data_symbol_by_name[name] = val
+        elif not isinstance(name, str):  # pragma: no cover
+            raise TypeError('%s should be a string' % name)
         else:
-            if not isinstance(name, str):
-                raise TypeError('%s should be a string' % name)
             self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
@@ -485,8 +473,7 @@ class NamespaceScope(Scope):
             ret = self.namespace_parent_scope.get_earliest_ancestor_containing(obj_id, is_subscript)
         if ret is not None:
             return ret
-        set_to_check = map(lambda dsym: dsym.obj_id, self.all_data_symbols_this_indentation(is_subscript=is_subscript))
-        if obj_id in set_to_check:
+        if obj_id in (dsym.obj_id for dsym in self.all_data_symbols_this_indentation(is_subscript=is_subscript)):
             return self
         else:
             return None

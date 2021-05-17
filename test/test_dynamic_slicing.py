@@ -293,3 +293,25 @@ def test_dynamic_only_variable_subscript():
         assert deps == {1, 2, 5, 6, 7, 10, 11}, 'got %s' % deps
     finally:
         nbs().mut_settings.static_slicing_enabled = orig_enabled
+
+
+def test_handler():
+    orig_enabled = nbs().mut_settings.static_slicing_enabled
+    try:
+        nbs().mut_settings.static_slicing_enabled = False
+        run_cell("""
+    try:
+        r = map()
+    except:
+        success = False
+    """)
+        run_cell("""
+    try:
+        logging.info("%d %d", (1, 2))
+    except:
+        success = False
+    """)
+        deps = set(nbs().get_cell_dependencies(2).keys())
+        assert deps == {2}, 'got %s' % deps
+    finally:
+        nbs().mut_settings.static_slicing_enabled = orig_enabled

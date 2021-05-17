@@ -204,6 +204,11 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
     def visit_withitem(self, node: ast.withitem):
         self.visit(node.context_expr)
 
+    def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        # important: this needs to skip the body
+        if node.type is not None:
+            tracer().resolve_loaded_symbols(node.type)
+
     def visit_Import(self, node: ast.Import):
         pass
 

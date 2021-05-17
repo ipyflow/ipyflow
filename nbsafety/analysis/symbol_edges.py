@@ -92,6 +92,11 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
             else:
                 self.edges.append((aliases, node.context_expr))
 
+    def visit_ExceptHandler(self, node: ast.ExceptHandler):
+        # TODO: this needs test coverage I think
+        if node.name is not None and node.type is not None:
+            self.edges.append((node.name, node.type))
+
     def visit_Import(self, node: ast.Import):
         self.visit_Import_or_ImportFrom(node)
 

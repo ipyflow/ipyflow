@@ -93,14 +93,14 @@ class TraceStatement:
                 namespace_for_upsert.scope_name = str(name)
                 namespace_for_upsert.parent_scope = scope
 
-    def _handle_assign_target_tuple_unpack_from_deps(self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]):
+    def _handle_store_target_tuple_unpack_from_deps(self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]):
         for inner_target in target.elts:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
-                self._handle_assign_target_tuple_unpack_from_deps(inner_target, deps)
+                self._handle_store_target_tuple_unpack_from_deps(inner_target, deps)
             else:
                 self._handle_assign_target_for_deps(inner_target, deps)
 
-    def _handle_starred_assign_target(self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]):
+    def _handle_starred_store_target(self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]):
         try:
             scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
@@ -122,7 +122,7 @@ class TraceStatement:
             is_subscript=is_subscript,
         )
 
-    def _handle_assign_target_tuple_unpack_from_namespace(
+    def _handle_store_target_tuple_unpack_from_namespace(
         self, target: Union[ast.List, ast.Tuple], rhs_namespace: NamespaceScope
     ):
         saved_starred_node: Optional[ast.Starred] = None
@@ -139,9 +139,9 @@ class TraceStatement:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
                 inner_namespace = nbs().namespaces.get(inner_dep.obj_id, None)
                 if inner_namespace is None:
-                    self._handle_assign_target_tuple_unpack_from_deps(inner_target, inner_deps)
+                    self._handle_store_target_tuple_unpack_from_deps(inner_target, inner_deps)
                 else:
-                    self._handle_assign_target_tuple_unpack_from_namespace(inner_target, inner_namespace)
+                    self._handle_store_target_tuple_unpack_from_namespace(inner_target, inner_namespace)
             else:
                 self._handle_assign_target_for_deps(
                     inner_target,
@@ -149,23 +149,33 @@ class TraceStatement:
                     maybe_fixup_literal_namespace=True,
                 )
         if saved_starred_node is not None:
-            self._handle_starred_assign_target(saved_starred_node, saved_starred_deps)
+            self._handle_starred_store_target(saved_starred_node, saved_starred_deps)
 
-    def _handle_assign_target(self, target: ast.AST, value: ast.AST):
+    def _handle_store_target(self, target: ast.AST, value: ast.AST, skip_namespace_check: bool = False):
         if isinstance(target, (ast.List, ast.Tuple)):
-            rhs_namespace = nbs().namespaces.get(tracer().saved_assign_rhs_obj_id, None)
+            rhs_namespace = (
+                None if skip_namespace_check
+                # next branch will always return None if skip_namespace_check is true,
+                # but we skip it anyway just for the sake of explicitness
+                else nbs().namespaces.get(tracer().saved_assign_rhs_obj_id, None)
+            )
             if rhs_namespace is None:
-                self._handle_assign_target_tuple_unpack_from_deps(target, resolve_rval_symbols(value))
+                self._handle_store_target_tuple_unpack_from_deps(target, resolve_rval_symbols(value))
             else:
-                self._handle_assign_target_tuple_unpack_from_namespace(target, rhs_namespace)
+                self._handle_store_target_tuple_unpack_from_namespace(target, rhs_namespace)
         else:
             self._handle_assign_target_for_deps(
                 target, resolve_rval_symbols(value), maybe_fixup_literal_namespace=True
             )
 
-    def _handle_assign(self, node: ast.Assign):
-        for target in node.targets:
-            self._handle_assign_target(target, node.value)
+    def _handle_store(self, node: Union[ast.Assign, ast.For]):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                self._handle_store_target(target, node.value)
+        elif isinstance(node, ast.For):
+            self._handle_store_target(node.target, node.iter, skip_namespace_check=True)
+        else:  # pragma: no cover
+            raise TypeError('node type not supported for node: %s' % ast.dump(node))
 
     def _handle_delete(self):
         assert isinstance(self.stmt_node, ast.Delete)
@@ -176,11 +186,11 @@ class TraceStatement:
             except KeyError as e:
                 # this will happen if, e.g., a __delitem__ triggered a call
                 # logger.info("got key error while trying to handle %s: %s", ast.dump(self.stmt_node), e)
-                logger.info("got key error: %s", e)
+                logger.info('got key error: %s', e)
 
     def _make_lval_data_symbols(self):
-        if isinstance(self.stmt_node, ast.Assign):
-            self._handle_assign(self.stmt_node)
+        if isinstance(self.stmt_node, (ast.Assign, ast.For)):
+            self._handle_store(self.stmt_node)
         else:
             self._make_lval_data_symbols_old()
 
@@ -214,7 +224,7 @@ class TraceStatement:
                     propagate=not isinstance(self.stmt_node, ast.For)
                 )
             except KeyError:
-                logger.warning('keyerror for %s', target)
+                logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
             except Exception as e:
                 logger.warning('exception while handling store: %s', e)
                 pass

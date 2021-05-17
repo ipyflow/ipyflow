@@ -1542,6 +1542,27 @@ for i in range(5):
     assert_false_negative('`s` does depend on second entry of `lst` but tracing every iteration of loop is slow')
 
 
+def test_for_loop_tuple_unpack():
+    run_cell('x = (1, 2)')
+    run_cell('y = (3, 4)')
+    run_cell('total_i = 0')
+    run_cell('total_j = 0')
+    run_cell("""
+for i, j in [x, y]:
+    total_i += i
+    total_j += j
+""")
+    run_cell('logging.info(total_i)')
+    assert_not_detected()
+    run_cell('logging.info(total_j)')
+    assert_not_detected()
+    run_cell('x = (42, 43)')
+    run_cell('logging.info(total_i)')
+    assert_detected('`total_i` depends on old version of `x`')
+    run_cell('logging.info(total_j)')
+    assert_detected('`total_j` also depends on old version of `x`')
+
+
 def test_same_cell_redefine():
     run_cell('a = 0')
     run_cell("""

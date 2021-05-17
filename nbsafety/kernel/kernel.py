@@ -52,4 +52,4 @@ class SafeKernel(IPythonKernel):
                 return super_.do_execute(cell, silent, store_history, user_expressions, allow_stdin)
             return next(iter(asyncio.get_event_loop().run_until_complete(
                 asyncio.wait([nbs().safe_execute(code, False, _run_cell_func)])
-            )[0]))
+            )[0])).result()

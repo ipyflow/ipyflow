@@ -708,12 +708,15 @@ class NotebookSafety(singletons.NotebookSafety):
 
             # Stage 1: Precheck.
             if self._safety_precheck_cell(cell, cell_id) and self.settings.mark_stale_symbol_usages_unsafe:
+                # set this back in case we need it (e.g. user overrides and reruns)
+                self._active_cell_id = cell_id
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
+                ret = run_cell_func('None')
                 if is_async:
-                    return await run_cell_func('None')
+                    return await ret
                 else:
-                    return run_cell_func('None')
+                    return ret
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:

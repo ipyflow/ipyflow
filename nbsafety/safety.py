@@ -211,6 +211,14 @@ class NotebookSafety(singletons.NotebookSafety):
         if request['type'] == 'change_active_cell':
             self.set_active_cell(request['active_cell_id'], position_idx=request.get('active_cell_order_idx', -1))
         elif request['type'] == 'cell_freshness':
+            if self._active_cell_id is None:
+                self._active_cell_id = request.get('executed_cell_id', None)
+                if self._active_cell_id is not None:
+                    self._counter_by_cell_id[self._active_cell_id] = self._last_execution_counter
+                    self._cell_id_by_counter[self._last_execution_counter] = self._active_cell_id
+                    self._run_cells.add(self._active_cell_id)
+                    for ast_id in [ast_id for ast_id, cell_id in self.cell_id_by_ast_id.items() if cell_id is None]:
+                        self.cell_id_by_ast_id[ast_id] = self._active_cell_id
             cell_id = request.get('executed_cell_id', None)
             cells_by_id = request['content_by_cell_id']
             if self.settings.backwards_cell_staleness_propagation:
@@ -693,11 +701,10 @@ class NotebookSafety(singletons.NotebookSafety):
         with save_number_of_currently_executing_cell():
             self._last_execution_counter = self.cell_counter()
 
-            cell_id = self._active_cell_id
-            if self._active_cell_id is not None:
-                self._counter_by_cell_id[self._active_cell_id] = self._last_execution_counter
-                self._cell_id_by_counter[self._last_execution_counter] = self._active_cell_id
-                self._active_cell_id = None
+            cell_id, self._active_cell_id = self._active_cell_id, None
+            if cell_id is not None:
+                self._counter_by_cell_id[cell_id] = self._last_execution_counter
+                self._cell_id_by_counter[self._last_execution_counter] = cell_id
 
             # Stage 1: Precheck.
             if self._safety_precheck_cell(cell, cell_id) and self.settings.mark_stale_symbol_usages_unsafe:
@@ -710,7 +717,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
-                self._run_cells.add(cell_id)
+                if cell_id is not None:
+                    self._run_cells.add(cell_id)
                 self.cell_content_by_counter[self._last_execution_counter] = cell
                 with self._tracing_context(cell_id):
                     if is_async:

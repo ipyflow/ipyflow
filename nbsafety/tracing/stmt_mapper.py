@@ -4,20 +4,20 @@ import copy
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Set
+    from typing import Dict, List, Optional, Set
     from nbsafety.types import CellId
 
 
 class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
-        cell_id: CellId,
+        cell_id: Optional[CellId],
         line_to_stmt_map: Dict[int, ast.stmt],
         id_map: Dict[int, ast.AST],
         cell_id_by_ast_id: Dict[int, CellId],
         parent_map: Dict[int, ast.AST],
     ):
-        self._cell_id = cell_id
+        self._cell_id: Optional[CellId] = cell_id
         self.line_to_stmt_map = line_to_stmt_map
         self.id_map = id_map
         self.cell_id_by_ast_id = cell_id_by_ast_id

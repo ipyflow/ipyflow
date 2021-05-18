@@ -2,11 +2,16 @@
 import ast
 import logging
 import traceback
+from typing import TYPE_CHECKING
 
 from nbsafety.singletons import nbs
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
 from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.tracing.stmt_mapper import StatementMapper
+
+if TYPE_CHECKING:
+    from typing import Optional
+    from nbsafety.types import CellId
 
 
 logger = logging.getLogger(__name__)
@@ -14,8 +19,8 @@ logger.setLevel(logging.WARNING)
 
 
 class SafetyAstRewriter(ast.NodeTransformer):
-    def __init__(self, cell_id):
-        self._cell_id = cell_id
+    def __init__(self, cell_id: Optional[CellId]):
+        self._cell_id: Optional[CellId] = cell_id
 
     def visit(self, node: ast.AST):
         try:

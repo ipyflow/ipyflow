@@ -239,7 +239,11 @@ History
 -------------------
 * Various bugfixes and usability improvements;
 
-0.0.66 (2021-05-18)
+0.0.66 (2021-05-17)
 -------------------
 * Hotfix for issue creating call arg data symbols;
 * Security audit;
+
+0.0.67 (2021-05-17)
+-------------------
+* Fix nbclassic bug;

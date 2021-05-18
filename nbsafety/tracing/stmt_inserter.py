@@ -6,13 +6,13 @@ from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, Set, Union
+    from typing import Dict, Optional, Set
     from nbsafety.types import CellId
 
 
 class StatementInserter(ast.NodeTransformer):
-    def __init__(self, cell_id: CellId, orig_to_copy_mapping: Dict[int, ast.AST]):
-        self._cell_id = cell_id
+    def __init__(self, cell_id: Optional[CellId], orig_to_copy_mapping: Dict[int, ast.AST]):
+        self._cell_id: Optional[CellId] = cell_id
         self._orig_to_copy_mapping = orig_to_copy_mapping
         self._prepend_stmt_template = '{}("{}", {{stmt_id}})'.format(EMIT_EVENT, TraceEvent.before_stmt.value)
         self._append_stmt_template = '{}("{}", {{stmt_id}})'.format(EMIT_EVENT, TraceEvent.after_stmt.value)

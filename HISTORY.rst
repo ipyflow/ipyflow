@@ -226,9 +226,15 @@ History
 * Bugfix for statements involving `del`;
 
 0.0.61 (2021-04-13)
+-------------------
 * Better handling for deletes;
 * Reduce false positive highlights when updated symbol unchanged;
 * Use new-style labextension, obviating need for separate `jupyter labextension install ...` command;
 
 0.0.62 (2021-04-13)
+-------------------
 * Fix packaging issue;
+
+0.0.64 (2021-05-17)
+-------------------
+* Various bugfixes and usability improvements;

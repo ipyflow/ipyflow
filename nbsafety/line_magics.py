@@ -64,10 +64,10 @@ def show_deps(symbols: str) -> Optional[str]:
         if len(dsyms) == 0:
             logger.warning('Could not find symbol metadata for %s', astunparse.unparse(unresolved).strip())
         for dsym in dsyms:
-            parents = {par for par in dsym.parents if not par.is_anonymous}
+            parents = {par for par in dsym.parents if par.is_user_accessible}
             children: Set[DataSymbol] = set()
             children = children.union(
-                *({child for child in children if not child.is_anonymous}
+                *({child for child in children if child.is_user_accessible}
                   for children in dsym.children_by_cell_position.values())
             )
             if dsym.required_timestamp > 0:

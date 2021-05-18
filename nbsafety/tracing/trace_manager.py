@@ -9,10 +9,11 @@ import sys
 from typing import cast, TYPE_CHECKING
 
 import astunparse
+from IPython import get_ipython
 
+from nbsafety import singletons
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
-from nbsafety import singletons
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, StandardMutation
@@ -520,7 +521,7 @@ class TraceManager(BaseTraceManager):
         if isinstance(nbs().ast_node_by_id[node_id], ast.Call):
             # clear the callpoint dependency
             self.node_id_to_loaded_symbols.pop(node_id, None)
-        if obj is None:
+        if obj is None or obj is get_ipython():
             return
         logger.warning('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
         sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)

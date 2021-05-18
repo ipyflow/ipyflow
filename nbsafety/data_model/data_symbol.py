@@ -50,7 +50,6 @@ class DataSymbol:
             # TODO: clean up redundancies
             assert implicit
             assert stmt_node is None
-        # print(containing_scope, name, obj, is_subscript)
         self.name = name
         self.symbol_type = symbol_type
         self.obj = obj
@@ -265,6 +264,10 @@ class DataSymbol:
     def is_globally_accessible(self):
         return self.containing_scope.is_globally_accessible
 
+    @property
+    def is_user_accessible(self):
+        return self.is_globally_accessible and not self.is_anonymous
+
     def collect_self_garbage(self):
         """
         Just null out the reference to obj; we need to keep the edges
@@ -420,9 +423,8 @@ class DataSymbol:
             # TODO: ideally we should try pass the actual objects to the DataSymbol ctor.
             #  Will require matching the signature with the actual call,
             #  which will be tricky I guess.
-            obj = deps[0].obj if len(deps) == 1 else None
-            logger.info('def arg %s matched with %s with deps %s', def_arg, obj, deps)
-            self.call_scope.upsert_data_symbol_for_name(def_arg, obj, deps, self.stmt_node, propagate=False)
+            self.call_scope.upsert_data_symbol_for_name(def_arg, None, deps, self.stmt_node, propagate=False)
+            logger.info('def arg %s matched with deps %s', def_arg, deps)
         for def_arg in self.get_definition_args():
             if def_arg in seen_def_args:
                 continue

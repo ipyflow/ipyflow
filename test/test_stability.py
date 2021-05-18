@@ -80,6 +80,12 @@ def test_slices():
     run_cell('lst[1:2] = foo')
 
 
+def test_partial_slices():
+    run_cell('s = "Hello, world!"')
+    run_cell('logging.info(str(s[:7]))')
+    run_cell('logging.info(str(s[7:]))')
+
+
 def test_delete():
     run_cell('lst = list(range(10))')
     run_cell('del lst[0]')

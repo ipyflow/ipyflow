@@ -21,9 +21,11 @@ def _maybe_convert_ast_subscript(subscript: ast.AST) -> ast.AST:
     if isinstance(subscript, ast.Index):
         return subscript.value  # type: ignore
     elif isinstance(subscript, ast.Slice):
+        lower = fast.NameConstant(None) if subscript.lower is None else subscript.lower
+        upper = fast.NameConstant(None) if subscript.upper is None else subscript.upper
         return fast.Call(
             func=fast.Name('slice', ast.Load()),
-            args=[subscript.lower, subscript.upper] + ([] if subscript.step is None else [subscript.step]),
+            args=[lower, upper] + ([] if subscript.step is None else [subscript.step]),
             keywords=[],
         )
     else:

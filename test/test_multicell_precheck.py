@@ -332,3 +332,17 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [1], 'got %s' % response['fresh_cells']
+
+
+def test_incorrect_object_not_used_for_argument_symbols():
+    cells = {
+        0: 'import numpy as np',
+        1: 'arr = np.random.randn(100)',
+        2: 'def f(x): return []',
+        # when obj for `np` was passed to `x`, this created issues
+        3: 'f(np.arange(10))',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']

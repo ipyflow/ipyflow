@@ -239,6 +239,7 @@ History
 -------------------
 * Various bugfixes and usability improvements;
 
-0.0.64 (2021-05-18)
+0.0.66 (2021-05-18)
 -------------------
 * Hotfix for issue creating call arg data symbols;
+* Security audit;

@@ -1,6 +1,6 @@
 {
   "name": "jupyter-nbsafety",
-  "version": "0.0.65",
+  "version": "0.0.66",
   "description": "JupyterLab extension for nbsafety user interface",
   "keywords": [
     "jupyter",
@@ -37,7 +37,7 @@
     "@types/webpack-env": "^1.16.0",
     "@typescript-eslint/eslint-plugin": "^2.25.0",
     "@typescript-eslint/parser": "^2.25.0",
-    "css-loader": "^3.1.0",
+    "css-loader": "^5.2.4",
     "eslint": "^6.8.0",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-prettier": "^3.3.1",

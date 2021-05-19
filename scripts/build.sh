@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+mkdir -p ./nbsafety/resources/labextension
+mkdir -p ./nbsafety/resources/nbextension
 pushd ./frontend/labextension
 npm ci && npm run build:prod
 popd

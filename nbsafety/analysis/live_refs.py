@@ -91,6 +91,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             and len(this_assign_live) == 1
             and len(this_assign_dead) == 1
             and not (this_assign_dead <= self.dead)
+            and aug_assign_target is None
+            and isinstance(value, (ast.Attribute, ast.Subscript, ast.Name))
         ):
             lhs, rhs = [
                 get_symbols_for_references(x, self.scope, only_add_successful_resolutions=True)[0]

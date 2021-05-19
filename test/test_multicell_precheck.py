@@ -346,3 +346,19 @@ def test_incorrect_object_not_used_for_argument_symbols():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
+
+
+def test_increment_by_same_amount():
+    cells = {
+        0: 'x = 2',
+        1: 'y = x + 1',
+        2: 'logging.info(y)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('x = 3', 0)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [2]
+    assert response['fresh_cells'] == [1]

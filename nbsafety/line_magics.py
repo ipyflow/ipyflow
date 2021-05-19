@@ -5,7 +5,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.ipython_utils import CellNotRunYetError
+from nbsafety.ipython_utils import cell_counter, CellNotRunYetError
 from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -141,12 +141,17 @@ def set_highlights(cmd: str, rest: str) -> None:
 
 
 def make_slice(line: str) -> Optional[str]:
-    usage = 'Usage: %safety slice <cell_num>'
-    try:
-        cell_num = int(line)
-    except:
-        logger.warning(usage)
-        return None
+    usage = 'Usage: %safety slice [cell_num]'
+    if line == '':
+        # subtract 1 because it will be incremented
+        # by the time this is running
+        cell_num = cell_counter() - 1
+    else:
+        try:
+            cell_num = int(line)
+        except:
+            logger.warning(usage)
+            return None
     try:
         deps = list(nbs().get_cell_dependencies(cell_num).items())
         deps.sort()

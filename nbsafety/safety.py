@@ -619,8 +619,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def get_cell_dependencies(self, cell_num: int) -> Dict[int, str]:
         """
-        Gets a dictionary object of cell dependencies for the last or 
-        currently executed cell.
+        Gets a dictionary object of cell dependencies for the cell with
+        the specified execution counter.
 
         Args:
             - cell_num (int): cell to get dependencies for, defaults to last

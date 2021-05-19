@@ -247,3 +247,8 @@ History
 0.0.67 (2021-05-17)
 -------------------
 * Fix nbclassic bug;
+
+0.0.68 (2021-05-18)
+-------------------
+* Actually fix nbclassic bug;
+* Slight improvement to the lineno -> FunctionDef mapping (fixing some bugs);

@@ -204,6 +204,7 @@ def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTr
 class TraceManager(BaseTraceManager):
     def __init__(self):
         super().__init__()
+        self._stmt_counter = 0
         self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
@@ -244,8 +245,12 @@ class TraceManager(BaseTraceManager):
                 # `None` means use 'cur_frame_original_scope'
                 self.active_literal_scope: Optional[NamespaceScope] = None
 
+
+    def stmt_counter(self) -> int:
+        return self._stmt_counter
+
     # TODO: use stack mechanism to automate this?
-    def after_stmt_reset_hook(self):
+    def after_stmt_reset_hook(self) -> None:
         self.mutations.clear()
         self.mutation_candidates.clear()
         self.lexical_call_stack.clear()
@@ -793,6 +798,7 @@ class TraceManager(BaseTraceManager):
 
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
+        self._stmt_counter += 1
         if stmt_id in self.seen_stmts:
             return ret_expr
         stmt = nbs().ast_node_by_id.get(stmt_id, None)

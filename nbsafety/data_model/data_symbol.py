@@ -8,6 +8,7 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
 from nbsafety.data_model import sizing
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.singletons import nbs, tracer
 
@@ -484,6 +485,8 @@ class DataSymbol:
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.timestamp_by_used_time[nbs().cell_counter()] = self.timestamp
         if refresh:
+            if not equal_to_old:
+                nbs().stmt_by_timestamp[Timestamp.current()] = tracer().prev_trace_stmt_in_cur_frame.stmt_node
             self.refresh(
                 bump_version=not equal_to_old,
                 # rationale: if this is a mutation for which we have more precise information,

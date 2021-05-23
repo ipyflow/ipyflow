@@ -31,6 +31,7 @@ from nbsafety.ipython_utils import (
 from nbsafety import line_magics
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
@@ -108,6 +109,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
+        self.stmt_by_timestamp: Dict[Timestamp, ast.stmt] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}
@@ -160,7 +162,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 return alias
         return None
 
-    def cell_counter(self):
+    def cell_counter(self) -> int:
         if self.settings.store_history:
             return cell_counter()
         else:

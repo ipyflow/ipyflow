@@ -81,8 +81,6 @@ class DataSymbol:
         # The necessary last-updated timestamp / cell counter for this symbol to not be stale
         self.required_timestamp: Timestamp = self.timestamp
 
-        # The execution counter of cell where this symbol was last used (-1 means it has net yet been used)
-        self.last_used_cell_num: int = -1
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.timestamp_by_used_time: Dict[Timestamp, Timestamp] = {}
         # History of definitions at time of liveness
@@ -119,6 +117,13 @@ class DataSymbol:
 
     def temporary_disable_warnings(self):
         self._temp_disable_warnings = True
+
+    @property
+    def last_used_timestamp(self):
+        if len(self.timestamp_by_used_time) == 0:
+            return Timestamp.uninitialized()
+        else:
+            return max(self.timestamp_by_used_time.keys())
 
     @property
     def namespace_stale_symbols(self) -> Set[DataSymbol]:

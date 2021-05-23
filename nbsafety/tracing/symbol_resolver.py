@@ -222,8 +222,8 @@ def update_usage_info(symbols: Union[Optional[DataSymbol], Set[Optional[DataSymb
     for sym in (symbols if symbols is not None and isinstance(symbols, set) else [symbols]):
         if sym is None:
             continue
-        sym.last_used_cell_num = used_time.cell_num
-        logger.info('sym `%s` used in cell %d last updated in cell %d', sym, used_time.cell_num, sym.timestamp)
+        if nbs().is_develop:
+            logger.info('sym `%s` used in cell %d last updated in cell %d', sym, used_time.cell_num, sym.timestamp)
         sym.timestamp_by_used_time[used_time] = sym.timestamp
 
 

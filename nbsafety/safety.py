@@ -173,7 +173,6 @@ class NotebookSafety(singletons.NotebookSafety):
         assert not self.settings.store_history
         for sym in self.all_data_symbols():
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
-            sym.last_used_cell_num = -1
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time.clear()
         self._cell_counter = 1

@@ -71,7 +71,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         else:
             yield
         # ensure each test didn't give failures during ast transformation
-        exc = nbs().set_ast_transformer_raised(None)
+        exc = nbs().set_exception_raised_during_execution(None)
         if exc is not None:
             raise exc
         get_ipython().reset()  # reset ipython state

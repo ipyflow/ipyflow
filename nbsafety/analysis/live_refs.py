@@ -277,7 +277,7 @@ def compute_call_chain_live_symbols_and_cells(live: Set[DataSymbol]) -> Tuple[Se
         live |= {
             sym for sym in itertools.chain(live_symbols, called_symbols) if sym.is_globally_accessible
         }
-    return live, {called_dsym.timestamp for called_dsym in seen}
+    return live, {called_dsym.timestamp.cell_num for called_dsym in seen}
 
 
 def compute_live_dead_symbol_refs(

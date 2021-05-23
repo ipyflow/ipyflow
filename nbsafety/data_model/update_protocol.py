@@ -2,6 +2,7 @@
 import logging
 from typing import TYPE_CHECKING
 
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
@@ -54,13 +55,13 @@ class UpdateProtocol:
         for dsym in updated_symbols:
             if dsym.is_import or dsym in self.seen:
                 continue
-            dsym.updated_timestamps.add(nbs().cell_counter())
+            dsym.updated_timestamps.add(Timestamp.current())
             self.seen.add(dsym)
             containing_ns = dsym.containing_namespace
             if containing_ns is not None:
                 logger.warning('containing scope for %s: %s; ids %s, %s', dsym, containing_ns, dsym.obj_id, containing_ns.obj_id)
                 containing_ns.namespace_stale_symbols.discard(dsym)
-                containing_ns.max_descendent_timestamp = nbs().cell_counter()
+                containing_ns.max_descendent_timestamp = Timestamp.current()
                 self._collect_updated_symbols_and_refresh_namespaces(
                     nbs().aliases[containing_ns.obj_id], refresh_descendent_namespaces
                 )
@@ -127,7 +128,7 @@ class UpdateProtocol:
         if dsym not in nbs().updated_symbols:
             if dsym.should_mark_stale(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
-                dsym.required_timestamp = nbs().cell_counter()
+                dsym.required_timestamp = Timestamp.current()
                 self._propagate_staleness_to_namespace_parents(dsym, skip_seen_check=True)
                 self._propagate_staleness_to_namespace_children(dsym, skip_seen_check=True)
         for child in self._non_class_to_instance_children(dsym):

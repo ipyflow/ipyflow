@@ -37,7 +37,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
             node = AstEavesdropper(orig_to_copy_mapping).visit(node)
             node = StatementInserter(self._cell_id, orig_to_copy_mapping).visit(node)
         except Exception as e:
-            nbs().set_ast_transformer_raised(e)
+            nbs().set_exception_raised_during_execution(e)
             traceback.print_exc()
             raise e
         return node

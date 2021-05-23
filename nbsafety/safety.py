@@ -114,7 +114,7 @@ class NotebookSafety(singletons.NotebookSafety):
         #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
+        self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
         self.cell_counters_needing_typecheck: Set[int] = set()
         self._typecheck_error_cells: Set[CellId] = set()
         self._counter_by_cell_id: Dict[CellId, int] = {}
@@ -134,7 +134,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._cell_counter = 1
         self._recorded_cell_name_to_cell_num = True
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
-        self._ast_transformer_raised: Optional[Exception] = None
+        self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
@@ -172,14 +172,15 @@ class NotebookSafety(singletons.NotebookSafety):
         # only called in test context
         assert not self.settings.store_history
         for sym in self.all_data_symbols():
-            sym.last_used_cell_num = sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = 0
+            sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
+            sym.last_used_cell_num = -1
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time.clear()
         self._cell_counter = 1
 
-    def set_ast_transformer_raised(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
-        ret = self._ast_transformer_raised
-        self._ast_transformer_raised = new_val
+    def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
+        ret = self._exception_raised_during_execution
+        self._exception_raised_during_execution = new_val
         return ret
 
     def get_position(self, frame: FrameType) -> Tuple[Optional[int], int]:
@@ -264,6 +265,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             try:
                 checker_result = self._check_cell_and_resolve_symbols(cell_content)
+                if len(checker_result.live) > 0:
+                    print(self._last_execution_counter, cell_id, checker_result)
+                    print(self._counter_by_cell_id[cell_id], 'vs', max(sym.timestamp.cell_num for sym in checker_result.live))
                 stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
@@ -290,8 +294,8 @@ class NotebookSafety(singletons.NotebookSafety):
                     pass
 
                 if (
-                        self._get_max_timestamp_cell_num_for_symbols(checker_result.live) >
-                        self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
+                    self._get_max_timestamp_cell_num_for_symbols(checker_result.live) >
+                    self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
                 ) and cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
                     fresh_cells.append(cell_id)
             except SyntaxError:
@@ -386,10 +390,10 @@ class NotebookSafety(singletons.NotebookSafety):
         return ast.parse('\n'.join(lines))
 
     def _get_max_timestamp_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
-        max_timestamp = -1
+        max_timestamp_cell_num = -1
         for dsym in symbols:
-            max_timestamp = max(max_timestamp, dsym.timestamp)
-        return max_timestamp
+            max_timestamp_cell_num = max(max_timestamp_cell_num, dsym.timestamp.cell_num)
+        return max_timestamp_cell_num
 
     def _build_typecheck_slice(
         self, cell_id: CellId, content_by_cell_id: Dict[CellId, str], checker_result: CheckerResult
@@ -421,7 +425,7 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_symbols = set(dsym for dsym in live_symbols if dsym.is_stale)
         return CheckerResult(
             live=live_symbols,
-            live_cells={sym.timestamp for sym in live_symbols},
+            live_cells={sym.timestamp.cell_num for sym in live_symbols},
             live_cells_from_calls=live_cells_from_calls,
             dead=dead_symbols,
             stale=stale_symbols,
@@ -434,7 +438,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _stale_sym_warning(sym: DataSymbol):
         if not sym.is_stale:
             raise ValueError('Expected node with stale ancestor; got %s' % sym)
-        if sym.timestamp < 1:
+        if not sym.timestamp.is_initialized:
             return
         fresher_symbols = sym.fresher_ancestors
         if len(fresher_symbols) == 0:
@@ -518,7 +522,7 @@ class NotebookSafety(singletons.NotebookSafety):
             self._last_refused_code = cell
             return True
 
-        # For each of the live symbols, record their `defined_cell_num`
+        # For each of the live symbols, record their timestamp
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
             self.cell_counter_by_live_symbol[sym].add(self.cell_counter())
@@ -576,17 +580,17 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
                 if top_level_sym.is_import:
-                    cell_num_to_used_imports[used_time].add(top_level_sym)
+                    cell_num_to_used_imports[used_time.cell_num].add(top_level_sym)
                 else:
                     if sym_timestamp_when_used < used_time:
-                        cell_num_to_dynamic_cell_parents[used_time].add(sym_timestamp_when_used)
-                        cell_num_to_dynamic_inputs[used_time].add(top_level_sym)
-                        cell_num_to_dynamic_cell_children[sym_timestamp_when_used].add(used_time)
-                    cell_num_to_dynamic_outputs[sym_timestamp_when_used].add(top_level_sym)
+                        cell_num_to_dynamic_cell_parents[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
+                        cell_num_to_dynamic_inputs[used_time.cell_num].add(top_level_sym)
+                        cell_num_to_dynamic_cell_children[sym_timestamp_when_used.cell_num].add(used_time.cell_num)
+                    cell_num_to_dynamic_outputs[sym_timestamp_when_used.cell_num].add(top_level_sym)
             if not top_level_sym.is_import:
                 for updated_time in sym.updated_timestamps:
                     # TODO: distinguished between used / unused outputs?
-                    cell_num_to_dynamic_outputs[updated_time].add(top_level_sym)
+                    cell_num_to_dynamic_outputs[updated_time.cell_num].add(top_level_sym)
 
         cell_metadata: Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]] = {}
         all_relevant_cells = (
@@ -642,11 +646,11 @@ class NotebookSafety(singletons.NotebookSafety):
         for sym in self.all_data_symbols():
             for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
                 if sym_timestamp_when_used < used_time:
-                    cell_num_to_dynamic_deps[used_time].add(sym_timestamp_when_used)
+                    cell_num_to_dynamic_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
             if self.mut_settings.static_slicing_enabled:
                 for liveness_time, sym_timestamp_when_used in sym.timestamp_by_liveness_time.items():
-                    if sym_timestamp_when_used < liveness_time:
-                        cell_num_to_static_deps[liveness_time].add(sym_timestamp_when_used)
+                    if sym_timestamp_when_used.cell_num < liveness_time:
+                        cell_num_to_static_deps[liveness_time].add(sym_timestamp_when_used.cell_num)
 
         self._get_cell_dependencies(
             cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps
@@ -735,12 +739,13 @@ class NotebookSafety(singletons.NotebookSafety):
 
                 self._resync_symbols([
                     # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                    sym for sym in self.all_data_symbols() if sym.timestamp == self.cell_counter()
+                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == self.cell_counter()
                 ])
                 self._gc()
             except Exception as e:
-                if self.is_develop:
-                    logger.warning('Exception: %s', e)
+                # logger.exception('exception occurred during execution')
+                if self.is_test:
+                    self.set_exception_raised_during_execution(e)
             finally:
                 if not self.settings.store_history:
                     self._cell_counter += 1

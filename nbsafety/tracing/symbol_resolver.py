@@ -7,6 +7,7 @@ from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
@@ -217,13 +218,13 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
 
 
 def update_usage_info(symbols: Union[Optional[DataSymbol], Set[Optional[DataSymbol]]]):
-    cell_counter = nbs().cell_counter()
+    used_time = Timestamp.current()
     for sym in (symbols if symbols is not None and isinstance(symbols, set) else [symbols]):
         if sym is None:
             continue
-        sym.last_used_cell_num = cell_counter
-        logger.info('sym `%s` used in cell %d last updated in cell %d', sym, cell_counter, sym.timestamp)
-        sym.timestamp_by_used_time[cell_counter] = sym.timestamp
+        sym.last_used_cell_num = used_time.cell_num
+        logger.info('sym `%s` used in cell %d last updated in cell %d', sym, used_time.cell_num, sym.timestamp)
+        sym.timestamp_by_used_time[used_time] = sym.timestamp
 
 
 def resolve_rval_symbols(node: Union[str, ast.AST], should_update_usage_info: bool = True) -> Set[DataSymbol]:

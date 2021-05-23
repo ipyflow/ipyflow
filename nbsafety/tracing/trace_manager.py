@@ -14,6 +14,7 @@ from IPython import get_ipython
 from nbsafety import singletons
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, StandardMutation
@@ -535,8 +536,8 @@ class TraceManager(BaseTraceManager):
         if sym_for_obj is None and obj_name is not None:
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
-        if sym_for_obj is not None and sym_for_obj.timestamp < nbs().cell_counter():
-            sym_for_obj.timestamp_by_used_time[nbs().cell_counter()] = sym_for_obj.timestamp_excluding_ns_descendents
+        if sym_for_obj is not None and sym_for_obj.timestamp < Timestamp.current():
+            sym_for_obj.timestamp_by_used_time[Timestamp.current()] = sym_for_obj.timestamp_excluding_ns_descendents
         
         is_subscript = (event == TraceEvent.subscript)
 

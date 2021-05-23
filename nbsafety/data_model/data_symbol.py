@@ -73,22 +73,22 @@ class DataSymbol:
         # initialize at -1 since the corresponding piece of data could already be around,
         # and we don't want liveness checker to think this was newly created unless we
         # explicitly trace an update somewhere
-        self._timestamp: int = -1
+        self._timestamp: Timestamp = Timestamp.uninitialized()
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
-        self._defined_cell_num = self._timestamp
+        self._defined_cell_num = nbs().cell_counter()
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be stale
-        self.required_timestamp: int = self.timestamp
+        self.required_timestamp: Timestamp = self.timestamp
 
         # The execution counter of cell where this symbol was last used (-1 means it has net yet been used)
         self.last_used_cell_num: int = -1
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
-        self.timestamp_by_used_time: Dict[int, int] = {}
+        self.timestamp_by_used_time: Dict[Timestamp, Timestamp] = {}
         # History of definitions at time of liveness
-        self.timestamp_by_liveness_time: Dict[int, int] = {}
+        self.timestamp_by_liveness_time: Dict[int, Timestamp] = {}
         # All timestamps associated with this symbol
-        self.updated_timestamps: Set[int] = set()
+        self.updated_timestamps: Set[Timestamp] = set()
 
         self.fresher_ancestors: Set[DataSymbol] = set()
 
@@ -130,7 +130,7 @@ class DataSymbol:
         return self._timestamp
 
     @property
-    def timestamp(self) -> int:
+    def timestamp(self) -> Timestamp:
         ts = self._timestamp
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
@@ -458,8 +458,8 @@ class DataSymbol:
         if self.is_import:
             # skip updates for imported symbols
             # just bump the version if it's newly created
-            if self._timestamp == -1:
-                self._timestamp = nbs().cell_counter()
+            if not self._timestamp.is_initialized:
+                self._timestamp = Timestamp.current()
             return
         # if we get here, no longer implicit
         self._implicit = False
@@ -480,10 +480,10 @@ class DataSymbol:
                 continue
             new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
-        self.required_timestamp = -1
+        self.required_timestamp = Timestamp.uninitialized()
         equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
-            self.timestamp_by_used_time[nbs().cell_counter()] = self.timestamp
+            self.timestamp_by_used_time[Timestamp.current()] = self.timestamp
         if refresh:
             if not equal_to_old:
                 nbs().stmt_by_timestamp[Timestamp.current()] = tracer().prev_trace_stmt_in_cur_frame.stmt_node
@@ -504,13 +504,13 @@ class DataSymbol:
         bump_version=True,
         refresh_descendent_namespaces=False,
         refresh_namespace_stale=True,
-        timestamp: Optional[int] = None,
+        timestamp: Optional[Timestamp] = None,
         seen: Set[DataSymbol] = None,
     ):
         self._temp_disable_warnings = False
         self.fresher_ancestors.clear()
         if bump_version:
-            self._timestamp = nbs().cell_counter() if timestamp is None else timestamp
+            self._timestamp = Timestamp.current() if timestamp is None else timestamp
             ns = self.containing_namespace
             if ns is not None:
                 ns.max_descendent_timestamp = self._timestamp

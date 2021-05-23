@@ -13,6 +13,7 @@ except ImportError:
 
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
@@ -328,7 +329,7 @@ class NamespaceScope(Scope):
         nbs().namespaces[id(obj)] = self
         self._tombstone = False
         # this timestamp needs to be bumped in DataSymbol refresh()
-        self.max_descendent_timestamp = -1
+        self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 
@@ -463,8 +464,8 @@ class NamespaceScope(Scope):
             self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
-    def refresh(self):
-        self.max_descendent_timestamp = nbs().cell_counter()
+    def refresh(self) -> None:
+        self.max_descendent_timestamp = Timestamp.current()
 
     def get_earliest_ancestor_containing(self, obj_id: int, is_subscript: bool) -> Optional[NamespaceScope]:
         # TODO: test this properly

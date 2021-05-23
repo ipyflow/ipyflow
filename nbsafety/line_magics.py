@@ -70,7 +70,7 @@ def show_deps(symbols: str) -> Optional[str]:
                 *({child for child in children if child.is_user_accessible}
                   for children in dsym.children_by_cell_position.values())
             )
-            if dsym.required_timestamp > 0:
+            if dsym.required_timestamp.is_initialized:
                 dsym_extra_info = 'last updated {}; required {}'.format(dsym.timestamp, dsym.required_timestamp)
             else:
                 dsym_extra_info = 'defined in cell {}'.format(dsym.timestamp)

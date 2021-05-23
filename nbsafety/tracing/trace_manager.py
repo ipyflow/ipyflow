@@ -888,7 +888,11 @@ class TraceManager(BaseTraceManager):
                     # TODO: this is bad and I should feel bad. Need a better way to figure out which
                     #  stmt is executing than by using line numbers.
                     parent_node = nbs().parent_node_by_id.get(id(stmt_node), None)
-                    logger.error("node %s parent %s", ast.dump(stmt_node), None if parent_node is None else ast.dump(parent_node))
+                    if nbs().is_develop:
+                        logger.info(
+                            "node %s parent %s",
+                            ast.dump(stmt_node), None if parent_node is None else ast.dump(parent_node),
+                        )
                     if (
                         parent_node is not None
                         and getattr(parent_node, 'lineno', None) == lineno

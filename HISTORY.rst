@@ -252,3 +252,8 @@ History
 -------------------
 * Actually fix nbclassic bug;
 * Slight improvement to the lineno -> FunctionDef mapping (fixing some bugs);
+
+0.0.69 (2021-05-22)
+-------------------
+* Minor logging fix;
+* Minor no-op detection fix;

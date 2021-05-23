@@ -257,3 +257,4 @@ History
 -------------------
 * Minor logging fix;
 * Minor no-op detection fix;
+* Minor security fixes in npm packages;

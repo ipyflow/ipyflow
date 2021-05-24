@@ -28,4 +28,4 @@ class Timestamp(NamedTuple):
     def __eq__(self, other) -> bool:
         if not isinstance(other, Timestamp):
             raise TypeError("cannot compare non-timestamp value %s with timestamp %s" % (other, self))
-        return self._asdict().values() == other._asdict().values()
+        return tuple(self._asdict().values()) == tuple(other._asdict().values())

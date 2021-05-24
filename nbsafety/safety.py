@@ -38,9 +38,11 @@ from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
+    from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, TypeVar, Union
     from types import FrameType
     from nbsafety.types import CellId, SupportedIndexType
+
+    TimestampOrCounter = TypeVar('TimestampOrCounter', Timestamp, int)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -619,7 +621,7 @@ class NotebookSafety(singletons.NotebookSafety):
             }
         return cell_metadata
 
-    def compute_slice(self, cell_num: int) -> Dict[int, str]:
+    def compute_slice(self, cell_num: int, stmt_level: bool = False) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the cell with
         the specified execution counter.
@@ -635,30 +637,55 @@ class NotebookSafety(singletons.NotebookSafety):
         if cell_num not in self.cell_content_by_counter.keys():
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
-        dependencies: Set[int] = set()
-        cell_num_to_dynamic_deps: Dict[int, Set[int]] = defaultdict(set)
-        cell_num_to_static_deps: Dict[int, Set[int]] = defaultdict(set)
+        if stmt_level:
+            deps_stmt: Set[Timestamp] = self._compute_slice_impl(
+                Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
+            )
+            deps = {dep.cell_num for dep in deps_stmt}
+        else:
+            deps = self._compute_slice_impl(cell_num, set(), defaultdict(set), defaultdict(set))
+
+        return {dep: self.cell_content_by_counter[dep] for dep in deps}
+
+    def _compute_slice_impl(
+        self,
+        seed_ts: TimestampOrCounter,
+        dependencies: Set[TimestampOrCounter],
+        timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
+        cell_num_to_static_ts_deps: Dict[int, Set[TimestampOrCounter]],
+    ) -> Set[TimestampOrCounter]:
 
         for sym in self.all_data_symbols():
             for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
                 if sym_timestamp_when_used < used_time:
-                    cell_num_to_dynamic_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
+                    if isinstance(seed_ts, Timestamp):
+                        timestamp_to_dynamic_ts_deps[used_time].add(sym_timestamp_when_used)
+                    else:
+                        timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
             if self.mut_settings.static_slicing_enabled:
-                for liveness_time, sym_timestamp_when_used in sym.timestamp_by_liveness_time.items():
+                for liveness_time, sym_timestamp_when_used in list(sym.timestamp_by_liveness_time.items()):
                     if sym_timestamp_when_used.cell_num < liveness_time:
-                        cell_num_to_static_deps[liveness_time].add(sym_timestamp_when_used.cell_num)
+                        if isinstance(seed_ts, Timestamp):
+                            cell_num_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
+                        else:
+                            cell_num_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used.cell_num)
 
-        self._get_cell_dependencies(
-            cell_num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps
-        )
-        return {num: self.cell_content_by_counter[num] for num in dependencies}
+        # ensure we at least get the static deps
+        NotebookSafety._get_ts_dependencies(seed_ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps)
+        if isinstance(seed_ts, Timestamp):
+            for ts in list(timestamp_to_dynamic_ts_deps.keys()):
+                if ts.cell_num == seed_ts.cell_num:
+                    NotebookSafety._get_ts_dependencies(
+                        ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps
+                    )
+        return dependencies
 
-    def _get_cell_dependencies(
-        self,
-        cell_num: int,
-        dependencies: Set[int],
-        cell_num_to_dynamic_deps: Dict[int, Set[int]],
-        cell_num_to_static_deps: Dict[int, Set[int]],
+    @staticmethod
+    def _get_ts_dependencies(
+        timestamp: TimestampOrCounter,
+        dependencies: Set[TimestampOrCounter],
+        timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
+        cell_num_to_static_ts_deps: Dict[int, Set[TimestampOrCounter]],
     ) -> None:
         """
         For a given cell, this function recursively populates a set of
@@ -676,24 +703,32 @@ class NotebookSafety(singletons.NotebookSafety):
             None
         """
         # Base case: cell already in dependencies
-        if cell_num in dependencies or cell_num <= 0:
+        if timestamp in dependencies:
+            return
+        if isinstance(timestamp, int) and timestamp < 0:
+            return
+        if isinstance(timestamp, Timestamp) and not timestamp.is_initialized:
             return
 
         # Add current cell to dependencies
-        dependencies.add(cell_num)
+        dependencies.add(timestamp)
 
         # Retrieve cell numbers for the dependent symbols
         # Add dynamic and static dependencies
-        dep_cell_nums = cell_num_to_dynamic_deps[cell_num] | cell_num_to_static_deps[cell_num]
-        logger.info('dynamic cell deps for %d: %s', cell_num,
-                    cell_num_to_dynamic_deps[cell_num])
-        logger.info('static cell deps for %d: %s', cell_num,
-                    cell_num_to_static_deps[cell_num])
+        dep_timestamps = timestamp_to_dynamic_ts_deps[timestamp]
+        if isinstance(timestamp, Timestamp):
+            static_ts_deps = cell_num_to_static_ts_deps[timestamp.cell_num]
+        else:
+            static_ts_deps = cell_num_to_static_ts_deps[timestamp]
+        dep_timestamps |= static_ts_deps
+        logger.info('dynamic ts deps for %s: %s', timestamp, timestamp_to_dynamic_ts_deps[timestamp])
+        logger.info('static ts deps for %d: %s', timestamp, static_ts_deps)
 
         # For each dependent cell, recursively get their dependencies
-        for num in dep_cell_nums - dependencies:
-            self._get_cell_dependencies(
-                num, dependencies, cell_num_to_dynamic_deps, cell_num_to_static_deps)
+        for ts in dep_timestamps - dependencies:
+            NotebookSafety._get_ts_dependencies(
+                ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps
+            )
 
     async def safe_execute(self, cell: str, is_async: bool, run_cell_func):
         if self._saved_debug_message is not None:
@@ -846,7 +881,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def line_magic_name(self):
         return self._line_magic.__name__
 
-    def all_data_symbols(self):
+    def all_data_symbols(self) -> Iterable[DataSymbol]:
         for alias_set in self.aliases.values():
             yield from alias_set
 

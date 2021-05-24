@@ -246,7 +246,6 @@ class TraceManager(BaseTraceManager):
                 # `None` means use 'cur_frame_original_scope'
                 self.active_literal_scope: Optional[NamespaceScope] = None
 
-
     def stmt_counter(self) -> int:
         return self._stmt_counter
 

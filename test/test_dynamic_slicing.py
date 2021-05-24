@@ -25,7 +25,7 @@ def test_simple():
     run_cell('b = 2')
     run_cell('logging.info(a)')
     run_cell('c = a + b')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 4}, 'got %s' % deps
 
 
@@ -41,7 +41,7 @@ def foo():
     return Foo()
 """)
     run_cell('logging.info(foo().foo())')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 3, 4}, 'got %s' % deps
 
 
@@ -49,7 +49,7 @@ def test_nested_symbol_usage():
     run_cell('lst = [1, 2, 3, 4, 5]')
     run_cell('lst[1] = 3')
     run_cell('logging.info(lst[1])')
-    deps = set(nbs().get_cell_dependencies(3).keys())
+    deps = set(nbs().compute_slice(3).keys())
     assert deps == {1, 2, 3}, 'got %s' % deps
 
 
@@ -58,7 +58,7 @@ def test_nested_symbol_usage_with_variable_subscript():
     run_cell('lst = [1, 2, 3, 4, 5]')
     run_cell('lst[x] = 3')
     run_cell('logging.info(lst[1])')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 3, 4}, 'got %s' % deps
 
 
@@ -69,7 +69,7 @@ def test_list_mutations():
     run_cell('lst.append(2)')
     run_cell('lst.append(3); lst.append(4)')
     run_cell('logging.info(lst)')
-    deps = set(nbs().get_cell_dependencies(5).keys())
+    deps = set(nbs().compute_slice(5).keys())
     assert deps == {2, 3, 4, 5}, 'got %s' % deps
 
 
@@ -77,7 +77,7 @@ def test_imports():
     run_cell('import numpy as np')
     run_cell('arr = np.zeros((5,))')
     run_cell('logging.info(arr * 3)')
-    deps = set(nbs().get_cell_dependencies(3).keys())
+    deps = set(nbs().compute_slice(3).keys())
     assert deps == {1, 2, 3}, 'got %s' % deps
 
 
@@ -87,7 +87,7 @@ def test_handle_stale():
     run_cell('a = 2')
     run_cell('logging.info(b)')
     run_cell('logging.info(b)')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 4}, 'got %s' % deps
 
 
@@ -96,7 +96,7 @@ def test_multiple_versions_captured():
     run_cell('logging.info(x); y = 7')
     run_cell('x = 5')
     run_cell('logging.info(x + y)')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 3, 4}, 'got %s' % deps
 
 
@@ -115,7 +115,7 @@ else:
 """)
     run_cell('x = 5')
     run_cell('logging.info(x + y)')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 3, 4}, 'got %s' % deps
 
 
@@ -134,7 +134,7 @@ else:
 """)
     run_cell('x = 5')
     run_cell('logging.info(y)')
-    deps = set(nbs().get_cell_dependencies(4).keys())
+    deps = set(nbs().compute_slice(4).keys())
     assert deps == {1, 2, 4}, 'got %s' % deps
 
 
@@ -142,7 +142,7 @@ def test_parent_usage_includes_child_update():
     run_cell('lst = [3]')
     run_cell('lst[0] += 1')
     run_cell('lst2 = lst + [5]')
-    deps = set(nbs().get_cell_dependencies(3).keys())
+    deps = set(nbs().compute_slice(3).keys())
     assert deps == {1, 2, 3}, 'got %s' % deps
 
 
@@ -163,7 +163,7 @@ class Foo:
     run_cell("obj.bar()[name]")
     run_cell("something_i_dont_care_about = obj.bar()[name]")
     run_cell("something_i_care_about = obj.bar()[name]")
-    deps = set(nbs().get_cell_dependencies(6).keys())
+    deps = set(nbs().compute_slice(6).keys())
     assert deps == {1, 2, 3, 6}, 'got %s' % deps
 
 
@@ -202,7 +202,7 @@ class Bar:
     run_cell("x = 1")
     run_cell("the_dictionary = {'something': 1}")
     run_cell("Foo().new(0).foo(1)")
-    deps = set(nbs().get_cell_dependencies(5).keys())
+    deps = set(nbs().compute_slice(5).keys())
     assert deps == {1, 2, 4, 5}, 'got %s' % deps
 
 
@@ -245,7 +245,7 @@ y = Foo().new(0).foo(1)
 z = Foo().new(1).bar(0)
 """)
     run_cell("logging.info(z)")
-    deps = set(nbs().get_cell_dependencies(6).keys())
+    deps = set(nbs().compute_slice(6).keys())
     assert deps == {1, 2, 3, 4, 5, 6}, 'got %s' % deps
 
 
@@ -257,7 +257,7 @@ def test_non_relevant_child_symbol_modified():
     run_cell('lst[0] += 1')
     run_cell('lst[0] += 1')
     run_cell('logging.info(lst[1])')
-    deps = set(nbs().get_cell_dependencies(7).keys())
+    deps = set(nbs().compute_slice(7).keys())
     assert deps == {1, 4, 7}, 'got %s' % deps
 
 
@@ -268,7 +268,7 @@ def test_dynamic_only_increment():
         run_cell('x = 0')
         run_cell('x += 1')
         run_cell('logging.info(x)')
-        deps = set(nbs().get_cell_dependencies(3).keys())
+        deps = set(nbs().compute_slice(3).keys())
         assert deps == {1, 2, 3}, 'got %s' % deps
     finally:
         nbs().mut_settings.static_slicing_enabled = orig_enabled
@@ -289,7 +289,7 @@ def test_dynamic_only_variable_subscript():
         run_cell('lst[x] += 1')
         run_cell('x += 1')
         run_cell('logging.info(lst[x])')
-        deps = set(nbs().get_cell_dependencies(11).keys())
+        deps = set(nbs().compute_slice(11).keys())
         assert deps == {1, 2, 5, 6, 7, 10, 11}, 'got %s' % deps
     finally:
         nbs().mut_settings.static_slicing_enabled = orig_enabled
@@ -311,7 +311,7 @@ def test_handler():
     except:
         success = False
     """)
-        deps = set(nbs().get_cell_dependencies(2).keys())
+        deps = set(nbs().compute_slice(2).keys())
         assert deps == {2}, 'got %s' % deps
     finally:
         nbs().mut_settings.static_slicing_enabled = orig_enabled

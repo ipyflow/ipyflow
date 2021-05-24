@@ -490,8 +490,12 @@ class DataSymbol:
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.timestamp_by_used_time[Timestamp.current()] = self.timestamp
         if refresh:
-            if not equal_to_old:
-                nbs().stmt_by_timestamp[Timestamp.current()] = tracer().prev_trace_stmt_in_cur_frame.stmt_node
+            if not equal_to_old and tracer().cur_frame_original_scope.is_global:
+                parent_by_stmt_id = nbs().parent_node_by_id
+                stmt_id_to_use = id(tracer().prev_trace_stmt_in_cur_frame.stmt_node)
+                while stmt_id_to_use in parent_by_stmt_id:
+                    stmt_id_to_use = id(parent_by_stmt_id[stmt_id_to_use])
+                nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
             self.refresh(
                 bump_version=not equal_to_old,
                 # rationale: if this is a mutation for which we have more precise information,

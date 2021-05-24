@@ -109,7 +109,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
-        self.stmt_by_timestamp: Dict[Timestamp, ast.stmt] = {}
+        self.stmt_id_by_timestamp: Dict[Timestamp, int] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}
@@ -622,7 +622,7 @@ class NotebookSafety(singletons.NotebookSafety):
             }
         return cell_metadata
 
-    def get_cell_dependencies(self, cell_num: int) -> Dict[int, str]:
+    def compute_slice(self, cell_num: int) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the cell with
         the specified execution counter.

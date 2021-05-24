@@ -153,7 +153,7 @@ def make_slice(line: str) -> Optional[str]:
             logger.warning(usage)
             return None
     try:
-        deps = list(nbs().get_cell_dependencies(cell_num).items())
+        deps = list(nbs().compute_slice(cell_num).items())
         deps.sort()
         return '\n\n'.join(f'# Cell {cell_num}\n' + content for cell_num, content in deps)
     except CellNotRunYetError:

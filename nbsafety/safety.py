@@ -264,9 +264,6 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             try:
                 checker_result = self._check_cell_and_resolve_symbols(cell_content)
-                if len(checker_result.live) > 0:
-                    print(self._last_execution_counter, cell_id, checker_result)
-                    print(self._counter_by_cell_id[cell_id], 'vs', max(sym.timestamp.cell_num for sym in checker_result.live))
                 stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols

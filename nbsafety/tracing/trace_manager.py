@@ -361,6 +361,7 @@ class TraceManager(BaseTraceManager):
             self._handle_call_transition(trace_stmt)
         if event == TraceEvent.return_:
             self._handle_return_transition(trace_stmt, ret)
+        self.prev_trace_stmt = trace_stmt
         self.prev_event = event
 
     @staticmethod
@@ -822,7 +823,6 @@ class TraceManager(BaseTraceManager):
             trace_stmt = TraceStatement(frame, cast(ast.stmt, nbs().ast_node_by_id[stmt_id]))
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
-        self.prev_trace_stmt = trace_stmt
         if not self.tracing_enabled:
             assert not self.tracing_reset_pending
             self._enable_tracing()

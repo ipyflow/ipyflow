@@ -1,7 +1,9 @@
 # -*- coding: future_annotations -*-
+import argparse
 import ast
 import astunparse
 import logging
+import shlex
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model.data_symbol import DataSymbol
@@ -140,20 +142,21 @@ def set_highlights(cmd: str, rest: str) -> None:
             logger.warning(usage)
 
 
+_SLICE_PARSER = argparse.ArgumentParser('slice')
+_SLICE_PARSER.add_argument('cell_num', nargs='?', type=int, default=None)
+_SLICE_PARSER.add_argument('--stmt', '--stmts', action='store_true')
+
+
 def make_slice(line: str) -> Optional[str]:
-    usage = 'Usage: %safety slice [cell_num]'
-    if line == '':
-        # subtract 1 because it will be incremented
-        # by the time this is running
-        cell_num = cell_counter() - 1
-    else:
-        try:
-            cell_num = int(line)
-        except:
-            logger.warning(usage)
-            return None
     try:
-        deps = list(nbs().compute_slice(cell_num).items())
+        args = _SLICE_PARSER.parse_args(shlex.split(line))
+    except:
+        return None
+    cell_num = args.cell_num
+    if cell_num is None:
+        cell_num = cell_counter() - 1
+    try:
+        deps = list(nbs().compute_slice(cell_num, stmt_level=args.stmt).items())
         deps.sort()
         return '\n\n'.join(f'# Cell {cell_num}\n' + content for cell_num, content in deps)
     except CellNotRunYetError:

@@ -493,8 +493,12 @@ class DataSymbol:
             if not equal_to_old and tracer().cur_frame_original_scope.is_global:
                 parent_by_stmt_id = nbs().parent_node_by_id
                 stmt_id_to_use = id(tracer().prev_trace_stmt_in_cur_frame.stmt_node)
-                while stmt_id_to_use in parent_by_stmt_id:
-                    stmt_id_to_use = id(parent_by_stmt_id[stmt_id_to_use])
+                while True:
+                    parent_stmt = parent_by_stmt_id.get(stmt_id_to_use, None)
+                    if parent_stmt is None or isinstance(parent_stmt, ast.Module):
+                        break
+                    else:
+                        stmt_id_to_use = id(parent_stmt)
                 nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
             self.refresh(
                 bump_version=not equal_to_old,

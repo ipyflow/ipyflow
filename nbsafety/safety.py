@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 import ast
+import astunparse
 import asyncio
 from collections import defaultdict
 from contextlib import contextmanager
@@ -641,11 +642,19 @@ class NotebookSafety(singletons.NotebookSafety):
             deps_stmt: Set[Timestamp] = self._compute_slice_impl(
                 Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
             )
-            deps = {dep.cell_num for dep in deps_stmt}
+            stmts_by_cell_num = defaultdict(list)
+            for ts in sorted(deps_stmt):
+                if ts.cell_num >= cell_num:
+                    break
+                stmt = self.ast_node_by_id.get(self.stmt_id_by_timestamp.get(ts, None), None)
+                if stmt is not None:
+                    stmts_by_cell_num[ts.cell_num].append(astunparse.unparse(stmt).strip())
+            ret = {ctr: '\n'.join(stmts) for ctr, stmts in stmts_by_cell_num.items()}
+            ret[cell_num] = self.cell_content_by_counter[cell_num]
+            return ret
         else:
-            deps = self._compute_slice_impl(cell_num, set(), defaultdict(set), defaultdict(set))
-
-        return {dep: self.cell_content_by_counter[dep] for dep in deps}
+            deps: Set[int] = self._compute_slice_impl(cell_num, set(), defaultdict(set), defaultdict(set))
+            return {dep: self.cell_content_by_counter[dep] for dep in deps}
 
     def _compute_slice_impl(
         self,

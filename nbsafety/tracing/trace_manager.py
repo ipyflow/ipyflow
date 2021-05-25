@@ -226,6 +226,8 @@ class TraceManager(BaseTraceManager):
             self.mutations: List[Mutation] = []
             self.mutation_candidates: List[MutationCandidate] = []
             self.saved_assign_rhs_obj_id: Optional[int] = None
+            # this one gets set regardless of whether tracing enabled
+            self.next_stmt_node_id: Optional[NodeId] = None
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = nbs().global_scope
@@ -809,6 +811,7 @@ class TraceManager(BaseTraceManager):
 
     @register_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
+        self.next_stmt_node_id = stmt_id
         if stmt_id in self.seen_stmts:
             return
         # logger.warning('reenable tracing: %s', site_id)
@@ -887,6 +890,10 @@ class TraceManager(BaseTraceManager):
 
         if event == TraceEvent.after_stmt:
             assert stmt_node is not None
+        elif event == TraceEvent.return_ and self.next_stmt_node_id is not None:
+            # this branch necessary for python < 3.8 where the frame
+            # position maps to the calling location instead of the return
+            stmt_node = cast(ast.stmt, nbs().ast_node_by_id[self.next_stmt_node_id])
         else:
             try:
                 stmt_node = nbs().statement_cache[cell_num][lineno]

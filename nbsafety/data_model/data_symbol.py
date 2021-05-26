@@ -449,6 +449,20 @@ class DataSymbol:
             return False
         return True
 
+    @staticmethod
+    def _map_timestamp_to_stmt_if_outermost_frame():
+        if not tracer().cur_frame_original_scope.is_global:
+            return
+        parent_by_stmt_id = nbs().parent_node_by_id
+        stmt_id_to_use = id(tracer().prev_trace_stmt_in_cur_frame.stmt_node)
+        while True:
+            parent_stmt = parent_by_stmt_id.get(stmt_id_to_use, None)
+            if parent_stmt is None or isinstance(parent_stmt, ast.Module):
+                break
+            else:
+                stmt_id_to_use = id(parent_stmt)
+        nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
+
     def update_deps(
         self,
         new_deps: Set[DataSymbol],
@@ -465,6 +479,7 @@ class DataSymbol:
             # just bump the version if it's newly created
             if not self._timestamp.is_initialized:
                 self._timestamp = Timestamp.current()
+                DataSymbol._map_timestamp_to_stmt_if_outermost_frame()
             return
         # if we get here, no longer implicit
         self._implicit = False
@@ -490,16 +505,8 @@ class DataSymbol:
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.timestamp_by_used_time[Timestamp.current()] = self.timestamp
         if refresh:
-            if not equal_to_old and tracer().cur_frame_original_scope.is_global:
-                parent_by_stmt_id = nbs().parent_node_by_id
-                stmt_id_to_use = id(tracer().prev_trace_stmt_in_cur_frame.stmt_node)
-                while True:
-                    parent_stmt = parent_by_stmt_id.get(stmt_id_to_use, None)
-                    if parent_stmt is None or isinstance(parent_stmt, ast.Module):
-                        break
-                    else:
-                        stmt_id_to_use = id(parent_stmt)
-                nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
+            if not equal_to_old:
+                DataSymbol._map_timestamp_to_stmt_if_outermost_frame()
             self.refresh(
                 bump_version=not equal_to_old,
                 # rationale: if this is a mutation for which we have more precise information,

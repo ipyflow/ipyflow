@@ -639,7 +639,9 @@ class TraceManager(BaseTraceManager):
                                 pass
                         elif isinstance(mutation_event, ListInsert):
                             mutation_event.insert_pos = recorded_arg_objs[0]
-                        self.mutations.append((obj_id, mutation_event, recorded_arg_dsyms, recorded_arg_objs))
+                        if obj_id != id(logging):
+                            # ignore calls to logging.whatever(...)
+                            self.mutations.append((obj_id, mutation_event, recorded_arg_dsyms, recorded_arg_objs))
                     else:
                         if self.sym_for_obj_calling_method is not None:
                             loaded_sym = self.sym_for_obj_calling_method

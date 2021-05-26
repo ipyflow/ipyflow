@@ -178,6 +178,7 @@ class NotebookSafety(singletons.NotebookSafety):
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time.clear()
+        self.stmt_id_by_timestamp.clear()
         self._cell_counter = 1
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
@@ -639,27 +640,39 @@ class NotebookSafety(singletons.NotebookSafety):
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
         if stmt_level:
-            deps_stmt: Set[Timestamp] = self._compute_slice_impl(
-                Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
-            )
-            stmts_by_cell_num = defaultdict(list)
-            seen_stmt_ids = set()
-            for ts in sorted(deps_stmt):
-                if ts.cell_num > cell_num:
-                    break
-                stmt_id = self.stmt_id_by_timestamp.get(ts, None)
-                if stmt_id is None or stmt_id in seen_stmt_ids:
-                    continue
-                seen_stmt_ids.add(stmt_id)
-                stmt = self.ast_node_by_id.get(stmt_id, None)
-                if stmt is not None:
-                    stmts_by_cell_num[ts.cell_num].append(astunparse.unparse(stmt).strip())
-            ret = {ctr: '\n'.join(stmts) for ctr, stmts in stmts_by_cell_num.items()}
+            stmts_by_cell_num = self.compute_slice_stmts(cell_num)
+            stmts_by_cell_num.pop(cell_num, None)
+            ret = {
+                ctr: '\n'.join(ast.unparse(stmt).strip() for stmt in stmts)
+                for ctr, stmts in stmts_by_cell_num.items()
+            }
             ret[cell_num] = self.cell_content_by_counter[cell_num]
             return ret
         else:
             deps: Set[int] = self._compute_slice_impl(cell_num, set(), defaultdict(set), defaultdict(set))
             return {dep: self.cell_content_by_counter[dep] for dep in deps}
+
+    def compute_slice_stmts(self, cell_num: int) -> Dict[int, List[ast.stmt]]:
+        if cell_num not in self.cell_content_by_counter.keys():
+            raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
+
+        deps_stmt: Set[Timestamp] = self._compute_slice_impl(
+            Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
+        )
+        stmts_by_cell_num = defaultdict(list)
+        seen_stmt_ids = set()
+        for ts in sorted(deps_stmt):
+            if ts.cell_num > cell_num:
+                break
+            stmt_id = self.stmt_id_by_timestamp.get(ts, None)
+            if stmt_id is None or stmt_id in seen_stmt_ids:
+                continue
+            seen_stmt_ids.add(stmt_id)
+            stmt = self.ast_node_by_id.get(stmt_id, None)
+            if stmt is not None:
+                stmts_by_cell_num[ts.cell_num].append(stmt)
+        stmts_by_cell_num[cell_num] = list(ast.parse(self.cell_content_by_counter[cell_num]).body)
+        return cast("Dict[int, List[ast.stmt]]", dict(stmts_by_cell_num))
 
     def _compute_slice_impl(
         self,
@@ -685,7 +698,9 @@ class NotebookSafety(singletons.NotebookSafety):
                             cell_num_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used.cell_num)
 
         # ensure we at least get the static deps
-        NotebookSafety._get_ts_dependencies(seed_ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps)
+        NotebookSafety._get_ts_dependencies(
+            seed_ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps
+        )
         if isinstance(seed_ts, Timestamp):
             for ts in list(timestamp_to_dynamic_ts_deps.keys()):
                 if ts.cell_num == seed_ts.cell_num:

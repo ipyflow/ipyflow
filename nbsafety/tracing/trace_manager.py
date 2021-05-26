@@ -801,6 +801,18 @@ class TraceManager(BaseTraceManager):
         sym.stmt_node = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
+    def _map_timestamp_to_stmt_and_bump_counter(self):
+        parent_by_stmt_id = nbs().parent_node_by_id
+        stmt_id_to_use = id(self.prev_trace_stmt_in_cur_frame.stmt_node)
+        while True:
+            parent_stmt = parent_by_stmt_id.get(stmt_id_to_use, None)
+            if parent_stmt is None or isinstance(parent_stmt, ast.Module):
+                break
+            else:
+                stmt_id_to_use = id(parent_stmt)
+        nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
+        self._stmt_counter += 1
+
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         try:
@@ -812,7 +824,7 @@ class TraceManager(BaseTraceManager):
             return ret_expr
         finally:
             if self.cur_frame_original_scope.is_global:
-                self._stmt_counter += 1
+                self._map_timestamp_to_stmt_and_bump_counter()
 
     @register_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:

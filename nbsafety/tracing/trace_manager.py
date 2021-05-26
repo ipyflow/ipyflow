@@ -801,13 +801,16 @@ class TraceManager(BaseTraceManager):
 
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
-        self._stmt_counter += 1
-        if stmt_id in self.seen_stmts:
+        try:
+            if stmt_id in self.seen_stmts:
+                return ret_expr
+            stmt = nbs().ast_node_by_id.get(stmt_id, None)
+            if stmt is not None:
+                self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
             return ret_expr
-        stmt = nbs().ast_node_by_id.get(stmt_id, None)
-        if stmt is not None:
-            self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
-        return ret_expr
+        finally:
+            if self.cur_frame_original_scope.is_global:
+                self._stmt_counter += 1
 
     @register_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:

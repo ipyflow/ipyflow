@@ -643,10 +643,15 @@ class NotebookSafety(singletons.NotebookSafety):
                 Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
             )
             stmts_by_cell_num = defaultdict(list)
+            seen_stmt_ids = set()
             for ts in sorted(deps_stmt):
-                if ts.cell_num >= cell_num:
+                if ts.cell_num > cell_num:
                     break
-                stmt = self.ast_node_by_id.get(self.stmt_id_by_timestamp.get(ts, None), None)
+                stmt_id = self.stmt_id_by_timestamp.get(ts, None)
+                if stmt_id is None or stmt_id in seen_stmt_ids:
+                    continue
+                seen_stmt_ids.add(stmt_id)
+                stmt = self.ast_node_by_id.get(stmt_id, None)
                 if stmt is not None:
                     stmts_by_cell_num[ts.cell_num].append(astunparse.unparse(stmt).strip())
             ret = {ctr: '\n'.join(stmts) for ctr, stmts in stmts_by_cell_num.items()}

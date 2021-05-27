@@ -2,7 +2,7 @@
 import ast
 import logging
 import traceback
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from nbsafety.singletons import nbs
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper

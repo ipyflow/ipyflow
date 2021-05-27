@@ -7,9 +7,10 @@ from nbsafety.analysis.symbol_edges import get_symbol_edges
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert
-from nbsafety.tracing.symbol_resolver import resolve_rval_symbols, update_usage_info
+from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
@@ -287,7 +288,7 @@ class TraceStatement:
         for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
             propagate_to_namespace_descendents = not isinstance(mutation_event, (ListAppend, ListExtend, ListInsert))
             logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
-            update_usage_info(mutation_arg_dsyms)
+            Timestamp.update_usage_info(mutation_arg_dsyms)
             if isinstance(mutation_event, ArgMutate):
                 for mutated_sym in mutation_arg_dsyms:
                     if mutated_sym is None:
@@ -305,7 +306,7 @@ class TraceStatement:
                 if isinstance(mutation_event, (ListAppend, ListInsert)):
                     mutation_arg_dsyms, mutation_upsert_deps = mutation_upsert_deps, mutation_arg_dsyms
                 self._handle_list_mutation(mutation_event, mutated_obj_id, mutation_upsert_deps)
-            update_usage_info(nbs().aliases[mutated_obj_id])
+            Timestamp.update_usage_info(nbs().aliases[mutated_obj_id])
             for mutated_sym in nbs().aliases[mutated_obj_id]:
                 mutated_sym.update_deps(
                     mutation_arg_dsyms,

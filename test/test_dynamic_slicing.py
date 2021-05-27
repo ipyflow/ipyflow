@@ -62,14 +62,44 @@ def test_nested_symbol_usage():
 
 
 def test_nested_symbol_usage_with_variable_subscript():
-    run_cell('x = 1')
-    run_cell('lst = [1, 2, 3, 4, 5]')
-    run_cell('lst[x] = 3')
-    run_cell('logging.info(lst[1])')
-    deps = set(nbs().compute_slice(4).keys())
-    assert deps == {1, 2, 3, 4}, 'got %s' % deps
-    slice_size = num_stmts_in_slice(4)
-    assert slice_size == 4, 'got %d' % slice_size
+    for static_slicing_enabled in [True, False]:
+        orig_enabled = nbs().mut_settings.static_slicing_enabled
+        try:
+            nbs().mut_settings.static_slicing_enabled = static_slicing_enabled
+            run_cell('x = 1')
+            run_cell('lst = [1, 2, 3, 4, 5]')
+            run_cell('lst[x] = 3')
+            run_cell('logging.info(lst[1])')
+            deps = set(nbs().compute_slice(4).keys())
+            assert deps == {1, 2, 3, 4}, 'got %s' % deps
+            slice_size = num_stmts_in_slice(4)
+            assert slice_size == 4, 'got %d' % slice_size
+        finally:
+            nbs().mut_settings.static_slicing_enabled = orig_enabled
+
+
+def test_liveness_timestamps():
+    orig_dynamic_enabled = nbs().mut_settings.dynamic_slicing_enabled
+    orig_static_enabled = nbs().mut_settings.dynamic_slicing_enabled
+    try:
+        nbs().mut_settings.dynamic_slicing_enabled = False
+        nbs().mut_settings.static_slicing_enabled = True
+        run_cell("""
+x = 0
+if True:
+    y = 1
+else:
+    y = 2
+""")
+        run_cell('z = 42')
+        run_cell('logging.info(x + 1)')
+        deps = set(nbs().compute_slice(3).keys())
+        assert deps == {1, 3}, 'got %s' % deps
+        slice_size = num_stmts_in_slice(3)
+        assert slice_size == 2, 'got %d' % slice_size
+    finally:
+        nbs().mut_settings.dynamic_slicing_enabled = orig_dynamic_enabled
+        nbs().mut_settings.static_slicing_enabled = orig_static_enabled
 
 
 def test_list_mutations():

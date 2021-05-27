@@ -84,7 +84,7 @@ class DataSymbol:
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.timestamp_by_used_time: Dict[Timestamp, Timestamp] = {}
         # History of definitions at time of liveness
-        self.timestamp_by_liveness_time: Dict[int, Timestamp] = {}
+        self.timestamp_by_liveness_time_by_cell_counter: Dict[int, Dict[Timestamp, Timestamp]] = defaultdict(dict)
         # All timestamps associated with this symbol
         self.updated_timestamps: Set[Timestamp] = set()
 
@@ -488,7 +488,7 @@ class DataSymbol:
         self.required_timestamp = Timestamp.uninitialized()
         equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
-            self.timestamp_by_used_time[Timestamp.current()] = self.timestamp
+            Timestamp.update_usage_info(self)
         if refresh:
             self.refresh(
                 bump_version=not equal_to_old,

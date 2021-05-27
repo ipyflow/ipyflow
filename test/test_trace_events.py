@@ -66,6 +66,7 @@ def test_recorded_events_simple():
         TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
 
 
@@ -82,6 +83,7 @@ def test_recorded_events_two_stmts():
         TraceEvent.after_list_literal,
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
 
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
@@ -92,6 +94,7 @@ def test_recorded_events_two_stmts():
         TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
 
 
@@ -118,6 +121,7 @@ def test_nested_chains_no_call():
         TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
 
 
@@ -139,6 +143,7 @@ def test_list_nested_in_dict():
         TraceEvent.after_dict_literal,
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
 
 
@@ -152,6 +157,7 @@ def foo(x):
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
     RECORDED_EVENTS.clear()
     run_cell('foo([42])')
@@ -175,6 +181,7 @@ def foo(x):
         TraceEvent.after_call,
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
 
 
@@ -192,4 +199,5 @@ def test_lambda_in_tuple():
         TraceEvent.after_tuple_literal,
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS

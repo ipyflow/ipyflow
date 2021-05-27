@@ -45,12 +45,20 @@ class StatementMapper(ast.NodeVisitor):
                 # to yield trace frames that use the lineno of the first decorator
                 for decorator in getattr(nc, 'decorator_list', []):
                     self.line_to_stmt_map[decorator.lineno] = nc
-            nc_body = getattr(nc, 'body', [])
-            try:
-                for child in nc_body:
-                    self.parent_map[id(child)] = nc
-            except TypeError:
-                self.parent_map[id(nc_body)] = nc
+                nc_body = getattr(nc, 'body', [])
+                try:
+                    for child in nc_body:
+                        if isinstance(child, ast.AST):
+                            self.parent_map[id(child)] = nc
+                except TypeError:
+                    self.parent_map[id(nc_body)] = nc
+                for name, field in ast.iter_fields(nc):
+                    if name == 'body':
+                        continue
+                    if isinstance(field, list):
+                        for child in field:
+                            if isinstance(child, ast.AST):
+                                self.parent_map[id(child)] = nc
         return orig_to_copy_mapping
 
     def visit(self, node):

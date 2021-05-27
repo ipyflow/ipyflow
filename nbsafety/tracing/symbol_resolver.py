@@ -217,20 +217,10 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         pass
 
 
-def update_usage_info(symbols: Union[Optional[DataSymbol], Set[Optional[DataSymbol]]]):
-    used_time = Timestamp.current()
-    for sym in (symbols if symbols is not None and isinstance(symbols, set) else [symbols]):
-        if sym is None:
-            continue
-        if nbs().is_develop:
-            logger.info('sym `%s` used in cell %d last updated in cell %d', sym, used_time.cell_num, sym.timestamp)
-        sym.timestamp_by_used_time[used_time] = sym.timestamp
-
-
 def resolve_rval_symbols(node: Union[str, ast.AST], should_update_usage_info: bool = True) -> Set[DataSymbol]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     rval_symbols = ResolveRvalSymbols()(node)
     if should_update_usage_info:
-        update_usage_info(rval_symbols)
+        Timestamp.update_usage_info(rval_symbols)
     return rval_symbols

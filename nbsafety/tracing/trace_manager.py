@@ -205,7 +205,7 @@ def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTr
 class TraceManager(BaseTraceManager):
     def __init__(self):
         super().__init__()
-        self._stmt_counter = 0
+        self._module_stmt_counter = 0
         self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
@@ -248,8 +248,8 @@ class TraceManager(BaseTraceManager):
                 # `None` means use 'cur_frame_original_scope'
                 self.active_literal_scope: Optional[NamespaceScope] = None
 
-    def stmt_counter(self) -> int:
-        return self._stmt_counter
+    def module_stmt_counter(self) -> int:
+        return self._module_stmt_counter
 
     # TODO: use stack mechanism to automate this?
     def after_stmt_reset_hook(self) -> None:
@@ -518,6 +518,7 @@ class TraceManager(BaseTraceManager):
         event: TraceEvent,
         *_,
         attr_or_subscript: AttrSubVal,
+        subscript_live_refs: Optional[List[str]],
         ctx: str,
         call_context: bool,
         top_level_node_id: NodeId,
@@ -538,9 +539,15 @@ class TraceManager(BaseTraceManager):
         if sym_for_obj is None and obj_name is not None:
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
-        if sym_for_obj is not None and sym_for_obj.timestamp < Timestamp.current():
-            sym_for_obj.timestamp_by_used_time[Timestamp.current()] = sym_for_obj.timestamp_excluding_ns_descendents
-        
+        if sym_for_obj is not None:
+            Timestamp.update_usage_info(sym_for_obj, exclude_ns=True)
+
+        if subscript_live_refs is not None:
+            for live_ref in subscript_live_refs:
+                live_ref_dsym = self.cur_frame_original_scope.lookup_data_symbol_by_name(live_ref)
+                if live_ref_dsym is not None:
+                    Timestamp.update_usage_info(live_ref_dsym)
+
         is_subscript = (event == TraceEvent.subscript)
 
         obj_id = id(obj)
@@ -801,7 +808,7 @@ class TraceManager(BaseTraceManager):
         sym.stmt_node = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
-    def _map_timestamp_to_stmt_and_bump_counter(self):
+    def _relate_timestamp_and_stmt_and_bump_counter(self):
         parent_by_stmt_id = nbs().parent_node_by_id
         stmt_id_to_use = id(self.prev_trace_stmt_in_cur_frame.stmt_node)
         while True:
@@ -811,20 +818,21 @@ class TraceManager(BaseTraceManager):
             else:
                 stmt_id_to_use = id(parent_stmt)
         nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
-        self._stmt_counter += 1
+        self._module_stmt_counter += 1
 
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
-        try:
-            if stmt_id in self.seen_stmts:
-                return ret_expr
-            stmt = nbs().ast_node_by_id.get(stmt_id, None)
-            if stmt is not None:
-                self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
+        if stmt_id in self.seen_stmts:
             return ret_expr
-        finally:
-            if self.cur_frame_original_scope.is_global:
-                self._map_timestamp_to_stmt_and_bump_counter()
+        stmt = nbs().ast_node_by_id.get(stmt_id, None)
+        if stmt is not None:
+            self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
+        return ret_expr
+
+    @register_handler(TraceEvent.after_module_stmt)
+    def after_module_stmt(self, *_, **__):
+        assert self.cur_frame_original_scope.is_global
+        self._relate_timestamp_and_stmt_and_bump_counter()
 
     @register_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:

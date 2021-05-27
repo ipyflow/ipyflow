@@ -8,9 +8,10 @@ from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymb
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope
+from nbsafety.data_model.timestamp import Timestamp
 
 if TYPE_CHECKING:
-    from typing import List, Optional, Set, Tuple, Union
+    from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
     from nbsafety.types import SymbolRef
 
 logger = logging.getLogger(__name__)
@@ -20,43 +21,41 @@ logger.setLevel(logging.ERROR)
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
     def __init__(self, scope: Optional[Scope] = None, init_killed: Optional[Set[str]] = None):
-        self.live: Set[SymbolRef] = set()
-        self.scope = scope
+        self._scope = scope
+        self._module_stmt_counter = 0
+        # live symbols also include the stmt counter of when they were live, for slicing purposes later
+        self.live: Set[Tuple[SymbolRef, int]] = set()
         if init_killed is None:
             self.dead: Set[SymbolRef] = set()
         else:
             self.dead = cast('Set[SymbolRef]', init_killed)
         # TODO: use the ast context instead of hacking our own (e.g. ast.Load(), ast.Store(), etc.)
-        self.in_kill_context = False
-        self.inside_attrsub = False
-        self.skip_simple_names = False
+        self._in_kill_context = False
+        self._inside_attrsub = False
+        self._skip_simple_names = False
 
-    def __call__(self, module_node: ast.Module):
+    def __call__(self, node: ast.AST):
         """
         This function should be called when we want to do a liveness check on a
-        cell's corresponding ast.Module. For each line/block of the cell we
-        first run the check of new assignments, then we obtain all the names.
-        In these names, we put the ones that are user defined and not in the
-        killed set into the return check_set for further checks.
+        cell's corresponding ast.Module.
         """
         # TODO: this will break if we ref a variable in a loop before killing it in the
         #   same loop, since we will add everything on the LHS of an assignment to the killed
         #   set before checking the loop body for live variables
-        for node in module_node.body:
-            self.visit(node)
+        self.visit(node)
         return self.live, self.dead
 
     def kill_context(self):
-        return self.push_attributes(in_kill_context=True)
+        return self.push_attributes(_in_kill_context=True)
 
     def live_context(self):
-        return self.push_attributes(in_kill_context=False)
+        return self.push_attributes(_in_kill_context=False)
 
     def attrsub_context(self, inside=True):
-        return self.push_attributes(inside_attrsub=inside, skip_simple_names=inside)
+        return self.push_attributes(_inside_attrsub=inside, _skip_simple_names=inside)
 
     def args_context(self):
-        return self.push_attributes(skip_simple_names=False)
+        return self.push_attributes(_skip_simple_names=False)
 
     def _add_attrsub_to_live_if_eligible(self, ref: AttrSubSymbolChain):
         if ref in self.dead:
@@ -69,7 +68,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             return
         if isinstance(leading_symbol, CallPoint) and leading_symbol.symbol in self.dead:
             return
-        self.live.add(ref)
+        self.live.add((ref, self._module_stmt_counter))
 
     # the idea behind this one is that we don't treat a symbol as dead
     # if it is used on the RHS of an assignment
@@ -87,7 +86,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         # TODO: ideally under the current abstraction we should
         #  not be resolving static references to symbols here
         if (
-            self.scope is not None
+            self._scope is not None
             and len(this_assign_live) == 1
             and len(this_assign_dead) == 1
             and not (this_assign_dead <= self.dead)
@@ -95,8 +94,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             and isinstance(value, (ast.Attribute, ast.Subscript, ast.Name))
         ):
             lhs, rhs = [
-                get_symbols_for_references(x, self.scope, only_add_successful_resolutions=True)[0]
-                for x in (this_assign_dead, this_assign_live)
+                get_symbols_for_references(x, self._scope, only_yield_successful_resolutions=True)[0]
+                for x in (this_assign_dead, (live[0] for live in this_assign_live))
             ]
             if len(lhs) == 1 and len(rhs) == 1:
                 lhs, rhs = [next(iter(x)) for x in (lhs, rhs)]
@@ -106,7 +105,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
                     # it's a no-op, so treat it as such
                     this_assign_live.clear()
                     this_assign_dead.clear()
-        this_assign_dead -= this_assign_live
+        this_assign_dead -= {live[0] for live in this_assign_live}
         self.live |= this_assign_live
         self.dead |= this_assign_dead
 
@@ -146,10 +145,10 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self.dead.add(node.name)
 
     def visit_Name(self, node):
-        if self.in_kill_context:
+        if self._in_kill_context:
             self.dead.add(node.id)
-        elif not self.skip_simple_names and node.id not in self.dead:
-            self.live.add(node.id)
+        elif not self._skip_simple_names and node.id not in self.dead:
+            self.live.add((node.id, self._module_stmt_counter))
 
     def visit_Tuple_or_List(self, node):
         for elt in node.elts:
@@ -166,7 +165,6 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self.visit(node.iter)
         with self.kill_context():
             self.visit(node.target)
-
         for line in node.body:
             self.visit(line)
 
@@ -187,13 +185,13 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute):
-        if not self.inside_attrsub:
+        if not self._inside_attrsub:
             self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
         with self.attrsub_context():
             self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript):
-        if not self.inside_attrsub:
+        if not self._inside_attrsub:
             self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
         with self.attrsub_context():
             self.visit(node.value)
@@ -226,19 +224,23 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.visit(node.args)
 
     def visit_arg(self, node):
-        if self.in_kill_context:
+        if self._in_kill_context:
             self.dead.add(node.arg)
-        elif not self.skip_simple_names and node.arg not in self.dead:
-            self.live.add(node.arg)
+        elif not self._skip_simple_names and node.arg not in self.dead:
+            self.live.add((node.arg, self._module_stmt_counter))
+
+    def visit_Module(self, node: ast.Module):
+        for child in node.body:
+            assert isinstance(child, ast.stmt)
+            self.visit(child)
+            self._module_stmt_counter += 1
 
 
-def get_symbols_for_references(
-        symbol_refs: Set[SymbolRef],
-        scope: Scope,
-        only_add_successful_resolutions: bool = False,
-) -> Tuple[Set[DataSymbol], Set[DataSymbol]]:
-    symbols = set()
-    called_symbols = set()
+def gen_symbols_for_references(
+    symbol_refs: Iterable[SymbolRef],
+    scope: Scope,
+    only_yield_successful_resolutions: bool,
+) -> Generator[Tuple[DataSymbol, bool], None, None]:
     for symbol_ref in symbol_refs:
         success = True
         if isinstance(symbol_ref, str):
@@ -250,41 +252,86 @@ def get_symbols_for_references(
             logger.warning('invalid type for ref %s', symbol_ref)
             continue
         if dsym is not None:
-            if success or not only_add_successful_resolutions:
-                symbols.add(dsym)
+            if success or not only_yield_successful_resolutions:
+                yield dsym, False
         if called_dsym is not None:
-            called_symbols.add(called_dsym)
-    return symbols, called_symbols
+            yield called_dsym, True
 
 
-def compute_call_chain_live_symbols_and_cells(live: Set[DataSymbol]) -> Tuple[Set[DataSymbol], Set[int]]:
+def get_symbols_for_references(
+    symbol_refs: Iterable[SymbolRef],
+    scope: Scope,
+    only_yield_successful_resolutions: bool = False,
+) -> Tuple[Set[DataSymbol], Set[DataSymbol]]:
+    dsyms: Set[DataSymbol] = set()
+    called_dsyms: Set[DataSymbol] = set()
+    for dsym, is_called in gen_symbols_for_references(
+        symbol_refs, scope, only_yield_successful_resolutions=only_yield_successful_resolutions
+    ):
+        if is_called:
+            called_dsyms.add(dsym)
+        else:
+            dsyms.add(dsym)
+    return dsyms, called_dsyms
+
+
+def get_live_symbols_and_cells_for_references_and_update_liveness(
+    symbol_refs: Set[Tuple[SymbolRef, int]],
+    scope: Scope,
+    cell_ctr: int,
+) -> Tuple[Set[DataSymbol], Set[int]]:
+    dsyms: Set[DataSymbol] = set()
+    called_dsyms: Set[Tuple[DataSymbol, int]] = set()
+    only_symbol_refs = (ref[0] for ref in symbol_refs)
+    only_stmt_counters = (ref[1] for ref in symbol_refs)
+    dsym_gen = gen_symbols_for_references(
+        only_symbol_refs, scope, only_yield_successful_resolutions=False
+    )
+    for (dsym, is_called), stmt_ctr in zip(dsym_gen, only_stmt_counters):
+        dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = dsym.timestamp
+        if is_called:
+            called_dsyms.add((dsym, stmt_ctr))
+        else:
+            dsyms.add(dsym)
+    live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(called_dsyms, cell_ctr)
+    dsyms |= live_from_calls
+    return dsyms, live_cells
+
+
+def _compute_call_chain_live_symbols_and_cells(
+    live_with_stmt_ctr: Set[Tuple[DataSymbol, int]], cell_ctr: int
+) -> Tuple[Set[DataSymbol], Set[int]]:
     seen = set()
-    worklist = list(live)
-    live = set(live)
+    worklist = list(live_with_stmt_ctr)
+    live = {dsym_stmt[0] for dsym_stmt in live_with_stmt_ctr}
     while len(worklist) > 0:
-        called_dsym = worklist.pop()
-        if called_dsym in seen:
+        workitem = worklist.pop()
+        if workitem in seen:
             continue
+        called_dsym, stmt_ctr = workitem
         # TODO: handle callable classes
         if not called_dsym.is_function:
             continue
-        seen.add(called_dsym)
+        seen.add(workitem)
         live_refs, _ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_dsym.stmt_node).body, init_killed=set(called_dsym.get_definition_args())
         )
-        live_symbols, called_symbols = get_symbols_for_references(live_refs, called_dsym.call_scope)
-        worklist.extend(called_symbols)
-        live |= {
+        live_symbols, called_symbols = get_symbols_for_references((ref[0] for ref in live_refs), called_dsym.call_scope)
+        worklist.extend((called_sym, stmt_ctr) for called_sym in called_symbols)
+        new_live = {
             sym for sym in itertools.chain(live_symbols, called_symbols) if sym.is_globally_accessible
         }
-    return live, {called_dsym.timestamp.cell_num for called_dsym in seen}
+        for dsym in new_live:
+            dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = dsym.timestamp
+        live |= new_live
+    return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
 
 
 def compute_live_dead_symbol_refs(
-    code: Union[ast.Module, List[ast.stmt], str],
+    code: Union[ast.AST, List[ast.stmt], str],
     scope: Scope = None,
     init_killed: Optional[Set[str]] = None,
-) -> Tuple[Set[SymbolRef], Set[SymbolRef]]:
+) -> Tuple[Set[Tuple[SymbolRef, int]], Set[SymbolRef]]:
     if init_killed is None:
         init_killed = set()
     if isinstance(code, str):

@@ -12,6 +12,7 @@ class TraceEvent(Enum):
 
     before_stmt = 'before_stmt'
     after_stmt = 'after_stmt'
+    after_module_stmt = 'after_outer_stmt'
 
     attribute = 'attribute'
     subscript = 'subscript'

@@ -19,8 +19,8 @@ from IPython.core.magic import register_cell_magic, register_line_magic
 
 from nbsafety.analysis.live_refs import (
     compute_live_dead_symbol_refs,
-    compute_call_chain_live_symbols_and_cells,
     get_symbols_for_references,
+    get_live_symbols_and_cells_for_references_and_update_liveness,
 )
 from nbsafety.ipython_utils import (
     CellNotRunYetError,
@@ -61,7 +61,6 @@ class NotebookSafetySettings(NamedTuple):
     mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool
-    naive_refresher_computation: bool
     mode: SafetyRunMode
 
 
@@ -70,6 +69,7 @@ class MutableNotebookSafetySettings:
     trace_messages_enabled: bool
     highlights_enabled: bool
     static_slicing_enabled: bool
+    dynamic_slicing_enabled: bool
 
 
 class CheckerResult(NamedTuple):
@@ -94,13 +94,13 @@ class NotebookSafety(singletons.NotebookSafety):
             mark_stale_symbol_usages_unsafe=kwargs.pop('mark_stale_symbol_usages_unsafe', True),
             mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
             mark_phantom_cell_usages_unsafe=kwargs.pop('mark_phantom_cell_usages_unsafe', False),
-            naive_refresher_computation=False,
             mode=SafetyRunMode.get(),
         )
         self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             highlights_enabled=kwargs.pop('highlights_enabled', True),
             static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
+            dynamic_slicing_enabled=kwargs.pop('dynamic_slicing_enabled', False),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.settrace = settrace or sys.settrace
@@ -113,11 +113,13 @@ class NotebookSafety(singletons.NotebookSafety):
         self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.stmt_id_by_timestamp: Dict[Timestamp, int] = {}
+        self.live_stmt_id_by_timestamp: Dict[Timestamp, int] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
+        self.live_symbols_by_cell_counter: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.cell_counters_needing_typecheck: Set[int] = set()
         self._typecheck_error_cells: Set[CellId] = set()
         self._counter_by_cell_id: Dict[CellId, int] = {}
@@ -177,8 +179,9 @@ class NotebookSafety(singletons.NotebookSafety):
         for sym in self.all_data_symbols():
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
-            sym.timestamp_by_liveness_time.clear()
+            sym.timestamp_by_liveness_time_by_cell_counter.clear()
         self.stmt_id_by_timestamp.clear()
+        self.live_stmt_id_by_timestamp.clear()
         self._cell_counter = 1
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
@@ -267,7 +270,7 @@ class NotebookSafety(singletons.NotebookSafety):
             ):
                 continue
             try:
-                checker_result = self._check_cell_and_resolve_symbols(cell_content)
+                checker_result = self._check_cell_and_resolve_symbols(cell_content, self._counter_by_cell_id[cell_id])
                 stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
@@ -305,17 +308,9 @@ class NotebookSafety(singletons.NotebookSafety):
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             refresher_cell_ids: Set[CellId] = set()
-            if self.settings.naive_refresher_computation:
-                refresher_cell_ids = self._naive_compute_refresher_cells(
-                    stale_cell_id,
-                    stale_syms,
-                    content_by_cell_id,
-                    order_index_by_cell_id=order_index_by_cell_id
-                )
-            else:
-                refresher_cell_ids = refresher_cell_ids.union(
-                    *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)
-                )
+            refresher_cell_ids = refresher_cell_ids.union(
+                *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)
+            )
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells
@@ -354,30 +349,6 @@ class NotebookSafety(singletons.NotebookSafety):
             'refresher_links': refresher_links,
         }
 
-    def _naive_compute_refresher_cells(
-        self,
-        stale_cell_id: CellId,
-        stale_symbols: Set[DataSymbol],
-        cells_by_id: Dict[CellId, str],
-        order_index_by_cell_id: Optional[Dict[CellId, int]] = None
-    ) -> Set[CellId]:
-        refresher_cell_ids: Set[CellId] = set()
-        stale_cell_content = cells_by_id[stale_cell_id]
-        for cell_id, cell_content in cells_by_id.items():
-            if cell_id == stale_cell_id:
-                continue
-            if (order_index_by_cell_id is not None and
-                    order_index_by_cell_id.get(cell_id, -1) >= order_index_by_cell_id.get(stale_cell_id, -1)):
-                continue
-            concated_content = f'{cell_content}\n\n{stale_cell_content}'
-            try:
-                concated_stale_symbols = self._check_cell_and_resolve_symbols(concated_content).stale
-            except SyntaxError:
-                continue
-            if concated_stale_symbols < stale_symbols:
-                refresher_cell_ids.add(cell_id)
-        return refresher_cell_ids
-
     @staticmethod
     def _get_cell_ast(cell):
         lines = []
@@ -411,18 +382,21 @@ class NotebookSafety(singletons.NotebookSafety):
             content='\n'.join(content_by_cell_id[cell_id] for cell_id in live_cell_ids),
         )
 
-    def _check_cell_and_resolve_symbols(self, cell: Union[ast.Module, str]) -> CheckerResult:
+    def _check_cell_and_resolve_symbols(self, cell: Union[ast.Module, str], cell_ctr: int) -> CheckerResult:
+        for dsym in self.live_symbols_by_cell_counter[cell_ctr]:
+            dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr].clear()
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell, scope=self.global_scope)
-        live_symbols, called_symbols = get_symbols_for_references(live_symbol_refs, self.global_scope)
-        live_symbols_from_calls, live_cells_from_calls = compute_call_chain_live_symbols_and_cells(called_symbols)
-        live_symbols = live_symbols | live_symbols_from_calls
+        live_symbols, live_cells_from_calls = get_live_symbols_and_cells_for_references_and_update_liveness(
+            live_symbol_refs, self.global_scope, cell_ctr
+        )
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
-            dead_symbol_refs, self.global_scope, only_add_successful_resolutions=True
+            dead_symbol_refs, self.global_scope, only_yield_successful_resolutions=True
         )
         stale_symbols = set(dsym for dsym in live_symbols if dsym.is_stale)
+        self.live_symbols_by_cell_counter[cell_ctr] = live_symbols
         return CheckerResult(
             live=live_symbols,
             live_cells={sym.timestamp.cell_num for sym in live_symbols},
@@ -475,7 +449,7 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
             return False
-        checker_result = self._check_cell_and_resolve_symbols(cell_ast)
+        checker_result = self._check_cell_and_resolve_symbols(cell_ast, self.cell_counter())
         stale_symbols, live_symbols, live_cells = checker_result.stale, checker_result.live, checker_result.live_cells
         stale_sym_usage_warning_counter = 0
         phantom_cell_usage_warning_counter = 0
@@ -526,7 +500,7 @@ class NotebookSafety(singletons.NotebookSafety):
         # at the time of liveness, for use with the dynamic slicer.
         for sym in live_symbols:
             self.cell_counter_by_live_symbol[sym].add(self.cell_counter())
-            sym.timestamp_by_liveness_time[self.cell_counter()] = sym.timestamp
+            # sym.timestamp_by_liveness_time[self.cell_counter()] = sym.timestamp
 
         self._last_refused_code = None
         return False
@@ -656,6 +630,8 @@ class NotebookSafety(singletons.NotebookSafety):
         if cell_num not in self.cell_content_by_counter.keys():
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
+        cell_ast = ast.parse(self.cell_content_by_counter[cell_num])
+
         deps_stmt: Set[Timestamp] = self._compute_slice_impl(
             Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
         )
@@ -665,12 +641,19 @@ class NotebookSafety(singletons.NotebookSafety):
             if ts.cell_num > cell_num:
                 break
             stmt_id = self.stmt_id_by_timestamp.get(ts, None)
-            if stmt_id is None or stmt_id in seen_stmt_ids:
+            if stmt_id is not None:
+                stmt = cast('Optional[ast.stmt]', self.ast_node_by_id.get(stmt_id, None))
+            else:
+                try:
+                    stmt = cell_ast.body[ts.stmt_num]
+                    stmt_id = id(stmt)
+                except IndexError:
+                    stmt = None
+            if stmt is None or stmt_id in seen_stmt_ids:
                 continue
             seen_stmt_ids.add(stmt_id)
-            stmt = self.ast_node_by_id.get(stmt_id, None)
             if stmt is not None:
-                stmts_by_cell_num[ts.cell_num].append(cast(ast.stmt, stmt))
+                stmts_by_cell_num[ts.cell_num].append(stmt)
         stmts_by_cell_num[cell_num] = list(ast.parse(self.cell_content_by_counter[cell_num]).body)
         return dict(stmts_by_cell_num)
 
@@ -679,42 +662,46 @@ class NotebookSafety(singletons.NotebookSafety):
         seed_ts: TimestampOrCounter,
         dependencies: Set[TimestampOrCounter],
         timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-        cell_num_to_static_ts_deps: Dict[int, Set[TimestampOrCounter]],
+        timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
     ) -> Set[TimestampOrCounter]:
 
         for sym in self.all_data_symbols():
-            for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
-                if sym_timestamp_when_used < used_time:
-                    if isinstance(seed_ts, Timestamp):
-                        timestamp_to_dynamic_ts_deps[used_time].add(sym_timestamp_when_used)
-                    else:
-                        timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
-            if self.mut_settings.static_slicing_enabled:
-                for liveness_time, sym_timestamp_when_used in list(sym.timestamp_by_liveness_time.items()):
-                    if sym_timestamp_when_used.cell_num < liveness_time:
+            if self.mut_settings.dynamic_slicing_enabled:
+                for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
+                    if sym_timestamp_when_used < used_time:
                         if isinstance(seed_ts, Timestamp):
-                            cell_num_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
+                            timestamp_to_dynamic_ts_deps[used_time].add(sym_timestamp_when_used)
                         else:
-                            cell_num_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used.cell_num)
+                            timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
+            if self.mut_settings.static_slicing_enabled:
+                for timestamp_by_liveness_time in sym.timestamp_by_liveness_time_by_cell_counter.values():
+                    for liveness_time, sym_timestamp_when_used in list(timestamp_by_liveness_time.items()):
+                        if sym_timestamp_when_used < liveness_time:
+                            if isinstance(seed_ts, Timestamp):
+                                timestamp_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
+                            else:
+                                timestamp_to_static_ts_deps[liveness_time.cell_num].add(
+                                    sym_timestamp_when_used.cell_num
+                                )
 
         # ensure we at least get the static deps
-        NotebookSafety._get_ts_dependencies(
-            seed_ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps
+        self._get_ts_dependencies(
+            seed_ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
         )
         if isinstance(seed_ts, Timestamp):
-            for ts in list(timestamp_to_dynamic_ts_deps.keys()):
+            for ts in list(timestamp_to_dynamic_ts_deps.keys() | timestamp_to_static_ts_deps.keys()):
                 if ts.cell_num == seed_ts.cell_num:
-                    NotebookSafety._get_ts_dependencies(
-                        ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps
+                    self._get_ts_dependencies(
+                        ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
                     )
         return dependencies
 
-    @staticmethod
     def _get_ts_dependencies(
+        self,
         timestamp: TimestampOrCounter,
         dependencies: Set[TimestampOrCounter],
         timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-        cell_num_to_static_ts_deps: Dict[int, Set[TimestampOrCounter]],
+        timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
     ) -> None:
         """
         For a given cell, this function recursively populates a set of
@@ -745,18 +732,15 @@ class NotebookSafety(singletons.NotebookSafety):
         # Retrieve cell numbers for the dependent symbols
         # Add dynamic and static dependencies
         dep_timestamps = timestamp_to_dynamic_ts_deps[timestamp]
-        if isinstance(timestamp, Timestamp):
-            static_ts_deps = cell_num_to_static_ts_deps[timestamp.cell_num]
-        else:
-            static_ts_deps = cell_num_to_static_ts_deps[timestamp]
+        logger.info('dynamic ts deps for %s: %s', timestamp, dep_timestamps)
+        static_ts_deps = timestamp_to_static_ts_deps[timestamp]
         dep_timestamps |= static_ts_deps
-        logger.info('dynamic ts deps for %s: %s', timestamp, timestamp_to_dynamic_ts_deps[timestamp])
         logger.info('static ts deps for %d: %s', timestamp, static_ts_deps)
 
         # For each dependent cell, recursively get their dependencies
         for ts in dep_timestamps - dependencies:
-            NotebookSafety._get_ts_dependencies(
-                ts, dependencies, timestamp_to_dynamic_ts_deps, cell_num_to_static_ts_deps
+            self._get_ts_dependencies(
+                ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
             )
 
     async def safe_execute(self, cell: str, is_async: bool, run_cell_func):

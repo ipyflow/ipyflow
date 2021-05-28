@@ -100,7 +100,7 @@ class NotebookSafety(singletons.NotebookSafety):
             trace_messages_enabled=kwargs.pop('trace_messages_enabled', False),
             highlights_enabled=kwargs.pop('highlights_enabled', True),
             static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
-            dynamic_slicing_enabled=kwargs.pop('dynamic_slicing_enabled', False),
+            dynamic_slicing_enabled=kwargs.pop('dynamic_slicing_enabled', True),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.settrace = settrace or sys.settrace

@@ -119,3 +119,20 @@ def foo():
     return
 """)
     run_cell('x = foo()')
+
+
+def test_fancy_slices():
+    run_cell("""
+class Foo:
+    def __init__(self, x):
+        self.x = x
+""")
+    run_cell('foo = Foo(1)')
+    run_cell('import numpy as np')
+    run_cell('x = np.zeros((3, 3, 3))')
+    run_cell('logging.info(x[:,:,:])')
+    run_cell('logging.info(x[:,...])')
+    run_cell('logging.info(x[1:,...])')
+    run_cell('logging.info(x[foo.x])')
+    run_cell('logging.info(x[foo.x:,...])')
+    run_cell('logging.info(x[foo.x:foo.x+1,:,...])')

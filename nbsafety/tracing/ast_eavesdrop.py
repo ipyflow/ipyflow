@@ -17,21 +17,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-def _maybe_convert_ast_subscript(subscript: ast.AST) -> ast.AST:
-    if isinstance(subscript, ast.Index):
-        return subscript.value  # type: ignore
-    elif isinstance(subscript, ast.Slice):
-        lower = fast.NameConstant(None) if subscript.lower is None else subscript.lower
-        upper = fast.NameConstant(None) if subscript.upper is None else subscript.upper
-        return fast.Call(
-            func=fast.Name('slice', ast.Load()),
-            args=[lower, upper] + ([] if subscript.step is None else [subscript.step]),
-            keywords=[],
-        )
-    else:
-        return subscript
-
-
 class AstEavesdropper(ast.NodeTransformer):
     def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST]):
         self._orig_to_copy_mapping = orig_to_copy_mapping
@@ -91,12 +76,26 @@ class AstEavesdropper(ast.NodeTransformer):
             attr_or_sub = fast.Str(attr_node.attr)
         return self.visit_Attribute_or_Subscript(node, attr_or_sub, call_context=call_context)
 
+    def _maybe_convert_ast_subscript(self, subscript: ast.AST) -> ast.AST:
+        if isinstance(subscript, ast.Index):
+            return self.visit(subscript.value)  # type: ignore
+        elif isinstance(subscript, ast.Slice):
+            lower = fast.NameConstant(None) if subscript.lower is None else self.visit(subscript.lower)
+            upper = fast.NameConstant(None) if subscript.upper is None else self.visit(subscript.upper)
+            return fast.Call(
+                func=fast.Name('slice', ast.Load()),
+                args=[lower, upper] + ([] if subscript.step is None else [self.visit(subscript.step)]),
+                keywords=[],
+            )
+        else:
+            return subscript
+
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
         with fast.location_of(node.slice if hasattr(node.slice, 'lineno') else node.value):
-            attr_or_sub = _maybe_convert_ast_subscript(node.slice)
-            if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
+            attr_or_sub = self._maybe_convert_ast_subscript(node.slice)
+            if isinstance(attr_or_sub, (ast.ExtSlice, ast.Tuple)):
                 elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
-                elts = [_maybe_convert_ast_subscript(elt) for elt in elts]
+                elts = [self._maybe_convert_ast_subscript(elt) for elt in elts]
                 attr_or_sub = fast.Tuple(elts, ast.Load())
             attr_or_sub = fast.Call(
                 func=self._emitter_ast(),

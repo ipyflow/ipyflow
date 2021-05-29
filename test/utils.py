@@ -47,7 +47,11 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
 
     store_history = kwargs.pop('store_history', False)
     test_context = kwargs.pop('test_context', True)
-    setup_cells = kwargs.pop('setup_cells', [])
+    setup_cells = [
+        'import sys',
+        'sys.path.append("./test")',
+        'import logging'
+    ] + kwargs.pop('setup_cells', [])
     extra_fixture = kwargs.pop('extra_fixture', None)
 
     @pytest.fixture(autouse=True)
@@ -59,11 +63,9 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
             test_context=test_context,
             **kwargs
         )
-        run_cell('import sys')
-        run_cell('sys.path.append("./test")')
-        run_cell('import logging')
-        for setup_cell in setup_cells:
-            run_cell(setup_cell)
+        # run all at once to prevent exec counter
+        # from getting too far ahead
+        run_cell('\n'.join(setup_cells))
         nbs().reset_cell_counter()
         # yield to execution of the actual test
         if extra_fixture is not None:

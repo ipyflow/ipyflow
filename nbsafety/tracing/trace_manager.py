@@ -509,6 +509,14 @@ class TraceManager(BaseTraceManager):
             return
         self.saved_assign_rhs_obj_id = id(obj)
 
+    @register_handler(TraceEvent.subscript_slice)
+    def subscript_slice(self, *_, subscript_live_refs: Optional[List[str]], **__):
+        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            return
+        Timestamp.update_usage_info(
+            self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
+        )
+
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     def attrsub_tracer(
         self,
@@ -518,7 +526,6 @@ class TraceManager(BaseTraceManager):
         event: TraceEvent,
         *_,
         attr_or_subscript: AttrSubVal,
-        subscript_live_refs: Optional[List[str]],
         ctx: str,
         call_context: bool,
         top_level_node_id: NodeId,
@@ -540,13 +547,7 @@ class TraceManager(BaseTraceManager):
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
         if sym_for_obj is not None:
-            Timestamp.update_usage_info(sym_for_obj, exclude_ns=True)
-
-        if subscript_live_refs is not None:
-            for live_ref in subscript_live_refs:
-                live_ref_dsym = self.cur_frame_original_scope.lookup_data_symbol_by_name(live_ref)
-                if live_ref_dsym is not None:
-                    Timestamp.update_usage_info(live_ref_dsym)
+            sym_for_obj.update_usage_info(exclude_ns=True)
 
         is_subscript = (event == TraceEvent.subscript)
 
@@ -808,18 +809,6 @@ class TraceManager(BaseTraceManager):
         sym.stmt_node = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
-    def _relate_timestamp_and_stmt_and_bump_counter(self):
-        parent_by_stmt_id = nbs().parent_node_by_id
-        stmt_id_to_use = id(self.prev_trace_stmt_in_cur_frame.stmt_node)
-        while True:
-            parent_stmt = parent_by_stmt_id.get(stmt_id_to_use, None)
-            if parent_stmt is None or isinstance(parent_stmt, ast.Module):
-                break
-            else:
-                stmt_id_to_use = id(parent_stmt)
-        nbs().stmt_id_by_timestamp[Timestamp.current()] = stmt_id_to_use
-        self._module_stmt_counter += 1
-
     @register_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:
@@ -832,7 +821,7 @@ class TraceManager(BaseTraceManager):
     @register_handler(TraceEvent.after_module_stmt)
     def after_module_stmt(self, *_, **__):
         assert self.cur_frame_original_scope.is_global
-        self._relate_timestamp_and_stmt_and_bump_counter()
+        self._module_stmt_counter += 1
 
     @register_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:

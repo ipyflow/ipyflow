@@ -111,11 +111,20 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
         with fast.location_of(node.slice if hasattr(node.slice, 'lineno') else node.value):
+            subscript_live_refs = _compute_simple_live_refs_no_timestamps(node.slice)
             attr_or_sub = _maybe_convert_ast_subscript(node.slice)
             if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
                 elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
                 elts = [_maybe_convert_ast_subscript(elt) for elt in elts]
                 attr_or_sub = fast.Tuple(elts, ast.Load())
+            attr_or_sub = fast.Call(
+                func=self._emitter_ast(),
+                args=[
+                    TraceEvent.subscript_slice.to_ast(),
+                    self._get_copy_id_ast(node.slice),
+                ],
+                keywords=fast.kwargs(ret=cast(ast.expr, attr_or_sub), subscript_live_refs=subscript_live_refs),
+            )
         return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(
@@ -188,13 +197,11 @@ class AstEavesdropper(ast.NodeTransformer):
                 extra_args = fast.kwargs(obj_name=fast.Str(node.value.id))
 
             subscript_name = None
-            subscript_live_refs = None
             if isinstance(node, ast.Subscript):
                 slice_val = resolve_slice_to_constant(node)
                 if isinstance(slice_val, ast.Name):
                     # TODO: this should be more general than just simple ast.Name subscripts
                     subscript_name = slice_val.id
-                subscript_live_refs = _compute_simple_live_refs_no_timestamps(node.slice)
 
             with self.attrsub_context(node):
                 node.value = fast.Call(
@@ -211,10 +218,6 @@ class AstEavesdropper(ast.NodeTransformer):
                         top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol),
                         subscript_name=(
                             fast.NameConstant(subscript_name) if subscript_name is None else fast.Str(subscript_name)
-                        ),
-                        subscript_live_refs=(
-                            fast.NameConstant(subscript_live_refs)
-                            if subscript_live_refs is None else subscript_live_refs
                         ),
                     ) + extra_args
                 )

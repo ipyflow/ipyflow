@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
-    from typing import Optional, Set, Union
+    from typing import Iterable, Optional, Union
 
     # avoid circular imports
     from nbsafety.data_model.data_symbol import DataSymbol
@@ -37,14 +37,14 @@ class Timestamp(NamedTuple):
         return tuple(self._asdict().values()) == tuple(other._asdict().values())
 
     @classmethod
-    def update_usage_info(cls, symbols: Union[Optional[DataSymbol], Set[Optional[DataSymbol]]], exclude_ns=False):
+    def update_usage_info(cls, symbols: Union[Optional[DataSymbol], Iterable[Optional[DataSymbol]]], exclude_ns=False):
+        if symbols is None:
+            return
+        try:
+            iter(symbols)  # type: ignore
+        except TypeError:
+            symbols = [symbols]  # type: ignore
         used_time = cls.current()
-        for sym in (symbols if symbols is not None and isinstance(symbols, set) else [symbols]):
-            if sym is None:
-                continue
-            if nbs().is_develop:
-                logger.info('sym `%s` used in cell %d last updated in cell %d', sym, used_time.cell_num, sym.timestamp)
-            if used_time not in sym.timestamp_by_used_time and sym.timestamp < used_time:
-                sym.timestamp_by_used_time[used_time] = (
-                    sym.timestamp_excluding_ns_descendents if exclude_ns else sym.timestamp
-                )
+        for sym in symbols:  # type: ignore
+            if sym is not None:
+                sym.update_usage_info(used_time=used_time, exclude_ns=exclude_ns)

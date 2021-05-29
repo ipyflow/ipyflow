@@ -24,7 +24,7 @@ class StatementMapper(ast.NodeVisitor):
         self.parent_map = parent_map
         self.traversal: List[ast.AST] = []
 
-    def __call__(self, node: ast.AST) -> Dict[int, ast.AST]:
+    def __call__(self, node: ast.Module) -> Dict[int, ast.AST]:
         # for some bizarre reason we need to visit once to clear empty nodes apparently
         self.visit(node)
         self.traversal.clear()

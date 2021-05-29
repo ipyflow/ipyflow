@@ -488,7 +488,7 @@ class DataSymbol:
         self.required_timestamp = Timestamp.uninitialized()
         equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
-            Timestamp.update_usage_info(self)
+            self.update_usage_info()
         if refresh:
             self.refresh(
                 bump_version=not equal_to_old,
@@ -501,6 +501,16 @@ class DataSymbol:
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
+
+    def update_usage_info(self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False) -> None:
+        if used_time is None:
+            used_time = Timestamp.current()
+        if nbs().is_develop:
+            logger.info('sym `%s` used in cell %d last updated in cell %d', self, used_time.cell_num, self.timestamp)
+        if used_time not in self.timestamp_by_used_time and self.timestamp < used_time:
+            self.timestamp_by_used_time[used_time] = (
+                self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
+            )
 
     def refresh(
         self,

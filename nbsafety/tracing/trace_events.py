@@ -16,6 +16,7 @@ class TraceEvent(Enum):
 
     attribute = 'attribute'
     subscript = 'subscript'
+    subscript_slice = 'subscript_slice'
 
     before_complex_symbol = 'before_complex_symbol'
     after_complex_symbol = 'after_complex_symbol'

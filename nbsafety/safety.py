@@ -112,11 +112,10 @@ class NotebookSafety(singletons.NotebookSafety):
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
-        self.stmt_id_by_timestamp: Dict[Timestamp, int] = {}
-        self.live_stmt_id_by_timestamp: Dict[Timestamp, int] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
         self.cell_content_by_counter: Dict[int, str] = {}
+        self.cell_ast_by_counter: Dict[int, ast.Module] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
         self.live_symbols_by_cell_counter: Dict[int, Set[DataSymbol]] = defaultdict(set)
@@ -180,8 +179,6 @@ class NotebookSafety(singletons.NotebookSafety):
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time_by_cell_counter.clear()
-        self.stmt_id_by_timestamp.clear()
-        self.live_stmt_id_by_timestamp.clear()
         self._cell_counter = 1
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
@@ -630,8 +627,6 @@ class NotebookSafety(singletons.NotebookSafety):
         if cell_num not in self.cell_content_by_counter.keys():
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
-        cell_ast = ast.parse(self.cell_content_by_counter[cell_num])
-
         deps_stmt: Set[Timestamp] = self._compute_slice_impl(
             Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
         )
@@ -640,15 +635,8 @@ class NotebookSafety(singletons.NotebookSafety):
         for ts in sorted(deps_stmt):
             if ts.cell_num > cell_num:
                 break
-            stmt_id = self.stmt_id_by_timestamp.get(ts, None)
-            if stmt_id is not None:
-                stmt = cast('Optional[ast.stmt]', self.ast_node_by_id.get(stmt_id, None))
-            else:
-                try:
-                    stmt = cell_ast.body[ts.stmt_num]
-                    stmt_id = id(stmt)
-                except IndexError:
-                    stmt = None
+            stmt = self.cell_ast_by_counter[ts.cell_num].body[ts.stmt_num]
+            stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue
             seen_stmt_ids.add(stmt_id)

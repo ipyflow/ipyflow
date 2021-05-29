@@ -23,6 +23,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
         self._cell_id: Optional[CellId] = cell_id
 
     def visit(self, node: ast.AST):
+        assert isinstance(node, ast.Module)
         try:
             mapper = StatementMapper(
                 self._cell_id,
@@ -32,6 +33,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
                 nbs().parent_node_by_id,
             )
             orig_to_copy_mapping = mapper(node)
+            nbs().cell_ast_by_counter[nbs().cell_counter()] = cast(ast.Module, orig_to_copy_mapping[id(node)])
             # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
             # modifies existing ones), since StatementInserter relies on being able to map these
             node = AstEavesdropper(orig_to_copy_mapping).visit(node)

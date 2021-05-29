@@ -732,7 +732,7 @@ class NotebookSafety(singletons.NotebookSafety):
             )
 
     async def safe_execute(self, cell: str, is_async: bool, run_cell_func):
-        if self._saved_debug_message is not None:
+        if self._saved_debug_message is not None:  # pragma: no cover
             logger.error(self._saved_debug_message)
             self._saved_debug_message = None
         ret = None
@@ -752,7 +752,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
                 ret = run_cell_func('None')
                 if is_async:
-                    return await ret
+                    return await ret  # pragma: no cover
                 else:
                     return ret
 
@@ -763,7 +763,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 self.cell_content_by_counter[self._last_execution_counter] = cell
                 with self._tracing_context(cell_id):
                     if is_async:
-                        ret = await run_cell_func(cell)
+                        ret = await run_cell_func(cell)  # pragma: no cover
                     else:
                         ret = run_cell_func(cell)
                 # Stage 2.1: resync any defined symbols that could have gotten out-of-sync

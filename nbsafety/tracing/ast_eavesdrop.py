@@ -156,10 +156,9 @@ class AstEavesdropper(ast.NodeTransformer):
                         slice=orig_node.slice,
                     )
                 else:
-                    logger.error(
-                        'Symbol tracing stores unsupported for node %s with type %s', orig_node, type(orig_node)
+                    raise TypeError(
+                        'Symbol tracing stores unsupported for node %s with type %s' %(orig_node, type(orig_node))
                     )
-                    assert False
                 node.ctx = ast.Store()
         # end location_of(node)
         return node

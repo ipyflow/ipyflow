@@ -30,7 +30,9 @@ check_no_typing:
 
 coverage:
 	rm -f .coverage
+	rm -r htmlcov
 	./scripts/runtests.sh --coverage
+	coverage html
 	coverage report
 
 xmlcov: coverage

@@ -376,7 +376,7 @@ class DataSymbol:
     def _match_call_args_with_definition_args(self):
         assert self.is_function and isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
         caller_node = self._get_calling_ast_node()
-        if not isinstance(caller_node, ast.Call):
+        if caller_node is None or not isinstance(caller_node, ast.Call):
             return []
         def_args = self.stmt_node.args.args
         if len(self.stmt_node.args.defaults) > 0:
@@ -404,7 +404,7 @@ class DataSymbol:
 
     def _get_calling_ast_node(self) -> Optional[ast.AST]:
         if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if self.name == '__getitem__':
+            if self.name in ('__getitem__', '__setitem__', '__delitem__'):
                 # TODO: handle case where we're looking for a subscript for the calling node
                 return None
             for decorator in self.stmt_node.decorator_list:

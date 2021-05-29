@@ -12,6 +12,7 @@ omit =
 
 [report]
 exclude_lines =
-    pragma: no cover
-    if TYPE_CHECKING:
-    except.*:
+    pragma: no cover *$
+    ^ *if TYPE_CHECKING:
+    ^ *except
+    ^ *raise

@@ -5,8 +5,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 import sys
 
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint, resolve_slice_to_constant
-from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
+from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.utils import fast
 
@@ -31,23 +30,6 @@ def _maybe_convert_ast_subscript(subscript: ast.AST) -> ast.AST:
         )
     else:
         return subscript
-
-
-def _compute_simple_live_refs_no_timestamps(node: ast.AST) -> ast.List:
-    live, _ = compute_live_dead_symbol_refs(node)
-    simple_live_refs = []
-    for ref, _ in live:
-        if isinstance(ref, str):
-            simple_live_refs.append(ref)
-        if not isinstance(ref, AttrSubSymbolChain):
-            continue
-        first_in_chain = ref.symbols[0]
-        if isinstance(first_in_chain, str):
-            simple_live_refs.append(first_in_chain)
-        elif isinstance(first_in_chain, CallPoint):
-            simple_live_refs.append(first_in_chain.symbol)
-
-    return fast.List([fast.Str(ref) for ref in simple_live_refs], ast.Load())
 
 
 class AstEavesdropper(ast.NodeTransformer):
@@ -111,7 +93,6 @@ class AstEavesdropper(ast.NodeTransformer):
 
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
         with fast.location_of(node.slice if hasattr(node.slice, 'lineno') else node.value):
-            subscript_live_refs = _compute_simple_live_refs_no_timestamps(node.slice)
             attr_or_sub = _maybe_convert_ast_subscript(node.slice)
             if isinstance(attr_or_sub, (ast.Slice, ast.ExtSlice)):
                 elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
@@ -123,7 +104,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     TraceEvent.subscript_slice.to_ast(),
                     self._get_copy_id_ast(node.slice),
                 ],
-                keywords=fast.kwargs(ret=cast(ast.expr, attr_or_sub), subscript_live_refs=subscript_live_refs),
+                keywords=fast.kwargs(ret=cast(ast.expr, attr_or_sub)),
             )
         return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
 

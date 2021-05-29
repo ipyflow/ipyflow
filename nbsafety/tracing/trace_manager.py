@@ -12,6 +12,8 @@ import astunparse
 from IPython import get_ipython
 
 from nbsafety import singletons
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.data_model.timestamp import Timestamp
@@ -199,6 +201,8 @@ def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTr
     mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
     mgr_cls._MANAGER_CLASS_REGISTERED = True
     return mgr_cls
+
+
 
 
 @register_trace_manager_class
@@ -510,9 +514,23 @@ class TraceManager(BaseTraceManager):
         self.saved_assign_rhs_obj_id = id(obj)
 
     @register_handler(TraceEvent.subscript_slice)
-    def subscript_slice(self, *_, subscript_live_refs: Optional[List[str]], **__):
+    def subscript_slice(self, _obj: Any, slice_node_id: NodeId, *__, **___):
         if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
             return
+        live, _ = compute_live_dead_symbol_refs(
+            nbs().ast_node_by_id[slice_node_id], scope=self.cur_frame_original_scope
+        )
+        subscript_live_refs = []
+        for ref, _ in live:
+            if isinstance(ref, str):
+                subscript_live_refs.append(ref)
+            if not isinstance(ref, AttrSubSymbolChain):
+                continue
+            first_in_chain = ref.symbols[0]
+            if isinstance(first_in_chain, str):
+                subscript_live_refs.append(first_in_chain)
+            elif isinstance(first_in_chain, CallPoint):
+                subscript_live_refs.append(first_in_chain.symbol)
         Timestamp.update_usage_info(
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
         )

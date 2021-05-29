@@ -95,7 +95,7 @@ class AstEavesdropper(ast.NodeTransformer):
             attr_or_sub = self._maybe_convert_ast_subscript(node.slice)
             if isinstance(attr_or_sub, (ast.ExtSlice, ast.Tuple)):
                 elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
-                elts = [self._maybe_convert_ast_subscript(elt) for elt in elts]
+                elts = [self._maybe_convert_ast_subscript(elt) for elt in elts]  # type: ignore
                 attr_or_sub = fast.Tuple(elts, ast.Load())
             attr_or_sub = fast.Call(
                 func=self._emitter_ast(),

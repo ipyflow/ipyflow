@@ -91,21 +91,30 @@ class AstEavesdropper(ast.NodeTransformer):
             return subscript
 
     def visit_Subscript(self, node: ast.Subscript, call_context=False):
-        with fast.location_of(node.slice if hasattr(node.slice, 'lineno') else node.value):
-            attr_or_sub = self._maybe_convert_ast_subscript(node.slice)
-            if isinstance(attr_or_sub, (ast.ExtSlice, ast.Tuple)):
-                elts = attr_or_sub.elts if isinstance(attr_or_sub, ast.Tuple) else attr_or_sub.dims  # type: ignore
-                elts = [self._maybe_convert_ast_subscript(elt) for elt in elts]  # type: ignore
-                attr_or_sub = fast.Tuple(elts, ast.Load())
-            attr_or_sub = fast.Call(
-                func=self._emitter_ast(),
-                args=[
-                    TraceEvent.subscript_slice.to_ast(),
-                    self._get_copy_id_ast(node.slice),
-                ],
-                keywords=fast.kwargs(ret=cast(ast.expr, attr_or_sub)),
-            )
-        return self.visit_Attribute_or_Subscript(node, cast(ast.expr, attr_or_sub), call_context=call_context)
+        with self.attrsub_context(None):
+            with fast.location_of(node.slice if hasattr(node.slice, 'lineno') else node.value):
+                slc = self._maybe_convert_ast_subscript(node.slice)
+                if isinstance(slc, (ast.ExtSlice, ast.Tuple)):
+                    elts = slc.elts if isinstance(slc, ast.Tuple) else slc.dims  # type: ignore
+                    elts = [self._maybe_convert_ast_subscript(elt) for elt in elts]  # type: ignore
+                    slc = fast.Tuple(elts, ast.Load())
+                slc = fast.Call(
+                    func=self._emitter_ast(),
+                    args=[
+                        TraceEvent.subscript_slice.to_ast(),
+                        self._get_copy_id_ast(node.slice),
+                    ],
+                    keywords=fast.kwargs(ret=cast(ast.expr, slc)),
+                )
+                node.slice = fast.Call(
+                    func=self._emitter_ast(),
+                    args=[
+                        TraceEvent._load_saved_slice.to_ast(),
+                        self._get_copy_id_ast(node.slice),
+                    ],
+                    keywords=[],
+                )
+        return self.visit_Attribute_or_Subscript(node, slc, call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(
         self, node, call_context=False, orig_node_id=None, begin_kwargs=None, end_kwargs=None

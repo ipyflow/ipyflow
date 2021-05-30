@@ -28,8 +28,18 @@ if __name__ == '__main__':
         # weird; need to reimport these for some reason
         import sys
         import ipytest
-        if name.startswith('test_') and isinstance(mod, type(sys)):
-            if ipytest.run(*sys.argv[1:], filename=mod.__file__, return_exit_code=True) != 0:
+        if len(sys.argv) > 1:
+            test_patt = sys.argv[1]
+            test_args = sys.argv[2:]
+        else:
+            test_patt = None
+            test_args = []
+        if (
+            name.startswith('test_')
+            and isinstance(mod, type(sys))
+            and (test_patt is None or test_patt in name)
+        ):
+            if ipytest.run(*test_args, filename=mod.__file__, return_exit_code=True) != 0:
                 import builtins
                 setattr(builtins, '__exit_zero', False)
     import sys

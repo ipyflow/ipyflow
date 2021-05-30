@@ -12,11 +12,12 @@ class TraceEvent(Enum):
 
     before_stmt = 'before_stmt'
     after_stmt = 'after_stmt'
-    after_module_stmt = 'after_outer_stmt'
+    after_module_stmt = 'after_module_stmt'
 
     attribute = 'attribute'
     subscript = 'subscript'
     subscript_slice = 'subscript_slice'
+    _load_saved_slice = '_load_saved_slice'
 
     before_complex_symbol = 'before_complex_symbol'
     after_complex_symbol = 'after_complex_symbol'
@@ -60,6 +61,9 @@ class TraceEvent(Enum):
 
     def __str__(self):
         return self.value
+
+    def __repr__(self):
+        return '<' + str(self) + '>'
 
     def to_ast(self):
         return fast.Constant(self.value)

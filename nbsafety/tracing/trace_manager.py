@@ -196,6 +196,22 @@ def register_universal_handler(handler):
     return register_handler(tuple(evt for evt in TraceEvent))(handler)
 
 
+class SliceTraceManager(BaseTraceManager):
+    def __init__(self):
+        super().__init__()
+        self._saved_slice: Optional[Any] = None
+
+    @register_handler(TraceEvent.subscript)
+    def _save_slice_for_later(self, *_, attr_or_subscript: Any, **__):
+        self._saved_slice = attr_or_subscript
+
+    @register_handler(TraceEvent._load_saved_slice)
+    def _load_saved_slice(self, *_, **__):
+        ret = self._saved_slice
+        self._saved_slice = None
+        return ret
+
+
 def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTraceManager]:
     mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
     mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
@@ -203,13 +219,12 @@ def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTr
     return mgr_cls
 
 
-
-
 @register_trace_manager_class
-class TraceManager(BaseTraceManager):
+class TraceManager(SliceTraceManager):
     def __init__(self):
         super().__init__()
         self._module_stmt_counter = 0
+        self._saved_stmt_ret_expr: Optional[Any] = None
         self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
@@ -831,6 +846,7 @@ class TraceManager(BaseTraceManager):
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:
             return ret_expr
+        self._saved_stmt_ret_expr = ret_expr
         stmt = nbs().ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
             self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
@@ -839,7 +855,10 @@ class TraceManager(BaseTraceManager):
     @register_handler(TraceEvent.after_module_stmt)
     def after_module_stmt(self, *_, **__):
         assert self.cur_frame_original_scope.is_global
+        ret = self._saved_stmt_ret_expr
+        self._saved_stmt_ret_expr = None
         self._module_stmt_counter += 1
+        return ret
 
     @register_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:

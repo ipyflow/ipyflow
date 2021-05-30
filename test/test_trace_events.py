@@ -201,3 +201,92 @@ def test_lambda_in_tuple():
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ], 'unexpected events; got %s' % RECORDED_EVENTS
+
+
+def test_fancy_slices():
+    assert RECORDED_EVENTS == []
+    run_cell("""
+import numpy as np
+class Foo:
+    def __init__(self, x):
+        self.x = x
+foo = Foo(1)
+arr = np.zeros((3, 3, 3))
+""")
+    assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
+        TraceEvent.before_stmt,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+
+        TraceEvent.before_stmt,
+        TraceEvent.call,
+        TraceEvent.before_stmt,
+        TraceEvent.after_stmt,
+        TraceEvent.return_,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+
+        TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.before_call,
+        TraceEvent.argument,
+        TraceEvent.call,
+        TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
+        TraceEvent.after_assign_rhs,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.after_stmt,
+        TraceEvent.return_,
+        TraceEvent.after_call,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.after_assign_rhs,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+
+        TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.before_call,
+        TraceEvent.before_tuple_literal,
+        TraceEvent.tuple_elt,
+        TraceEvent.tuple_elt,
+        TraceEvent.tuple_elt,
+        TraceEvent.after_tuple_literal,
+        TraceEvent.argument,
+        TraceEvent.after_call,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.after_assign_rhs,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    RECORDED_EVENTS.clear()
+
+    run_cell('logging.info(arr[foo.x:foo.x+1,...])')
+    assert RECORDED_EVENTS == [
+        TraceEvent.init_cell,
+        TraceEvent.before_stmt,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.before_call,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.attribute,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.subscript_slice,
+        TraceEvent.subscript,
+        TraceEvent._load_saved_slice,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.argument,
+        TraceEvent.after_call,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+    ], 'unexpected events; got %s' % RECORDED_EVENTS

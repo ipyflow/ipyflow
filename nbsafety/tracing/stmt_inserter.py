@@ -52,7 +52,7 @@ class StatementInserter(ast.NodeTransformer):
                                     f'{EMIT_EVENT}("{TraceEvent.init_cell.value}", None, cell_id="{self._cell_id}")'
                                 ).body[0])
                         new_field.append(_get_parsed_insert_stmt(stmt_copy, TraceEvent.before_stmt))
-                        if isinstance(inner_node, ast.Expr):
+                        if isinstance(inner_node, ast.Expr) and isinstance(node, ast.Module) and name == 'body':
                             val = inner_node.value
                             while isinstance(val, ast.Expr):
                                 val = val.value

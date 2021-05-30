@@ -106,7 +106,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     ],
                     keywords=fast.kwargs(ret=cast(ast.expr, slc)),
                 )
-                node.slice = fast.Call(
+                replacement_slice = fast.Call(
                     func=self._emitter_ast(),
                     args=[
                         TraceEvent._load_saved_slice.to_ast(),
@@ -114,6 +114,10 @@ class AstEavesdropper(ast.NodeTransformer):
                     ],
                     keywords=[],
                 )
+                if sys.version_info >= (3, 9):
+                    node.slice = replacement_slice
+                else:
+                    node.slice = fast.Index(replacement_slice)
         return self.visit_Attribute_or_Subscript(node, slc, call_context=call_context)
 
     def _maybe_wrap_symbol_in_before_after_tracing(

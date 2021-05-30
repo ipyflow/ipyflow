@@ -63,6 +63,8 @@ def test_nested_symbol_usage():
 
 def test_nested_symbol_usage_with_variable_subscript():
     for static_slicing_enabled in [True, False]:
+        if not static_slicing_enabled and not nbs().mut_settings.dynamic_slicing_enabled:
+            continue
         orig_enabled = nbs().mut_settings.static_slicing_enabled
         try:
             nbs().mut_settings.static_slicing_enabled = static_slicing_enabled
@@ -138,6 +140,8 @@ def test_handle_stale():
 
 
 def test_multiple_versions_captured():
+    if not nbs().mut_settings.dynamic_slicing_enabled:
+        return
     orig_enabled = nbs().mut_settings.static_slicing_enabled
     try:
         nbs().mut_settings.static_slicing_enabled = False
@@ -325,13 +329,18 @@ def test_non_relevant_child_symbol_modified():
     run_cell('lst[0] += 1')
     run_cell('lst[0] += 1')
     run_cell('logging.info(lst[1])')
+    run_cell('lst[1] = 42')
     deps = set(nbs().compute_slice(7).keys())
     assert deps == {1, 4, 7}, 'got %s' % deps
+    deps = set(nbs().compute_slice(8).keys())
+    assert deps == {1, 8}, 'got %s' % deps
     slice_size = num_stmts_in_slice(7)
     assert slice_size == 3, 'got %d' % slice_size
 
 
 def test_dynamic_only_increment():
+    if not nbs().mut_settings.dynamic_slicing_enabled:
+        return
     orig_enabled = nbs().mut_settings.static_slicing_enabled
     try:
         nbs().mut_settings.static_slicing_enabled = False
@@ -347,6 +356,8 @@ def test_dynamic_only_increment():
 
 
 def test_dynamic_only_variable_subscript():
+    if not nbs().mut_settings.dynamic_slicing_enabled:
+        return
     orig_enabled = nbs().mut_settings.static_slicing_enabled
     try:
         nbs().mut_settings.static_slicing_enabled = False
@@ -370,6 +381,8 @@ def test_dynamic_only_variable_subscript():
 
 
 def test_handler():
+    if not nbs().mut_settings.dynamic_slicing_enabled:
+        return
     orig_enabled = nbs().mut_settings.static_slicing_enabled
     try:
         nbs().mut_settings.static_slicing_enabled = False

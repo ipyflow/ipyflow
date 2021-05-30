@@ -20,7 +20,7 @@ from IPython.core.magic import register_cell_magic, register_line_magic
 from nbsafety.analysis.live_refs import (
     compute_live_dead_symbol_refs,
     get_symbols_for_references,
-    get_live_symbols_and_cells_for_references_and_update_liveness,
+    get_live_symbols_and_cells_for_references,
 )
 from nbsafety.ipython_utils import (
     CellNotRunYetError,
@@ -379,14 +379,20 @@ class NotebookSafety(singletons.NotebookSafety):
             content='\n'.join(content_by_cell_id[cell_id] for cell_id in live_cell_ids),
         )
 
-    def _check_cell_and_resolve_symbols(self, cell: Union[ast.Module, str], cell_ctr: int) -> CheckerResult:
+    def _check_cell_and_resolve_symbols(
+        self, cell: Union[ast.Module, str], cell_ctr: int, update_liveness_time_versions: bool = False
+    ) -> CheckerResult:
         for dsym in self.live_symbols_by_cell_counter[cell_ctr]:
             dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr].clear()
         if isinstance(cell, str):
             cell = self._get_cell_ast(cell)
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell, scope=self.global_scope)
-        live_symbols, live_cells_from_calls = get_live_symbols_and_cells_for_references_and_update_liveness(
-            live_symbol_refs, self.global_scope, cell_ctr
+        if update_liveness_time_versions:
+            get_live_symbols_and_cells_for_references(
+                live_symbol_refs, self.global_scope, cell_ctr, update_liveness_time_versions=True
+            )
+        live_symbols, live_cells_from_calls = get_live_symbols_and_cells_for_references(
+            live_symbol_refs, self.global_scope, cell_ctr, update_liveness_time_versions=False
         )
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
@@ -446,7 +452,9 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_ast = self._get_cell_ast(cell)
         except SyntaxError:
             return False
-        checker_result = self._check_cell_and_resolve_symbols(cell_ast, self.cell_counter())
+        checker_result = self._check_cell_and_resolve_symbols(
+            cell_ast, self.cell_counter(), update_liveness_time_versions=self.mut_settings.static_slicing_enabled
+        )
         stale_symbols, live_symbols, live_cells = checker_result.stale, checker_result.live, checker_result.live_cells
         stale_sym_usage_warning_counter = 0
         phantom_cell_usage_warning_counter = 0

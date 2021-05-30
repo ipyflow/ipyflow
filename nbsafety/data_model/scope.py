@@ -88,10 +88,10 @@ class Scope:
         return ret
 
     @staticmethod
-    def _get_name_to_obj_mapping(obj, dc) -> Dict[SupportedIndexType, Any]:
+    def _get_name_to_obj_mapping(obj: Any, dsym: DataSymbol) -> Dict[SupportedIndexType, Any]:
         if obj is None:
             return get_ipython().ns_table['user_global']
-        elif dc is not None and dc.is_subscript:
+        elif dsym is not None and dsym.is_subscript:
             return obj
         else:
             try:
@@ -109,35 +109,62 @@ class Scope:
                 return dict(inspect.getmembers(obj))
         return name_to_obj
 
-    def get_most_specific_data_symbol_for_attrsub_chain(self, chain: AttrSubSymbolChain):
+    def gen_data_symbols_for_attrsub_chain(self, chain: AttrSubSymbolChain):
         """
-        Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
+        Generates progressive symbols appearing in an AttrSub chain until
+        this can no longer be done semi-statically (e.g. because one of the
+        chain members is a CallPoint).
         """
         cur_scope = self
-        dsym, next_dsym, success = None, None, False
         obj = None
-        for name in chain.symbols:
+        for i, name in enumerate(chain.symbols):
             if isinstance(name, CallPoint):
                 next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
+                if next_dsym is not None:
+                    yield next_dsym, True, False
                 break
             next_dsym = cur_scope.lookup_data_symbol_by_name(name)
-            if dsym is not None and next_dsym is None:
-                # HUGE HACK: prevents us from checking namespace symbols unless entire namespace is stale
-                # TODO: get rid of this check once namespace symbols created for dictionary literals
-                if dsym.is_stale and dsym.timestamp >= dsym.required_timestamp:
-                    dsym = None
+            if next_dsym is None:
                 break
-            dsym, next_dsym = next_dsym, None
+            else:
+                yield next_dsym, False, i == len(chain.symbols) - 1
             try:
-                obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
+                obj = self._get_name_to_obj_mapping(obj, next_dsym)[name]
             except (KeyError, IndexError, Exception):
                 break
             cur_scope = nbs().namespaces.get(id(obj), None)
             if cur_scope is None:
                 break
-        else:
-            success = True
-        return dsym, next_dsym, success
+
+    def get_most_specific_data_symbol_for_attrsub_chain(self, chain: AttrSubSymbolChain):
+        """
+        Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
+        """
+        dsym, is_called, success = None, False, False
+        for dsym, is_called, success in self.gen_data_symbols_for_attrsub_chain(chain):
+            pass
+        return dsym, is_called, success
+        # cur_scope = self
+        # dsym, next_dsym, success = None, None, False
+        # obj = None
+        # for name in chain.symbols:
+        #     if isinstance(name, CallPoint):
+        #         next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
+        #         break
+        #     next_dsym = cur_scope.lookup_data_symbol_by_name(name)
+        #     if dsym is not None and next_dsym is None:
+        #         break
+        #     dsym, next_dsym = next_dsym, None
+        #     try:
+        #         obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
+        #     except (KeyError, IndexError, Exception):
+        #         break
+        #     cur_scope = nbs().namespaces.get(id(obj), None)
+        #     if cur_scope is None:
+        #         break
+        # else:
+        #     success = True
+        # return dsym, next_dsym, success
 
     @staticmethod
     def _resolve_symbol_type(

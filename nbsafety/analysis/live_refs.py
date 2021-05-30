@@ -106,6 +106,15 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
                     this_assign_live.clear()
                     this_assign_dead.clear()
         this_assign_dead -= {live[0] for live in this_assign_live}
+        # for ref in this_assign_dead:
+        #     if isinstance(ref, AttrSubSymbolChain) and len(ref.symbols) > 1:
+        #         this_assign_live.add(
+        #             (AttrSubSymbolChain(list(ref.symbols[:-1]) + [
+        #                 # FIXME: hack to ensure it can't be resolved all the way, so that we use
+        #                 #  timestamp_excluding_ns_children instead of timestamp
+        #                 CallPoint('<dummy>')
+        #             ]), self._module_stmt_counter)
+        #         )
         self.live |= this_assign_live
         self.dead |= this_assign_dead
 
@@ -240,22 +249,33 @@ def gen_symbols_for_references(
     symbol_refs: Iterable[SymbolRef],
     scope: Scope,
     only_yield_successful_resolutions: bool,
-) -> Generator[Tuple[DataSymbol, bool], None, None]:
-    for symbol_ref in symbol_refs:
-        success = True
+    stmt_counters: Optional[Iterable[int]] = None,
+    update_liveness_time_versions: bool = False,
+) -> Generator[Tuple[DataSymbol, bool, bool, Optional[int]], None, None]:
+    if stmt_counters is None:
+        stmt_counters = (None for _ in itertools.count())
+    for symbol_ref, stmt_counter in zip(symbol_refs, stmt_counters):
         if isinstance(symbol_ref, str):
             dsym = scope.lookup_data_symbol_by_name(symbol_ref)
-            called_dsym = None
+            if dsym is not None:
+                yield dsym, False, True, stmt_counter
         elif isinstance(symbol_ref, AttrSubSymbolChain):
-            dsym, called_dsym, success = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
+            if update_liveness_time_versions:
+                # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
+                #  Right now, yielding the intermediate elts of the chain will yield false positives in the
+                #  event of namespace stale children.
+                for dsym, is_called, success in scope.gen_data_symbols_for_attrsub_chain(symbol_ref):
+                    if only_yield_successful_resolutions and not success:
+                        continue
+                    yield dsym, is_called, success, stmt_counter
+            else:
+                dsym, is_called, success = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
+                if dsym is not None:
+                    if success or not only_yield_successful_resolutions:
+                        yield dsym, is_called, success, stmt_counter
         else:
             logger.warning('invalid type for ref %s', symbol_ref)
             continue
-        if dsym is not None:
-            if success or not only_yield_successful_resolutions:
-                yield dsym, False
-        if called_dsym is not None:
-            yield called_dsym, True
 
 
 def get_symbols_for_references(
@@ -265,7 +285,7 @@ def get_symbols_for_references(
 ) -> Tuple[Set[DataSymbol], Set[DataSymbol]]:
     dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[DataSymbol] = set()
-    for dsym, is_called in gen_symbols_for_references(
+    for dsym, is_called, *_ in gen_symbols_for_references(
         symbol_refs, scope, only_yield_successful_resolutions=only_yield_successful_resolutions
     ):
         if is_called:
@@ -275,31 +295,39 @@ def get_symbols_for_references(
     return dsyms, called_dsyms
 
 
-def get_live_symbols_and_cells_for_references_and_update_liveness(
+def get_live_symbols_and_cells_for_references(
     symbol_refs: Set[Tuple[SymbolRef, int]],
     scope: Scope,
     cell_ctr: int,
+    update_liveness_time_versions: bool = False,
 ) -> Tuple[Set[DataSymbol], Set[int]]:
     dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[Tuple[DataSymbol, int]] = set()
     only_symbol_refs = (ref[0] for ref in symbol_refs)
     only_stmt_counters = (ref[1] for ref in symbol_refs)
-    dsym_gen = gen_symbols_for_references(
-        only_symbol_refs, scope, only_yield_successful_resolutions=False
-    )
-    for (dsym, is_called), stmt_ctr in zip(dsym_gen, only_stmt_counters):
-        dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = dsym.timestamp
+    for dsym, is_called, success, stmt_ctr in gen_symbols_for_references(
+        only_symbol_refs,
+        scope,
+        only_yield_successful_resolutions=False,
+        stmt_counters=only_stmt_counters,
+        update_liveness_time_versions=update_liveness_time_versions,
+    ):
+        if update_liveness_time_versions:
+            ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
+            dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
         if is_called:
             called_dsyms.add((dsym, stmt_ctr))
         else:
             dsyms.add(dsym)
-    live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(called_dsyms, cell_ctr)
+    live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
+        called_dsyms, cell_ctr, update_liveness_time_versions
+    )
     dsyms |= live_from_calls
     return dsyms, live_cells
 
 
 def _compute_call_chain_live_symbols_and_cells(
-    live_with_stmt_ctr: Set[Tuple[DataSymbol, int]], cell_ctr: int
+    live_with_stmt_ctr: Set[Tuple[DataSymbol, int]], cell_ctr: int, update_liveness_time_versions: bool
 ) -> Tuple[Set[DataSymbol], Set[int]]:
     seen = set()
     worklist = list(live_with_stmt_ctr)
@@ -316,14 +344,17 @@ def _compute_call_chain_live_symbols_and_cells(
         live_refs, _ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_dsym.stmt_node).body, init_killed=set(called_dsym.get_definition_args())
         )
-        live_symbols, called_symbols = get_symbols_for_references((ref[0] for ref in live_refs), called_dsym.call_scope)
-        worklist.extend((called_sym, stmt_ctr) for called_sym in called_symbols)
-        new_live = {
-            sym for sym in itertools.chain(live_symbols, called_symbols) if sym.is_globally_accessible
-        }
-        for dsym in new_live:
-            dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = dsym.timestamp
-        live |= new_live
+        used_time = Timestamp(cell_ctr, stmt_ctr)
+        for dsym, is_called, success, *_ in gen_symbols_for_references(
+            (ref[0] for ref in live_refs), called_dsym.call_scope, only_yield_successful_resolutions=False
+        ):
+            if is_called:
+                worklist.append((dsym, stmt_ctr))
+            if dsym.is_globally_accessible:
+                live.add(dsym)
+                if update_liveness_time_versions:
+                    ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
+                    dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][used_time] = ts_to_use
     return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
 
 
@@ -337,5 +368,5 @@ def compute_live_dead_symbol_refs(
     if isinstance(code, str):
         code = ast.parse(code)
     elif isinstance(code, list):
-        code = ast.Module(body=code)
+        code = ast.Module(code)
     return ComputeLiveSymbolRefs(scope=scope, init_killed=init_killed)(code)

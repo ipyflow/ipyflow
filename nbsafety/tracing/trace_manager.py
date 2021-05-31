@@ -430,7 +430,11 @@ class TraceManager(SliceTraceManager):
         if isinstance(symbol_ref, int):
             return self.node_id_to_loaded_symbols.get(symbol_ref, [])
         elif isinstance(symbol_ref, str):
-            return [self.cur_frame_original_scope.lookup_data_symbol_by_name(symbol_ref)]
+            ret = self.cur_frame_original_scope.lookup_data_symbol_by_name_this_indentation(symbol_ref)
+            if ret is None:
+                return []
+            else:
+                return [ret]
         else:
             return []
 

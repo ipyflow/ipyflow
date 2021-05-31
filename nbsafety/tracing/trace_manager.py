@@ -60,11 +60,6 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
-def _finish_tracing_reset():
-    # do nothing; we just want to trigger the newly reenabled tracer with a 'call' event
-    pass
-
-
 class BaseTraceManager(singletons.TraceManager):
 
     _MANAGER_CLASS_REGISTERED = False
@@ -82,7 +77,6 @@ class BaseTraceManager(singletons.TraceManager):
         super().__init__()
         self._event_handlers = self.EVENT_HANDLERS_BY_CLASS[self.__class__]
         self.tracing_enabled = False
-        self.tracing_reset_pending = False
         self.sys_tracer = self._sys_tracer
         self.existing_tracer = None
 
@@ -97,7 +91,7 @@ class BaseTraceManager(singletons.TraceManager):
                 if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
                     raise exc
                 else:
-                    logger.error('Exception occurred: %s', str(exc))
+                    logger.exception('An exception while handling evt %s', evt)
                 new_ret = None
             if new_ret is not None:
                 kwargs['ret'] = new_ret
@@ -168,14 +162,10 @@ class BaseTraceManager(singletons.TraceManager):
             delattr(builtins, EMIT_EVENT)
             self._disable_tracing(check_enabled=False)
 
-    def _attempt_to_reenable_tracing(self, frame: FrameType):
+    def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented
 
     def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
-        if self.tracing_reset_pending:
-            assert evt == 'call', 'expected call; got event %s' % evt
-            self._attempt_to_reenable_tracing(frame)
-            return None
         if evt == 'line' or not nbs().is_cell_file(frame.f_code.co_filename):
             return None
 
@@ -377,6 +367,8 @@ class TraceManager(SliceTraceManager):
                             self.node_id_to_loaded_symbols[return_to_node_id].append(dsym_to_attach)
         finally:
             self.call_stack.pop()
+            if nbs().is_develop and len(self.call_stack) == 0:
+                assert self.call_depth == 1
 
     def state_transition_hook(
         self,
@@ -738,32 +730,24 @@ class TraceManager(SliceTraceManager):
 
     @register_handler(TraceEvent.after_call)
     def after_call(self, _ret, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):
+        tracing_will_be_enabled_by_end = self.tracing_enabled
         if not self.tracing_enabled:
-            assert not self.tracing_reset_pending
-            call_depth = 0
-            while frame is not None:
-                if nbs().is_cell_file(frame.f_code.co_filename):
-                    call_depth += 1
-                frame = frame.f_back
-            if call_depth != 1:
-                return
-            if len(self.call_stack) == 0:
-                stmt_in_top_level_frame = self.prev_trace_stmt_in_cur_frame
-            else:
-                stmt_in_top_level_frame = self.call_stack.get_field('prev_trace_stmt_in_cur_frame', depth=0)
-            if stmt_in_top_level_frame.finished:
-                return
-            self._enable_tracing()
-            if nbs().trace_messages_enabled:
-                self.EVENT_LOGGER.warning('reenable tracing >>>')
-            self.call_depth = 1
-            while len(self.call_stack) > 0:
-                self.call_stack.pop()
-        if self.tracing_enabled:
+            tracing_will_be_enabled_by_end = self._should_attempt_to_reenable_tracing(frame)
+            if tracing_will_be_enabled_by_end:
+                # if tracing gets reenabled here instead of at the 'before_stmt' handler, then we're still
+                # at the same module stmt as when tracing was disabled, and we still have a 'return' to trace
+                self.call_depth = 1
+                while len(self.call_stack) > 0:
+                    self.call_stack.pop()
+
+        if tracing_will_be_enabled_by_end:
             # no need to reset active scope here;
             # that will happen in the 'after chain' handler
             self.lexical_call_stack.pop()
             self.prev_node_id_in_cur_frame_lexical = None
+
+            if not self.tracing_enabled:
+                self._enable_tracing()
 
     # Note: we don't trace set literals
     @register_handler((TraceEvent.before_dict_literal, TraceEvent.before_list_literal, TraceEvent.before_tuple_literal))
@@ -907,17 +891,22 @@ class TraceManager(SliceTraceManager):
             trace_stmt = TraceStatement(frame, cast(ast.stmt, nbs().ast_node_by_id[stmt_id]))
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
-        if not self.tracing_enabled:
-            assert not self.tracing_reset_pending
+        if not self.tracing_enabled and self._should_attempt_to_reenable_tracing(frame):
+            # At this point, we can be sure we're at the top level
+            # because tracing was enabled in a top-level handler.
+            # We also need to clear the stack, as we won't catch
+            # the return event (since tracing was already disabled
+            # when we got to a `before_stmt` event).
+            self.call_depth = 0
+            self.call_stack.clear()
+            self.lexical_call_stack.clear()
+            self.after_stmt_reset_hook()
             self._enable_tracing()
-            self.tracing_reset_pending = True
-            _finish_tracing_reset()  # trigger the tracer with a frame
 
-    def _attempt_to_reenable_tracing(self, frame: FrameType) -> None:
+    def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         if nbs().is_develop:
-            assert self.tracing_reset_pending, 'expected tracing reset to be pending!'
+            assert not self.tracing_enabled
             assert self.call_depth > 0, 'expected managed call depth > 0, got %d' % self.call_depth
-        self.tracing_reset_pending = False
         call_depth = 0
         while frame is not None:
             if nbs().is_cell_file(frame.f_code.co_filename):
@@ -927,17 +916,16 @@ class TraceManager(SliceTraceManager):
             assert call_depth >= 1, 'expected call depth >= 1, got %d' % call_depth
         # TODO: allow reenabling tracing beyond just at the top level
         if call_depth != 1:
-            self._disable_tracing()
-            return
-        # at this point, we can be sure we're at the top level
-        # because tracing was enabled in a handler and not in the
-        # top level, we need to clear the stack, since we won't
-        # catch the return event
-        self.call_depth = 0
-        self.call_stack.clear()
-        self.lexical_call_stack.clear()
+            return False
+        if len(self.call_stack) == 0:
+            stmt_in_top_level_frame = self.prev_trace_stmt_in_cur_frame
+        else:
+            stmt_in_top_level_frame = self.call_stack.get_field('prev_trace_stmt_in_cur_frame', depth=0)
+        if stmt_in_top_level_frame.finished:
+            return False
         if nbs().trace_messages_enabled:
             self.EVENT_LOGGER.warning('reenable tracing >>>')
+        return True
 
     @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
     def handle_sys_events(
@@ -963,6 +951,8 @@ class TraceManager(SliceTraceManager):
 
         if event == TraceEvent.return_:
             self.call_depth -= 1
+            if nbs().is_develop:
+                assert self.call_depth >= 0
             if self.call_depth == 0:
                 return
 

@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     AttrSubVal = SupportedIndexType
     NodeId = int
     ObjId = int
-    MutationCandidate = Tuple[Tuple[int, ObjId, Optional[str]], MutationEvent, Set[DataSymbol], List[Any]]
+    MutationCandidate = Tuple[Tuple[ObjId, Optional[str]], MutationEvent, Set[DataSymbol], List[Any]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedDelData = Tuple[NamespaceScope, AttrSubVal, bool]
@@ -48,6 +48,7 @@ logger.setLevel(logging.ERROR)
 ARG_MUTATION_EXCEPTED_MODULES = {
     'alt',
     'altair',
+    'd2l',
     'display',
     'logging',
     'matplotlib',
@@ -224,7 +225,6 @@ class TraceManager(SliceTraceManager):
         super().__init__()
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
-        self.trace_event_counter = 0
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.seen_stmts: Set[NodeId] = set()
@@ -376,8 +376,6 @@ class TraceManager(SliceTraceManager):
         trace_stmt: TraceStatement,
         ret: Any,
     ):
-        self.trace_event_counter += 1
-
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
         if event == TraceEvent.call:
@@ -630,7 +628,7 @@ class TraceManager(SliceTraceManager):
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
             self.mutation_candidates.append(
-                ((self.trace_event_counter, obj_id, obj_name), mutation_event, set(), [])
+                ((obj_id, obj_name), mutation_event, set(), [])
             )
             if not is_subscript:
                 if sym_for_obj is None and obj_name is not None:
@@ -667,12 +665,15 @@ class TraceManager(SliceTraceManager):
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
             if call_context and len(self.mutation_candidates) > 0:
                 (
-                    (evt_counter, obj_id, obj_name),
+                    (obj_id, obj_name),
                     mutation_event,
                     recorded_arg_dsyms,
                     recorded_arg_objs,
                 ) = self.mutation_candidates.pop()
-                if evt_counter == self.trace_event_counter:
+                obj_type = None
+                if obj_id in nbs().aliases:
+                    obj_type = next(iter(nbs().aliases[obj_id])).obj_type
+                if obj_type is not None and id(obj_type) not in nbs().aliases:
                     if obj is None or id(obj) == obj_id:
                         if isinstance(mutation_event, StandardMutation):
                             try:

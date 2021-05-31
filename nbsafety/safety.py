@@ -136,7 +136,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self._last_refused_code: Optional[str] = None
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
         self._cell_counter = 1
-        self._recorded_cell_name_to_cell_num = True
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
@@ -752,22 +751,27 @@ class NotebookSafety(singletons.NotebookSafety):
                 self._counter_by_cell_id[cell_id] = self._last_execution_counter
                 self._cell_id_by_counter[self._last_execution_counter] = cell_id
 
+            if cell_id is not None:
+                # add to run_cells even if it fails precheck, since an attempt
+                # to run indicates that the user is interested in this cell, so
+                # we should add this cell to the set of cells that get checked
+                # in various ways in the post-exec hook.
+                self._run_cells.add(cell_id)
+
             # Stage 1: Precheck.
             if self._safety_precheck_cell(cell, cell_id) and self.settings.mark_stale_symbol_usages_unsafe:
                 # set this back in case we need it (e.g. user overrides and reruns)
                 self._active_cell_id = cell_id
                 # FIXME: hack to increase cell number
                 #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
-                ret = run_cell_func('None')
                 if is_async:
-                    return await ret  # pragma: no cover
+                    ret = await run_cell_func('None')  # pragma: no cover
                 else:
-                    return ret
+                    ret = run_cell_func('None')
+                return ret
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
-                if cell_id is not None:
-                    self._run_cells.add(cell_id)
                 self.cell_content_by_counter[self._last_execution_counter] = cell
                 with self._tracing_context(cell_id):
                     if is_async:
@@ -810,7 +814,6 @@ class NotebookSafety(singletons.NotebookSafety):
     @contextmanager
     def _tracing_context(self, cell_id: CellId):
         self.updated_symbols.clear()
-        self._recorded_cell_name_to_cell_num = False
 
         try:
             with TraceManager.instance().tracing_context():

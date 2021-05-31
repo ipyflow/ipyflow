@@ -12,7 +12,7 @@ import astunparse
 from IPython import get_ipython
 
 from nbsafety import singletons
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.attr_symbols import CallPoint
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
@@ -192,6 +192,15 @@ def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
     return _inner_registrar
 
 
+def skip_when_tracing_disabled(handler):
+    @functools.wraps(handler)
+    def skipping_handler(self, *args, **kwargs):
+        if not self.tracing_enabled:
+            return
+        return handler(self, *args, **kwargs)
+    return skipping_handler
+
+
 def register_universal_handler(handler):
     return register_handler(tuple(evt for evt in TraceEvent))(handler)
 
@@ -274,8 +283,6 @@ class TraceManager(SliceTraceManager):
     def after_stmt_reset_hook(self) -> None:
         self.mutations.clear()
         self.mutation_candidates.clear()
-        self.lexical_call_stack.clear()
-        self.lexical_literal_stack.clear()
         self.active_scope = self.cur_frame_original_scope
         self.first_obj_id_in_chain = None
         self.top_level_node_id_for_chain = None
@@ -283,6 +290,10 @@ class TraceManager(SliceTraceManager):
         self.active_literal_scope = None
         self.node_id_to_loaded_literal_scope.clear()
         self.node_id_to_saved_dict_key.clear()
+        self.prev_node_id_in_cur_frame = None
+        # don't clear the lexical stacks because line magics can
+        # mess with when an 'after_stmt' gets emitted, and anyway
+        # these should be pushed / popped appropriately by ast events
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         # ensures we only handle del's and not delitem's
@@ -299,7 +310,7 @@ class TraceManager(SliceTraceManager):
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _check_prev_stmt_done_executing_hook(self, event: TraceEvent, trace_stmt: TraceStatement):
-        if event == TraceEvent.after_stmt:
+        if event == TraceEvent.after_stmt and self.tracing_enabled:
             trace_stmt.finished_execution_hook()
         elif event == TraceEvent.return_ and self.prev_event not in (TraceEvent.call, TraceEvent.exception):
             # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
@@ -516,9 +527,12 @@ class TraceManager(SliceTraceManager):
             TraceEvent.c_return,
             TraceEvent.c_exception,
             TraceEvent.argument,
+            TraceEvent.before_stmt,
+            TraceEvent.after_stmt,
+            TraceEvent.after_module_stmt,
         })
     )
-    def _save_node_id(self, _obj, node_id: NodeId, *_, **__):
+    def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
 
@@ -527,15 +541,13 @@ class TraceManager(SliceTraceManager):
         nbs().set_name_to_cell_num_mapping(frame)
 
     @register_handler(TraceEvent.after_assign_rhs)
+    @skip_when_tracing_disabled
     def after_assign_rhs(self, obj: Any, *_, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
         self.saved_assign_rhs_obj_id = id(obj)
 
     @register_handler(TraceEvent.subscript_slice)
+    @skip_when_tracing_disabled
     def subscript_slice(self, _obj: Any, slice_node_id: NodeId, *__, **___):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
         live, _ = compute_live_dead_symbol_refs(
             nbs().ast_node_by_id[slice_node_id], scope=self.cur_frame_original_scope
         )
@@ -555,6 +567,7 @@ class TraceManager(SliceTraceManager):
         )
 
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
+    @skip_when_tracing_disabled
     def attrsub_tracer(
         self,
         obj: Any,
@@ -569,8 +582,6 @@ class TraceManager(SliceTraceManager):
         obj_name: Optional[str] = None,
         **__
     ):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
         if isinstance(nbs().ast_node_by_id[node_id], ast.Call):
             # clear the callpoint dependency
             self.node_id_to_loaded_symbols.pop(node_id, None)
@@ -654,7 +665,7 @@ class TraceManager(SliceTraceManager):
     @register_handler(TraceEvent.after_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):
         try:
-            if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
+            if not self.tracing_enabled:
                 return
             if self.first_obj_id_in_chain is None:
                 return
@@ -701,9 +712,8 @@ class TraceManager(SliceTraceManager):
             self.active_scope = self.cur_frame_original_scope
 
     @register_handler(TraceEvent.argument)
+    @skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
         self.num_args_seen += 1
         arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
         if len(self.mutation_candidates) == 0:
@@ -720,34 +730,52 @@ class TraceManager(SliceTraceManager):
         self.mutation_candidates[-1][-1].append(arg_obj)
 
     @register_handler(TraceEvent.before_call)
+    @skip_when_tracing_disabled
     def before_call(self, *_, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
         with self.lexical_call_stack.push():
             pass
         self.active_scope = self.cur_frame_original_scope
 
     @register_handler(TraceEvent.after_call)
-    def after_call(self, *_, call_node_id: NodeId, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
-        # no need to reset active scope here;
-        # that will happen in the 'after chain' handler
-        self.lexical_call_stack.pop()
+    def after_call(self, _ret, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):
+        if not self.tracing_enabled:
+            assert not self.tracing_reset_pending
+            call_depth = 0
+            while frame is not None:
+                if nbs().is_cell_file(frame.f_code.co_filename):
+                    call_depth += 1
+                frame = frame.f_back
+            if call_depth != 1:
+                return
+            if len(self.call_stack) == 0:
+                stmt_in_top_level_frame = self.prev_trace_stmt_in_cur_frame
+            else:
+                stmt_in_top_level_frame = self.call_stack.get_field('prev_trace_stmt_in_cur_frame', depth=0)
+            if stmt_in_top_level_frame.finished:
+                return
+            self._enable_tracing()
+            if nbs().trace_messages_enabled:
+                self.EVENT_LOGGER.warning('reenable tracing >>>')
+            self.call_depth = 1
+            while len(self.call_stack) > 0:
+                self.call_stack.pop()
+        if self.tracing_enabled:
+            # no need to reset active scope here;
+            # that will happen in the 'after chain' handler
+            self.lexical_call_stack.pop()
+            self.prev_node_id_in_cur_frame_lexical = None
 
     # Note: we don't trace set literals
     @register_handler((TraceEvent.before_dict_literal, TraceEvent.before_list_literal, TraceEvent.before_tuple_literal))
+    @skip_when_tracing_disabled
     def before_literal(self, *_, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return
         parent_scope = self.active_literal_scope or self.cur_frame_original_scope
         with self.lexical_literal_stack.push():
             self.active_literal_scope = NamespaceScope(None, NamespaceScope.ANONYMOUS, parent_scope)
 
     @register_handler((TraceEvent.after_dict_literal, TraceEvent.after_list_literal, TraceEvent.after_tuple_literal))
+    @skip_when_tracing_disabled
     def after_literal(self, literal: Union[dict, list, tuple], node_id: NodeId, *_, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return literal
         try:
             self.active_literal_scope.update_obj_ref(literal)
             logger.warning("create literal scope %s", self.active_literal_scope)
@@ -793,16 +821,14 @@ class TraceManager(SliceTraceManager):
             self.lexical_literal_stack.pop()
 
     @register_handler(TraceEvent.dict_key)
+    @skip_when_tracing_disabled
     def dict_key(self, obj: Any, key_node_id: NodeId, *_, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return obj
         self.node_id_to_saved_dict_key[key_node_id] = obj
         return obj
 
     @register_handler(TraceEvent.dict_value)
+    @skip_when_tracing_disabled
     def dict_value(self, obj: Any, value_node_id: NodeId, *_, key_node_id: NodeId, dict_node_id: NodeId, **__):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return obj
         scope = self.node_id_to_loaded_literal_scope.pop(value_node_id, None)
         if scope is None:
             return obj
@@ -814,11 +840,10 @@ class TraceManager(SliceTraceManager):
         return obj
 
     @register_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
+    @skip_when_tracing_disabled
     def list_or_tuple_elt(
         self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
     ):
-        if not self.tracing_enabled or self.prev_trace_stmt_in_cur_frame.finished:
-            return obj
         scope = self.node_id_to_loaded_literal_scope.pop(elt_node_id, None)
         if scope is None:
             return obj
@@ -827,6 +852,7 @@ class TraceManager(SliceTraceManager):
         return obj
 
     @register_handler(TraceEvent.after_lambda)
+    @skip_when_tracing_disabled
     def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
         sym_deps = []
         node = nbs().ast_node_by_id[lambda_node_id]
@@ -858,7 +884,8 @@ class TraceManager(SliceTraceManager):
 
     @register_handler(TraceEvent.after_module_stmt)
     def after_module_stmt(self, *_, **__):
-        assert self.cur_frame_original_scope.is_global
+        if self.tracing_enabled:
+            assert self.cur_frame_original_scope.is_global
         ret = self._saved_stmt_ret_expr
         self._saved_stmt_ret_expr = None
         self._module_stmt_counter += 1
@@ -983,12 +1010,19 @@ class TraceManager(SliceTraceManager):
             codeline = ' ' * getattr(stmt_node, 'col_offset', 0) + codeline
             self.EVENT_LOGGER.warning(' %3d: %10s >>> %s', trace_stmt.lineno, event, codeline)
         if event == TraceEvent.call:
-            if trace_stmt.node_id_for_last_call == self.prev_node_id_in_cur_frame:
-                if nbs().trace_messages_enabled:
-                    self.EVENT_LOGGER.warning(' disable tracing >>>')
-                self._disable_tracing()
-                return None
-            trace_stmt.node_id_for_last_call = self.prev_node_id_in_cur_frame
+            try:
+                prev_node_id_in_cur_frame_lexical = self.lexical_call_stack.get_field(
+                    'prev_node_id_in_cur_frame_lexical'
+                )
+            except IndexError:
+                prev_node_id_in_cur_frame_lexical = None
+            if prev_node_id_in_cur_frame_lexical is not None:
+                if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
+                    if nbs().trace_messages_enabled:
+                        self.EVENT_LOGGER.warning(' disable tracing >>>')
+                    self._disable_tracing()
+                    return None
+            trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
         self.state_transition_hook(event, trace_stmt, ret_obj)
         return self.sys_tracer
 

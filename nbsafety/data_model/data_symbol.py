@@ -36,6 +36,16 @@ class DataSymbol:
 
     NULL = object()
 
+    IMMUTABLE_TYPES = {
+        bytes,
+        bytearray,
+        float,
+        frozenset,
+        int,
+        str,
+        tuple,
+    }
+
     def __init__(
         self,
         name: SupportedIndexType,
@@ -139,6 +149,10 @@ class DataSymbol:
         ts = self._timestamp
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
+
+    @property
+    def defined_cell_num(self) -> int:
+        return self._defined_cell_num
 
     @property
     def readable_name(self) -> str:
@@ -466,6 +480,8 @@ class DataSymbol:
             if not self._timestamp.is_initialized:
                 self._timestamp = Timestamp.current()
             return
+        if mutated and self.obj_type in self.IMMUTABLE_TYPES:
+            return
         # if we get here, no longer implicit
         self._implicit = False
         # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
@@ -501,6 +517,10 @@ class DataSymbol:
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
+        if self.is_class:
+            # pop pending class defs and update obj ref
+            pending_class_ns = tracer().pending_class_namespaces.pop()
+            pending_class_ns.update_obj_ref(self.obj)
 
     def update_usage_info(self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False) -> None:
         if used_time is None:
@@ -526,6 +546,7 @@ class DataSymbol:
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
             ns = self.containing_namespace
             if ns is not None:
+                # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
                 ns.max_descendent_timestamp = self._timestamp
             self.updated_timestamps.add(self._timestamp)
             self._version += 1
@@ -546,6 +567,7 @@ class DataSymbol:
                     # `test_external_object_update_propagates_to_stale_namespace_symbols()`
                     # in `test_multicell_precheck.py`
                     if not dsym.is_stale or refresh_namespace_stale:
+                        # logger.error("refresh %s due to %s (value %s) via namespace %s", dsym.full_path, self.full_path, self.obj, ns.full_path)
                         dsym.refresh(refresh_descendent_namespaces=True, timestamp=self._timestamp, seen=seen)
             if refresh_namespace_stale:
                 self.namespace_stale_symbols.clear()

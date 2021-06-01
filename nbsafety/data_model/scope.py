@@ -339,6 +339,8 @@ class Scope:
 class NamespaceScope(Scope):
     ANONYMOUS = '<anonymous_namespace>'
 
+    PENDING_CLASS_PLACEHOLDER = object()
+
     # TODO: support (multiple) inheritance by allowing
     #  NamespaceScopes from classes to clone their parent class's NamespaceScopes
     def __init__(self, obj: Any, *args, **kwargs):
@@ -353,7 +355,8 @@ class NamespaceScope(Scope):
                 raise ValueError(msg)
             else:
                 logger.warning(msg)
-        nbs().namespaces[id(obj)] = self
+        if obj is not self.PENDING_CLASS_PLACEHOLDER:
+            nbs().namespaces[id(obj)] = self
         self._tombstone = False
         # this timestamp needs to be bumped in DataSymbol refresh()
         self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()

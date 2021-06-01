@@ -422,9 +422,10 @@ class NotebookSafety(singletons.NotebookSafety):
                 *(ns_stale.fresher_ancestors for ns_stale in sym.namespace_stale_symbols)
             )
         logger.warning(
-            f'`{sym.readable_name}` defined in cell {sym.timestamp} may depend on '
-            f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols)}] '
-            f'(latest update in cell {max(dep.timestamp for dep in fresher_symbols)}).'
+            f'`{sym.readable_name}` defined in cell {sym.defined_cell_num} '
+            f'(last updated in cell {sym.timestamp.cell_num}) may depend on '
+            f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols if not dep.is_anonymous)}] '
+            f'(latest update in cell {max(dep.timestamp.cell_num for dep in fresher_symbols if not dep.is_anonymous)}).'
             f'\n\n(Run cell again to override and execute anyway.)'
         )
 

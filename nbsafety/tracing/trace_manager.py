@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     AttrSubVal = SupportedIndexType
     NodeId = int
     ObjId = int
-    MutationCandidate = Tuple[Tuple[ObjId, Optional[str]], MutationEvent, Set[DataSymbol], List[Any]]
+    MutationCandidate = Tuple[Tuple[ObjId, Optional[str]], MutationEvent, List[Set[DataSymbol]], List[Any]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedDelData = Tuple[NamespaceScope, AttrSubVal, bool]
@@ -48,7 +48,6 @@ logger.setLevel(logging.ERROR)
 ARG_MUTATION_EXCEPTED_MODULES = {
     'alt',
     'altair',
-    'd2l',
     'display',
     'logging',
     'matplotlib',
@@ -246,6 +245,8 @@ class TraceManager(SliceTraceManager):
             self.saved_assign_rhs_obj_id: Optional[int] = None
             # this one gets set regardless of whether tracing enabled
             self.next_stmt_node_id: Optional[NodeId] = None
+
+            self.pending_class_namespaces: List[NamespaceScope] = []
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = nbs().global_scope
@@ -628,7 +629,7 @@ class TraceManager(SliceTraceManager):
             # if event counter didn't change when we process the Call retval, and if the
             # retval is None, this is a likely signal that we have a mutation
             self.mutation_candidates.append(
-                ((obj_id, obj_name), mutation_event, set(), [])
+                ((obj_id, obj_name), mutation_event, [], [])
             )
             if not is_subscript:
                 if sym_for_obj is None and obj_name is not None:
@@ -675,14 +676,34 @@ class TraceManager(SliceTraceManager):
                     obj_type = next(iter(nbs().aliases[obj_id])).obj_type
                 if obj_type is not None and id(obj_type) not in nbs().aliases:
                     if obj is None or id(obj) == obj_id:
+                        arg_dsyms: Set[DataSymbol] = set()
+                        arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
                         if isinstance(mutation_event, StandardMutation):
                             try:
                                 top_level_sym = nbs().get_first_full_symbol(self.first_obj_id_in_chain)
                                 if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
                                     # TODO: should it be the other way around?
                                     #  i.e. allow-list for arg mutations, starting with np.random.seed?
+                                    mutated_dsym = None
                                     if len(recorded_arg_dsyms) > 0:
+                                        first_arg_dsyms = list(recorded_arg_dsyms[0])
+                                        first_arg_dsyms = [dsym for dsym in first_arg_dsyms if dsym.obj is recorded_arg_objs[0]]
+                                        if len(first_arg_dsyms) == 1:
+                                            mutated_dsym = first_arg_dsyms[0]
+                                            if mutated_dsym.obj_type in DataSymbol.IMMUTABLE_TYPES:
+                                                mutated_dsym = None
+                                            elif mutated_dsym.obj_type in {list, set, dict}:
+                                                # assume module code won't mutate these primitive containers
+                                                mutated_dsym = None
+                                    if mutated_dsym is not None:
                                         # only make this an arg mutation event if it looks like there's an arg to mutate
+                                        arg_dsyms = {mutated_dsym}
+                                        # just consider the first one mutated unless other args depend on it
+                                        for other_recorded_arg_dsyms in recorded_arg_dsyms[1:]:
+                                            arg_dsyms.update({
+                                                dsym for dsym in other_recorded_arg_dsyms
+                                                if mutated_dsym in dsym.parents
+                                            })
                                         mutation_event = ArgMutate()
                             except:
                                 pass
@@ -690,7 +711,7 @@ class TraceManager(SliceTraceManager):
                             mutation_event.insert_pos = recorded_arg_objs[0]
                         if obj_id != id(logging):
                             # ignore calls to logging.whatever(...)
-                            self.mutations.append((obj_id, mutation_event, recorded_arg_dsyms, recorded_arg_objs))
+                            self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
                     else:
                         if self.sym_for_obj_calling_method is not None:
                             loaded_sym = self.sym_for_obj_calling_method
@@ -719,7 +740,7 @@ class TraceManager(SliceTraceManager):
                 self.active_scope.upsert_data_symbol_for_name(
                     arg_node.id, arg_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, implicit=True
                 )
-        self.mutation_candidates[-1][-2].update(resolve_rval_symbols(arg_node))
+        self.mutation_candidates[-1][-2].append(resolve_rval_symbols(arg_node))
         self.mutation_candidates[-1][-1].append(arg_obj)
 
     @register_handler(TraceEvent.before_call)
@@ -788,7 +809,7 @@ class TraceManager(SliceTraceManager):
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):  # TODO: perform more general check for SupportedIndexType
                     self.active_literal_scope.upsert_data_symbol_for_name(
-                        i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, is_subscript=True
+                        i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, is_subscript=True, implicit=True,
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope
@@ -799,6 +820,7 @@ class TraceManager(SliceTraceManager):
                 set(),
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
                 is_anonymous=True,
+                implicit=True,
             )
             self.node_id_to_loaded_symbols[node_id].append(literal_sym)
             return literal

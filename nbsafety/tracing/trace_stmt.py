@@ -49,7 +49,9 @@ class TraceStatement:
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            return old_scope.make_child_scope(self.stmt_node.name, obj=-1)
+            pending_ns = old_scope.make_child_scope(self.stmt_node.name, obj=NamespaceScope.PENDING_CLASS_PLACEHOLDER)
+            tracer().pending_class_namespaces.append(pending_ns)
+            return pending_ns
 
         if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             func_name = self.stmt_node.name
@@ -291,7 +293,7 @@ class TraceStatement:
             Timestamp.update_usage_info(mutation_arg_dsyms)
             if isinstance(mutation_event, ArgMutate):
                 for mutated_sym in mutation_arg_dsyms:
-                    if mutated_sym is None:
+                    if mutated_sym is None or mutated_sym.is_anonymous:
                         continue
                     # TODO: happens when module mutates args
                     #  should we add module as a dep in this case?

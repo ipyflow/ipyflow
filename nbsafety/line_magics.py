@@ -72,10 +72,9 @@ def show_deps(symbols: str) -> Optional[str]:
                 *({child for child in children if child.is_user_accessible}
                   for children in dsym.children_by_cell_position.values())
             )
+            dsym_extra_info = f'defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}'
             if dsym.required_timestamp.is_initialized:
-                dsym_extra_info = 'last updated {}; required {}'.format(dsym.timestamp, dsym.required_timestamp)
-            else:
-                dsym_extra_info = 'defined in cell {}'.format(dsym.timestamp)
+                dsym_extra_info += f'; required: {dsym.required_timestamp.cell_num}'
             statements.append(
                 'Symbol {} ({}) is dependent on {} and is a parent of {}'.format(
                     dsym.full_namespace_path,

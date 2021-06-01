@@ -1,4 +1,5 @@
 # -*- coding: future_annotations -*-
+import difflib
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -8,17 +9,17 @@ from nbsafety.tracing.trace_manager import TraceManager
 from .utils import make_safety_fixture
 
 if TYPE_CHECKING:
-    from typing import Union
+    from typing import List, Union
     from types import FrameType
 
 logging.basicConfig(level=logging.INFO)
 
 
-RECORDED_EVENTS = []
+_RECORDED_EVENTS = []
 
 
 def patched_emit_event_fixture():
-    RECORDED_EVENTS.clear()
+    _RECORDED_EVENTS.clear()
     original_emit_event = TraceManager._emit_event
 
     def _patched_emit_event(self, evt: Union[TraceEvent, str], *args, **kwargs):
@@ -30,7 +31,7 @@ def patched_emit_event_fixture():
                 (event == TraceEvent.call and self.call_depth == 0) or
                 (event == TraceEvent.return_ and self.call_depth == 1)
             ):
-                RECORDED_EVENTS.append(event)
+                _RECORDED_EVENTS.append(event)
         return original_emit_event(self, evt, *args, **kwargs)
     TraceManager._emit_event = _patched_emit_event
     yield
@@ -44,6 +45,14 @@ _safety_fixture, run_cell_ = make_safety_fixture(
 )
 
 
+_DIFFER = difflib.Differ()
+
+
+def throw_and_print_diff_if_recorded_not_equal_to(actual: List[TraceEvent]) -> None:
+    assert _RECORDED_EVENTS == actual, '\n'.join(_DIFFER.compare(_RECORDED_EVENTS, actual))
+    _RECORDED_EVENTS.clear()
+
+
 def run_cell(cell, **kwargs):
     # print()
     # print('*******************************************')
@@ -54,9 +63,9 @@ def run_cell(cell, **kwargs):
 
 
 def test_recorded_events_simple():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell('logging.info("foo")')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
@@ -67,14 +76,14 @@ def test_recorded_events_simple():
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])
 
 
 def test_recorded_events_two_stmts():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell('x = [1, 2, 3]')
     run_cell('logging.info(x)')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
@@ -95,13 +104,13 @@ def test_recorded_events_two_stmts():
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])
 
 
 def test_nested_chains_no_call():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell('logging.info("foo is %s", logging.info("foo"))')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
@@ -122,13 +131,13 @@ def test_nested_chains_no_call():
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])
 
 
 def test_list_nested_in_dict():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell('x = {1: [2, 3, 4]}')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
@@ -144,24 +153,23 @@ def test_list_nested_in_dict():
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])
 
 
 def test_function_call():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell("""
 def foo(x):
     return [x]
 """)
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
-    RECORDED_EVENTS.clear()
+    ])
     run_cell('foo([42])')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
@@ -182,13 +190,13 @@ def foo(x):
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])
 
 
 def test_lambda_in_tuple():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell('x = (lambda: 42,)')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
@@ -200,11 +208,11 @@ def test_lambda_in_tuple():
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])
 
 
 def test_fancy_slices():
-    assert RECORDED_EVENTS == []
+    assert _RECORDED_EVENTS == []
     run_cell("""
 import numpy as np
 class Foo:
@@ -213,7 +221,7 @@ class Foo:
 foo = Foo(1)
 arr = np.zeros((3, 3, 3))
 """)
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
@@ -263,11 +271,10 @@ arr = np.zeros((3, 3, 3))
         TraceEvent.after_assign_rhs,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
-    RECORDED_EVENTS.clear()
+    ])
 
     run_cell('logging.info(arr[foo.x:foo.x+1,...])')
-    assert RECORDED_EVENTS == [
+    throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
@@ -289,4 +296,4 @@ arr = np.zeros((3, 3, 3))
         TraceEvent.after_complex_symbol,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
-    ], 'unexpected events; got %s' % RECORDED_EVENTS
+    ])

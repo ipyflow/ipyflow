@@ -241,7 +241,6 @@ class TraceManager(SliceTraceManager):
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
             self.mutations: List[Mutation] = []
-            self.mutation_candidates: List[MutationCandidate] = []
             self.saved_assign_rhs_obj_id: Optional[int] = None
             # this one gets set regardless of whether tracing enabled
             self.next_stmt_node_id: Optional[NodeId] = None
@@ -260,6 +259,7 @@ class TraceManager(SliceTraceManager):
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
                 self.saved_complex_symbol_load_data: Optional[SavedComplexSymbolLoadData] = None
                 self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
+                self.mutation_candidate: Optional[MutationCandidate] = None
 
             self.lexical_literal_stack: TraceStack = self._make_stack()
             with self.lexical_literal_stack.register_stack_state():
@@ -272,7 +272,7 @@ class TraceManager(SliceTraceManager):
     # TODO: use stack mechanism to automate this?
     def after_stmt_reset_hook(self) -> None:
         self.mutations.clear()
-        self.mutation_candidates.clear()
+        self.mutation_candidate = None
         self.active_scope = self.cur_frame_original_scope
         self.first_obj_id_in_chain = None
         self.top_level_node_id_for_chain = None
@@ -556,17 +556,6 @@ class TraceManager(SliceTraceManager):
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
         )
 
-    def _save_mutation_candidate(self, obj: Any, attr_or_subscript: AttrSubVal, obj_name: Optional[str] = None) -> None:
-        mutation_event: MutationEvent = StandardMutation()
-        if isinstance(obj, list):
-            if attr_or_subscript == 'append':
-                mutation_event = ListAppend()
-            elif attr_or_subscript == 'extend':
-                mutation_event = ListExtend(len(obj))
-            elif attr_or_subscript == 'insert':
-                mutation_event = ListInsert()
-        self.mutation_candidates.append(((id(obj), obj_name), mutation_event, [], []))
-
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     @skip_when_tracing_disabled
     def attrsub_tracer(
@@ -648,14 +637,15 @@ class TraceManager(SliceTraceManager):
             self.active_scope = scope
 
     def _process_possible_mutation(self, retval: Any) -> None:
-        if len(self.mutation_candidates) == 0:
+        if self.mutation_candidate is None:
             return
         (
             (obj_id, obj_name),
             mutation_event,
             recorded_arg_dsyms,
             recorded_arg_objs,
-        ) = self.mutation_candidates.pop()
+        ) = self.mutation_candidate
+        self.mutation_candidate = None
         obj_type = None
         if obj_id in nbs().aliases:
             obj_type = next(iter(nbs().aliases[obj_id])).obj_type
@@ -730,7 +720,11 @@ class TraceManager(SliceTraceManager):
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1
         arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
-        if len(self.mutation_candidates) == 0:
+        try:
+            mut_cand = self.lexical_call_stack.get_field('mutation_candidate')
+        except IndexError:
+            return
+        if mut_cand is None:
             return
 
         if isinstance(arg_node, ast.Name):
@@ -740,8 +734,19 @@ class TraceManager(SliceTraceManager):
                 self.active_scope.upsert_data_symbol_for_name(
                     arg_node.id, arg_obj, set(), self.prev_trace_stmt_in_cur_frame.stmt_node, implicit=True
                 )
-        self.mutation_candidates[-1][-2].append(resolve_rval_symbols(arg_node))
-        self.mutation_candidates[-1][-1].append(arg_obj)
+        mut_cand[-2].append(resolve_rval_symbols(arg_node))
+        mut_cand[-1].append(arg_obj)
+
+    def _save_mutation_candidate(self, obj: Any, attr_or_subscript: AttrSubVal, obj_name: Optional[str] = None) -> None:
+        mutation_event: MutationEvent = StandardMutation()
+        if isinstance(obj, list):
+            if attr_or_subscript == 'append':
+                mutation_event = ListAppend()
+            elif attr_or_subscript == 'extend':
+                mutation_event = ListExtend(len(obj))
+            elif attr_or_subscript == 'insert':
+                mutation_event = ListInsert()
+        self.mutation_candidate = ((id(obj), obj_name), mutation_event, [], [])
 
     @register_handler(TraceEvent.before_call)
     @skip_when_tracing_disabled
@@ -770,16 +775,17 @@ class TraceManager(SliceTraceManager):
                 while len(self.call_stack) > 0:
                     self.call_stack.pop()
 
-        if tracing_will_be_enabled_by_end:
-            # no need to reset active scope here;
-            # that will happen in the 'after chain' handler
-            self.lexical_call_stack.pop()
-            self.prev_node_id_in_cur_frame_lexical = None
+        if not tracing_will_be_enabled_by_end:
+            return
 
-            self._process_possible_mutation(retval)
+        # no need to reset active scope here;
+        # that will happen in the 'after chain' handler
+        self.lexical_call_stack.pop()
+        self.prev_node_id_in_cur_frame_lexical = None
+        self._process_possible_mutation(retval)
 
-            if not self.tracing_enabled:
-                self._enable_tracing()
+        if not self.tracing_enabled:
+            self._enable_tracing()
 
     # Note: we don't trace set literals
     @register_handler((TraceEvent.before_dict_literal, TraceEvent.before_list_literal, TraceEvent.before_tuple_literal))
@@ -808,18 +814,24 @@ class TraceManager(SliceTraceManager):
                         starred_syms = self.resolve_loaded_symbols(inner_val_node)
                         starred_namespace = nbs().namespaces.get(starred_syms[0].obj_id, None) if starred_syms else None
                     if starred_namespace is not None:
-                        starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(starred_idx, is_subscript=True)
+                        starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(
+                            starred_idx, is_subscript=True
+                        )
                         inner_symbols.add(starred_dep)
                 else:
                     inner_symbols = resolve_rval_symbols(inner_val_node)
                     if inner_key_node is not None:
-                        # inner_symbols.add(self.resolve_loaded_symbols(inner_key_node))
                         inner_symbols.update(resolve_rval_symbols(inner_key_node))
                 self.node_id_to_loaded_symbols.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):  # TODO: perform more general check for SupportedIndexType
                     self.active_literal_scope.upsert_data_symbol_for_name(
-                        i, inner_obj, inner_symbols, self.prev_trace_stmt_in_cur_frame.stmt_node, is_subscript=True, implicit=True,
+                        i,
+                        inner_obj,
+                        inner_symbols,
+                        self.prev_trace_stmt_in_cur_frame.stmt_node,
+                        is_subscript=True,
+                        implicit=True,
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope

@@ -446,7 +446,6 @@ class NamespaceScope(Scope):
             return name
 
     def lookup_data_symbol_by_name_this_indentation(self, name, is_subscript=None, skip_cloned_lookup=False):
-        # TODO: specify in arguments whether `name` refers to a subscript
         if is_subscript is None:
             ret = self._data_symbol_by_name.get(name, None)
             if ret is None:

@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedDelData = Tuple[NamespaceScope, AttrSubVal, bool]
-    SavedComplexSymbolLoadData = Tuple[Tuple[NamespaceScope, Any], Tuple[AttrSubVal, bool]]
+    SavedComplexSymbolLoadData = Tuple[NamespaceScope, Any, AttrSubVal, bool, Optional[str]]
 
 
 logger = logging.getLogger(__name__)
@@ -256,7 +256,6 @@ class TraceManager(SliceTraceManager):
             self.lexical_call_stack: TraceStack = self._make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.num_args_seen = 0
-                self.sym_for_obj_calling_method: Optional[DataSymbol] = None
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
                 self.saved_complex_symbol_load_data: Optional[SavedComplexSymbolLoadData] = None
@@ -482,7 +481,7 @@ class TraceManager(SliceTraceManager):
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(self, obj_attr_or_sub) -> Optional[DataSymbol]:
         if self.saved_complex_symbol_load_data is None:
             return None
-        (scope, obj), (attr_or_subscript, is_subscript) = self.saved_complex_symbol_load_data
+        scope, obj, attr_or_subscript, is_subscript, *_ = self.saved_complex_symbol_load_data
         self.saved_complex_symbol_load_data = None
         data_sym = scope.lookup_data_symbol_by_name_this_indentation(
             attr_or_subscript, is_subscript=is_subscript, skip_cloned_lookup=True,
@@ -557,6 +556,17 @@ class TraceManager(SliceTraceManager):
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
         )
 
+    def _save_mutation_candidate(self, obj: Any, attr_or_subscript: AttrSubVal, obj_name: Optional[str] = None) -> None:
+        mutation_event: MutationEvent = StandardMutation()
+        if isinstance(obj, list):
+            if attr_or_subscript == 'append':
+                mutation_event = ListAppend()
+            elif attr_or_subscript == 'extend':
+                mutation_event = ListExtend(len(obj))
+            elif attr_or_subscript == 'insert':
+                mutation_event = ListInsert()
+        self.mutation_candidates.append(((id(obj), obj_name), mutation_event, [], []))
+
     @register_handler((TraceEvent.attribute, TraceEvent.subscript))
     @skip_when_tracing_disabled
     def attrsub_tracer(
@@ -595,63 +605,105 @@ class TraceManager(SliceTraceManager):
             self.top_level_node_id_for_chain = top_level_node_id
         if self.first_obj_id_in_chain is None:
             self.first_obj_id_in_chain = obj_id
-        if isinstance(attr_or_subscript, tuple):
-            if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
-                return
-        elif not isinstance(attr_or_subscript, (str, int)):
-            return
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
-        self.active_scope = scope
 
-        if ctx in ('Store', 'AugStore'):
-            logger.warning(
-                "save store data for node id %d: %s, %s, %s, %s",
-                top_level_node_id, scope, obj, attr_or_subscript, is_subscript
-            )
-            self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
-            return
-        elif ctx == 'Del':
-            # logger.error("save del data for node %s", ast.dump(nbs().ast_node_by_id[top_level_node_id]))
-            logger.warning("save del data for node id %d", top_level_node_id)
-            self.node_id_to_saved_del_data[top_level_node_id] = (scope, attr_or_subscript, is_subscript)
-            return
-        if call_context:
-            mutation_event: MutationEvent = StandardMutation()
-            if isinstance(obj, list):
-                if attr_or_subscript == 'append':
-                    mutation_event = ListAppend()
-                elif attr_or_subscript == 'extend':
-                    mutation_event = ListExtend(len(obj))
-                elif attr_or_subscript == 'insert':
-                    mutation_event = ListInsert()
-            # save off event counter and obj_id
-            # if event counter didn't change when we process the Call retval, and if the
-            # retval is None, this is a likely signal that we have a mutation
-            self.mutation_candidates.append(
-                ((obj_id, obj_name), mutation_event, [], [])
-            )
-            if not is_subscript:
-                if sym_for_obj is None and obj_name is not None:
-                    sym_for_obj = self.cur_frame_original_scope.lookup_data_symbol_by_name(
-                        obj_name, is_subscript=is_subscript
-                    )
-                if sym_for_obj is None and self.prev_trace_stmt_in_cur_frame is not None:
-                    sym_for_obj = self.cur_frame_original_scope.upsert_data_symbol_for_name(
-                        obj_name or '<anonymous_symbol_%d>' % id(obj),
-                        obj,
-                        set(),
-                        self.prev_trace_stmt_in_cur_frame.stmt_node,
-                        is_subscript=is_subscript,
-                        is_anonymous=obj_name is None,
-                        propagate=False,
-                        implicit=True,
-                    )
-                if sym_for_obj is not None:
-                    self.sym_for_obj_calling_method = sym_for_obj
-        else:
+        try:
+            if isinstance(attr_or_subscript, tuple):
+                if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
+                    return
+            elif not isinstance(attr_or_subscript, (str, int)):
+                return
+            if ctx in ('Store', 'AugStore'):
+                logger.warning(
+                    "save store data for node id %d: %s, %s, %s, %s",
+                    top_level_node_id, scope, obj, attr_or_subscript, is_subscript
+                )
+                self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
+                return
+            elif ctx == 'Del':
+                # logger.error("save del data for node %s", ast.dump(nbs().ast_node_by_id[top_level_node_id]))
+                logger.warning("save del data for node id %d", top_level_node_id)
+                self.node_id_to_saved_del_data[top_level_node_id] = (scope, attr_or_subscript, is_subscript)
+                return
             logger.warning("saved load data: %s, %s, %s", scope, attr_or_subscript, is_subscript)
-            self.saved_complex_symbol_load_data = ((scope, obj), (attr_or_subscript, is_subscript))
+            self.saved_complex_symbol_load_data = (scope, obj, attr_or_subscript, is_subscript, obj_name)
+            if call_context:
+                if not is_subscript:
+                    if sym_for_obj is None and self.prev_trace_stmt_in_cur_frame is not None:
+                        sym_for_obj = self.active_scope.upsert_data_symbol_for_name(
+                            obj_name or '<anonymous_symbol_%d>' % id(obj),
+                            obj,
+                            set(),
+                            self.prev_trace_stmt_in_cur_frame.stmt_node,
+                            is_subscript=is_subscript,
+                            is_anonymous=obj_name is None,
+                            propagate=False,
+                            implicit=True,
+                        )
+                    if sym_for_obj is not None:
+                        assert self.top_level_node_id_for_chain is not None
+                        self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(sym_for_obj)
+        finally:
+            self.active_scope = scope
+
+    def _process_possible_mutation(self, retval: Any) -> None:
+        if len(self.mutation_candidates) == 0:
+            return
+        (
+            (obj_id, obj_name),
+            mutation_event,
+            recorded_arg_dsyms,
+            recorded_arg_objs,
+        ) = self.mutation_candidates.pop()
+        obj_type = None
+        if obj_id in nbs().aliases:
+            obj_type = next(iter(nbs().aliases[obj_id])).obj_type
+        if obj_type is None or id(obj_type) in nbs().aliases:
+            # the calling obj looks like something that we can trace;
+            # no need to process the call as a possible mutation
+            return
+        if retval is not None and id(retval) != obj_id:
+            # doesn't look like something we can trace, but it also
+            # doesn't look like something that mutates the caller, since
+            # the return value is not None and it's not the caller object
+            return
+        arg_dsyms: Set[DataSymbol] = set()
+        arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
+        if isinstance(mutation_event, StandardMutation):
+            try:
+                top_level_sym = nbs().get_first_full_symbol(self.first_obj_id_in_chain)
+                if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
+                    # TODO: should it be the other way around?
+                    #  i.e. allow-list for arg mutations, starting with np.random.seed?
+                    mutated_dsym = None
+                    if len(recorded_arg_dsyms) > 0:
+                        first_arg_dsyms = list(recorded_arg_dsyms[0])
+                        first_arg_dsyms = [dsym for dsym in first_arg_dsyms if dsym.obj is recorded_arg_objs[0]]
+                        if len(first_arg_dsyms) == 1:
+                            mutated_dsym = first_arg_dsyms[0]
+                            if mutated_dsym.obj_type in DataSymbol.IMMUTABLE_TYPES:
+                                mutated_dsym = None
+                            elif mutated_dsym.obj_type in {list, set, dict}:
+                                # assume module code won't mutate these primitive containers
+                                mutated_dsym = None
+                    if mutated_dsym is not None:
+                        # only make this an arg mutation event if it looks like there's an arg to mutate
+                        arg_dsyms = {mutated_dsym}
+                        # just consider the first one mutated unless other args depend on it
+                        for other_recorded_arg_dsyms in recorded_arg_dsyms[1:]:
+                            arg_dsyms.update({
+                                dsym for dsym in other_recorded_arg_dsyms
+                                if mutated_dsym in dsym.parents
+                            })
+                        mutation_event = ArgMutate()
+            except:
+                pass
+        elif isinstance(mutation_event, ListInsert):
+            mutation_event.insert_pos = recorded_arg_objs[0]
+        if obj_id != id(logging):
+            # ignore calls to logging.whatever(...)
+            self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
     @register_handler(TraceEvent.after_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):
@@ -663,66 +715,14 @@ class TraceManager(SliceTraceManager):
             if ctx != 'Load':
                 # don't trace after non-load events
                 return
+            assert self.top_level_node_id_for_chain is not None
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
-            if call_context and len(self.mutation_candidates) > 0:
-                (
-                    (obj_id, obj_name),
-                    mutation_event,
-                    recorded_arg_dsyms,
-                    recorded_arg_objs,
-                ) = self.mutation_candidates.pop()
-                obj_type = None
-                if obj_id in nbs().aliases:
-                    obj_type = next(iter(nbs().aliases[obj_id])).obj_type
-                if obj_type is not None and id(obj_type) not in nbs().aliases:
-                    if obj is None or id(obj) == obj_id:
-                        arg_dsyms: Set[DataSymbol] = set()
-                        arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
-                        if isinstance(mutation_event, StandardMutation):
-                            try:
-                                top_level_sym = nbs().get_first_full_symbol(self.first_obj_id_in_chain)
-                                if top_level_sym.is_import and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES:
-                                    # TODO: should it be the other way around?
-                                    #  i.e. allow-list for arg mutations, starting with np.random.seed?
-                                    mutated_dsym = None
-                                    if len(recorded_arg_dsyms) > 0:
-                                        first_arg_dsyms = list(recorded_arg_dsyms[0])
-                                        first_arg_dsyms = [dsym for dsym in first_arg_dsyms if dsym.obj is recorded_arg_objs[0]]
-                                        if len(first_arg_dsyms) == 1:
-                                            mutated_dsym = first_arg_dsyms[0]
-                                            if mutated_dsym.obj_type in DataSymbol.IMMUTABLE_TYPES:
-                                                mutated_dsym = None
-                                            elif mutated_dsym.obj_type in {list, set, dict}:
-                                                # assume module code won't mutate these primitive containers
-                                                mutated_dsym = None
-                                    if mutated_dsym is not None:
-                                        # only make this an arg mutation event if it looks like there's an arg to mutate
-                                        arg_dsyms = {mutated_dsym}
-                                        # just consider the first one mutated unless other args depend on it
-                                        for other_recorded_arg_dsyms in recorded_arg_dsyms[1:]:
-                                            arg_dsyms.update({
-                                                dsym for dsym in other_recorded_arg_dsyms
-                                                if mutated_dsym in dsym.parents
-                                            })
-                                        mutation_event = ArgMutate()
-                            except:
-                                pass
-                        elif isinstance(mutation_event, ListInsert):
-                            mutation_event.insert_pos = recorded_arg_objs[0]
-                        if obj_id != id(logging):
-                            # ignore calls to logging.whatever(...)
-                            self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
-                    else:
-                        if self.sym_for_obj_calling_method is not None:
-                            loaded_sym = self.sym_for_obj_calling_method
-                            self.sym_for_obj_calling_method = None
             if loaded_sym is not None:
                 self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(loaded_sym)
         finally:
             self.saved_complex_symbol_load_data = None
             self.first_obj_id_in_chain = None
             self.top_level_node_id_for_chain = None
-            self.sym_for_obj_calling_method = None
             self.active_scope = self.cur_frame_original_scope
 
     @register_handler(TraceEvent.argument)
@@ -745,13 +745,21 @@ class TraceManager(SliceTraceManager):
 
     @register_handler(TraceEvent.before_call)
     @skip_when_tracing_disabled
-    def before_call(self, *_, **__):
+    def before_call(self, function_or_method, *_, **__):
+        if self.saved_complex_symbol_load_data is None:
+            obj, attr_or_subscript, obj_name = None, None, None
+        else:
+            # TODO: this will cause errors if we add more fields
+            _, obj, attr_or_subscript, *_, obj_name = self.saved_complex_symbol_load_data
+        if obj is not None:
+            self._save_mutation_candidate(obj, attr_or_subscript, obj_name=obj_name)
+        self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():
             pass
         self.active_scope = self.cur_frame_original_scope
 
     @register_handler(TraceEvent.after_call)
-    def after_call(self, _ret, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):
+    def after_call(self, retval: Any, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):
         tracing_will_be_enabled_by_end = self.tracing_enabled
         if not self.tracing_enabled:
             tracing_will_be_enabled_by_end = self._should_attempt_to_reenable_tracing(frame)
@@ -767,6 +775,8 @@ class TraceManager(SliceTraceManager):
             # that will happen in the 'after chain' handler
             self.lexical_call_stack.pop()
             self.prev_node_id_in_cur_frame_lexical = None
+
+            self._process_possible_mutation(retval)
 
             if not self.tracing_enabled:
                 self._enable_tracing()

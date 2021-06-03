@@ -205,3 +205,18 @@ def test_list_insert():
     assert name == 'lst[3]', 'got %s' % name
     name = lookup_symbol(4).readable_name
     assert name == 'lst[4]', 'got %s' % name
+
+
+def test_list_delete():
+    run_cell('lst = [0, 1, 2, 3, 3, 4, 5, 6]')
+    name = lookup_symbol(2).readable_name
+    assert name == 'lst[2]', 'got %s' % name
+    name = lookup_symbol(4).readable_name
+    assert name == 'lst[5]', 'got %s' % name
+    run_cell('del lst[3]')
+    name = lookup_symbol(2).readable_name
+    assert name == 'lst[2]', 'got %s' % name
+    name = lookup_symbol(3).readable_name
+    assert name == 'lst[3]', 'got %s' % name
+    name = lookup_symbol(4).readable_name
+    assert name == 'lst[4]', 'got %s' % name

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     MutationCandidate = Tuple[Tuple[ObjId, Optional[str]], MutationEvent, List[Set[DataSymbol]], List[Any]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    SavedDelData = Tuple[NamespaceScope, AttrSubVal, bool]
+    SavedDelData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedComplexSymbolLoadData = Tuple[NamespaceScope, Any, AttrSubVal, bool, Optional[str]]
 
 
@@ -415,14 +415,16 @@ class TraceManager(SliceTraceManager):
             scope_to_use = scope
         return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
 
-    def resolve_del_data_for_target(self, target: Union[str, int, ast.AST]) -> Tuple[Scope, AttrSubVal, Any, bool]:
+    def resolve_del_data_for_target(
+        self, target: Union[str, int, ast.AST]
+    ) -> Tuple[Scope, Optional[Any], AttrSubVal, bool]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
-            return self.cur_frame_original_scope, target, None, False
+            return self.cur_frame_original_scope, None, target, False
         (
-            scope, attr_or_sub, is_subscript
+            scope, obj, attr_or_sub, is_subscript
         ) = self.node_id_to_saved_del_data[target]
-        return scope, attr_or_sub, None, is_subscript
+        return scope, obj, attr_or_sub, is_subscript
 
     def resolve_loaded_symbols(self, symbol_ref: Union[str, int, ast.AST, DataSymbol]) -> List[DataSymbol]:
         if isinstance(symbol_ref, DataSymbol):
@@ -613,7 +615,7 @@ class TraceManager(SliceTraceManager):
             elif ctx == 'Del':
                 # logger.error("save del data for node %s", ast.dump(nbs().ast_node_by_id[top_level_node_id]))
                 logger.warning("save del data for node id %d", top_level_node_id)
-                self.node_id_to_saved_del_data[top_level_node_id] = (scope, attr_or_subscript, is_subscript)
+                self.node_id_to_saved_del_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
                 return
             logger.warning("saved load data: %s, %s, %s", scope, attr_or_subscript, is_subscript)
             self.saved_complex_symbol_load_data = (scope, obj, attr_or_subscript, is_subscript, obj_name)

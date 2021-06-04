@@ -3,7 +3,7 @@ import ast
 import inspect
 import itertools
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from IPython import get_ipython
 try:
@@ -229,7 +229,11 @@ class Scope:
             implicit=implicit,
         )
         dsym.update_deps(
-            deps, prev_obj=prev_obj, overwrite=overwrite, propagate=propagate, refresh=not implicit
+            deps,
+            prev_obj=prev_obj,
+            overwrite=overwrite,
+            propagate=propagate,
+            refresh=not implicit,
         )
         return dsym
 
@@ -290,9 +294,10 @@ class Scope:
         return dsym, prev_dsym, prev_obj
 
     def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
+        assert not is_subscript
         dsym = self._data_symbol_by_name.pop(name, None)
         if dsym is not None:
-            dsym.update_deps(set())
+            dsym.update_deps(set(), deleted=True)
 
     @property
     def is_global(self):

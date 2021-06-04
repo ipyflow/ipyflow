@@ -362,3 +362,47 @@ def test_increment_by_same_amount():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
     assert response['fresh_cells'] == [1]
+
+
+def test_list_insert():
+    cells = {
+        0: 'lst = [0, 1, 2, 4, 5, 6]',
+        1: 'logging.info(lst[0])',
+        2: 'logging.info(lst[1])',
+        3: 'logging.info(lst[2])',
+        4: 'logging.info(lst[3])',
+        5: 'logging.info(lst[4])',
+        6: 'logging.info(lst[5])',
+        7: 'x = lst[5] + 42',
+        8: 'logging.info(x)',
+        9: 'lst.insert(3, 3)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [8], 'got %s' % response['stale_cells']
+    assert response['fresh_cells'] == [4, 5, 6, 7], 'got %s' % response['fresh_cells']
+
+
+def test_list_delete():
+    cells = {
+        0: 'lst = [0, 1, 2, 3, 3, 4, 5, 6]',
+        1: 'logging.info(lst[0])',
+        2: 'logging.info(lst[1])',
+        3: 'logging.info(lst[2])',
+        4: 'logging.info(lst[3])',
+        5: 'logging.info(lst[4])',
+        6: 'logging.info(lst[5])',
+        7: 'logging.info(lst[6])',
+        8: 'logging.info(lst[7])',
+        9: 'x = lst[6] + 42',
+        10: 'logging.info(x)',
+        11: 'del lst[3]',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == [10]
+    # TODO: ideally we would detect that lst[3] is the same after deleting
+    #  and not consider cell 4 to be fresh
+    # TODO: ideally cell 8 would be considered unsafe since the last entry
+    #  no longer exists
+    assert response['fresh_cells'] == [4, 5, 6, 7, 9], 'got %s' % response['fresh_cells']

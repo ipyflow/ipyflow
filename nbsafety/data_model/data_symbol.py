@@ -466,14 +466,14 @@ class DataSymbol:
     def update_deps(
         self,
         new_deps: Set[DataSymbol],
-        prev_obj=None,
-        overwrite=True,
-        mutated=False,
-        deleted=False,
-        propagate_to_namespace_descendents=False,
-        propagate=True,
-        refresh=True,
-    ):
+        prev_obj: Any = None,
+        overwrite: bool = True,
+        mutated: bool = False,
+        deleted: bool = False,
+        propagate_to_namespace_descendents: bool = False,
+        propagate: bool = True,
+        refresh: bool = True,
+    ) -> None:
         if self.is_import:
             # skip updates for imported symbols
             # just bump the version if it's newly created
@@ -539,7 +539,7 @@ class DataSymbol:
         refresh_namespace_stale=True,
         timestamp: Optional[Timestamp] = None,
         seen: Set[DataSymbol] = None,
-    ):
+    ) -> None:
         self._temp_disable_warnings = False
         self.fresher_ancestors.clear()
         if bump_version:

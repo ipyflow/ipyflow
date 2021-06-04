@@ -199,12 +199,16 @@ def test_list_insert():
     dsym = lookup_symbol(3)
     assert dsym is None
     run_cell('lst.insert(3, 3)')
-    name = lookup_symbol(2).readable_name
-    assert name == 'lst[2]', 'got %s' % name
-    name = lookup_symbol(3).readable_name
-    assert name == 'lst[3]', 'got %s' % name
-    name = lookup_symbol(4).readable_name
-    assert name == 'lst[4]', 'got %s' % name
+    sym_2 = lookup_symbol(2)
+    assert sym_2.readable_name == 'lst[2]', 'got %s' % sym_2.readable_name
+    assert sym_2.obj == 2
+    sym_3 = lookup_symbol(3)
+    assert sym_3.readable_name == 'lst[3]', 'got %s' % sym_3.readable_name
+    assert sym_3.obj == 3
+    sym_4 = lookup_symbol(4)
+    assert sym_4.readable_name == 'lst[4]', 'got %s' % sym_4.readable_name
+    assert sym_4.obj == 4
+    assert sym_4.containing_namespace.lookup_data_symbol_by_name_this_indentation(4, is_subscript=True) is sym_4
 
 
 def test_list_delete():
@@ -214,9 +218,10 @@ def test_list_delete():
     name = lookup_symbol(4).readable_name
     assert name == 'lst[5]', 'got %s' % name
     run_cell('del lst[3]')
-    name = lookup_symbol(2).readable_name
-    assert name == 'lst[2]', 'got %s' % name
-    name = lookup_symbol(3).readable_name
-    assert name == 'lst[3]', 'got %s' % name
-    name = lookup_symbol(4).readable_name
-    assert name == 'lst[4]', 'got %s' % name
+    sym_2 = lookup_symbol(2)
+    assert sym_2.readable_name == 'lst[2]', 'got %s' % sym_2.readable_name
+    sym_3 = lookup_symbol(3)
+    assert sym_3.readable_name == 'lst[3]', 'got %s' % sym_3.readable_name
+    sym_4 = lookup_symbol(4)
+    assert sym_4.readable_name == 'lst[4]', 'got %s' % sym_4.readable_name
+    assert sym_4.containing_namespace.lookup_data_symbol_by_name_this_indentation(4, is_subscript=True) is sym_4

@@ -328,6 +328,11 @@ class DataSymbol:
         if refresh_cached:
             self._refresh_cached_obj()
 
+    def invalidate_cached(self):
+        self._cached_out_of_sync = True
+        self.cached_obj_id = None
+        self.cached_obj_type = None
+
     def get_ref_count(self):
         if self.obj is None:
             return -1

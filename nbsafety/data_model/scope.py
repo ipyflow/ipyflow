@@ -465,6 +465,27 @@ class NamespaceScope(Scope):
                 ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name, is_subscript=is_subscript)
         return ret
 
+    def _remap_sym(self, from_idx: int, to_idx: int, prev_obj: Optional[Any]) -> None:
+        subsym = self._subscript_data_symbol_by_name.pop(from_idx, None)
+        if subsym is None:
+            return
+        subsym.name = to_idx
+        subsym.invalidate_cached()  # ensure we bypass equality check and bump timestamp
+        subsym.update_deps(
+            set(), prev_obj, overwrite=False, propagate=True, refresh=True,
+        )
+        self._subscript_data_symbol_by_name[to_idx] = subsym
+
+    def shuffle_symbols_upward_from(self, pos: int) -> None:
+        for idx in range(len(self.obj) - 1, pos, -1):
+            prev_obj = self.obj[idx + 1] if idx < len(self.obj) - 1 else None
+            self._remap_sym(idx - 1, idx, prev_obj)
+
+    def _shuffle_symbols_downward_to(self, pos: int) -> None:
+        for idx in range(pos + 1, len(self.obj)):
+            prev_obj = self.obj[idx - 2] if idx > pos + 1 else None
+            self._remap_sym(idx, idx - 1, prev_obj)
+
     def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
         if is_subscript:
             dsym = self._subscript_data_symbol_by_name.pop(name, None)
@@ -473,6 +494,8 @@ class NamespaceScope(Scope):
                 dsym = self._subscript_data_symbol_by_name.pop(name, None)
             if dsym is not None:
                 dsym.update_deps(set(), deleted=True)
+            if isinstance(self.obj, list) and isinstance(name, int):
+                self._shuffle_symbols_downward_to(name)
         else:
             super().delete_data_symbol_for_name(name)
 

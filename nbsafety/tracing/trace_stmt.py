@@ -189,20 +189,6 @@ class TraceStatement:
             try:
                 scope, obj, name, is_subscript = tracer().resolve_del_data_for_target(target)
                 scope.delete_data_symbol_for_name(name, is_subscript=is_subscript)
-                # TODO: move this closer to list insert logic and fix private field accesses
-                if isinstance(obj, list) and isinstance(name, int):
-                    for idx in range(name + 1, len(obj)):
-                        subsym = scope._subscript_data_symbol_by_name.pop(idx, None)
-                        if subsym is None:
-                            continue
-                        subsym.name = idx - 1
-                        subsym.update_obj_ref(obj[idx - 1], refresh_cached=False)
-                        subsym.cached_obj_id = None
-                        prev_obj = obj[idx - 2] if idx > name + 1 else None
-                        subsym.update_deps(
-                            set(), prev_obj, overwrite=False, propagate=True, refresh=True,
-                        )
-                        scope._subscript_data_symbol_by_name[idx - 1] = subsym
             except KeyError as e:
                 # this will happen if, e.g., a __delitem__ triggered a call
                 # logger.info("got key error while trying to handle %s: %s", ast.dump(self.stmt_node), e)
@@ -290,18 +276,8 @@ class TraceStatement:
                     propagate=False,
                 )
         elif isinstance(mutation_event, ListInsert):
-            for idx in range(len(mutated_obj) - 1, mutation_event.insert_pos, -1):
-                subsym = namespace_scope._subscript_data_symbol_by_name.pop(idx - 1, None)
-                if subsym is None:
-                    continue
-                subsym.name = idx
-                subsym.update_obj_ref(subsym.obj, refresh_cached=False)
-                subsym.cached_obj_id = None
-                prev_obj = mutated_obj[idx + 1] if idx < len(mutated_obj) - 1 else None
-                subsym.update_deps(
-                    set(), prev_obj, overwrite=False, propagate=True, refresh=True,
-                )
-                namespace_scope._subscript_data_symbol_by_name[idx] = subsym
+            assert mutated_obj is namespace_scope.obj
+            namespace_scope.shuffle_symbols_upward_from(mutation_event.insert_pos)
             namespace_scope.upsert_data_symbol_for_name(
                 mutation_event.insert_pos,
                 mutated_obj[mutation_event.insert_pos],

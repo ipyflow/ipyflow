@@ -259,7 +259,7 @@ History
 * Minor no-op detection fix;
 * Minor security fixes in npm packages;
 
-0.0.70 (2021-XX-YY)
+0.0.70 (2021-06-05)
 -------------------
 * Improved slicing via timestamp-augmented liveness analysis;
 * Bugfix to dedup slice computation;
@@ -267,3 +267,4 @@ History
 * Bugfix for improper class namespace registration;
 * State transition bugfix for return from ClassDef;
 * Misc improvements to mutations;
+* Improved bookkeeping for list insertions / deletions;

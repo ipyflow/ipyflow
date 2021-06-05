@@ -64,5 +64,5 @@
     "extension": true,
     "outputDir": "../../nbsafety/resources/labextension/"
   },
-  "version": "0.0.69"
+  "version": "0.0.70"
 }

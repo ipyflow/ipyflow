@@ -84,7 +84,10 @@ class TraceStatement:
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
-            logger.info("Exception: %s", e)
+            if nbs().is_develop:
+                logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+            # if nbs().is_test:
+            #     raise ke
             return
         upserted = scope.upsert_data_symbol_for_name(
             name, obj, deps, self.stmt_node, is_subscript=is_subscript,
@@ -240,11 +243,17 @@ class TraceStatement:
                     class_scope=self.class_scope,
                     propagate=not isinstance(self.stmt_node, ast.For)
                 )
-            except KeyError:
-                logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+            except KeyError as ke:
+                # e.g., slices aren't implemented yet
+                # put logging behind flag to avoid noise to user
+                if nbs().is_develop:
+                    logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+                # if nbs().is_test:
+                #     raise ke
             except Exception as e:
                 logger.warning('exception while handling store: %s', e)
-                pass
+                if nbs().is_test:
+                    raise e
 
     def _handle_list_mutation(
         self,

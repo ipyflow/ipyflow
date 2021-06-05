@@ -136,3 +136,15 @@ class Foo:
     run_cell('logging.info(x[foo.x])')
     run_cell('logging.info(x[foo.x:,...])')
     run_cell('logging.info(x[foo.x:foo.x+1,:,...])')
+
+
+def test_fancy_slice_assign_augassign():
+    run_cell('%safety trace_messages enable')
+    run_cell('import numpy as np')
+    run_cell('x = np.zeros((3, 3, 3))')
+    run_cell('x[:, 1 ,...] = 1.')
+    run_cell('x[:, 1 ,...] /= 5.')
+
+
+def test_pass():
+    run_cell('if True: pass')

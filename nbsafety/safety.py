@@ -426,7 +426,6 @@ class NotebookSafety(singletons.NotebookSafety):
             f'(last updated in cell {sym.timestamp.cell_num}) may depend on '
             f'old version(s) of [{", ".join(f"`{str(dep)}`" for dep in fresher_symbols if not dep.is_anonymous)}] '
             f'(latest update in cell {max(dep.timestamp.cell_num for dep in fresher_symbols if not dep.is_anonymous)}).'
-            f'\n\n(Run cell again to override and execute anyway.)'
         )
 
     @staticmethod
@@ -468,6 +467,8 @@ class NotebookSafety(singletons.NotebookSafety):
                         break
                     self._stale_sym_warning(sym)
                     stale_sym_usage_warning_counter += 1
+                if stale_sym_usage_warning_counter > 0:
+                    logger.warning('\n\n(Run cell again to override and execute anyway.)')
             if self.settings.mark_phantom_cell_usages_unsafe:
                 used_cell_counters_by_cell_id = defaultdict(set)
                 used_cell_counters_by_cell_id[cell_id].add(self.cell_counter())

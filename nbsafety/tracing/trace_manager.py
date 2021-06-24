@@ -81,21 +81,25 @@ class BaseTraceManager(singletons.TraceManager):
         self.existing_tracer = None
 
     def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
-        event = TraceEvent(evt) if isinstance(evt, str) else evt
-        frame = kwargs.get('_frame', sys._getframe().f_back)
-        kwargs['_frame'] = frame
-        for handler in self._event_handlers[event]:
-            try:
-                new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
-            except Exception as exc:
-                if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
-                    raise exc
-                else:
-                    logger.exception('An exception while handling evt %s', evt)
-                new_ret = None
-            if new_ret is not None:
-                kwargs['ret'] = new_ret
-        return kwargs.get('ret', None)
+        try:
+            event = TraceEvent(evt) if isinstance(evt, str) else evt
+            frame = kwargs.get('_frame', sys._getframe().f_back)
+            kwargs['_frame'] = frame
+            for handler in self._event_handlers[event]:
+                try:
+                    new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
+                except Exception as exc:
+                    if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
+                        raise exc
+                    else:
+                        logger.exception('An exception while handling evt %s', evt)
+                    new_ret = None
+                if new_ret is not None:
+                    kwargs['ret'] = new_ret
+            return kwargs.get('ret', None)
+        except KeyboardInterrupt as ki:
+            self._disable_tracing(check_enabled=False)
+            raise ki.with_traceback(None)
 
     def _make_stack(self):
         return TraceStack(self)

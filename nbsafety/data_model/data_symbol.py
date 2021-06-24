@@ -313,6 +313,7 @@ class DataSymbol:
     #         self.call_scope = None
 
     def update_obj_ref(self, obj, refresh_cached=True):
+        logger.info("%s update obj ref to %s", self, obj)
         self._cached_out_of_sync = True
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
             nbs().cell_counters_needing_typecheck |= nbs().cell_counter_by_live_symbol.get(self, set())
@@ -323,7 +324,16 @@ class DataSymbol:
                 # don't overwrite existing namespace for this obj
                 old_ns = nbs().namespaces.get(self.cached_obj_id, None)
                 if old_ns is not None:
-                    _ = old_ns.fresh_copy(obj)
+                    logger.info("create fresh copy of namespace %s", old_ns)
+                    new_ns = old_ns.fresh_copy(obj)
+                    for dsym in list(old_ns.all_data_symbols_this_indentation(exclude_class=True, is_subscript=False)):
+                        if hasattr(obj, dsym.name):
+                            dsym.update_obj_ref(getattr(obj, dsym.name))
+                            logger.info("shuffle %s from %s to %s", dsym, old_ns, new_ns)
+                            old_ns._data_symbol_by_name.pop(dsym.name, None)
+                            new_ns._data_symbol_by_name[dsym.name] = dsym
+                            dsym.containing_scope = new_ns
+                    # TODO: how best to handle subscripts?
             self._handle_aliases()
         if refresh_cached:
             self._refresh_cached_obj()

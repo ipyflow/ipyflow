@@ -141,7 +141,7 @@ for foo in lst:
     cells[5] = 'foo.inc()'
     run_cell(cells[5], 5)
     response = nbs().check_and_link_multiple_cells(cells)
-    assert response['stale_cells'] == []
+    assert response['stale_cells'] == [], 'got %s' % response['stale_cells']
     assert response['fresh_cells'] == [2, 3, 4], 'got %s' % response['fresh_cells']
 
     if force_subscript_symbol_creation:

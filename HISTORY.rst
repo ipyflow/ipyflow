@@ -268,3 +268,9 @@ History
 * State transition bugfix for return from ClassDef;
 * Misc improvements to mutations;
 * Improved bookkeeping for list insertions / deletions;
+
+0.0.71 (2021-06-27)
+-------------------
+* Add exceptions for general mutation rules;
+* Fix return transition when first call happens outside notebook;
+* Shuffle namespace symbols from old to new when namespace overwritten;

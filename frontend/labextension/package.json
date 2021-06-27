@@ -43,7 +43,8 @@
     "@jupyterlab/application": "^3.0.7",
     "@jupyterlab/coreutils": "^5.0.6",
     "@jupyterlab/notebook": "^3.0.7",
-    "codemirror": "^5.61.0"
+    "codemirror": "^5.61.0",
+    "normalize-url": "^6.1.0"
   },
   "devDependencies": {
     "@jupyterlab/builder": "^3.0.7",

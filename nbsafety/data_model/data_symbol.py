@@ -492,7 +492,7 @@ class DataSymbol:
         if self.is_import:
             # skip updates for imported symbols
             # just bump the version if it's newly created
-            if not self._timestamp.is_initialized:
+            if mutated or not self._timestamp.is_initialized:
                 self._timestamp = Timestamp.current()
             return
         if mutated and self.obj_type in self.IMMUTABLE_TYPES:
@@ -517,9 +517,9 @@ class DataSymbol:
             new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
             self.parents.add(new_parent)
         self.required_timestamp = Timestamp.uninitialized()
-        equal_to_old = self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.update_usage_info()
+        equal_to_old = not mutated and self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if refresh:
             self.refresh(
                 bump_version=not equal_to_old,
@@ -528,7 +528,7 @@ class DataSymbol:
                 refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents),
                 refresh_namespace_stale=not mutated,
             )
-        if propagate and (mutated or deleted or not equal_to_old):
+        if propagate and (deleted or not equal_to_old):
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)

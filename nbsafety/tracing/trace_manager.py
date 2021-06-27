@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     AttrSubVal = SupportedIndexType
     NodeId = int
     ObjId = int
-    MutationCandidate = Tuple[Tuple[ObjId, Optional[str]], MutationEvent, List[Set[DataSymbol]], List[Any]]
+    MutationCandidate = Tuple[Tuple[Any, Optional[str], Optional[str]], MutationEvent, List[Set[DataSymbol]], List[Any]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
     SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
     SavedDelData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
@@ -58,6 +58,26 @@ ARG_MUTATION_EXCEPTED_MODULES = {
     'sns',
     'widget',
 }
+
+
+METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN: Set[Tuple[int, str]] = set()
+METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = set()
+
+try:
+    import pylab
+    pylab_id = id(pylab)
+    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN.add((pylab_id, 'figure'))
+    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((pylab_id, 'show'))
+except ImportError:
+    pass
+
+try:
+    import matplotlib.pyplot as plt
+    plt_id = id(plt)
+    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN.add((plt_id, 'figure'))
+    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((plt_id, 'show'))
+except ImportError:
+    pass
 
 
 class BaseTraceManager(singletons.TraceManager):
@@ -318,7 +338,15 @@ class TraceManager(SliceTraceManager):
     def _handle_return_transition(self, trace_stmt: TraceStatement, ret: Any):
         try:
             inside_anonymous_call = self.inside_anonymous_call
-            return_to_stmt: TraceStatement = self.call_stack.get_field('prev_trace_stmt_in_cur_frame')
+            try:
+                return_to_stmt: TraceStatement = self.call_stack.get_field('prev_trace_stmt_in_cur_frame')
+            except IndexError:
+                # then the first call was triggered from inside library code;
+                # skip the transition and disable tracing in case this call
+                # happens in a loop; we won't catch it in our normal tracing
+                # disabler since it's the first call
+                self._disable_tracing()
+                return
             assert return_to_stmt is not None
             if self.prev_event != TraceEvent.exception:
                 # exception events are followed by return events until we hit an except clause
@@ -370,7 +398,8 @@ class TraceManager(SliceTraceManager):
                             # logger.error("use node %s", ast.dump(nbs().ast_node_by_id[return_to_node_id]))
                             self.node_id_to_loaded_symbols[return_to_node_id].append(dsym_to_attach)
         finally:
-            self.call_stack.pop()
+            if self.tracing_enabled:
+                self.call_stack.pop()
             if nbs().is_develop and len(self.call_stack) == 0:
                 assert self.call_depth == 1
 
@@ -646,24 +675,36 @@ class TraceManager(SliceTraceManager):
         if self.mutation_candidate is None:
             return
         (
-            (obj_id, obj_name),
+            (obj, obj_name, method_name),
             mutation_event,
             recorded_arg_dsyms,
             recorded_arg_objs,
         ) = self.mutation_candidate
         self.mutation_candidate = None
+        if obj is logging or isinstance(obj, logging.Logger):
+            # ignore calls to logging.whatever(...)
+            return
         obj_type = None
+        obj_id = id(obj)
         if obj_id in nbs().aliases:
             obj_type = next(iter(nbs().aliases[obj_id])).obj_type
-        if obj_type is None or id(obj_type) in nbs().aliases:
-            # the calling obj looks like something that we can trace;
-            # no need to process the call as a possible mutation
-            return
+        is_excepted_mutation = False
+        is_excepted_non_mutation = False
         if retval is not None and id(retval) != obj_id:
             # doesn't look like something we can trace, but it also
             # doesn't look like something that mutates the caller, since
             # the return value is not None and it's not the caller object
-            return
+            if (obj_id, method_name) in METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN:
+                is_excepted_mutation = True
+            else:
+                return
+        if not is_excepted_mutation:
+            if retval is None:
+                is_excepted_non_mutation = (obj_id, method_name) in METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN
+            if is_excepted_non_mutation or obj_type is None or id(obj_type) in nbs().aliases:
+                # the calling obj looks like something that we can trace;
+                # no need to process the call as a possible mutation
+                return
         arg_dsyms: Set[DataSymbol] = set()
         arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
         if isinstance(mutation_event, StandardMutation):
@@ -697,9 +738,7 @@ class TraceManager(SliceTraceManager):
                 pass
         elif isinstance(mutation_event, ListInsert):
             mutation_event.insert_pos = recorded_arg_objs[0]
-        if obj_id != id(logging):
-            # ignore calls to logging.whatever(...)
-            self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
+        self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
     @register_handler(TraceEvent.after_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):
@@ -743,27 +782,33 @@ class TraceManager(SliceTraceManager):
         mut_cand[-2].append(resolve_rval_symbols(arg_node))
         mut_cand[-1].append(arg_obj)
 
-    def _save_mutation_candidate(self, obj: Any, attr_or_subscript: AttrSubVal, obj_name: Optional[str] = None) -> None:
+    def _save_mutation_candidate(self, obj: Any, method_name: Optional[str], obj_name: Optional[str] = None) -> None:
         mutation_event: MutationEvent = StandardMutation()
         if isinstance(obj, list):
-            if attr_or_subscript == 'append':
+            if method_name == 'append':
                 mutation_event = ListAppend()
-            elif attr_or_subscript == 'extend':
+            elif method_name == 'extend':
                 mutation_event = ListExtend(len(obj))
-            elif attr_or_subscript == 'insert':
+            elif method_name == 'insert':
                 mutation_event = ListInsert()
-        self.mutation_candidate = ((id(obj), obj_name), mutation_event, [], [])
+        self.mutation_candidate = ((obj, obj_name, method_name), mutation_event, [], [])
 
     @register_handler(TraceEvent.before_call)
     @skip_when_tracing_disabled
     def before_call(self, function_or_method, *_, **__):
         if self.saved_complex_symbol_load_data is None:
-            obj, attr_or_subscript, obj_name = None, None, None
+            obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
         else:
             # TODO: this will cause errors if we add more fields
-            _, obj, attr_or_subscript, *_, obj_name = self.saved_complex_symbol_load_data
-        if obj is not None:
-            self._save_mutation_candidate(obj, attr_or_subscript, obj_name=obj_name)
+            _, obj, attr_or_subscript, is_subscript, *_, obj_name = self.saved_complex_symbol_load_data
+        if obj is not None and is_subscript is not None:
+            if is_subscript:
+                method_name = None
+            else:
+                assert isinstance(attr_or_subscript, str)
+                method_name = attr_or_subscript
+                # method_name should match ast_by_id[function_or_method].func.id
+            self._save_mutation_candidate(obj, method_name, obj_name=obj_name)
         self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():
             pass
@@ -1036,8 +1081,8 @@ class TraceManager(SliceTraceManager):
                     ):
                         stmt_node = parent_node
             except KeyError as e:
-                self.EVENT_LOGGER.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
                 if nbs().is_develop:
+                    self.EVENT_LOGGER.warning("got key error for stmt node in cell %d, line %d", cell_num, lineno)
                     raise e
                 return self.sys_tracer
 
@@ -1056,13 +1101,16 @@ class TraceManager(SliceTraceManager):
                     'prev_node_id_in_cur_frame_lexical'
                 )
             except IndexError:
-                prev_node_id_in_cur_frame_lexical = None
-            if prev_node_id_in_cur_frame_lexical is not None:
-                if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
-                    if nbs().trace_messages_enabled:
-                        self.EVENT_LOGGER.warning(' disable tracing >>>')
-                    self._disable_tracing()
-                    return None
+                # this could happen if the call happens in library code,
+                # and the corresponding notebook statement isn't an ast.Call
+                # (e.g., it's a property or just induces a __repr__ call)
+                # Make node_id_for_last_call point to self to cover such cases
+                prev_node_id_in_cur_frame_lexical = id(stmt_node)
+            if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
+                if nbs().trace_messages_enabled:
+                    self.EVENT_LOGGER.warning(' disable tracing >>>')
+                self._disable_tracing()
+                return None
             trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
         self.state_transition_hook(event, trace_stmt, ret_obj)
         return self.sys_tracer

@@ -26,6 +26,7 @@ jobs:
         pip install -r requirements.txt
         pip install -r requirements-dev.txt
         pip install -e .
+        mypy --install-types
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names

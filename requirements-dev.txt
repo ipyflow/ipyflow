@@ -6,4 +6,5 @@ pandas
 py
 pytest
 twine
+types-dataclasses
 versioneer

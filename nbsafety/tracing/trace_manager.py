@@ -564,6 +564,14 @@ class TraceManager(SliceTraceManager):
     @register_handler(TraceEvent.init_cell)
     def init_cell(self, _obj, _node_id, frame: FrameType, _event, cell_id: Union[str, int], **__):
         nbs().set_name_to_cell_num_mapping(frame)
+        # needs to happen after stmt inserting has already happened
+        for flag_name in nbs().loop_iter_flag_names:
+            setattr(builtins, flag_name, False)
+
+    @register_handler(TraceEvent.after_loop_iter)
+    def after_loop_iter(self, _obj, loop_node_id: NodeId, *_, **__):
+        looped_once_flag_name = nbs().make_loop_iter_flag_name(loop_node_id)
+        setattr(builtins, looped_once_flag_name, True)
 
     @register_handler(TraceEvent.after_assign_rhs)
     @skip_when_tracing_disabled

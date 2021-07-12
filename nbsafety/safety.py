@@ -2,6 +2,7 @@
 import ast
 import astunparse
 import asyncio
+import builtins
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -110,6 +111,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_symbols: Set[DataSymbol] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
+        self.loop_iter_flag_names: Set[str] = set()
         self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
@@ -929,3 +931,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 logger.warning('object: %s', obj)
                 logger.warning('attr / subscript: %s', attr_or_sub)
             raise e
+
+    @staticmethod
+    def make_loop_iter_flag_name(loop_node: Union[int, ast.AST]):
+        loop_node_id = loop_node if isinstance(loop_node, int) else id(loop_node)
+        return '_X5ix_NBSAFETY_LOOPED_ONCE_{}'.format(loop_node_id)

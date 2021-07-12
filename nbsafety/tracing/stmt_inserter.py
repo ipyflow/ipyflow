@@ -1,13 +1,18 @@
 # -*- coding: future_annotations -*-
 import ast
+import logging
 from typing import cast, TYPE_CHECKING
 
+from nbsafety.singletons import nbs  # FIXME: get rid of this
 from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
     from typing import Dict, Optional, Set
     from nbsafety.types import CellId
+
+
+logger = logging.getLogger(__name__)
 
 
 _INSERT_STMT_TEMPLATE = '{}("{{evt}}", {{stmt_id}})'.format(EMIT_EVENT)
@@ -69,12 +74,23 @@ class StatementInserter(ast.NodeTransformer):
                     else:
                         new_field.append(inner_node)
                 if isinstance(node, (ast.For, ast.While)) and name == 'body':
+                    loop_node_copy = self._orig_to_copy_mapping[id(node)]
                     new_field.append(
                         _get_parsed_append_stmt(
-                            cast(ast.stmt, self._orig_to_copy_mapping[id(node)]),
+                            cast(ast.stmt, loop_node_copy),
                             evt=TraceEvent.after_loop_iter,
                         )
                     )
+                    looped_once_flag = nbs().make_loop_iter_flag_name(loop_node_copy)
+                    nbs().loop_iter_flag_names.add(looped_once_flag)
+                    with fast.location_of(loop_node_copy):
+                        new_field = [
+                            fast.If(
+                                test=fast.Name(looped_once_flag, ast.Load()),
+                                body=loop_node_copy.body,
+                                orelse=new_field,
+                            ),
+                        ]
                 setattr(node, name, new_field)
             else:
                 continue

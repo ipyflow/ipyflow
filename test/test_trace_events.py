@@ -317,7 +317,8 @@ for i in range(10):
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
         TraceEvent.after_loop_iter,
-    ] * 10 + [
+    # ] * 10 + [
+    ] * 1 + [
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ])
@@ -342,7 +343,8 @@ while i < 10:
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
         TraceEvent.after_loop_iter,
-    ] * 10 + [
+    # ] * 10 + [
+    ] * 1 + [
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ])
@@ -375,13 +377,14 @@ while i < 10:
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
         TraceEvent.after_loop_iter,
-        TraceEvent.before_stmt,
-        TraceEvent.after_stmt,
-        TraceEvent.after_loop_iter,
+        # TraceEvent.before_stmt,
+        # TraceEvent.after_stmt,
+        # TraceEvent.after_loop_iter,
 
         TraceEvent.after_stmt,
         TraceEvent.after_loop_iter,
-    ] * 5 + [
+    # ] * 5 + [
+    ] * 1 + [
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ])

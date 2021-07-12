@@ -255,6 +255,7 @@ class TraceManager(SliceTraceManager):
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = defaultdict(list)
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
+        self.node_id_to_saved_live_subscript_refs: Dict[NodeId, Set[DataSymbol]] = {}
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
@@ -430,14 +431,14 @@ class TraceManager(SliceTraceManager):
 
     def resolve_store_data_for_target(
         self, target: Union[str, int, ast.AST], frame: FrameType
-    ) -> Tuple[Scope, AttrSubVal, Any, bool]:
+    ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[DataSymbol]]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
             obj = frame.f_locals[target]
-            return self.cur_frame_original_scope, target, obj, False
+            return self.cur_frame_original_scope, target, obj, False, set()
         (
             scope, obj, attr_or_sub, is_subscript
-        ) = self.node_id_to_saved_store_data[target]
+        ) = self.node_id_to_saved_store_data.pop(target)
         attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
         if attr_or_sub_obj is None:
             scope_to_use = scope
@@ -446,7 +447,13 @@ class TraceManager(SliceTraceManager):
         if scope_to_use is None:
             # Nobody before `scope` has it, so we'll insert it at this level
             scope_to_use = scope
-        return scope_to_use, attr_or_sub, attr_or_sub_obj, is_subscript
+        return (
+            scope_to_use,
+            attr_or_sub,
+            attr_or_sub_obj,
+            is_subscript,
+            self.node_id_to_saved_live_subscript_refs.pop(target, set()),
+        )
 
     def resolve_del_data_for_target(
         self, target: Union[str, int, ast.AST]
@@ -580,7 +587,11 @@ class TraceManager(SliceTraceManager):
 
     @register_handler(TraceEvent.subscript_slice)
     @skip_when_tracing_disabled
-    def subscript_slice(self, _obj: Any, slice_node_id: NodeId, *__, **___):
+    def subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
+        node = nbs().ast_node_by_id.get(node_id, None)
+        if node is None:
+            return
+        slice_node_id = id(cast(ast.Subscript, node).slice)
         live, _ = compute_live_dead_symbol_refs(
             nbs().ast_node_by_id[slice_node_id], scope=self.cur_frame_original_scope
         )
@@ -595,6 +606,7 @@ class TraceManager(SliceTraceManager):
             # instead just check for length-1 "chains" that are just fn calls
             if isinstance(first_in_chain, CallPoint) and len(ref.symbols) == 1:
                 subscript_live_refs.append(first_in_chain.symbol)
+        self.node_id_to_saved_live_subscript_refs[node_id] = self.resolve_symbols(set(subscript_live_refs))
         Timestamp.update_usage_info(
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
         )

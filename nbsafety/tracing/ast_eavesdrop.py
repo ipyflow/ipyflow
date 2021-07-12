@@ -102,7 +102,7 @@ class AstEavesdropper(ast.NodeTransformer):
                     func=self._emitter_ast(),
                     args=[
                         TraceEvent.subscript_slice.to_ast(),
-                        self._get_copy_id_ast(node.slice),
+                        self._get_copy_id_ast(node),
                     ],
                     keywords=fast.kwargs(ret=cast(ast.expr, slc)),
                 )

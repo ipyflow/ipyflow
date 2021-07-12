@@ -80,7 +80,7 @@ class TraceStatement:
     ) -> None:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
-            scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
+            scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
@@ -90,7 +90,7 @@ class TraceStatement:
             #     raise ke
             return
         upserted = scope.upsert_data_symbol_for_name(
-            name, obj, deps, self.stmt_node, is_subscript=is_subscript,
+            name, obj, deps - excluded_deps, self.stmt_node, is_subscript=is_subscript,
         )
         logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
         if maybe_fixup_literal_namespace:
@@ -108,7 +108,7 @@ class TraceStatement:
 
     def _handle_starred_store_target(self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]):
         try:
-            scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
+            scope, name, obj, is_subscript, _ = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
@@ -219,9 +219,9 @@ class TraceStatement:
                 self.class_scope.obj = class_ref
                 nbs().namespaces[id(class_ref)] = self.class_scope
             try:
-                scope, name, obj, is_subscript = tracer().resolve_store_data_for_target(target, self.frame)
+                scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
                 scope.upsert_data_symbol_for_name(
-                    name, obj, rval_deps, self.stmt_node,
+                    name, obj, rval_deps - excluded_deps, self.stmt_node,
                     overwrite=should_overwrite,
                     is_subscript=is_subscript,
                     is_function_def=is_function_def,

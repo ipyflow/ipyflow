@@ -74,15 +74,18 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
     # if it is used on the RHS of an assignment
     def visit_Assign_impl(self, targets, value, aug_assign_target=None):
         this_assign_live = set()
-        this_assign_dead = set()
+        # we won't mutate overall dead for visiting simple targets, and we need it to avoid adding false positive lives
         with self.push_attributes(live=this_assign_live):
             self.visit(value)
             if aug_assign_target is not None:
                 self.visit(aug_assign_target)
+        # make a copy, then track the new dead
+        this_assign_dead = set(self.dead)
         with self.push_attributes(dead=this_assign_dead):
             with self.kill_context():
                 for target in targets:
                     self.visit_Assign_target(target)
+        this_assign_dead -= self.dead
         # TODO: ideally under the current abstraction we should
         #  not be resolving static references to symbols here
         if (

@@ -627,18 +627,25 @@ class TraceManager(SliceTraceManager):
         if sym_for_obj is None and obj_name is not None:
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
-        if sym_for_obj is not None:
-            sym_for_obj.update_usage_info(exclude_ns=True)
-
+        scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         is_subscript = (event == TraceEvent.subscript)
+        if sym_for_obj is not None:
+            try:
+                data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+                    attr_or_subscript, is_subscript=is_subscript, skip_cloned_lookup=True,
+                )
+            except TypeError:
+                data_sym = None
+            if data_sym is None:
+                sym_for_obj.update_usage_info()
+            else:
+                sym_for_obj.update_usage_info(exclude_ns=True)
 
         obj_id = id(obj)
         if self.top_level_node_id_for_chain is None:
             self.top_level_node_id_for_chain = top_level_node_id
         if self.first_obj_id_in_chain is None:
             self.first_obj_id_in_chain = obj_id
-
-        scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
 
         try:
             if isinstance(attr_or_subscript, tuple):

@@ -1,6 +1,6 @@
 coverage
 flake8
-ipytest
+ipytest==0.9.1
 numpy
 pandas
 py

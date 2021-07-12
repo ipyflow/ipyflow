@@ -14,6 +14,8 @@ class TraceEvent(Enum):
     after_stmt = 'after_stmt'
     after_module_stmt = 'after_module_stmt'
 
+    after_loop_iter = 'after_loop_iter'
+
     attribute = 'attribute'
     subscript = 'subscript'
     subscript_slice = 'subscript_slice'

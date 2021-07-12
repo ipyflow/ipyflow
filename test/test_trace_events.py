@@ -297,3 +297,91 @@ arr = np.zeros((3, 3, 3))
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ])
+
+
+def test_for_loop():
+    assert _RECORDED_EVENTS == []
+    run_cell("""
+for i in range(10):
+    pass
+""")
+    throw_and_print_diff_if_recorded_not_equal_to([
+        TraceEvent.init_cell,
+        TraceEvent.before_stmt,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.before_call,
+        TraceEvent.argument,
+        TraceEvent.after_call,
+        TraceEvent.after_complex_symbol,
+    ] + [
+        TraceEvent.before_stmt,
+        TraceEvent.after_stmt,
+        TraceEvent.after_loop_iter,
+    ] * 10 + [
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+    ])
+
+
+def test_while_loop():
+    assert _RECORDED_EVENTS == []
+    run_cell("""
+i = 0
+while i < 10:
+    i += 1
+""")
+    throw_and_print_diff_if_recorded_not_equal_to([
+        TraceEvent.init_cell,
+        TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
+        TraceEvent.after_assign_rhs,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+        TraceEvent.before_stmt,
+    ] + [
+        TraceEvent.before_stmt,
+        TraceEvent.after_stmt,
+        TraceEvent.after_loop_iter,
+    ] * 10 + [
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+    ])
+
+
+def test_for_loop_nested_in_while_loop():
+    assert _RECORDED_EVENTS == []
+    run_cell("""
+i = 0
+while i < 10:
+    for j in range(2):
+        i += 1
+""")
+    throw_and_print_diff_if_recorded_not_equal_to([
+        TraceEvent.init_cell,
+        TraceEvent.before_stmt,
+        TraceEvent.before_assign_rhs,
+        TraceEvent.after_assign_rhs,
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+        TraceEvent.before_stmt,
+    ] + [
+        TraceEvent.before_stmt,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.before_call,
+        TraceEvent.argument,
+        TraceEvent.after_call,
+        TraceEvent.after_complex_symbol,
+
+        TraceEvent.before_stmt,
+        TraceEvent.after_stmt,
+        TraceEvent.after_loop_iter,
+        TraceEvent.before_stmt,
+        TraceEvent.after_stmt,
+        TraceEvent.after_loop_iter,
+
+        TraceEvent.after_stmt,
+        TraceEvent.after_loop_iter,
+    ] * 5 + [
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+    ])

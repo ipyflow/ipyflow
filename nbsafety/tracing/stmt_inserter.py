@@ -68,6 +68,13 @@ class StatementInserter(ast.NodeTransformer):
                         new_field.append(self.visit(inner_node))
                     else:
                         new_field.append(inner_node)
+                if isinstance(node, (ast.For, ast.While)) and name == 'body':
+                    new_field.append(
+                        _get_parsed_append_stmt(
+                            cast(ast.stmt, self._orig_to_copy_mapping[id(node)]),
+                            evt=TraceEvent.after_loop_iter,
+                        )
+                    )
                 setattr(node, name, new_field)
             else:
                 continue

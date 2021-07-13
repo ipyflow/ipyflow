@@ -850,15 +850,18 @@ class TraceManager(SliceTraceManager):
                 # if tracing gets reenabled here instead of at the 'before_stmt' handler, then we're still
                 # at the same module stmt as when tracing was disabled, and we still have a 'return' to trace
                 self.call_depth = 1
-                while len(self.call_stack) > 0:
-                    self.call_stack.pop()
+                self.call_stack.clear()
+                self.lexical_call_stack.clear()
 
         if not tracing_will_be_enabled_by_end:
             return
 
         # no need to reset active scope here;
         # that will happen in the 'after chain' handler
-        self.lexical_call_stack.pop()
+
+        if len(self.lexical_call_stack) > 0:
+            # skip / give up if tracing was recently reenabled
+            self.lexical_call_stack.pop()
         self.prev_node_id_in_cur_frame_lexical = None
         self._process_possible_mutation(retval)
 

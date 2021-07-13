@@ -274,3 +274,8 @@ History
 * Add exceptions for general mutation rules;
 * Fix return transition when first call happens outside notebook;
 * Shuffle namespace symbols from old to new when namespace overwritten;
+
+0.0.72 (2021-07-12)
+-------------------
+* Improve loop performance by better enforcing trace-once semantics;
+* Bugfix for stack tracking when tracing reenabled;

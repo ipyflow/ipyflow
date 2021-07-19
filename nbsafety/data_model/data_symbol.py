@@ -286,7 +286,14 @@ class DataSymbol:
 
     @property
     def is_user_accessible(self):
-        return self.is_globally_accessible and not self.is_anonymous
+        return (
+            self.is_globally_accessible
+            and not self.is_anonymous
+            and not (
+                self.containing_namespace is not None
+                and self.containing_namespace.is_anonymous
+            )
+        )
 
     def collect_self_garbage(self):
         """

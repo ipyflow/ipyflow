@@ -3,12 +3,13 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
+from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
 from nbsafety.singletons import nbs  # FIXME: get rid of this
-from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
+from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, Optional, Set
+    from typing import Dict, List, Optional, Set, Union
     from nbsafety.types import CellId
 
 
@@ -35,11 +36,56 @@ def _get_parsed_append_stmt(
     return ret
 
 
+class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
+    def visit_Global(self, node: ast.Global) -> ast.Pass:
+        with fast.location_of(node):
+            return fast.Pass()
+
+    def visit_Nonlocal(self, node: ast.Nonlocal) -> ast.Pass:
+        with fast.location_of(node):
+            return fast.Pass()
+
+
 class StatementInserter(ast.NodeTransformer):
     def __init__(self, cell_id: Optional[CellId], orig_to_copy_mapping: Dict[int, ast.AST]):
         self._cell_id: Optional[CellId] = cell_id
         self._orig_to_copy_mapping = orig_to_copy_mapping
         self._init_stmt_inserted = False
+        self._global_nonlocal_stripper = StripGlobalAndNonlocalDeclarations()
+
+    def _handle_loop_body(self, node: Union[ast.For, ast.While], new_field: List[ast.AST]) -> List[ast.AST]:
+        loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
+        new_field.append(
+            _get_parsed_append_stmt(
+                cast(ast.stmt, loop_node_copy),
+                evt=TraceEvent.after_loop_iter,
+            )
+        )
+        looped_once_flag = make_loop_iter_flag_name(loop_node_copy)
+        nbs().loop_iter_flag_names.add(looped_once_flag)
+        with fast.location_of(loop_node_copy):
+            new_field = [
+                fast.If(
+                    test=fast.Name(looped_once_flag, ast.Load()),
+                    body=loop_node_copy.body,
+                    orelse=self._global_nonlocal_stripper.visit(ast.Module(new_field)).body,
+                ),
+            ]
+        return new_field
+
+    def _handle_function_body(
+        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], new_field: List[ast.AST]
+    ) -> List[ast.AST]:
+        fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self._orig_to_copy_mapping[id(node)])
+        with fast.location_of(fundef_copy):
+            new_field = [
+                fast.If(
+                    test=fast.Name(TRACING_ENABLED, ast.Load()),
+                    body=new_field,
+                    orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,
+                ),
+            ]
+        return new_field
 
     def generic_visit(self, node):
         for name, field in ast.iter_fields(node):
@@ -73,24 +119,11 @@ class StatementInserter(ast.NodeTransformer):
                         new_field.append(self.visit(inner_node))
                     else:
                         new_field.append(inner_node)
-                if isinstance(node, (ast.For, ast.While)) and name == 'body':
-                    loop_node_copy = self._orig_to_copy_mapping[id(node)]
-                    new_field.append(
-                        _get_parsed_append_stmt(
-                            cast(ast.stmt, loop_node_copy),
-                            evt=TraceEvent.after_loop_iter,
-                        )
-                    )
-                    looped_once_flag = nbs().make_loop_iter_flag_name(loop_node_copy)
-                    nbs().loop_iter_flag_names.add(looped_once_flag)
-                    with fast.location_of(loop_node_copy):
-                        new_field = [
-                            fast.If(
-                                test=fast.Name(looped_once_flag, ast.Load()),
-                                body=loop_node_copy.body,
-                                orelse=new_field,
-                            ),
-                        ]
+                if name == 'body':
+                    if isinstance(node, (ast.For, ast.While)):
+                        new_field = self._handle_loop_body(node, new_field)
+                    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        new_field = self._handle_function_body(node, new_field)
                 setattr(node, name, new_field)
             else:
                 continue

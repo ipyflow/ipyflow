@@ -17,11 +17,12 @@ from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.data_model.timestamp import Timestamp
+from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, StandardMutation
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
-from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
+from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
@@ -158,6 +159,7 @@ class BaseTraceManager(singletons.TraceManager):
         else:
             self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
         nbs().settrace(self.sys_tracer)
+        setattr(builtins, TRACING_ENABLED, True)
 
     def _disable_tracing(self, check_enabled=True):
         if check_enabled:
@@ -165,6 +167,7 @@ class BaseTraceManager(singletons.TraceManager):
             assert sys.gettrace() is self.sys_tracer
         self.tracing_enabled = False
         nbs().settrace(self.existing_tracer)
+        setattr(builtins, TRACING_ENABLED, False)
 
     @contextmanager
     def _patch_sys_settrace(self):
@@ -183,8 +186,9 @@ class BaseTraceManager(singletons.TraceManager):
                 self._enable_tracing()
                 yield
         finally:
-            delattr(builtins, EMIT_EVENT)
             self._disable_tracing(check_enabled=False)
+            delattr(builtins, EMIT_EVENT)
+            delattr(builtins, TRACING_ENABLED)
 
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented
@@ -577,7 +581,7 @@ class TraceManager(SliceTraceManager):
 
     @register_handler(TraceEvent.after_loop_iter)
     def after_loop_iter(self, _obj, loop_node_id: NodeId, *_, **__):
-        looped_once_flag_name = nbs().make_loop_iter_flag_name(loop_node_id)
+        looped_once_flag_name = make_loop_iter_flag_name(loop_node_id)
         setattr(builtins, looped_once_flag_name, True)
 
     @register_handler(TraceEvent.after_assign_rhs)

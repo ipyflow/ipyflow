@@ -931,8 +931,3 @@ class NotebookSafety(singletons.NotebookSafety):
                 logger.warning('object: %s', obj)
                 logger.warning('attr / subscript: %s', attr_or_sub)
             raise e
-
-    @staticmethod
-    def make_loop_iter_flag_name(loop_node: Union[int, ast.AST]):
-        loop_node_id = loop_node if isinstance(loop_node, int) else id(loop_node)
-        return '_X5ix_NBSAFETY_LOOPED_ONCE_{}'.format(loop_node_id)

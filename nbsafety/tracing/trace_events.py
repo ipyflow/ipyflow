@@ -4,9 +4,6 @@ from enum import Enum
 from nbsafety.utils import fast
 
 
-EMIT_EVENT = '_X5ix_NBSAFETY_EVT_EMIT'
-
-
 class TraceEvent(Enum):
     init_cell = 'init_cell'
 

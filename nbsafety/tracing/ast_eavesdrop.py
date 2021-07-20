@@ -6,7 +6,8 @@ from typing import cast, TYPE_CHECKING
 import sys
 
 from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
-from nbsafety.tracing.trace_events import TraceEvent, EMIT_EVENT
+from nbsafety.extra_builtins import EMIT_EVENT
+from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:

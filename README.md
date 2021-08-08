@@ -19,7 +19,7 @@ About
 *stale dependency problem* when executing cells out-of-order. Here's an
 example in action:
 
-<img src="https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example.gif" alt="nbsafety example" width="1017" />
+<img src="https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example.gif" alt="nbsafety example" width="500" />
 
 When the first cell is rerun, the second cell now contains a reference to an
 updated `f` and is suggested for re-execution with a turquoise highlight. The

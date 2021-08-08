@@ -8,13 +8,7 @@ About
 *stale dependency problem* when executing cells out-of-order. Here's an
 example in action:
 
-Step 0: modify cell 1     | Step 1: rerun cell 1     
-:------------------------:|:------------------------:
-![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-0.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-1.png)  
-
-Step 2: rerun cell 2     | Step 3: rerun cell 3
-:------------------------:|:------------------------:
-![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-2.png)  |![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example-3.png)
+![](https://raw.githubusercontent.com/nbsafety-project/nbsafety/master/img/example.gif)
 
 When the first cell is rerun, the second cell now contains a reference to an
 updated `f` and is suggested for re-execution with a turquoise highlight. The

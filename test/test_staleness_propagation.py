@@ -249,18 +249,18 @@ def test_basic_assignment():
     run_cell('b = 2')
     run_cell('c = a+b')
     run_cell('d = c+1')
-    run_cell('logging.info(a,b,c,d)')
+    run_cell('logging.info("%s, %s, %s, %s", a, b, c, d)')
     # redefine a here but not c and d
     run_cell('a = 7')
-    run_cell('logging.info(a,b,c,d)')
+    run_cell('logging.info("%s, %s, %s, %s", a, b, c, d)')
     assert_detected("Did not detect that c's reference was changed")
 
     run_cell('c = a+b')
-    run_cell('logging.info(a,b,c,d)')
+    run_cell('logging.info("%s, %s, %s, %s", a, b, c, d)')
     assert_detected("Did not detect that d's reference was changed")
 
     run_cell('d = c+1')
-    run_cell('logging.info(a,b,c,d)')
+    run_cell('logging.info("%s, %s, %s, %s", a, b, c, d)')
     assert_not_detected("There should be no more dependency issue")
 
 
@@ -546,19 +546,19 @@ def func():
     run_cell('x = 7')
     run_cell('y = x')
     run_cell('z = func')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
 
     # change x inside of the function, but not x outside of the function
     run_cell('def func():\n    x = 10')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
     assert_detected("Did not detect the dependency change in the function")
 
     run_cell('y = x')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
     assert_detected("Updating y should not solve the dependency change inside of function func")
 
     run_cell('z = func')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
     assert_not_detected("Updating z should solve the problem")
 
 
@@ -567,19 +567,19 @@ def test_variable_scope_2():
     run_cell('x = 7')
     run_cell('y = x')
     run_cell('z = func')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
 
     # change x outside of the function, but not inside of the function
     run_cell('x = 10')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
     assert_detected("Did not detect the dependency change outside of the function")
 
     run_cell('z = func')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
     assert_detected("Updating z should not solve the dependency change outside of function")
 
     run_cell('y = x')
-    run_cell('logging.info(y,z())')
+    run_cell('logging.info("%s, %s", y, z())')
     assert_not_detected("Updating y should solve the problem")
 
 

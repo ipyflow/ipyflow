@@ -6,6 +6,11 @@ import logging
 import sys
 from typing import cast, TYPE_CHECKING
 
+try:
+    import numpy
+except ImportError:
+    numpy = None
+
 from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
 from nbsafety.data_model import sizing
 from nbsafety.data_model.timestamp import Timestamp
@@ -278,7 +283,16 @@ class DataSymbol:
 
     @property
     def is_garbage(self):
-        return self._tombstone or self.get_ref_count() == 0
+        return self._tombstone
+
+    def is_new_garbage(self):
+        if self._tombstone:
+            return False
+        if numpy is not None and self.containing_namespace is not None and isinstance(self.containing_namespace.obj, numpy.ndarray):
+            # numpy atoms are not interned (so assigning array elts to a variable does not bump refcount);
+            # also seems that refcount is always 0, so just check if the containing namespace is garbage
+            return self.containing_namespace.is_garbage
+        return self.get_ref_count() == 0
 
     @property
     def is_globally_accessible(self):
@@ -321,10 +335,10 @@ class DataSymbol:
 
     def update_obj_ref(self, obj, refresh_cached=True):
         logger.info("%s update obj ref to %s", self, obj)
+        self._tombstone = False
         self._cached_out_of_sync = True
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
             nbs().cell_counters_needing_typecheck |= nbs().cell_counter_by_live_symbol.get(self, set())
-        self._tombstone = False
         self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             if self.obj_id not in nbs().namespaces:
@@ -351,9 +365,14 @@ class DataSymbol:
         self.cached_obj_type = None
 
     def get_ref_count(self):
-        if self.obj is None:
+        if self.obj is None or self.obj is DataSymbol.NULL:
             return -1
-        return sys.getrefcount(self.obj) - 1 - len(nbs().aliases[self.obj_id]) - (self.obj_id in nbs().namespaces)
+        total = sys.getrefcount(self.obj) - 1
+        total -= len(nbs().aliases[self.obj_id])
+        ns = nbs().namespaces.get(self.obj_id, None)
+        if ns is not None and ns.obj is not None and ns.obj is not DataSymbol.NULL:
+            total -= 1
+        return total
 
     def prev_obj_definitely_equal_to_current_obj(self, prev_obj: Optional[Any]) -> bool:
         if prev_obj is None:

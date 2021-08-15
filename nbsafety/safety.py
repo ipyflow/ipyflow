@@ -908,9 +908,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def _gc(self):
         # Need to do the garbage check and the collection separately
-        garbage_syms = [dsym for dsym in self.all_data_symbols() if dsym.is_garbage]
+        garbage_syms = [dsym for dsym in self.all_data_symbols() if dsym.is_new_garbage()]
         for dsym in garbage_syms:
-            logger.info('collect sym %s', dsym)
             dsym.collect_self_garbage()
 
     def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: SupportedIndexType, is_subscript: bool):

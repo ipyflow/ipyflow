@@ -917,6 +917,10 @@ class TraceManager(SliceTraceManager):
                         self.prev_trace_stmt_in_cur_frame.stmt_node,
                         is_subscript=True,
                         implicit=True,
+                        # this is necessary in case some literal object got reused,
+                        # since as of this comment (2021/08/14) we do not clear
+                        # GC'd symbols from the symbol graph
+                        propagate=False,
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope

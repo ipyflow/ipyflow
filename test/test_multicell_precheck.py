@@ -255,9 +255,7 @@ def test_equal_list_update_does_not_induce_fresh_cell():
     assert response['fresh_cells'] == [2, 3]
 
 
-# FIXME: investigate why this fails on ubuntu 20.04.2 with Python 3.8.11
-@skipif_known_failing
-def test_equal_list_update_does_not_induce_fresh_cell_FAILS_ON_UBUNTU_20_04_2_PYTHON_3_8_11():
+def test_equal_list_update_does_not_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UBUNTU_20_04_2_PYTHON_3_8_11():
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',

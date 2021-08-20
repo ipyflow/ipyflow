@@ -80,7 +80,7 @@ class StatementInserter(ast.NodeTransformer):
         with fast.location_of(fundef_copy):
             new_field = [
                 fast.If(
-                    test=fast.Name(TRACING_ENABLED, ast.Load()),
+                    test=fast.parse(f'getattr(builtins, "{TRACING_ENABLED}", False)').body[0].value,  # type: ignore
                     body=new_field,
                     orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,
                 ),
@@ -99,9 +99,9 @@ class StatementInserter(ast.NodeTransformer):
                         if not self._init_stmt_inserted:
                             self._init_stmt_inserted = True
                             with fast.location_of(stmt_copy):
-                                new_field.append(fast.parse(
-                                    f'{EMIT_EVENT}("{TraceEvent.init_cell.value}", None, cell_id="{self._cell_id}")'
-                                ).body[0])
+                                new_field.extend(fast.parse(
+                                    f'import builtins; {EMIT_EVENT}("{TraceEvent.init_cell.value}", None, cell_id="{self._cell_id}")'
+                                ).body)
                         new_field.append(_get_parsed_insert_stmt(stmt_copy, TraceEvent.before_stmt))
                         if isinstance(inner_node, ast.Expr) and isinstance(node, ast.Module) and name == 'body':
                             val = inner_node.value

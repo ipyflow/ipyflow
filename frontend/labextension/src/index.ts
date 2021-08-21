@@ -80,11 +80,19 @@ const linkedRefresherClass = 'linked-refresher';
 const cleanup = new Event('cleanup');
 
 const getJpInputCollapser = (elem: HTMLElement) => {
-  return elem.children.item(1).firstElementChild;
+  const child = elem.children.item(1);
+  if (child === null) {
+    return null;
+  }
+  return child.firstElementChild;
 };
 
 const getJpOutputCollapser = (elem: HTMLElement) => {
-  return elem.children.item(2).firstElementChild;
+  const child = elem.children.item(2);
+  if (child === null) {
+    return null;
+  }
+  return child.firstElementChild;
 };
 
 const attachCleanupListener = (elem: Element, evt: "mouseover" | "mouseout", listener: any) => {

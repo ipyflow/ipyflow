@@ -9,7 +9,8 @@ import {
 } from '@jupyterlab/application';
 
 import {
-  ICellModel
+  ICellModel,
+  ICodeCellModel
 } from '@jupyterlab/cells';
 
 import {
@@ -35,6 +36,14 @@ const extension: JupyterFrontEndPlugin<void> = {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
         clearCellState(nbPanel.content, -1);
+        // let pasteAction = (<any>NotebookActions).pasteCompleted;
+        // if (pasteAction !== undefined) {
+        //   console.log('found paste action');
+        //   pasteAction.connect((notebook: Notebook, cell: Cell) => {
+        //     console.log('Just pasted cell:')
+        //     console.log(cell);
+        //   })
+        // }
         let commDisconnectHandler = connectToComm(
           session.session.kernel,
           nbPanel.content
@@ -76,6 +85,11 @@ const refresherClass = 'refresher-cell';
 const refresherInputClass = 'refresher-input-cell';
 const linkedStaleClass = 'linked-stale';
 const linkedRefresherClass = 'linked-refresher';
+
+let dirtyCells: string[] = [];
+let staleCells: string[] = [];
+let freshCells: string[] = [];
+let refresherCells: string[] = [];
 
 const cleanup = new Event('cleanup');
 
@@ -134,6 +148,10 @@ const addStaleOutputInteractions = (elem: HTMLElement, linkedInputClass: string)
 };
 
 const clearCellState = (notebook: Notebook, lastCellExecPositionIdx: any) => {
+  dirtyCells = [];
+  staleCells = [];
+  freshCells = [];
+  refresherCells = [];
   notebook.widgets.forEach((cell, idx) => {
     if (idx < lastCellExecPositionIdx) {
       return;
@@ -165,7 +183,7 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: [string],
                                   collapserFun: (elem: HTMLElement) => Element,
                                   evt: "mouseover" | "mouseout",
                                   add_or_remove: "add" | "remove",
-                                  staleCells: [string]) => {
+                                  staleCells: string[]) => {
   const listener = () => {
     for (const linkedId of linkedElems) {
       let css = linkedRefresherClass;
@@ -236,14 +254,25 @@ const connectToComm = (
     if (args.name !== 'activeCellIndex' || nb !== notebook) {
       return;
     }
+    // console.log('state changed');
+    // console.log(`dirty cells: ${dirtyCells}`)
     const oldActiveCell = nb.model.cells.get(args.oldValue);
     if (oldActiveCell !== null) {
       oldActiveCell.stateChanged.disconnect(onExecution, oldActiveCell.stateChanged);
     }
     const newActiveCell = nb.model.cells.get(args.newValue);
-    if (newActiveCell !== null) {
-      newActiveCell.stateChanged.connect(onExecution);
-      notifyActiveCell(newActiveCell);
+    if (newActiveCell === null) {
+      return;
+    }
+    newActiveCell.stateChanged.connect(onExecution);
+    notifyActiveCell(newActiveCell);
+    if (newActiveCell.type === "code") {
+      dirtyCells.forEach((cell_id, _) => {
+        if (cell_id === newActiveCell.id) {
+          // console.log(`found one: ${newActiveCell.id}`);
+          (<any>newActiveCell)._setDirty(true);
+        }
+      });
     }
   }
   notebook.stateChanged.connect(onNotebookStateChange);
@@ -256,17 +285,23 @@ const connectToComm = (
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
     } else if (msg.content.data['type'] === 'cell_freshness') {
-      const staleCells: any = msg.content.data['stale_cells'];
-      const freshCells: any = msg.content.data['fresh_cells'];
       const staleLinks: any = msg.content.data['stale_links'];
       const refresherLinks: any = msg.content.data['refresher_links'];
       const lastCellExecPositionIdx: any = msg.content.data['last_cell_exec_position_idx'];
       const cellsById: {[id: string]: HTMLElement} = {};
       const orderIdxById: {[id: string]: number} = {};
       clearCellState(notebook, lastCellExecPositionIdx);
+      staleCells = msg.content.data['stale_cells'] as string[];
+      freshCells = msg.content.data['fresh_cells'] as string[];
+      // console.log('cell freshness');
       notebook.widgets.forEach((cell, idx) => {
         cellsById[cell.model.id] = cell.node;
         orderIdxById[cell.model.id] = idx;
+        console.log(`cell id: ${cell.model.id}; cell type: ${cell.model.type}`);
+        if (cell.model.type === "code" && (<ICodeCellModel>cell.model).isDirty) {
+          console.log(`push ${cell.model.id} as dirty`);
+          dirtyCells.push(cell.model.id);
+        }
       });
       for (const [id, elem] of Object.entries(cellsById)) {
         if (orderIdxById[id] < lastCellExecPositionIdx) {
@@ -306,6 +341,7 @@ const connectToComm = (
         }
 
         if (refresherLinks.hasOwnProperty(id)) {
+          refresherCells.push(id);
           if (staleCells.indexOf(id) === -1) {
             elem.classList.add(refresherClass);
             elem.classList.add(freshClass);

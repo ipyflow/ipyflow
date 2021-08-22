@@ -9,6 +9,7 @@ import {
 } from '@jupyterlab/application';
 
 import {
+  Cell,
   ICellModel,
   ICodeCellModel
 } from '@jupyterlab/cells';
@@ -44,6 +45,8 @@ const extension: JupyterFrontEndPlugin<void> = {
         //     console.log(cell);
         //   })
         // }
+        activeCell = nbPanel.content.activeCell;
+        activeCellId = nbPanel.content.activeCell.model.id;
         let commDisconnectHandler = connectToComm(
           session.session.kernel,
           nbPanel.content
@@ -86,13 +89,16 @@ const refresherInputClass = 'refresher-input-cell';
 const linkedStaleClass = 'linked-stale';
 const linkedRefresherClass = 'linked-refresher';
 
-let dirtyCells: string[] = [];
-let staleCells: string[] = [];
-let freshCells: string[] = [];
+let dirtyCells: Set<string> = new Set();
+let staleCells: Set<string> = new Set();
+let freshCells: Set<string> = new Set();
 let staleLinks: {[id: string]: string[]} = {}
 let refresherLinks: {[id: string]: string[]} = {}
-let refresherCells: string[] = [];
 let lastCellExecPositionIdx: number = -1;
+let activeCell: Cell<ICellModel> = null;
+let activeCellId: string = null;
+let cellsById: {[id: string]: HTMLElement} = {};
+let orderIdxById: {[id: string]: number} = {};
 
 const cleanup = new Event('cleanup');
 
@@ -150,6 +156,17 @@ const addStaleOutputInteractions = (elem: HTMLElement, linkedInputClass: string)
   );
 };
 
+
+const refreshNodeMapping = (notebook: Notebook) => {
+  cellsById = {};
+  orderIdxById = {};
+
+  notebook.widgets.forEach((cell, idx) => {
+    cellsById[cell.model.id] = cell.node;
+    orderIdxById[cell.model.id] = idx;
+  });
+}
+
 const clearCellState = (notebook: Notebook, execIdx?: number) => {
   if (execIdx === null) {
     execIdx = lastCellExecPositionIdx;
@@ -185,11 +202,11 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: string[],
                                   collapserFun: (elem: HTMLElement) => Element,
                                   evt: "mouseover" | "mouseout",
                                   add_or_remove: "add" | "remove",
-                                  staleCells: string[]) => {
+                                  staleCells: Set<string>) => {
   const listener = () => {
     for (const linkedId of linkedElems) {
       let css = linkedRefresherClass;
-      if (staleCells.indexOf(linkedId) > -1) {
+      if (staleCells.has(linkedId)) {
         css = linkedStaleClass;
       }
       collapserFun(cellsById[linkedId]).firstElementChild.classList[add_or_remove](css);
@@ -246,110 +263,113 @@ const connectToComm = (
       active_cell_order_idx: newActiveCellOrderIdx
     }
     comm.send(payload);
-  }
+  };
 
   const onNotebookStateChange = (nb: Notebook, args: IChangedArgs<any>) => {
     if (disconnected) {
       nb.stateChanged.disconnect(onNotebookStateChange);
       return;
     }
-    if (args.name !== 'activeCellIndex' || nb !== notebook) {
+    // console.log(`event: ${args.name}`)
+  };
+  notebook.stateChanged.connect(onNotebookStateChange);
+  notebook.activeCellChanged.connect((nb, cell) => {
+    if (notebook !== nb) {
       return;
     }
-    // console.log('state changed');
-    // console.log(`dirty cells: ${dirtyCells}`)
-    const oldActiveCell = nb.model.cells.get(args.oldValue);
-    if (oldActiveCell !== null) {
-      oldActiveCell.stateChanged.disconnect(onExecution, oldActiveCell.stateChanged);
-      if ((<ICodeCellModel>oldActiveCell).isDirty) {
-        dirtyCells.push(oldActiveCell.id);
+    notifyActiveCell(cell.model);
+    if (activeCell !== null) {
+      if ((<ICodeCellModel>activeCell.model).isDirty) {
+        dirtyCells.add(activeCellId);
+      } else {
+        dirtyCells.delete(activeCellId);
       }
+      activeCell.model.stateChanged.disconnect(onExecution, activeCell.model.stateChanged);
     }
-    const newActiveCell = nb.model.cells.get(args.newValue);
-    if (newActiveCell === null) {
+    activeCell = cell;
+    activeCellId = cell.model.id;
+
+    if (activeCell === null || activeCell.model === null || activeCell.model.type !== "code") {
       return;
     }
-    newActiveCell.stateChanged.connect(onExecution);
-    notifyActiveCell(newActiveCell);
-    if (newActiveCell.type === "code") {
-      dirtyCells.forEach((cell_id, _) => {
-        if (cell_id === newActiveCell.id) {
-          // console.log(`found one: ${newActiveCell.id}`);
-          (<any>newActiveCell)._setDirty(true);
-        }
+
+    activeCell.model.stateChanged.connect(onExecution);
+    notifyActiveCell(activeCell.model);
+
+    if (dirtyCells.has(activeCellId)) {
+      (<any>activeCell.model)._setDirty(true);
+    }
+    // console.log(`update cell ${activeCellId}; stale: ${staleCells.has(activeCellId)}; fresh: ${freshCells.has(activeCellId)}; dirty: ${dirtyCells.has(activeCellId)}`);
+    refreshNodeMapping(notebook);
+    updateOneCellUI(activeCellId);
+  });
+
+  const actionUpdatePairs: {action: "mouseover" | "mouseout"; update: "add" | "remove"}[] = [
+    {
+      action: 'mouseover',
+      update: 'add',
+    }, {
+      action: 'mouseout',
+      update: 'remove',
+    }
+  ];
+
+  const updateOneCellUI = (id: string) => {
+    const elem = cellsById[id];
+    if (staleCells.has(id)) {
+      elem.classList.add(staleClass);
+      elem.classList.add(freshClass);
+      elem.classList.remove(refresherInputClass);
+      addStaleOutputInteractions(elem, linkedStaleClass);
+    } else if (freshCells.has(id)) {
+      elem.classList.add(refresherInputClass);
+      elem.classList.add(freshClass);
+      addStaleOutputInteractions(elem, linkedRefresherClass);
+    }
+
+    if (staleLinks.hasOwnProperty(id)) {
+      actionUpdatePairs.forEach(({action, update}) => {
+        addUnsafeCellInteraction(
+            getJpInputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
+            action, update, staleCells
+        );
+
+        addUnsafeCellInteraction(
+            getJpOutputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
+            action, update, staleCells,
+        );
       });
     }
-  }
-  notebook.stateChanged.connect(onNotebookStateChange);
+
+    if (refresherLinks.hasOwnProperty(id)) {
+      if (!staleCells.has(id)) {
+        elem.classList.add(refresherClass);
+        elem.classList.add(freshClass);
+      }
+      actionUpdatePairs.forEach(({action, update}) => {
+        addUnsafeCellInteraction(
+            getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpInputCollapser,
+            action, update, staleCells
+        );
+
+        addUnsafeCellInteraction(
+            getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpOutputCollapser,
+            action, update, staleCells,
+        );
+      });
+    }
+  };
 
   const updateUI = (notebook: Notebook) => {
     clearCellState(notebook);
-    const cellsById: {[id: string]: HTMLElement} = {};
-    const orderIdxById: {[id: string]: number} = {};
-
-    notebook.widgets.forEach((cell, idx) => {
-      cellsById[cell.model.id] = cell.node;
-      orderIdxById[cell.model.id] = idx;
-    });
-    for (const [id, elem] of Object.entries(cellsById)) {
+    refreshNodeMapping(notebook);
+    for (const [id, _] of Object.entries(cellsById)) {
       if (orderIdxById[id] < lastCellExecPositionIdx) {
         continue;
       }
-      if (staleCells.indexOf(id) > -1) {
-        elem.classList.add(staleClass);
-        elem.classList.add(freshClass);
-        elem.classList.remove(refresherInputClass);
-        addStaleOutputInteractions(elem, linkedStaleClass);
-      } else if (freshCells.indexOf(id) > -1) {
-        elem.classList.add(refresherInputClass);
-        elem.classList.add(freshClass);
-        addStaleOutputInteractions(elem, linkedRefresherClass);
-      }
-
-      const actionUpdatePairs: {action: "mouseover" | "mouseout"; update: "add" | "remove"}[] = [
-        {
-          action: 'mouseover',
-          update: 'add',
-        }, {
-          action: 'mouseout',
-          update: 'remove',
-        }
-      ];
-
-      if (staleLinks.hasOwnProperty(id)) {
-        actionUpdatePairs.forEach(({action, update}) => {
-          addUnsafeCellInteraction(
-              getJpInputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-              action, update, staleCells
-          );
-
-          addUnsafeCellInteraction(
-              getJpOutputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-              action, update, staleCells,
-          );
-        });
-      }
-
-      if (refresherLinks.hasOwnProperty(id)) {
-        refresherCells.push(id);
-        if (staleCells.indexOf(id) === -1) {
-          elem.classList.add(refresherClass);
-          elem.classList.add(freshClass);
-        }
-        actionUpdatePairs.forEach(({action, update}) => {
-          addUnsafeCellInteraction(
-              getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpInputCollapser,
-              action, update, staleCells
-          );
-
-          addUnsafeCellInteraction(
-              getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpOutputCollapser,
-              action, update, staleCells,
-          );
-        });
-      }
+      updateOneCellUI(id);
     }
-  }
+  };
 
   comm.onMsg = (msg) => {
     if (disconnected) {
@@ -359,8 +379,8 @@ const connectToComm = (
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
     } else if (msg.content.data['type'] === 'cell_freshness') {
-      staleCells = msg.content.data['stale_cells'] as string[];
-      freshCells = msg.content.data['fresh_cells'] as string[];
+      staleCells = new Set(msg.content.data['stale_cells'] as string[]);
+      freshCells = new Set(msg.content.data['fresh_cells'] as string[]);
       staleLinks = msg.content.data['stale_links'] as { [id: string]: string[] };
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
       lastCellExecPositionIdx = msg.content.data['last_cell_exec_position_idx'] as number;

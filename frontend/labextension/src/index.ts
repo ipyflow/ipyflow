@@ -103,6 +103,9 @@ let orderIdxById: {[id: string]: number} = {};
 const cleanup = new Event('cleanup');
 
 const getJpInputCollapser = (elem: HTMLElement) => {
+  if (elem === null || elem === undefined) {
+    return null;
+  }
   const child = elem.children.item(1);
   if (child === null) {
     return null;
@@ -111,6 +114,9 @@ const getJpInputCollapser = (elem: HTMLElement) => {
 };
 
 const getJpOutputCollapser = (elem: HTMLElement) => {
+  if (elem === null || elem === undefined) {
+    return null;
+  }
   const child = elem.children.item(2);
   if (child === null) {
     return null;
@@ -132,6 +138,9 @@ const addStaleOutputInteraction = (elem: Element,
                                    evt: "mouseover" | "mouseout",
                                    add_or_remove: "add" | "remove",
                                    css: string) => {
+  if (elem === null || linkedElem === null) {
+    return;
+  }
   const listener = () => {
     linkedElem.firstElementChild.classList[add_or_remove](css);
   };
@@ -203,13 +212,20 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: string[],
                                   evt: "mouseover" | "mouseout",
                                   add_or_remove: "add" | "remove",
                                   staleCells: Set<string>) => {
+  if (elem === null) {
+    return;
+  }
   const listener = () => {
     for (const linkedId of linkedElems) {
       let css = linkedRefresherClass;
       if (staleCells.has(linkedId)) {
         css = linkedStaleClass;
       }
-      collapserFun(cellsById[linkedId]).firstElementChild.classList[add_or_remove](css);
+      const collapser = collapserFun(cellsById[linkedId]);
+      if (collapser === null || collapser.firstElementChild === null) {
+        return;
+      }
+      collapser.firstElementChild.classList[add_or_remove](css);
     }
   };
   elem.addEventListener(evt, listener);

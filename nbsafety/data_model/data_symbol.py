@@ -521,6 +521,15 @@ class DataSymbol:
             return False
         return True
 
+    def _is_simple_assign(self, new_deps: Set[DataSymbol]) -> bool:
+        if not isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign)):
+            return False
+        if len(new_deps) != 1:
+            return False
+        only_dep: DataSymbol = next(iter(new_deps))
+        # obj ids can get reused for anon symbols like literals
+        return not only_dep.is_anonymous and self.obj_id == only_dep.obj_id
+
     def update_deps(
         self,
         new_deps: Set[DataSymbol],
@@ -567,8 +576,9 @@ class DataSymbol:
             self.refresh(
                 bump_version=not equal_to_old,
                 # rationale: if this is a mutation for which we have more precise information,
-                # then we don't need to update the ns descendents as this will already have happened
-                refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents),
+                # then we don't need to update the ns descendents as this will already have happened.
+                # also don't update ns descendents for things like `a = b`
+                refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents) and not self._is_simple_assign(new_deps),
                 refresh_namespace_stale=not mutated,
             )
         if propagate and (deleted or not equal_to_old):

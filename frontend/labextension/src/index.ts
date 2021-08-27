@@ -313,7 +313,10 @@ const connectToComm = (
     notifyActiveCell(activeCell.model);
 
     if (dirtyCells.has(activeCellId)) {
-      (<any>activeCell.model)._setDirty(true);
+      const setDirty = (<any>activeCell.model)._setDirty;
+      if (setDirty !== undefined) {
+        setDirty(true);
+      }
     }
     // console.log(`update cell ${activeCellId}; stale: ${staleCells.has(activeCellId)}; fresh: ${freshCells.has(activeCellId)}; dirty: ${dirtyCells.has(activeCellId)}`);
     refreshNodeMapping(notebook);

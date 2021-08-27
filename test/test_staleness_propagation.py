@@ -1969,7 +1969,6 @@ def test_dict():
     assert_detected('`x` has dependency on old value of `d[0]`')
 
 
-@skipif_known_failing
 def test_dict_2():
     run_cell('d = {}; d[0] = 0')
     run_cell('x = d[0] + 1')
@@ -1984,7 +1983,7 @@ def test_default_dict():
     run_cell('x = d[0][0] + 1')
     run_cell('d = defaultdict(dict); d[0][0] = 42')
     run_cell('logging.info(x)')
-    assert_false_negative('`x` has dependency on old value of `d[0][0]`, but this is hard to detect b/c d was cleared')
+    assert_detected('`x` has dependency on old value of `d[0][0]`')
 
 
 def test_mutate_arg():

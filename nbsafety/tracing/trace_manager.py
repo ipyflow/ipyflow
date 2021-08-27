@@ -888,6 +888,7 @@ class TraceManager(SliceTraceManager):
             logger.warning("create literal scope %s", self.active_literal_scope)
             starred_idx = -1
             starred_namespace = None
+            outer_deps = set()
             for (i, inner_obj), (inner_key_node, inner_val_node) in match_container_obj_or_namespace_with_literal_nodes(
                 literal, nbs().ast_node_by_id[node_id]  # type: ignore
             ):
@@ -906,7 +907,7 @@ class TraceManager(SliceTraceManager):
                 else:
                     inner_symbols = resolve_rval_symbols(inner_val_node)
                     if inner_key_node is not None:
-                        inner_symbols.update(resolve_rval_symbols(inner_key_node))
+                        outer_deps.update(resolve_rval_symbols(inner_key_node))
                 self.node_id_to_loaded_symbols.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
                 if isinstance(i, (int, str)):  # TODO: perform more general check for SupportedIndexType
@@ -928,7 +929,7 @@ class TraceManager(SliceTraceManager):
             literal_sym = parent_scope.upsert_data_symbol_for_name(
                 '<literal_sym_%d>' % id(literal),
                 literal,
-                set(),
+                outer_deps,
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
                 is_anonymous=True,
                 implicit=True,

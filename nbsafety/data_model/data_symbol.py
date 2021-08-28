@@ -344,7 +344,7 @@ class DataSymbol:
             new_ns = nbs().namespaces.get(self.obj_id, None)
             # don't overwrite existing namespace for this obj
             old_ns = nbs().namespaces.get(self.cached_obj_id, None)
-            if old_ns is not None:
+            if old_ns is not None and (new_ns is None or not new_ns.max_descendent_timestamp.is_initialized) and old_ns.full_namespace_path == self.full_namespace_path:
                 logger.info("create fresh copy of namespace %s", old_ns)
                 if new_ns is None:
                     new_ns = old_ns.fresh_copy(obj)
@@ -528,7 +528,7 @@ class DataSymbol:
             return False
         only_dep: DataSymbol = next(iter(new_deps))
         # obj ids can get reused for anon symbols like literals
-        return not only_dep.is_anonymous and self.obj_id == only_dep.obj_id
+        return not only_dep.is_anonymous and self.cached_obj_id == only_dep.obj_id
 
     def update_deps(
         self,

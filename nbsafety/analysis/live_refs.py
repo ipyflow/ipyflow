@@ -101,11 +101,13 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
                 for x in (this_assign_dead, (live[0] for live in this_assign_live))
             ]
             if len(lhs) == 1 and len(rhs) == 1:
-                lhs, rhs = [next(iter(x)) for x in (lhs, rhs)]
+                syms: List[DataSymbol] = [next(iter(x)) for x in (lhs, rhs)]
+                lhs_sym, rhs_sym = syms[0], syms[1]
                 # hack to avoid marking `b` as live when objects are same,
                 # or when it was detected that rhs symbol wasn't actually updated
-                if lhs.obj is rhs.obj:
-                    # it's a no-op, so treat it as such
+                if lhs_sym.obj is rhs_sym.obj or lhs_sym.timestamp_excluding_ns_descendents > rhs_sym.timestamp:
+                    # either (a) it's a no-op (so treat it as such), or
+                    #        (b) lhs is newer and it doesn't make sense to refresh
                     this_assign_live.clear()
                     this_assign_dead.clear()
         this_assign_dead -= {live[0] for live in this_assign_live}

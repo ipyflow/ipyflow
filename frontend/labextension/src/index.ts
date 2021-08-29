@@ -97,7 +97,7 @@ let orderIdxById: {[id: string]: number} = {};
 let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
-let executedReactiveFreshCells: string[] = [];
+let executedReactiveFreshCells: Set<string> = new Set();
 
 const cleanup = new Event('cleanup');
 
@@ -266,8 +266,8 @@ const connectToComm = (
       if (cellPendingExecution !== null) {
         CodeCell.execute(cellPendingExecution, session)
       } else if (lastExecutionMode === 'reactive') {
-        freshCells = new Set(executedReactiveFreshCells);
-        executedReactiveFreshCells = [];
+        freshCells = executedReactiveFreshCells;
+        executedReactiveFreshCells = new Set<string>();
         updateUI(notebook, -1);
       }
     });
@@ -415,14 +415,14 @@ const connectToComm = (
       if (exec_mode === 'normal') {
         updateUI(notebook);
       } else if (exec_mode === 'reactive') {
-        executedReactiveFreshCells.push(msg.content.data['last_executed_cell_id'] as string);
+        executedReactiveFreshCells.add(msg.content.data['last_executed_cell_id'] as string);
         clearCellState(notebook);
         let found = false;
         notebook.widgets.forEach(cell => {
           if (found) {
             return;
           }
-          if (freshCells.has(cell.model.id)) {
+          if (freshCells.has(cell.model.id) && !executedReactiveFreshCells.has(cell.model.id)) {
             if (cell.model.type === 'code') {
               cellPendingExecution = (cell as CodeCell);
             }

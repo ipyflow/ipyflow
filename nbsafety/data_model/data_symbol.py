@@ -4,7 +4,7 @@ from collections import defaultdict
 from enum import Enum
 import logging
 import sys
-from typing import cast, TYPE_CHECKING, Sequence
+from typing import cast, TYPE_CHECKING
 
 try:
     import numpy
@@ -345,33 +345,13 @@ class DataSymbol:
             # don't overwrite existing namespace for this obj
             old_ns = nbs().namespaces.get(self.cached_obj_id, None)
             if old_ns is not None and (new_ns is None or not new_ns.max_descendent_timestamp.is_initialized) and old_ns.full_namespace_path == self.full_namespace_path:
-                logger.info("create fresh copy of namespace %s", old_ns)
                 if new_ns is None:
+                    logger.info("create fresh copy of namespace %s", old_ns)
                     new_ns = old_ns.fresh_copy(obj)
                 else:
                     new_ns.scope_name = old_ns.scope_name
                     new_ns.parent_scope = old_ns.parent_scope
-                for dsym in list(old_ns.all_data_symbols_this_indentation(exclude_class=True, is_subscript=False)):
-                    dsym.update_obj_ref(getattr(obj, dsym.name, None))
-                    logger.info("shuffle %s from %s to %s", dsym, old_ns, new_ns)
-                    old_ns._data_symbol_by_name.pop(dsym.name, None)
-                    new_ns._data_symbol_by_name[dsym.name] = dsym
-                    dsym.containing_scope = new_ns
-                for dsym in list(old_ns.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)):
-                    if isinstance(obj, Sequence) and hasattr(obj, '__len__'):
-                        if isinstance(dsym.name, int) and dsym.name < len(obj):
-                            inner_obj = obj[dsym.name]
-                        else:
-                            inner_obj = None
-                    elif hasattr(obj, '__contains__') and dsym.name in obj:
-                        inner_obj = obj[dsym.name]
-                    else:
-                        inner_obj = None
-                    dsym.update_obj_ref(inner_obj)
-                    logger.info("shuffle %s from %s to %s", dsym, old_ns, new_ns)
-                    old_ns._subscript_data_symbol_by_name.pop(dsym.name, None)
-                    new_ns._subscript_data_symbol_by_name[dsym.name] = dsym
-                    dsym.containing_scope = new_ns
+                old_ns.transfer_symbols_to(new_ns)
             self._handle_aliases()
         if refresh_cached:
             self._refresh_cached_obj()

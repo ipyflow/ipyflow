@@ -3,7 +3,7 @@ import ast
 import inspect
 import itertools
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import cast, TYPE_CHECKING, Sequence
 
 from IPython import get_ipython
 try:
@@ -17,7 +17,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
+    from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
     from nbsafety.types import SupportedIndexType
 
 
@@ -541,3 +541,26 @@ class NamespaceScope(Scope):
         if self.parent_scope is not None and isinstance(self.parent_scope, NamespaceScope):
             return self.parent_scope
         return None
+
+    def transfer_symbols_to(self, new_ns: NamespaceScope) -> None:
+        for dsym in list(self.all_data_symbols_this_indentation(exclude_class=True, is_subscript=False)):
+            dsym.update_obj_ref(getattr(new_ns.obj, cast(str, dsym.name), None))
+            logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
+            self._data_symbol_by_name.pop(dsym.name, None)
+            new_ns._data_symbol_by_name[dsym.name] = dsym
+            dsym.containing_scope = new_ns
+        for dsym in list(self.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)):
+            if isinstance(new_ns.obj, Sequence) and hasattr(new_ns.obj, '__len__'):
+                if isinstance(dsym.name, int) and dsym.name < len(new_ns.obj):
+                    inner_obj = new_ns.obj[dsym.name]
+                else:
+                    inner_obj = None
+            elif hasattr(new_ns.obj, '__contains__') and dsym.name in new_ns.obj:
+                inner_obj = new_ns.obj[dsym.name]
+            else:
+                inner_obj = None
+            dsym.update_obj_ref(inner_obj)
+            logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
+            self._subscript_data_symbol_by_name.pop(dsym.name, None)
+            new_ns._subscript_data_symbol_by_name[dsym.name] = dsym
+            dsym.containing_scope = new_ns

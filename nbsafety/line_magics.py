@@ -8,6 +8,7 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.ipython_utils import cell_counter, CellNotRunYetError
+from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -236,3 +237,13 @@ def turn_on_warnings_for(line_: str) -> None:
             logger.warning('Warnings are turned on for %s', data_sym_name)
         else:
             logger.warning('Could not find symbol metadata for %s', data_sym_name)
+
+
+def set_exec_mode(line_: str) -> None:
+    usage = f'Usage: %safety mode [{ExecutionMode.NORMAL}|{ExecutionMode.REACTIVE}]'
+    try:
+        exec_mode = ExecutionMode(line_.strip())
+    except ValueError:
+        logger.warning(usage)
+        return
+    nbs().mut_settings.exec_mode = exec_mode

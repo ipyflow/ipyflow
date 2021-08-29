@@ -2,7 +2,6 @@
 import ast
 import astunparse
 import asyncio
-import builtins
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -34,7 +33,7 @@ from nbsafety import line_magics
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope, NamespaceScope
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.run_mode import SafetyRunMode
+from nbsafety.run_mode import ExecutionMode, SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
@@ -71,6 +70,7 @@ class MutableNotebookSafetySettings:
     highlights_enabled: bool
     static_slicing_enabled: bool
     dynamic_slicing_enabled: bool
+    exec_mode: ExecutionMode
 
 
 class CheckerResult(NamedTuple):
@@ -102,6 +102,7 @@ class NotebookSafety(singletons.NotebookSafety):
             highlights_enabled=kwargs.pop('highlights_enabled', True),
             static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
             dynamic_slicing_enabled=kwargs.pop('dynamic_slicing_enabled', True),
+            exec_mode=ExecutionMode(kwargs.pop('exec_mode', ExecutionMode.NORMAL)),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.settrace = settrace or sys.settrace
@@ -237,6 +238,8 @@ class NotebookSafety(singletons.NotebookSafety):
             response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id)
             response['type'] = 'cell_freshness'
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
+            response['exec_mode'] = self.mut_settings.exec_mode.value
+            response['last_executed_cell_id'] = cell_id
             if comm is not None:
                 comm.send(response)
         else:
@@ -850,6 +853,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.turn_off_warnings_for(line)
             elif cmd == 'turn_on_warnings_for':
                 return line_magics.turn_on_warnings_for(line)
+            elif cmd in ('mode', 'exec_mode'):
+                return line_magics.set_exec_mode(line)
             elif cmd in line_magic_names:
                 logger.warning('We have a magic for %s, but have not yet registered it', cmd)
                 return None

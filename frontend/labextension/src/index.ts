@@ -96,6 +96,9 @@ let cellsById: {[id: string]: HTMLElement} = {};
 let orderIdxById: {[id: string]: number} = {};
 let cellPendingExecution: CodeCell = null;
 
+let lastExecutionMode: string = null;
+let executedReactiveFreshCells: string[] = [];
+
 const cleanup = new Event('cleanup');
 
 const getJpInputCollapser = (elem: HTMLElement) => {
@@ -262,9 +265,14 @@ const connectToComm = (
     comm.send(payload).done.then(() => {
       if (cellPendingExecution !== null) {
         CodeCell.execute(cellPendingExecution, session)
+      } else if (lastExecutionMode === 'reactive') {
+        freshCells = new Set(executedReactiveFreshCells);
+        executedReactiveFreshCells = [];
+        updateUI(notebook, -1);
       }
     });
   };
+
 
   const notifyActiveCell = (newActiveCell: ICellModel) => {
     let newActiveCellOrderIdx = -1;
@@ -281,15 +289,12 @@ const connectToComm = (
     comm.send(payload);
   };
 
-  const onNotebookStateChange = (nb: Notebook, args: IChangedArgs<any>) => {
-    if (disconnected) {
-      nb.stateChanged.disconnect(onNotebookStateChange);
+  const onActiveCellChange = (nb: Notebook, cell: Cell<ICellModel>) => {
+    if (notebook !== nb) {
       return;
     }
-  };
-  notebook.stateChanged.connect(onNotebookStateChange);
-  notebook.activeCellChanged.connect((nb, cell) => {
-    if (notebook !== nb) {
+    if (disconnected) {
+      notebook.activeCellChanged.disconnect(onActiveCellChange);
       return;
     }
     notifyActiveCell(cell.model);
@@ -319,7 +324,8 @@ const connectToComm = (
     }
     refreshNodeMapping(notebook);
     updateOneCellUI(activeCellId);
-  });
+  };
+  notebook.activeCellChanged.connect(onActiveCellChange);
 
   const actionUpdatePairs: {action: "mouseover" | "mouseout"; update: "add" | "remove"}[] = [
     {
@@ -340,8 +346,10 @@ const connectToComm = (
       addStaleOutputInteractions(elem, linkedStaleClass);
     } else if (freshCells.has(id)) {
       elem.classList.add(refresherInputClass);
-      elem.classList.add(freshClass);
-      addStaleOutputInteractions(elem, linkedRefresherClass);
+      if (lastExecutionMode === 'normal') {
+        elem.classList.add(freshClass);
+        addStaleOutputInteractions(elem, linkedRefresherClass);
+      }
     }
 
     if (staleLinks.hasOwnProperty(id)) {
@@ -377,8 +385,8 @@ const connectToComm = (
     }
   };
 
-  const updateUI = (notebook: Notebook) => {
-    clearCellState(notebook);
+  const updateUI = (notebook: Notebook, execIdx?: number) => {
+    clearCellState(notebook, execIdx);
     refreshNodeMapping(notebook);
     for (const [id, _] of Object.entries(cellsById)) {
       if (orderIdxById[id] < lastCellExecPositionIdx) {
@@ -401,20 +409,29 @@ const connectToComm = (
       staleLinks = msg.content.data['stale_links'] as { [id: string]: string[] };
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
       lastCellExecPositionIdx = msg.content.data['last_cell_exec_position_idx'] as number;
-      updateUI(notebook);
       cellPendingExecution = null;
-      let found = false;
-      notebook.widgets.forEach(cell => {
-        if (found) {
-          return;
-        }
-        if (freshCells.has(cell.model.id)) {
-          if (cell.model.type === 'code') {
-            cellPendingExecution = (cell as CodeCell);
+      const exec_mode = msg.content.data['exec_mode'] as string;
+      lastExecutionMode = exec_mode;
+      if (exec_mode === 'normal') {
+        updateUI(notebook);
+      } else if (exec_mode === 'reactive') {
+        executedReactiveFreshCells.push(msg.content.data['last_executed_cell_id'] as string);
+        clearCellState(notebook);
+        let found = false;
+        notebook.widgets.forEach(cell => {
+          if (found) {
+            return;
           }
-          found = true;
-        }
-      });
+          if (freshCells.has(cell.model.id)) {
+            if (cell.model.type === 'code') {
+              cellPendingExecution = (cell as CodeCell);
+            }
+            found = true;
+          }
+        });
+      } else {
+        console.warn(`Unknown execution mode: ${exec_mode}`)
+      }
     }
   };
   comm.open({});

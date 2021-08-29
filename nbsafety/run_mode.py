@@ -13,3 +13,8 @@ class SafetyRunMode(Enum):
             return SafetyRunMode.DEVELOP
         else:
             return SafetyRunMode.PRODUCTION
+
+
+class ExecutionMode(Enum):
+    NORMAL = 'normal'
+    REACTIVE = 'reactive'

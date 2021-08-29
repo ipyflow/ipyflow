@@ -40,14 +40,14 @@
     "watch:labextension": "jupyter labextension watch ."
   },
   "dependencies": {
-    "@jupyterlab/application": "^3.0.7",
+    "@jupyterlab/application": "^3.1.8",
     "@jupyterlab/coreutils": "^5.0.6",
-    "@jupyterlab/notebook": "^3.0.7",
+    "@jupyterlab/notebook": "^3.1.8",
     "codemirror": "^5.61.0",
     "normalize-url": "^6.1.0"
   },
   "devDependencies": {
-    "@jupyterlab/builder": "^3.0.7",
+    "@jupyterlab/builder": "^3.1.8",
     "@typescript-eslint/eslint-plugin": "^2.25.0",
     "@typescript-eslint/parser": "^2.25.0",
     "@wdio/cli": "^6.12.1",

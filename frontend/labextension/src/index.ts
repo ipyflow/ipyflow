@@ -9,7 +9,12 @@ import {
 } from '@jupyterlab/application';
 
 import {
+  ISessionContext
+} from '@jupyterlab/apputils';
+
+import {
   Cell,
+  CodeCell,
   ICellModel,
   ICodeCellModel
 } from '@jupyterlab/cells';
@@ -18,8 +23,6 @@ import {
   INotebookTracker,
   Notebook
 } from '@jupyterlab/notebook';
-
-import { Kernel } from '@jupyterlab/services';
 
 /**
  * Initialization data for the jupyterlab-nbsafety extension.
@@ -37,25 +40,17 @@ const extension: JupyterFrontEndPlugin<void> = {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
         clearCellState(nbPanel.content, -1);
-        // let pasteAction = (<any>NotebookActions).pasteCompleted;
-        // if (pasteAction !== undefined) {
-        //   console.log('found paste action');
-        //   pasteAction.connect((notebook: Notebook, cell: Cell) => {
-        //     console.log('Just pasted cell:')
-        //     console.log(cell);
-        //   })
-        // }
         activeCell = nbPanel.content.activeCell;
         activeCellId = nbPanel.content.activeCell.model.id;
         let commDisconnectHandler = connectToComm(
-          session.session.kernel,
+          session,
           nbPanel.content
         );
         session.kernelChanged.connect(() => {
           clearCellState(nbPanel.content, -1);
           commDisconnectHandler();
           commDisconnectHandler = connectToComm(
-            session.session.kernel,
+            session,
             nbPanel.content
           );
         });
@@ -71,7 +66,7 @@ const extension: JupyterFrontEndPlugin<void> = {
               clearCellState(nbPanel.content, -1);
               commDisconnectHandler();
               commDisconnectHandler = connectToComm(
-                  session.session.kernel,
+                  session,
                   nbPanel.content
               );
             });
@@ -99,6 +94,7 @@ let activeCell: Cell<ICellModel> = null;
 let activeCellId: string = null;
 let cellsById: {[id: string]: HTMLElement} = {};
 let orderIdxById: {[id: string]: number} = {};
+let cellPendingExecution: CodeCell = null;
 
 const cleanup = new Event('cleanup');
 
@@ -233,13 +229,13 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: string[],
 };
 
 const connectToComm = (
-  kernel: Kernel.IKernelConnection,
+  session: ISessionContext,
   notebook: Notebook
 ) => {
-  const comm = kernel.createComm('nbsafety');
+  const comm = session.session.kernel.createComm('nbsafety');
   let disconnected = false;
 
-  const onExecution: any = (cell: ICellModel, args: IChangedArgs<any>) => {
+  const onExecution = (cell: ICellModel, args: IChangedArgs<any>) => {
     if (disconnected) {
       cell.stateChanged.disconnect(onExecution);
       return;
@@ -263,7 +259,11 @@ const connectToComm = (
       content_by_cell_id: content_by_cell_id,
       order_index_by_cell_id: order_index_by_cell_id,
     };
-    comm.send(payload);
+    comm.send(payload).done.then(() => {
+      if (cellPendingExecution !== null) {
+        CodeCell.execute(cellPendingExecution, session)
+      }
+    });
   };
 
   const notifyActiveCell = (newActiveCell: ICellModel) => {
@@ -286,7 +286,6 @@ const connectToComm = (
       nb.stateChanged.disconnect(onNotebookStateChange);
       return;
     }
-    // console.log(`event: ${args.name}`)
   };
   notebook.stateChanged.connect(onNotebookStateChange);
   notebook.activeCellChanged.connect((nb, cell) => {
@@ -318,7 +317,6 @@ const connectToComm = (
         setDirty(true);
       }
     }
-    // console.log(`update cell ${activeCellId}; stale: ${staleCells.has(activeCellId)}; fresh: ${freshCells.has(activeCellId)}; dirty: ${dirtyCells.has(activeCellId)}`);
     refreshNodeMapping(notebook);
     updateOneCellUI(activeCellId);
   });
@@ -404,6 +402,19 @@ const connectToComm = (
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
       lastCellExecPositionIdx = msg.content.data['last_cell_exec_position_idx'] as number;
       updateUI(notebook);
+      cellPendingExecution = null;
+      let found = false;
+      notebook.widgets.forEach(cell => {
+        if (found) {
+          return;
+        }
+        if (freshCells.has(cell.model.id)) {
+          if (cell.model.type === 'code') {
+            cellPendingExecution = (cell as CodeCell);
+          }
+          found = true;
+        }
+      });
     }
   };
   comm.open({});

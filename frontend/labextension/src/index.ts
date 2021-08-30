@@ -24,6 +24,8 @@ import {
   Notebook
 } from '@jupyterlab/notebook';
 
+const NBSAFETY_KERNEL_NAME: string = 'nbsafety';
+
 /**
  * Initialization data for the jupyterlab-nbsafety extension.
  */
@@ -42,17 +44,23 @@ const extension: JupyterFrontEndPlugin<void> = {
         clearCellState(nbPanel.content, -1);
         activeCell = nbPanel.content.activeCell;
         activeCellId = nbPanel.content.activeCell.model.id;
-        let commDisconnectHandler = connectToComm(
-          session,
-          nbPanel.content
-        );
-        session.kernelChanged.connect(() => {
-          clearCellState(nbPanel.content, -1);
-          commDisconnectHandler();
+        let commDisconnectHandler = () => {};
+        if (session.session.kernel.name === NBSAFETY_KERNEL_NAME) {
           commDisconnectHandler = connectToComm(
             session,
             nbPanel.content
           );
+        }
+        session.kernelChanged.connect((_, args) => {
+          clearCellState(nbPanel.content, -1);
+          commDisconnectHandler();
+          commDisconnectHandler = () => {};
+          if (args.newValue !== null && args.newValue.name === NBSAFETY_KERNEL_NAME) {
+            commDisconnectHandler = connectToComm(
+              session,
+              nbPanel.content
+            );
+          }
         });
         let shouldReconnect = false;
         session.statusChanged.connect((session, status) => {
@@ -65,10 +73,13 @@ const extension: JupyterFrontEndPlugin<void> = {
             session.ready.then(() => {
               clearCellState(nbPanel.content, -1);
               commDisconnectHandler();
-              commDisconnectHandler = connectToComm(
-                  session,
-                  nbPanel.content
-              );
+              commDisconnectHandler = () => {};
+              if (session.session.kernel.name === NBSAFETY_KERNEL_NAME) {
+                commDisconnectHandler = connectToComm(
+                    session,
+                    nbPanel.content
+                );
+              }
             });
           }
         });

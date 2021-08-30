@@ -138,6 +138,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
+        self._prev_exec_fresh_cell_ids: Set[CellId] = set()
         self._cell_counter = 1
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
@@ -240,6 +241,10 @@ class NotebookSafety(singletons.NotebookSafety):
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             response['exec_mode'] = self.mut_settings.exec_mode.value
             response['last_executed_cell_id'] = cell_id
+            cur_fresh_cells = set(response['fresh_cells'])
+            new_fresh_cells = cur_fresh_cells - self._prev_exec_fresh_cell_ids
+            self._prev_exec_fresh_cell_ids = cur_fresh_cells
+            response['new_fresh_cells'] = list(new_fresh_cells)
             if comm is not None:
                 comm.send(response)
         else:

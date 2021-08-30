@@ -109,6 +109,7 @@ let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
 let executedReactiveFreshCells: Set<string> = new Set();
+let newFreshCells: Set<string> = new Set();
 
 const cleanup = new Event('cleanup');
 
@@ -278,6 +279,7 @@ const connectToComm = (
         CodeCell.execute(cellPendingExecution, session)
       } else if (lastExecutionMode === 'reactive') {
         freshCells = executedReactiveFreshCells;
+        newFreshCells = new Set<string>();
         executedReactiveFreshCells = new Set<string>();
         updateUI(notebook, -1);
       }
@@ -309,7 +311,7 @@ const connectToComm = (
       return;
     }
     notifyActiveCell(cell.model);
-    if (activeCell !== null) {
+    if (activeCell !== null && activeCell.model !== null) {
       if ((<ICodeCellModel>activeCell.model).isDirty) {
         dirtyCells.add(activeCellId);
       } else {
@@ -417,6 +419,7 @@ const connectToComm = (
     } else if (msg.content.data['type'] === 'cell_freshness') {
       staleCells = new Set(msg.content.data['stale_cells'] as string[]);
       freshCells = new Set(msg.content.data['fresh_cells'] as string[]);
+      newFreshCells = new Set([...newFreshCells, ...msg.content.data['fresh_cells'] as string[]])
       staleLinks = msg.content.data['stale_links'] as { [id: string]: string[] };
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
       lastCellExecPositionIdx = msg.content.data['last_cell_exec_position_idx'] as number;
@@ -424,6 +427,7 @@ const connectToComm = (
       const exec_mode = msg.content.data['exec_mode'] as string;
       lastExecutionMode = exec_mode;
       if (exec_mode === 'normal') {
+        newFreshCells = new Set<string>();
         updateUI(notebook);
       } else if (exec_mode === 'reactive') {
         executedReactiveFreshCells.add(msg.content.data['last_executed_cell_id'] as string);
@@ -433,7 +437,7 @@ const connectToComm = (
           if (found) {
             return;
           }
-          if (freshCells.has(cell.model.id) && !executedReactiveFreshCells.has(cell.model.id)) {
+          if (newFreshCells.has(cell.model.id) && !executedReactiveFreshCells.has(cell.model.id)) {
             if (cell.model.type === 'code') {
               cellPendingExecution = (cell as CodeCell);
             }

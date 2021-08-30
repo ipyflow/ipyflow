@@ -365,6 +365,10 @@ const connectToComm = (
       }
     }
 
+    if (lastExecutionMode === 'reactive') {
+      return;
+    }
+
     if (staleLinks.hasOwnProperty(id)) {
       actionUpdatePairs.forEach(({action, update}) => {
         addUnsafeCellInteraction(

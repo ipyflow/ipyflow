@@ -330,9 +330,9 @@ const connectToComm = (
     notifyActiveCell(activeCell.model);
 
     if (dirtyCells.has(activeCellId)) {
-      const setDirty = (<any>activeCell.model)._setDirty;
-      if (setDirty !== undefined) {
-        setDirty(true);
+      const activeCellModel: any = activeCell.model as any;
+      if (activeCellModel._setDirty !== undefined) {
+        activeCellModel._setDirty(true);
       }
     }
     refreshNodeMapping(notebook);

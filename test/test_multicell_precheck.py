@@ -303,7 +303,7 @@ def test_list_append():
     run_cell('lst[1] += 42', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
-    assert response['fresh_cells'] == [1, 3]
+    assert response['fresh_cells'] == [1]
 
 
 def test_list_extend():
@@ -320,7 +320,7 @@ def test_list_extend():
     run_cell('lst[1] += 42', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == [2]
-    assert response['fresh_cells'] == [1, 3]
+    assert response['fresh_cells'] == [1]
 
 
 def test_implicit_subscript_symbol_does_not_bump_ts():

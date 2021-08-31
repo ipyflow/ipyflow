@@ -75,6 +75,7 @@ class MutableNotebookSafetySettings:
 
 class CheckerResult(NamedTuple):
     live: Set[DataSymbol]
+    shallow_live: Set[DataSymbol]
     live_cells: Set[int]
     live_cells_from_calls: Set[int]
     dead: Set[DataSymbol]
@@ -297,7 +298,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     pass
 
                 if (
-                    self._get_max_timestamp_cell_num_for_symbols(checker_result.live) >
+                    self._get_max_timestamp_cell_num_for_symbols(checker_result.live, checker_result.shallow_live) >
                     self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
                 ) and cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
                     fresh_cells.append(cell_id)
@@ -360,10 +361,14 @@ class NotebookSafety(singletons.NotebookSafety):
                 lines.append(line)
         return ast.parse('\n'.join(lines))
 
-    def _get_max_timestamp_cell_num_for_symbols(self, symbols: Set[DataSymbol]) -> int:
+    @staticmethod
+    def _get_max_timestamp_cell_num_for_symbols(symbols: Set[DataSymbol], shallow_symbols: Set[DataSymbol]) -> int:
         max_timestamp_cell_num = -1
         for dsym in symbols:
-            max_timestamp_cell_num = max(max_timestamp_cell_num, dsym.timestamp.cell_num)
+            if dsym in shallow_symbols:
+                max_timestamp_cell_num = max(max_timestamp_cell_num, dsym.timestamp_excluding_ns_descendents.cell_num)
+            else:
+                max_timestamp_cell_num = max(max_timestamp_cell_num, dsym.timestamp.cell_num)
         return max_timestamp_cell_num
 
     def _build_typecheck_slice(
@@ -394,7 +399,7 @@ class NotebookSafety(singletons.NotebookSafety):
             get_live_symbols_and_cells_for_references(
                 live_symbol_refs, self.global_scope, cell_ctr, update_liveness_time_versions=True
             )
-        live_symbols, live_cells_from_calls = get_live_symbols_and_cells_for_references(
+        live_symbols, shallow_live_symbols, live_cells_from_calls = get_live_symbols_and_cells_for_references(
             live_symbol_refs, self.global_scope, cell_ctr, update_liveness_time_versions=False
         )
         # only mark dead attrsubs as killed if we can traverse the entire chain
@@ -405,6 +410,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.live_symbols_by_cell_counter[cell_ctr] = live_symbols
         return CheckerResult(
             live=live_symbols,
+            shallow_live=shallow_live_symbols,
             live_cells={sym.timestamp.cell_num for sym in live_symbols},
             live_cells_from_calls=live_cells_from_calls,
             dead=dead_symbols,

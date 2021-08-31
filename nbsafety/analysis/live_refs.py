@@ -12,7 +12,7 @@ from nbsafety.data_model.timestamp import Timestamp
 
 if TYPE_CHECKING:
     from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
-    from nbsafety.types import SymbolRef
+    from nbsafety.types import SupportedIndexType, SymbolRef
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -257,28 +257,29 @@ def gen_symbols_for_references(
     only_yield_successful_resolutions: bool,
     stmt_counters: Optional[Iterable[int]] = None,
     update_liveness_time_versions: bool = False,
-) -> Generator[Tuple[DataSymbol, bool, bool, Optional[int]], None, None]:
+) -> Generator[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool, Optional[int]], None, None]:
     if stmt_counters is None:
         stmt_counters = (None for _ in itertools.count())
     for symbol_ref, stmt_counter in zip(symbol_refs, stmt_counters):
         if isinstance(symbol_ref, str):
             dsym = scope.lookup_data_symbol_by_name(symbol_ref)
             if dsym is not None:
-                yield dsym, False, True, stmt_counter
+                yield dsym, None, False, True, stmt_counter
         elif isinstance(symbol_ref, AttrSubSymbolChain):
             if update_liveness_time_versions:
                 # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
                 #  Right now, yielding the intermediate elts of the chain will yield false positives in the
                 #  event of namespace stale children.
-                for dsym, is_called, success in scope.gen_data_symbols_for_attrsub_chain(symbol_ref):
+                for dsym, next_ref, is_called, success in scope.gen_data_symbols_for_attrsub_chain(symbol_ref):
                     if only_yield_successful_resolutions and not success:
                         continue
-                    yield dsym, is_called, success, stmt_counter
+                    yield dsym, next_ref, is_called, success, stmt_counter
             else:
-                dsym, is_called, success = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
-                if dsym is not None:
+                dsym_et_al = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
+                if dsym_et_al is not None:
+                    dsym, next_ref, is_called, success = dsym_et_al
                     if success or not only_yield_successful_resolutions:
-                        yield dsym, is_called, success, stmt_counter
+                        yield dsym, next_ref, is_called, success, stmt_counter
         else:
             logger.warning('invalid type for ref %s', symbol_ref)
             continue
@@ -306,12 +307,13 @@ def get_live_symbols_and_cells_for_references(
     scope: Scope,
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
-) -> Tuple[Set[DataSymbol], Set[int]]:
+) -> Tuple[Set[DataSymbol], Set[DataSymbol], Set[int]]:
     dsyms: Set[DataSymbol] = set()
+    shallow_dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[Tuple[DataSymbol, int]] = set()
     only_symbol_refs = (ref[0] for ref in symbol_refs)
     only_stmt_counters = (ref[1] for ref in symbol_refs)
-    for dsym, is_called, success, stmt_ctr in gen_symbols_for_references(
+    for dsym, next_ref, is_called, success, stmt_ctr in gen_symbols_for_references(
         only_symbol_refs,
         scope,
         only_yield_successful_resolutions=False,
@@ -323,13 +325,16 @@ def get_live_symbols_and_cells_for_references(
             dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
         if is_called:
             called_dsyms.add((dsym, stmt_ctr))
+        elif isinstance(dsym.obj, list) and isinstance(next_ref, CallPoint) and next_ref.symbol in ('append', 'extend'):
+            shallow_dsyms.add(dsym)
         else:
             dsyms.add(dsym)
     live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
         called_dsyms, cell_ctr, update_liveness_time_versions
     )
     dsyms |= live_from_calls
-    return dsyms, live_cells
+    dsyms |= shallow_dsyms
+    return dsyms, shallow_dsyms, live_cells
 
 
 def _compute_call_chain_live_symbols_and_cells(

@@ -17,7 +17,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+    from typing import Any, Dict, Generator, Iterable, List, Optional, Set, Tuple, Union
     from nbsafety.types import SupportedIndexType
 
 
@@ -109,7 +109,9 @@ class Scope:
                 return dict(inspect.getmembers(obj))
         return name_to_obj
 
-    def gen_data_symbols_for_attrsub_chain(self, chain: AttrSubSymbolChain):
+    def gen_data_symbols_for_attrsub_chain(
+        self, chain: AttrSubSymbolChain
+    ) -> Generator[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool], None, None]:
         """
         Generates progressive symbols appearing in an AttrSub chain until
         this can no longer be done semi-statically (e.g. because one of the
@@ -118,16 +120,17 @@ class Scope:
         cur_scope = self
         obj = None
         for i, name in enumerate(chain.symbols):
+            is_last = i == len(chain.symbols) - 1
             if isinstance(name, CallPoint):
                 next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
                 if next_dsym is not None:
-                    yield next_dsym, True, False
+                    yield next_dsym, None if is_last else chain.symbols[i + 1], True, False
                 break
             next_dsym = cur_scope.lookup_data_symbol_by_name(name)
             if next_dsym is None:
                 break
             else:
-                yield next_dsym, False, i == len(chain.symbols) - 1
+                yield next_dsym, None if is_last else chain.symbols[i + 1], False, is_last
             try:
                 obj = self._get_name_to_obj_mapping(obj, next_dsym)[name]
             except (KeyError, IndexError, Exception):
@@ -136,35 +139,16 @@ class Scope:
             if cur_scope is None:
                 break
 
-    def get_most_specific_data_symbol_for_attrsub_chain(self, chain: AttrSubSymbolChain):
+    def get_most_specific_data_symbol_for_attrsub_chain(
+        self, chain: AttrSubSymbolChain
+    ) -> Optional[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool]]:
         """
         Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
-        dsym, is_called, success = None, False, False
-        for dsym, is_called, success in self.gen_data_symbols_for_attrsub_chain(chain):
-            pass
-        return dsym, is_called, success
-        # cur_scope = self
-        # dsym, next_dsym, success = None, None, False
-        # obj = None
-        # for name in chain.symbols:
-        #     if isinstance(name, CallPoint):
-        #         next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
-        #         break
-        #     next_dsym = cur_scope.lookup_data_symbol_by_name(name)
-        #     if dsym is not None and next_dsym is None:
-        #         break
-        #     dsym, next_dsym = next_dsym, None
-        #     try:
-        #         obj = Scope._get_name_to_obj_mapping(obj, dsym)[name]
-        #     except (KeyError, IndexError, Exception):
-        #         break
-        #     cur_scope = nbs().namespaces.get(id(obj), None)
-        #     if cur_scope is None:
-        #         break
-        # else:
-        #     success = True
-        # return dsym, next_dsym, success
+        ret = None
+        for dsym, next_ref, is_called, success in self.gen_data_symbols_for_attrsub_chain(chain):
+            ret = dsym, next_ref, is_called, success
+        return ret
 
     @staticmethod
     def _resolve_symbol_type(

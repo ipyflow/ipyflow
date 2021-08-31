@@ -302,13 +302,21 @@ def get_symbols_for_references(
     return dsyms, called_dsyms
 
 
+def _live_dsym_is_shallow(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
+    if not isinstance(dsym.obj, list):
+        return False
+    if next_ref is None:
+        return False
+    return isinstance(next_ref, CallPoint) and next_ref.symbol in ('append', 'extend')
+
+
 def get_live_symbols_and_cells_for_references(
     symbol_refs: Set[Tuple[SymbolRef, int]],
     scope: Scope,
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
 ) -> Tuple[Set[DataSymbol], Set[DataSymbol], Set[int]]:
-    dsyms: Set[DataSymbol] = set()
+    deep_dsyms: Set[DataSymbol] = set()
     shallow_dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[Tuple[DataSymbol, int]] = set()
     only_symbol_refs = (ref[0] for ref in symbol_refs)
@@ -325,24 +333,25 @@ def get_live_symbols_and_cells_for_references(
             dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
         if is_called:
             called_dsyms.add((dsym, stmt_ctr))
-        elif isinstance(dsym.obj, list) and isinstance(next_ref, CallPoint) and next_ref.symbol in ('append', 'extend'):
+        elif _live_dsym_is_shallow(dsym, next_ref):
             shallow_dsyms.add(dsym)
         else:
-            dsyms.add(dsym)
-    live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
+            deep_dsyms.add(dsym)
+    deep_live_from_calls, shallow_live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
         called_dsyms, cell_ctr, update_liveness_time_versions
     )
-    dsyms |= live_from_calls
-    dsyms |= shallow_dsyms
-    return dsyms, shallow_dsyms, live_cells
+    deep_dsyms |= deep_live_from_calls
+    shallow_dsyms |= shallow_live_from_calls
+    return deep_dsyms, shallow_dsyms, live_cells
 
 
 def _compute_call_chain_live_symbols_and_cells(
     live_with_stmt_ctr: Set[Tuple[DataSymbol, int]], cell_ctr: int, update_liveness_time_versions: bool
-) -> Tuple[Set[DataSymbol], Set[int]]:
+) -> Tuple[Set[DataSymbol], Set[DataSymbol], Set[int]]:
     seen = set()
     worklist = list(live_with_stmt_ctr)
-    live = {dsym_stmt[0] for dsym_stmt in live_with_stmt_ctr}
+    deep_live = {dsym_stmt[0] for dsym_stmt in live_with_stmt_ctr}
+    shallow_live = set()
     while len(worklist) > 0:
         workitem = worklist.pop()
         if workitem in seen:
@@ -356,17 +365,20 @@ def _compute_call_chain_live_symbols_and_cells(
             cast(ast.FunctionDef, called_dsym.stmt_node).body, init_killed=set(called_dsym.get_definition_args())
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
-        for dsym, is_called, success, *_ in gen_symbols_for_references(
+        for dsym, next_ref, is_called, success, *_ in gen_symbols_for_references(
             (ref[0] for ref in live_refs), called_dsym.call_scope, only_yield_successful_resolutions=False
         ):
             if is_called:
                 worklist.append((dsym, stmt_ctr))
             if dsym.is_globally_accessible:
-                live.add(dsym)
+                if _live_dsym_is_shallow(dsym, next_ref):
+                    shallow_live.add(dsym)
+                else:
+                    deep_live.add(dsym)
                 if update_liveness_time_versions:
                     ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
                     dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][used_time] = ts_to_use
-    return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
+    return deep_live, shallow_live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
 
 
 def compute_live_dead_symbol_refs(

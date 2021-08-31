@@ -245,6 +245,7 @@ class NotebookSafety(singletons.NotebookSafety):
             new_fresh_cells = cur_fresh_cells - self._prev_exec_fresh_cell_ids
             self._prev_exec_fresh_cell_ids = cur_fresh_cells
             response['new_fresh_cells'] = list(new_fresh_cells)
+            response['highlights_enabled'] = self.mut_settings.highlights_enabled
             if comm is not None:
                 comm.send(response)
         else:
@@ -255,13 +256,6 @@ class NotebookSafety(singletons.NotebookSafety):
         content_by_cell_id: Dict[CellId, str],
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None
     ) -> Dict[str, Any]:
-        if not self.mut_settings.highlights_enabled:
-            return {
-                'stale_cells': [],
-                'fresh_cells': [],
-                'stale_links': {},
-                'refresher_links': {},
-            }
         stale_cells = set()
         fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}

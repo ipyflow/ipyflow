@@ -108,6 +108,7 @@ let orderIdxById: {[id: string]: number} = {};
 let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
+let lastExecutionHighlightsEnabled: boolean = null;
 let executedReactiveFreshCells: Set<string> = new Set();
 let newFreshCells: Set<string> = new Set();
 
@@ -404,6 +405,9 @@ const connectToComm = (
 
   const updateUI = (notebook: Notebook, execIdx?: number) => {
     clearCellState(notebook, execIdx);
+    if (!lastExecutionHighlightsEnabled) {
+      return;
+    }
     refreshNodeMapping(notebook);
     for (const [id, _] of Object.entries(cellsById)) {
       if (orderIdxById[id] < lastCellExecPositionIdx) {
@@ -430,6 +434,7 @@ const connectToComm = (
       cellPendingExecution = null;
       const exec_mode = msg.content.data['exec_mode'] as string;
       lastExecutionMode = exec_mode;
+      lastExecutionHighlightsEnabled = msg.content.data['highlights_enabled'] as boolean;
       if (exec_mode === 'normal') {
         newFreshCells = new Set<string>();
         updateUI(notebook);

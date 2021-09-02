@@ -127,7 +127,6 @@ const connectToComm = (Jupyter: any) => {
         if (data.cell.notebook !== Jupyter.notebook) {
             return;
         }
-        // console.log(data.cell);
         data.cell.element[0].classList.remove(freshClass);
         data.cell.element[0].classList.remove(refresherInputClass);
         comm.send({
@@ -135,13 +134,28 @@ const connectToComm = (Jupyter: any) => {
             executed_cell_id: data.cell.cell_id,
             content_by_cell_id: gatherCellContentsById(Jupyter)
         });
-        // console.log(evt);
+    };
+    const onSelect = (evt: any, data: {cell: any}) => {
+        let active_cell_order_idx: number = null;
+        let cur_idx = 0;
+        Jupyter.notebook.get_cells().forEach((cell: any) => {
+            if (data.cell.cell_id === cell.cell_id) {
+                active_cell_order_idx = cur_idx;
+            }
+            cur_idx += 1;
+        });
+        comm.send({
+            type: 'change_active_cell',
+            active_cell_id: data.cell.cell_id,
+            active_cell_order_idx: active_cell_order_idx,
+        });
     };
     comm.on_msg((msg: any) => {
         // console.log('comm got msg: ');
         // console.log(msg.content.data)
         if (msg.content.data.type == 'establish') {
             Jupyter.notebook.events.on('execute.CodeCell', onExecution);
+            Jupyter.notebook.events.on('select.Cell', onSelect);
         } else if (msg.content.data.type === 'cell_freshness') {
             clearCellState(Jupyter);
             const staleCells: any = msg.content.data['stale_cells'];
@@ -220,6 +234,7 @@ const connectToComm = (Jupyter: any) => {
     return () => {
         clearCellState(Jupyter);
         Jupyter.notebook.events.unbind('execute.CodeCell', onExecution);
+        Jupyter.notebook.events.unbind('select.Cell', onSelect);
     };
 }
 

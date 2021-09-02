@@ -20,7 +20,7 @@ class UpdateProtocol:
         self.updated_sym = updated_sym
         self.seen: Set[DataSymbol] = set()
 
-    def __call__(self, new_deps: Set[DataSymbol], mutated: bool, propagate_to_namespace_descendents: bool) -> None:
+    def __call__(self, new_deps: Set[DataSymbol], mutated: bool, propagate_to_namespace_descendents: bool, refresh: bool) -> None:
         # in most cases, mutated implies that we should propagate to namespace descendents, since we
         # do not know how the mutation affects the namespace members. The exception is for specific
         # known events such as 'list.append()' or 'list.extend()' since we know these do not update
@@ -41,9 +41,10 @@ class UpdateProtocol:
         updated_symbols_with_ancestors = set(self.seen)
         logger.warning('all updated symbols for symbol %s: %s', self.updated_sym, updated_symbols_with_ancestors)
         nbs().updated_symbols |= self.seen
-        for updated_sym in directly_updated_symbols:
-            if not updated_sym.is_stale and updated_sym is not self.updated_sym:
-                updated_sym.refresh()
+        if refresh:
+            for updated_sym in directly_updated_symbols:
+                if not updated_sym.is_stale and updated_sym is not self.updated_sym:
+                    updated_sym.refresh()
         self.seen |= new_deps  # don't propagate to stuff on RHS
         for dsym in updated_symbols_with_ancestors:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)

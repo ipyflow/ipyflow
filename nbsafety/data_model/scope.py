@@ -17,7 +17,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Generator, Iterable, List, Optional, Set, Tuple, Union
+    from typing import Any, Dict, Generator, Iterable, Iterator, List, Optional, Set, Tuple, Union
     from nbsafety.types import SupportedIndexType
 
 
@@ -75,13 +75,13 @@ class Scope:
         self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
-    def lookup_data_symbol_by_name_this_indentation(self, name, **_) -> Optional[DataSymbol]:
+    def lookup_data_symbol_by_name_this_indentation(self, name: SupportedIndexType, **_: Any) -> Optional[DataSymbol]:
         return self._data_symbol_by_name.get(name, None)
 
     def all_data_symbols_this_indentation(self):
         return self._data_symbol_by_name.values()
 
-    def lookup_data_symbol_by_name(self, name, **kwargs) -> Optional[DataSymbol]:
+    def lookup_data_symbol_by_name(self, name: SupportedIndexType, **kwargs: Any) -> Optional[DataSymbol]:
         ret = self.lookup_data_symbol_by_name_this_indentation(name, **kwargs)
         if ret is None and self.non_namespace_parent_scope is not None:
             ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(name, **kwargs)
@@ -332,7 +332,7 @@ class NamespaceScope(Scope):
 
     # TODO: support (multiple) inheritance by allowing
     #  NamespaceScopes from classes to clone their parent class's NamespaceScopes
-    def __init__(self, obj: Any, *args, **kwargs):
+    def __init__(self, obj: Any, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional[NamespaceScope] = None
         self.child_clones: List[NamespaceScope] = []
@@ -352,78 +352,78 @@ class NamespaceScope(Scope):
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
         self.namespace_stale_symbols: Set[DataSymbol] = set()
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         # in order to override if __len__ returns 0
         return True
 
-    def __len__(self):
+    def __len__(self) -> int:
         if not isinstance(self.obj, (dict, list, tuple)):  # pragma: no cover
             raise TypeError("tried to get length of non-container namespace %s: %s", self, self.obj)
         return len(self.obj)
 
-    def _iter_inner(self):
+    def _iter_inner(self) -> Generator[Optional[DataSymbol], None, None]:
         for i in range(len(self.obj)):
             yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Optional[DataSymbol]]:
         if not isinstance(self.obj, (list, tuple)):  # pragma: no cover
             raise TypeError("tried to iterate through non-sequence namespace %s: %s", self, self.obj)
         # do the validation before starting the generator part so that we raise immediately
         return self._iter_inner()
 
-    def _items_inner(self):
+    def _items_inner(self) -> Generator[Tuple[Any, Optional[DataSymbol]], None, None]:
         for key in self.obj.keys():
             yield key, self.lookup_data_symbol_by_name_this_indentation(key, is_subscript=True)
 
-    def items(self):
+    def items(self) -> Iterator[Tuple[Any, Optional[DataSymbol]]]:
         if not isinstance(self.obj, dict):  # pragma: no cover
             raise TypeError("tried to get iterate through items of non-dict namespace: %s", self.obj)
         # do the validation before starting the generator part so that we raise immediately
         return self._items_inner()
 
     @property
-    def obj_id(self):
+    def obj_id(self) -> int:
         return self.cached_obj_id
 
     @property
-    def is_anonymous(self):
+    def is_anonymous(self) -> bool:
         return self.scope_name == NamespaceScope.ANONYMOUS
 
     @property
-    def is_garbage(self):
+    def is_garbage(self) -> bool:
         return self._tombstone or self.obj_id not in nbs().aliases or self.obj_id not in nbs().namespaces
 
     @property
-    def is_subscript(self):
+    def is_subscript(self) -> bool:
         dsym = nbs().get_first_full_symbol(self.obj_id)
         if dsym is None:
             return False
         else:
             return dsym.is_subscript
 
-    def update_obj_ref(self, obj):
+    def update_obj_ref(self, obj) -> None:
         self._tombstone = False
         nbs().namespaces.pop(self.cached_obj_id, None)
         self.obj = obj
         self.cached_obj_id = id(obj)
         nbs().namespaces[self.cached_obj_id] = self
 
-    def data_symbol_by_name(self, is_subscript=False):
+    def data_symbol_by_name(self, is_subscript=False) -> Dict[SupportedIndexType, DataSymbol]:
         if is_subscript:
             return self._subscript_data_symbol_by_name
         else:
             return self._data_symbol_by_name
 
-    def clone(self, obj: Any):
+    def clone(self, obj: Any) -> NamespaceScope:
         cloned = NamespaceScope(obj, self.scope_name, self.parent_scope)
         cloned.cloned_from = self
         self.child_clones.append(cloned)
         return cloned
 
-    def fresh_copy(self, obj: Any):
+    def fresh_copy(self, obj: Any) -> NamespaceScope:
         return NamespaceScope(obj, self.scope_name, self.parent_scope)
 
-    def make_namespace_qualified_name(self, dsym: DataSymbol):
+    def make_namespace_qualified_name(self, dsym: DataSymbol) -> str:
         path = self.full_namespace_path
         name = str(dsym.name)
         if path:
@@ -434,19 +434,36 @@ class NamespaceScope(Scope):
         else:
             return name
 
-    def lookup_data_symbol_by_name_this_indentation(self, name, is_subscript=None, skip_cloned_lookup=False):
+    def _lookup_subscript(self, name: SupportedIndexType) -> Optional[DataSymbol]:
+        ret = self._subscript_data_symbol_by_name.get(name, None)
+        if isinstance(self.obj, Sequence) and isinstance(name, int) and hasattr(self.obj, '__len__'):
+            if name < 0 and ret is None:
+                name = len(self.obj) + name
+                ret = self._subscript_data_symbol_by_name.get(name, None)
+        return ret
+
+    def lookup_data_symbol_by_name_this_indentation(
+        self,
+        name: SupportedIndexType,
+        *_,
+        is_subscript: Optional[bool] = None,
+        skip_cloned_lookup: bool = False,
+        **kwargs: Any,
+    ) -> Optional[DataSymbol]:
         if is_subscript is None:
             ret = self._data_symbol_by_name.get(name, None)
             if ret is None:
-                ret = self._subscript_data_symbol_by_name.get(name, None)
+                ret = self._lookup_subscript(name)
         elif is_subscript:
-            ret = self._subscript_data_symbol_by_name.get(name, None)
+            ret = self._lookup_subscript(name)
         else:
             ret = self._data_symbol_by_name.get(name, None)
         if not skip_cloned_lookup and ret is None and self.cloned_from is not None and not is_subscript and isinstance(name, str):
             if name not in getattr(self.obj, '__dict__', {}):
                 # only fall back to the class sym if it's not present in the corresponding obj for this scope
-                ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(name, is_subscript=is_subscript)
+                ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(
+                    name, is_subscript=is_subscript, **kwargs
+                )
         return ret
 
     def _remap_sym(self, from_idx: int, to_idx: int, prev_obj: Optional[Any]) -> None:
@@ -470,7 +487,7 @@ class NamespaceScope(Scope):
             prev_obj = self.obj[idx - 2] if idx > pos + 1 else None
             self._remap_sym(idx, idx - 1, prev_obj)
 
-    def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False):
+    def delete_data_symbol_for_name(self, name: SupportedIndexType, is_subscript: bool = False) -> None:
         if is_subscript:
             dsym = self._subscript_data_symbol_by_name.pop(name, None)
             if dsym is None and name == -1 and isinstance(self.obj, list):
@@ -496,7 +513,7 @@ class NamespaceScope(Scope):
             dsym_collections_to_chain.append(self.cloned_from.all_data_symbols_this_indentation())
         return itertools.chain(*dsym_collections_to_chain)
 
-    def put(self, name: SupportedIndexType, val: DataSymbol):
+    def put(self, name: SupportedIndexType, val: DataSymbol) -> None:
         if val.is_subscript:
             self._subscript_data_symbol_by_name[name] = val
         elif not isinstance(name, str):  # pragma: no cover

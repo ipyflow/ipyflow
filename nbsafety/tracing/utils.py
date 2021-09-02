@@ -1,9 +1,10 @@
 # -*- coding: future_annotations -*-
 import ast
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Union
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from typing import Any, Dict, List, Tuple, Union
     from nbsafety.data_model.scope import NamespaceScope
 
 

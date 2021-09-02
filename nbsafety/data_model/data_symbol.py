@@ -521,7 +521,7 @@ class DataSymbol:
         propagate: bool = True,
         refresh: bool = True,
     ) -> None:
-        if self.is_import:
+        if self.is_import and self.obj_id == self.cached_obj_id:
             # skip updates for imported symbols
             # just bump the version if it's newly created
             if mutated or not self._timestamp.is_initialized:
@@ -554,7 +554,7 @@ class DataSymbol:
         equal_to_old = not mutated and self.prev_obj_definitely_equal_to_current_obj(prev_obj)
         if refresh:
             self.refresh(
-                bump_version=not equal_to_old,
+                bump_version=not equal_to_old or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES,
                 # rationale: if this is a mutation for which we have more precise information,
                 # then we don't need to update the ns descendents as this will already have happened.
                 # also don't update ns descendents for things like `a = b`
@@ -562,7 +562,7 @@ class DataSymbol:
                 refresh_namespace_stale=not mutated,
             )
         if propagate and (deleted or not equal_to_old):
-            UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents)
+            UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents, refresh)
         self._refresh_cached_obj()
         nbs().updated_symbols.add(self)
         if self.is_class:

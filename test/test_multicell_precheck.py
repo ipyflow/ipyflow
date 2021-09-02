@@ -238,7 +238,7 @@ def test_updated_namespace_after_subscript_dep_removed():
     assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
 
 
-def test_equal_list_update_does_not_induce_fresh_cell():
+def test_equal_list_update_does_induce_fresh_cell():
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',
@@ -248,14 +248,14 @@ def test_equal_list_update_does_not_induce_fresh_cell():
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == []
+    assert response['fresh_cells'] == [2]
     run_cell('y = ("f",)', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3]
 
 
-def test_equal_list_update_does_not_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UBUNTU_20_04_2_PYTHON_3_8_11():
+def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UBUNTU_20_04_2_PYTHON_3_8_11():
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',
@@ -265,14 +265,14 @@ def test_equal_list_update_does_not_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_O
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == []
+    assert response['fresh_cells'] == [2]
     run_cell('y = ["f"]', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2, 3]
 
 
-def test_equal_dict_update_does_not_induce_fresh_cell():
+def test_equal_dict_update_does_induce_fresh_cell():
     cells = {
         0: 'x = {"foo": 42, "bar": 43}',
         1: 'y = dict(set(x.items()) | set({"baz": 44}.items()))',
@@ -282,7 +282,7 @@ def test_equal_dict_update_does_not_induce_fresh_cell():
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [], 'got %s' % response['fresh_cells']
+    assert response['fresh_cells'] == [2], 'got %s' % response['fresh_cells']
     run_cell('y = {"foo": 99}', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
@@ -348,7 +348,7 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
     run_cell('lst = [1, 2, 3, 4]', 3)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [1], 'got %s' % response['fresh_cells']
+    assert response['fresh_cells'] == [1, 2], 'got %s' % response['fresh_cells']
 
 
 def test_incorrect_object_not_used_for_argument_symbols():

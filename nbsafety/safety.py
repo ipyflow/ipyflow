@@ -251,7 +251,9 @@ class NotebookSafety(singletons.NotebookSafety):
             if comm is not None:
                 comm.send(response)
         else:
-            logger.error('Unsupported request type for request %s' % request)
+            dbg_msg = 'Unsupported request type for request %s' % request
+            logger.error(dbg_msg)
+            self._saved_debug_message = dbg_msg
 
     def check_and_link_multiple_cells(
         self,
@@ -764,8 +766,6 @@ class NotebookSafety(singletons.NotebookSafety):
             if cell_id is not None:
                 self._counter_by_cell_id[cell_id] = self._last_execution_counter
                 self._cell_id_by_counter[self._last_execution_counter] = cell_id
-
-            if cell_id is not None:
                 # add to run_cells even if it fails precheck, since an attempt
                 # to run indicates that the user is interested in this cell, so
                 # we should add this cell to the set of cells that get checked

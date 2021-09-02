@@ -292,7 +292,6 @@ class TraceStatement:
         if not nbs().dependency_tracking_enabled:
             return
         for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
-            propagate_to_namespace_descendents = not isinstance(mutation_event, (ListAppend, ListExtend, ListInsert))
             logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
             Timestamp.update_usage_info(mutation_arg_dsyms)
             if isinstance(mutation_event, ArgMutate):
@@ -307,7 +306,9 @@ class TraceStatement:
             # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
+            should_propagate = True
             if isinstance(mutation_event, (ListAppend, ListExtend, ListInsert)):
+                should_propagate = False
                 mutation_upsert_deps: Set[DataSymbol] = set()
                 if isinstance(mutation_event, (ListAppend, ListInsert)):
                     mutation_arg_dsyms, mutation_upsert_deps = mutation_upsert_deps, mutation_arg_dsyms
@@ -318,7 +319,8 @@ class TraceStatement:
                     mutation_arg_dsyms,
                     overwrite=False,
                     mutated=True,
-                    propagate_to_namespace_descendents=propagate_to_namespace_descendents,
+                    propagate_to_namespace_descendents=should_propagate,
+                    refresh=should_propagate,
                 )
         if self._contains_lval():
             self._make_lval_data_symbols()

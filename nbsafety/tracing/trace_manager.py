@@ -20,7 +20,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
-from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, StandardMutation
+from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, ListPop, ListRemove, StandardMutation
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
@@ -721,21 +721,23 @@ class TraceManager(SliceTraceManager):
             obj_type = next(iter(nbs().aliases[obj_id])).obj_type
         is_excepted_mutation = False
         is_excepted_non_mutation = False
-        if retval is not None and id(retval) != obj_id:
-            # doesn't look like something we can trace, but it also
-            # doesn't look like something that mutates the caller, since
-            # the return value is not None and it's not the caller object
-            if (obj_id, method_name) in METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN:
-                is_excepted_mutation = True
-            else:
-                return
-        if not is_excepted_mutation:
-            if retval is None:
-                is_excepted_non_mutation = (obj_id, method_name) in METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN
-            if is_excepted_non_mutation or obj_type is None or id(obj_type) in nbs().aliases:
-                # the calling obj looks like something that we can trace;
-                # no need to process the call as a possible mutation
-                return
+        if isinstance(mutation_event, StandardMutation):
+            # only look for exceptions for standard mutations; other cases are handled elsewhere
+            if retval is not None and id(retval) != obj_id:
+                # doesn't look like something we can trace, but it also
+                # doesn't look like something that mutates the caller, since
+                # the return value is not None and it's not the caller object
+                if (obj_id, method_name) in METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN:
+                    is_excepted_mutation = True
+                else:
+                    return
+            if not is_excepted_mutation:
+                if retval is None:
+                    is_excepted_non_mutation = (obj_id, method_name) in METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN
+                if is_excepted_non_mutation or obj_type is None or id(obj_type) in nbs().aliases:
+                    # the calling obj looks like something that we can trace;
+                    # no need to process the call as a possible mutation
+                    return
         arg_dsyms: Set[DataSymbol] = set()
         arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
         if isinstance(mutation_event, StandardMutation):
@@ -767,8 +769,6 @@ class TraceManager(SliceTraceManager):
                         mutation_event = ArgMutate()
             except:
                 pass
-        elif isinstance(mutation_event, ListInsert):
-            mutation_event.insert_pos = recorded_arg_objs[0]
         self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
     @register_handler(TraceEvent.after_complex_symbol)
@@ -803,6 +803,19 @@ class TraceManager(SliceTraceManager):
         if mut_cand is None:
             return
 
+        if isinstance(mut_cand[1], (ListInsert, ListPop, ListRemove)) and mut_cand[1].pos is None and self.num_args_seen == 1:
+            try:
+                if isinstance(mut_cand[1], ListRemove):
+                    mut_obj = mut_cand[0][0]
+                    for i in range(len(mut_obj)):
+                        if mut_obj[i] == arg_obj:
+                            mut_cand[1].pos = i
+                            break
+                else:
+                    mut_cand[1].pos = arg_obj
+            except:
+                pass
+
         if isinstance(arg_node, ast.Name):
             assert self.active_scope is self.cur_frame_original_scope
             arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
@@ -822,6 +835,10 @@ class TraceManager(SliceTraceManager):
                 mutation_event = ListExtend(len(obj))
             elif method_name == 'insert':
                 mutation_event = ListInsert()
+            elif method_name == 'pop':
+                mutation_event = ListPop()
+            elif method_name == 'remove':
+                mutation_event = ListRemove()
         self.mutation_candidate = ((obj, obj_name, method_name), mutation_event, [], [])
 
     @register_handler(TraceEvent.before_call)

@@ -470,6 +470,7 @@ class NamespaceScope(Scope):
         subsym = self._subscript_data_symbol_by_name.pop(from_idx, None)
         if subsym is None:
             return
+        subsym.update_usage_info()
         subsym.name = to_idx
         subsym.invalidate_cached()  # ensure we bypass equality check and bump timestamp
         subsym.update_deps(
@@ -483,7 +484,7 @@ class NamespaceScope(Scope):
             self._remap_sym(idx - 1, idx, prev_obj)
 
     def _shuffle_symbols_downward_to(self, pos: int) -> None:
-        for idx in range(pos + 1, len(self.obj)):
+        for idx in range(pos + 1, len(self.obj) + 1):
             prev_obj = self.obj[idx - 2] if idx > pos + 1 else None
             self._remap_sym(idx, idx - 1, prev_obj)
 

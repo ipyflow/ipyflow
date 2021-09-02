@@ -2,7 +2,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Any, Optional
 
 
 class MutationEvent:
@@ -26,7 +26,19 @@ class ListExtend(MutationEvent):
 class ListInsert(MutationEvent):
     def __init__(self, insert_pos: Optional[int] = None):
         super().__init__()
-        self.insert_pos = insert_pos
+        self.pos = insert_pos
+
+
+class ListRemove(MutationEvent):
+    def __init__(self, remove_pos: Optional[int] = None):
+        super().__init__()
+        self.pos = remove_pos
+
+
+class ListPop(MutationEvent):
+    def __init__(self, pop_pos: Optional[int] = None):
+        super().__init__()
+        self.pos = pop_pos
 
 
 class ArgMutate(MutationEvent):

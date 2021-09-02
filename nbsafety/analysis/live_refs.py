@@ -213,6 +213,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         with self.attrsub_context(inside=False):
             self.visit(node.slice)
 
+    def visit_Delete(self, node: ast.Delete):
+        pass
+
     def visit_GeneratorExp(self, node):
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
@@ -302,6 +305,45 @@ def get_symbols_for_references(
     return dsyms, called_dsyms
 
 
+def _should_exclude_live_dsym(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
+    if next_ref is None:
+        return False
+    if isinstance(dsym.obj, (list, tuple)):
+        if isinstance(next_ref, CallPoint) and next_ref.symbol in (
+            'append',
+            'clear',
+            'extend',
+            'insert',
+            'pop',
+            'remove',
+            'reverse',
+            'sort',
+        ):
+            return True
+        if isinstance(next_ref, int) and next_ref >= len(dsym.obj):
+            return True
+    elif isinstance(dsym.obj, dict):
+        # FIXME: corner case with next_ref == None
+        if isinstance(next_ref, CallPoint):
+            if next_ref.symbol in ('clear', 'pop', 'popitem', 'setdefault', 'update'):
+                return True
+        elif next_ref not in dsym.obj:
+            return True
+    elif isinstance(dsym.obj, set):
+        if isinstance(next_ref, CallPoint) and next_ref.symbol in (
+            'clear',
+            'difference_update',
+            'discard',
+            'intersection_update',
+            'pop',
+            'remove',
+            'symmetric_difference_update',
+            'update',
+        ):
+            return True
+    return False
+
+
 def _live_dsym_is_shallow(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
     if not isinstance(dsym.obj, list):
         return False
@@ -331,10 +373,13 @@ def get_live_symbols_and_cells_for_references(
         if update_liveness_time_versions:
             ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
             dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
-        if is_called:
+        if _should_exclude_live_dsym(dsym, next_ref):
+            continue
+        elif is_called:
             called_dsyms.add((dsym, stmt_ctr))
-        elif _live_dsym_is_shallow(dsym, next_ref):
-            shallow_dsyms.add(dsym)
+        # TODO: nothing here for now
+        # elif _live_dsym_is_shallow(dsym, next_ref):
+        #     shallow_dsyms.add(dsym)
         else:
             deep_dsyms.add(dsym)
     deep_live_from_calls, shallow_live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(

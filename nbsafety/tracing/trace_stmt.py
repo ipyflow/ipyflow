@@ -9,7 +9,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
-from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert
+from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, ListPop, ListRemove
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
@@ -243,7 +243,7 @@ class TraceStatement:
 
     def _handle_list_mutation(
         self,
-        mutation_event: Union[ListAppend, ListExtend, ListInsert],
+        mutation_event: Union[ListAppend, ListExtend, ListInsert, ListPop, ListRemove],
         mutated_obj_id: int,
         mutation_upsert_deps: Set[DataSymbol],
     ):
@@ -277,16 +277,19 @@ class TraceStatement:
                 )
         elif isinstance(mutation_event, ListInsert):
             assert mutated_obj is namespace_scope.obj
-            namespace_scope.shuffle_symbols_upward_from(mutation_event.insert_pos)
+            namespace_scope.shuffle_symbols_upward_from(mutation_event.pos)
             namespace_scope.upsert_data_symbol_for_name(
-                mutation_event.insert_pos,
-                mutated_obj[mutation_event.insert_pos],
+                mutation_event.pos,
+                mutated_obj[mutation_event.pos],
                 mutation_upsert_deps,
                 self.stmt_node,
                 overwrite=False,
                 is_subscript=True,
                 propagate=True,
             )
+        elif isinstance(mutation_event, (ListPop, ListRemove)) and mutation_event.pos is not None:
+            assert mutated_obj is namespace_scope.obj
+            namespace_scope.delete_data_symbol_for_name(mutation_event.pos, is_subscript=True)
 
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:
@@ -307,7 +310,7 @@ class TraceStatement:
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
             should_propagate = True
-            if isinstance(mutation_event, (ListAppend, ListExtend, ListInsert)):
+            if isinstance(mutation_event, (ListAppend, ListExtend, ListInsert, ListPop, ListRemove)):
                 should_propagate = False
                 mutation_upsert_deps: Set[DataSymbol] = set()
                 if isinstance(mutation_event, (ListAppend, ListInsert)):

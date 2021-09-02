@@ -348,7 +348,7 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
     run_cell('lst = [1, 2, 3, 4]', 3)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [1, 2], 'got %s' % response['fresh_cells']
+    assert response['fresh_cells'] == [1], 'got %s' % response['fresh_cells']
 
 
 def test_incorrect_object_not_used_for_argument_symbols():
@@ -400,7 +400,7 @@ def test_list_insert():
     assert response['fresh_cells'] == [4, 5, 6, 7], 'got %s' % response['fresh_cells']
 
 
-def test_list_delete():
+def _test_list_delete_helper(last_cell):
     cells = {
         0: 'lst = [0, 1, 2, 3, 3, 4, 5, 6]',
         1: 'logging.info(lst[0])',
@@ -413,7 +413,7 @@ def test_list_delete():
         8: 'logging.info(lst[7])',
         9: 'x = lst[6] + 42',
         10: 'logging.info(x)',
-        11: 'del lst[3]',
+        11: last_cell,
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells(cells)
@@ -423,3 +423,15 @@ def test_list_delete():
     # TODO: ideally cell 8 would be considered unsafe since the last entry
     #  no longer exists
     assert response['fresh_cells'] == [4, 5, 6, 7, 9], 'got %s' % response['fresh_cells']
+
+
+def test_list_delete():
+    _test_list_delete_helper('del lst[3]')
+
+
+def test_list_pop():
+    _test_list_delete_helper('lst.pop(3)')
+
+
+def test_list_remove():
+    _test_list_delete_helper('lst.remove(3)')

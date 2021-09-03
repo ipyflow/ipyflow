@@ -1,4 +1,5 @@
 # -*- coding: future_annotations -*-
+import functools
 import logging
 
 from nbsafety.singletons import nbs
@@ -9,6 +10,29 @@ logging.basicConfig(level=logging.ERROR)
 # Reset dependency graph before each test
 # _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
 _safety_fixture, run_cell_ = make_safety_fixture()
+
+
+def dynamic_or_static_only_test(test_f, dynamic_enabled, static_enabled):
+    @functools.wraps(test_f)
+    def dynamic_test_f(*args, **kwargs):
+        orig_dynamic_enabled = nbs().mut_settings.dynamic_slicing_enabled
+        orig_static_enabled = nbs().mut_settings.dynamic_slicing_enabled
+        try:
+            nbs().mut_settings.dynamic_slicing_enabled = dynamic_enabled
+            nbs().mut_settings.static_slicing_enabled = static_enabled
+            test_f(*args, **kwargs)
+        finally:
+            nbs().mut_settings.dynamic_slicing_enabled = orig_dynamic_enabled
+            nbs().mut_settings.static_slicing_enabled = orig_static_enabled
+    return dynamic_test_f
+
+
+def dynamic_only_test(test_f):
+    return dynamic_or_static_only_test(test_f, True, False)
+
+
+def static_only_test(test_f):
+    return dynamic_or_static_only_test(test_f, False, True)
 
 
 def run_cell(cell):
@@ -80,28 +104,21 @@ def test_nested_symbol_usage_with_variable_subscript():
             nbs().mut_settings.static_slicing_enabled = orig_enabled
 
 
+@static_only_test
 def test_liveness_timestamps():
-    orig_dynamic_enabled = nbs().mut_settings.dynamic_slicing_enabled
-    orig_static_enabled = nbs().mut_settings.dynamic_slicing_enabled
-    try:
-        nbs().mut_settings.dynamic_slicing_enabled = False
-        nbs().mut_settings.static_slicing_enabled = True
-        run_cell("""
+    run_cell("""
 x = 0
 if True:
     y = 1
 else:
     y = 2
 """)
-        run_cell('z = 42')
-        run_cell('logging.info(x + 1)')
-        deps = set(nbs().compute_slice(3).keys())
-        assert deps == {1, 3}, 'got %s' % deps
-        slice_size = num_stmts_in_slice(3)
-        assert slice_size == 2, 'got %d' % slice_size
-    finally:
-        nbs().mut_settings.dynamic_slicing_enabled = orig_dynamic_enabled
-        nbs().mut_settings.static_slicing_enabled = orig_static_enabled
+    run_cell('z = 42')
+    run_cell('logging.info(x + 1)')
+    deps = set(nbs().compute_slice(3).keys())
+    assert deps == {1, 3}, 'got %s' % deps
+    slice_size = num_stmts_in_slice(3)
+    assert slice_size == 2, 'got %d' % slice_size
 
 
 def test_list_mutations():
@@ -139,22 +156,16 @@ def test_handle_stale():
     assert slice_size == 3, 'got %d' % slice_size
 
 
+@dynamic_only_test
 def test_multiple_versions_captured():
-    if not nbs().mut_settings.dynamic_slicing_enabled:
-        return
-    orig_enabled = nbs().mut_settings.static_slicing_enabled
-    try:
-        nbs().mut_settings.static_slicing_enabled = False
-        run_cell('x = 0')
-        run_cell('logging.info(x); y = 7')
-        run_cell('x = 5')
-        run_cell('logging.info(x + y)')
-        deps = set(nbs().compute_slice(4).keys())
-        assert deps == {1, 2, 3, 4}, 'got %s' % deps
-        slice_size = num_stmts_in_slice(4)
-        assert slice_size == 3, 'got %d' % slice_size
-    finally:
-        nbs().mut_settings.static_slicing_enabled = orig_enabled
+    run_cell('x = 0')
+    run_cell('logging.info(x); y = 7')
+    run_cell('x = 5')
+    run_cell('logging.info(x + y)')
+    deps = set(nbs().compute_slice(4).keys())
+    assert deps == {1, 2, 3, 4}, 'got %s' % deps
+    slice_size = num_stmts_in_slice(4)
+    assert slice_size == 3, 'got %d' % slice_size
 
 
 def test_version_used_when_live():
@@ -338,67 +349,51 @@ def test_non_relevant_child_symbol_modified():
     assert slice_size == 3, 'got %d' % slice_size
 
 
+@dynamic_only_test
 def test_dynamic_only_increment():
-    if not nbs().mut_settings.dynamic_slicing_enabled:
-        return
-    orig_enabled = nbs().mut_settings.static_slicing_enabled
-    try:
-        nbs().mut_settings.static_slicing_enabled = False
-        run_cell('x = 0')
-        run_cell('x += 1')
-        run_cell('logging.info(x)')
-        deps = set(nbs().compute_slice(3).keys())
-        assert deps == {1, 2, 3}, 'got %s' % deps
-        slice_size = num_stmts_in_slice(3)
-        assert slice_size == 3, 'got %d' % slice_size
-    finally:
-        nbs().mut_settings.static_slicing_enabled = orig_enabled
+    nbs().mut_settings.static_slicing_enabled = False
+    run_cell('x = 0')
+    run_cell('x += 1')
+    run_cell('logging.info(x)')
+    deps = set(nbs().compute_slice(3).keys())
+    assert deps == {1, 2, 3}, 'got %s' % deps
+    slice_size = num_stmts_in_slice(3)
+    assert slice_size == 3, 'got %d' % slice_size
 
 
+@dynamic_only_test
 def test_dynamic_only_variable_subscript():
-    if not nbs().mut_settings.dynamic_slicing_enabled:
-        return
-    orig_enabled = nbs().mut_settings.static_slicing_enabled
-    try:
-        nbs().mut_settings.static_slicing_enabled = False
-        run_cell('lst = [0, 1, 2]')
-        run_cell('x = 0')
-        run_cell('lst[x] += 1')
-        run_cell('lst[x] += 1')
-        run_cell('x += 1')
-        run_cell('lst[x] += 1')
-        run_cell('x -= 1')
-        run_cell('lst[x] += 1')
-        run_cell('lst[x] += 1')
-        run_cell('x += 1')
-        run_cell('logging.info(lst[x])')
-        deps = set(nbs().compute_slice(11).keys())
-        assert deps == {1, 2, 5, 6, 7, 10, 11}, 'got %s' % deps
-        slice_size = num_stmts_in_slice(11)
-        assert slice_size == len(deps), 'got %d' % slice_size
-    finally:
-        nbs().mut_settings.static_slicing_enabled = orig_enabled
+    nbs().mut_settings.static_slicing_enabled = False
+    run_cell('lst = [0, 1, 2]')
+    run_cell('x = 0')
+    run_cell('lst[x] += 1')
+    run_cell('lst[x] += 1')
+    run_cell('x += 1')
+    run_cell('lst[x] += 1')
+    run_cell('x -= 1')
+    run_cell('lst[x] += 1')
+    run_cell('lst[x] += 1')
+    run_cell('x += 1')
+    run_cell('logging.info(lst[x])')
+    deps = set(nbs().compute_slice(11).keys())
+    assert deps == {1, 2, 5, 6, 7, 10, 11}, 'got %s' % deps
+    slice_size = num_stmts_in_slice(11)
+    assert slice_size == len(deps), 'got %d' % slice_size
 
 
+@dynamic_only_test
 def test_handler():
-    if not nbs().mut_settings.dynamic_slicing_enabled:
-        return
-    orig_enabled = nbs().mut_settings.static_slicing_enabled
-    try:
-        nbs().mut_settings.static_slicing_enabled = False
-        run_cell("""
+    run_cell("""
 try:
     r = map()
 except:
     success = False""")
-        run_cell("""
+    run_cell("""
 try:
     logging.info("%d %d", (1, 2))
 except:
     success = False""")
-        deps = set(nbs().compute_slice(2).keys())
-        assert deps == {2}, 'got %s' % deps
-        slice_size = num_stmts_in_slice(2)
-        assert slice_size == 1, 'got %d' % slice_size
-    finally:
-        nbs().mut_settings.static_slicing_enabled = orig_enabled
+    deps = set(nbs().compute_slice(2).keys())
+    assert deps == {2}, 'got %s' % deps
+    slice_size = num_stmts_in_slice(2)
+    assert slice_size == 1, 'got %d' % slice_size

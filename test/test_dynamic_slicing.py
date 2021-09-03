@@ -397,3 +397,16 @@ except:
     assert deps == {2}, 'got %s' % deps
     slice_size = num_stmts_in_slice(2)
     assert slice_size == 1, 'got %d' % slice_size
+
+
+@dynamic_only_test
+def test_list_delete():
+    run_cell('lst = [0, 1, 2, 3, 4, 5, 6]')
+    run_cell('lst.append(7)')
+    run_cell('del lst[0]')
+    run_cell('del lst[2]')
+    run_cell('logging.info(lst[1])')
+    deps = set(nbs().compute_slice(5).keys())
+    assert deps == {1, 2, 3, 5}, 'got %s' % deps
+    slice_size = num_stmts_in_slice(5)
+    assert slice_size == len(deps), 'got %d' % slice_size

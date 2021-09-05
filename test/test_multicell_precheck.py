@@ -346,7 +346,7 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
     run_cell('lst = [1, 2, 3, 4]', 3)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
-    assert response['fresh_cells'] == [1], 'got %s' % response['fresh_cells']
+    assert response['fresh_cells'] == [1, 2], 'got %s' % response['fresh_cells']
 
 
 def test_incorrect_object_not_used_for_argument_symbols():

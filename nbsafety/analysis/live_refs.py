@@ -9,6 +9,8 @@ from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixi
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
+from nbsafety.run_mode import ExecutionMode
+from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
     from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
@@ -305,7 +307,7 @@ def get_symbols_for_references(
     return dsyms, called_dsyms
 
 
-def _should_exclude_live_dsym(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
+def _live_dsym_is_mutating(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
     if next_ref is None:
         return False
     if isinstance(dsym.obj, (list, tuple)):
@@ -344,14 +346,6 @@ def _should_exclude_live_dsym(dsym: DataSymbol, next_ref: Optional[Union[Support
     return False
 
 
-def _live_dsym_is_shallow(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
-    if not isinstance(dsym.obj, list):
-        return False
-    if next_ref is None:
-        return False
-    return isinstance(next_ref, CallPoint) and next_ref.symbol in ('append', 'extend')
-
-
 def get_live_symbols_and_cells_for_references(
     symbol_refs: Set[Tuple[SymbolRef, int]],
     scope: Scope,
@@ -373,8 +367,13 @@ def get_live_symbols_and_cells_for_references(
         if update_liveness_time_versions:
             ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
             dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
-        if _should_exclude_live_dsym(dsym, next_ref):
-            continue
+        if _live_dsym_is_mutating(dsym, next_ref):
+            if nbs().mut_settings.exec_mode == ExecutionMode.NORMAL:
+                shallow_dsyms.add(dsym)
+            elif nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
+                continue
+            else:
+                raise ValueError('not sure how to handle execution mode %s' % nbs().mut_settings.exec_mode)
         elif is_called:
             called_dsyms.add((dsym, stmt_ctr))
         # TODO: nothing here for now
@@ -416,8 +415,13 @@ def _compute_call_chain_live_symbols_and_cells(
             if is_called:
                 worklist.append((dsym, stmt_ctr))
             if dsym.is_globally_accessible:
-                if _live_dsym_is_shallow(dsym, next_ref):
-                    shallow_live.add(dsym)
+                if _live_dsym_is_mutating(dsym, next_ref):
+                    if nbs().mut_settings.exec_mode == ExecutionMode.NORMAL:
+                        shallow_live.add(dsym)
+                    elif nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
+                        continue
+                    else:
+                        raise ValueError('not sure how to handle execution mode %s' % nbs().mut_settings.exec_mode)
                 else:
                     deep_live.add(dsym)
                 if update_liveness_time_versions:

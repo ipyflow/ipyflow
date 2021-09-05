@@ -279,3 +279,9 @@ History
 -------------------
 * Improve loop performance by better enforcing trace-once semantics;
 * Bugfix for stack tracking when tracing reenabled;
+
+0.0.73 (2021-09-04)
+-------------------
+* Misc bugfixes and improvements;
+* Ignore mutating calls when determining fresh cells;
+* Experimental reactivity prototype;

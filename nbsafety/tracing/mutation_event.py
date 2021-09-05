@@ -2,7 +2,7 @@
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Any, Optional
+    from typing import Any, Dict, Optional, Type
 
 
 class MutationEvent:
@@ -41,6 +41,48 @@ class ListPop(MutationEvent):
         self.pos = pop_pos
 
 
+class MutatingMethodEventNotYetImplemented(MutationEvent):
+    pass
+
+
 class ArgMutate(MutationEvent):
     pass
+
+
+_METHOD_TO_EVENT_TYPE: Dict[Any, Type[MutationEvent]] = {
+    list.append: ListAppend,
+    list.clear: MutatingMethodEventNotYetImplemented,
+    list.extend: ListExtend,
+    list.insert: ListInsert,
+    list.pop: ListPop,
+    list.remove: ListRemove,
+    list.sort: MutatingMethodEventNotYetImplemented,
+
+    dict.clear: MutatingMethodEventNotYetImplemented,
+    dict.pop: MutatingMethodEventNotYetImplemented,
+    dict.popitem: MutatingMethodEventNotYetImplemented,
+    dict.setdefault: MutatingMethodEventNotYetImplemented,
+    dict.update: MutatingMethodEventNotYetImplemented,
+
+    set.clear: MutatingMethodEventNotYetImplemented,
+    set.difference_update: MutatingMethodEventNotYetImplemented,
+    set.discard: MutatingMethodEventNotYetImplemented,
+    set.intersection_update: MutatingMethodEventNotYetImplemented,
+    set.pop: MutatingMethodEventNotYetImplemented,
+    set.remove: MutatingMethodEventNotYetImplemented,
+    set.symmetric_difference_update: MutatingMethodEventNotYetImplemented,
+    set.update: MutatingMethodEventNotYetImplemented,
+}
+
+
+def resolve_mutating_method(obj: Any, method: Optional[str]) -> Optional[MutationEvent]:
+    if method is None:
+        return None
+    mutation_type = _METHOD_TO_EVENT_TYPE.get(getattr(type(obj), method, None), None)
+    if mutation_type is None:
+        return None
+    if mutation_type is ListExtend:
+        return ListExtend(len(obj))
+    else:
+        return mutation_type()
 

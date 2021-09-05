@@ -11,6 +11,7 @@ from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
+from nbsafety.tracing.mutation_event import resolve_mutating_method
 
 if TYPE_CHECKING:
     from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
@@ -307,43 +308,37 @@ def get_symbols_for_references(
     return dsyms, called_dsyms
 
 
-def _live_dsym_is_mutating(dsym: DataSymbol, next_ref: Optional[Union[SupportedIndexType, CallPoint]]) -> bool:
-    if next_ref is None:
-        return False
-    if isinstance(dsym.obj, (list, tuple)):
-        if isinstance(next_ref, CallPoint) and next_ref.symbol in (
-            'append',
-            'clear',
-            'extend',
-            'insert',
-            'pop',
-            'remove',
-            'reverse',
-            'sort',
-        ):
-            return True
-        if isinstance(next_ref, int) and next_ref >= len(dsym.obj):
-            return True
-    elif isinstance(dsym.obj, dict):
-        # FIXME: corner case with next_ref == None
-        if isinstance(next_ref, CallPoint):
-            if next_ref.symbol in ('clear', 'pop', 'popitem', 'setdefault', 'update'):
-                return True
-        elif next_ref not in dsym.obj:
-            return True
-    elif isinstance(dsym.obj, set):
-        if isinstance(next_ref, CallPoint) and next_ref.symbol in (
-            'clear',
-            'difference_update',
-            'discard',
-            'intersection_update',
-            'pop',
-            'remove',
-            'symmetric_difference_update',
-            'update',
-        ):
-            return True
+def _live_dsym_is_mutating(dsym: DataSymbol, next_ref: CallPoint) -> bool:
+    return resolve_mutating_method(dsym.obj, next_ref.symbol) is not None
+
+
+def _live_dsym_unsafe(dsym: DataSymbol, next_ref: SupportedIndexType) -> bool:
+    if isinstance(dsym.obj, (list, tuple)) and isinstance(next_ref, int) and next_ref >= len(dsym.obj):
+        return True
+    if isinstance(dsym.obj, dict) and next_ref not in dsym.obj:
+        return True
     return False
+
+
+def _handle_live_symbol(
+    dsym: DataSymbol,
+    next_ref: Optional[Union[SupportedIndexType, CallPoint]],
+    deep_live: Set[DataSymbol],
+    shallow_live: Set[DataSymbol]
+):
+    if next_ref is None:
+        deep_live.add(dsym)
+    elif isinstance(next_ref, CallPoint) and _live_dsym_is_mutating(dsym, next_ref):
+        if nbs().mut_settings.exec_mode == ExecutionMode.NORMAL:
+            shallow_live.add(dsym)
+        elif nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
+            return
+        else:
+            raise ValueError('not sure how to handle execution mode %s' % nbs().mut_settings.exec_mode)
+    elif not isinstance(next_ref, CallPoint) and _live_dsym_unsafe(dsym, next_ref):
+        return
+    else:
+        deep_live.add(dsym)
 
 
 def get_live_symbols_and_cells_for_references(
@@ -367,20 +362,10 @@ def get_live_symbols_and_cells_for_references(
         if update_liveness_time_versions:
             ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
             dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
-        if _live_dsym_is_mutating(dsym, next_ref):
-            if nbs().mut_settings.exec_mode == ExecutionMode.NORMAL:
-                shallow_dsyms.add(dsym)
-            elif nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
-                continue
-            else:
-                raise ValueError('not sure how to handle execution mode %s' % nbs().mut_settings.exec_mode)
-        elif is_called:
+        if is_called:
             called_dsyms.add((dsym, stmt_ctr))
-        # TODO: nothing here for now
-        # elif _live_dsym_is_shallow(dsym, next_ref):
-        #     shallow_dsyms.add(dsym)
         else:
-            deep_dsyms.add(dsym)
+            _handle_live_symbol(dsym, next_ref, deep_dsyms, shallow_dsyms)
     deep_live_from_calls, shallow_live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
         called_dsyms, cell_ctr, update_liveness_time_versions
     )
@@ -395,7 +380,7 @@ def _compute_call_chain_live_symbols_and_cells(
     seen = set()
     worklist = list(live_with_stmt_ctr)
     deep_live = {dsym_stmt[0] for dsym_stmt in live_with_stmt_ctr}
-    shallow_live = set()
+    shallow_live: Set[DataSymbol] = set()
     while len(worklist) > 0:
         workitem = worklist.pop()
         if workitem in seen:
@@ -415,15 +400,7 @@ def _compute_call_chain_live_symbols_and_cells(
             if is_called:
                 worklist.append((dsym, stmt_ctr))
             if dsym.is_globally_accessible:
-                if _live_dsym_is_mutating(dsym, next_ref):
-                    if nbs().mut_settings.exec_mode == ExecutionMode.NORMAL:
-                        shallow_live.add(dsym)
-                    elif nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
-                        continue
-                    else:
-                        raise ValueError('not sure how to handle execution mode %s' % nbs().mut_settings.exec_mode)
-                else:
-                    deep_live.add(dsym)
+                _handle_live_symbol(dsym, next_ref, deep_live, shallow_live)
                 if update_liveness_time_versions:
                     ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
                     dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][used_time] = ts_to_use

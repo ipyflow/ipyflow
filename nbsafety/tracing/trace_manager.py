@@ -20,7 +20,15 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
-from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, ListPop, ListRemove, StandardMutation
+from nbsafety.tracing.mutation_event import (
+    ArgMutate,
+    ListInsert,
+    ListPop,
+    ListRemove,
+    MutatingMethodEventNotYetImplemented,
+    StandardMutation,
+    resolve_mutating_method,
+)
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
@@ -827,18 +835,9 @@ class TraceManager(SliceTraceManager):
         mut_cand[-1].append(arg_obj)
 
     def _save_mutation_candidate(self, obj: Any, method_name: Optional[str], obj_name: Optional[str] = None) -> None:
-        mutation_event: MutationEvent = StandardMutation()
-        if isinstance(obj, list):
-            if method_name == 'append':
-                mutation_event = ListAppend()
-            elif method_name == 'extend':
-                mutation_event = ListExtend(len(obj))
-            elif method_name == 'insert':
-                mutation_event = ListInsert()
-            elif method_name == 'pop':
-                mutation_event = ListPop()
-            elif method_name == 'remove':
-                mutation_event = ListRemove()
+        mutation_event = resolve_mutating_method(obj, method_name)
+        if mutation_event is None or isinstance(mutation_event, MutatingMethodEventNotYetImplemented):
+            mutation_event = StandardMutation()
         self.mutation_candidate = ((obj, obj_name, method_name), mutation_event, [], [])
 
     @register_handler(TraceEvent.before_call)
@@ -851,6 +850,7 @@ class TraceManager(SliceTraceManager):
             _, obj, attr_or_subscript, is_subscript, *_, obj_name = self.saved_complex_symbol_load_data
         if obj is not None and is_subscript is not None:
             if is_subscript:
+                # TODO: need to do this also for chained calls, e.g. f()()
                 method_name = None
             else:
                 assert isinstance(attr_or_subscript, str)

@@ -32,11 +32,9 @@ def override_settings(**kwargs):
 
 def run_cell(cell, cell_id=None, **kwargs):
     """Mocks the `change active cell` portion of the comm protocol"""
-    if cell_id is not None:
-        nbs().handle({
-            'type': 'change_active_cell',
-            'active_cell_id': cell_id
-        })
+    if cell_id is None:
+        cell_id = nbs().cell_counter()
+    nbs().set_active_cell(cell_id)
     run_cell_(cell, **kwargs)
 
 

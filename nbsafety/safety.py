@@ -37,6 +37,7 @@ from nbsafety.run_mode import ExecutionMode, SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
+from nbsafety.utils.misc_utils import GetterPipeline
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, TypeVar, Union
@@ -128,6 +129,9 @@ class NotebookSafety(singletons.NotebookSafety):
         self._typecheck_error_cells: Set[CellId] = set()
         self._counter_by_cell_id: Dict[CellId, int] = {}
         self._cell_id_by_counter: Dict[int, CellId] = {}
+        self.cell_content_by_cell_id = cast(
+            'Dict[CellId, str]', GetterPipeline([self._counter_by_cell_id, self.cell_content_by_counter])
+        )
         self._active_cell_id: Optional[str] = None
         self._run_cells: Set[CellId] = set()
         self.active_cell_position_idx = -1
@@ -257,9 +261,11 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def check_and_link_multiple_cells(
         self,
-        content_by_cell_id: Dict[CellId, str],
+        content_by_cell_id: Optional[Dict[CellId, str]] = None,
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None
     ) -> Dict[str, Any]:
+        if content_by_cell_id is None:
+            content_by_cell_id = self.cell_content_by_cell_id
         stale_cells = set()
         fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}

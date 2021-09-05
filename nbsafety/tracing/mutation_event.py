@@ -41,6 +41,10 @@ class ListPop(MutationEvent):
         self.pos = pop_pos
 
 
+class NamespaceClear(MutationEvent):
+    pass
+
+
 class MutatingMethodEventNotYetImplemented(MutationEvent):
     pass
 
@@ -51,14 +55,14 @@ class ArgMutate(MutationEvent):
 
 _METHOD_TO_EVENT_TYPE: Dict[Any, Type[MutationEvent]] = {
     list.append: ListAppend,
-    list.clear: MutatingMethodEventNotYetImplemented,
+    list.clear: NamespaceClear,
     list.extend: ListExtend,
     list.insert: ListInsert,
     list.pop: ListPop,
     list.remove: ListRemove,
     list.sort: MutatingMethodEventNotYetImplemented,
 
-    dict.clear: MutatingMethodEventNotYetImplemented,
+    dict.clear: NamespaceClear,
     dict.pop: MutatingMethodEventNotYetImplemented,
     dict.popitem: MutatingMethodEventNotYetImplemented,
     dict.setdefault: MutatingMethodEventNotYetImplemented,

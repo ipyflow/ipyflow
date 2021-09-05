@@ -3,13 +3,13 @@ import ast
 import logging
 from typing import TYPE_CHECKING
 
+import nbsafety.tracing.mutation_event as me
 from nbsafety.analysis.symbol_edges import get_symbol_edges
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.scope import NamespaceScope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
-from nbsafety.tracing.mutation_event import ArgMutate, ListAppend, ListExtend, ListInsert, ListPop, ListRemove
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
@@ -81,11 +81,11 @@ class TraceStatement:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
             scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
-        except KeyError as e:
+        except KeyError:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
             if nbs().is_develop:
-                logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+                logger.exception('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
             # if nbs().is_test:
             #     raise ke
             return
@@ -241,9 +241,10 @@ class TraceStatement:
                 if nbs().is_test:
                     raise e
 
-    def _handle_list_mutation(
+    # TODO: put this logic in each respective MutationEvent itself
+    def _handle_specific_mutation_type(
         self,
-        mutation_event: Union[ListAppend, ListExtend, ListInsert, ListPop, ListRemove],
+        mutation_event: me.MutationEvent,
         mutated_obj_id: int,
         mutation_upsert_deps: Set[DataSymbol],
     ):
@@ -252,9 +253,9 @@ class TraceStatement:
         if mutated_sym is None:
             return
         mutated_obj = mutated_sym.obj
-        if isinstance(mutation_event, (ListAppend, ListExtend)):
+        if isinstance(mutation_event, (me.ListAppend, me.ListExtend)):
             for upsert_pos in range(
-                mutation_event.orig_len if isinstance(mutation_event, ListExtend) else len(mutated_obj) - 1,
+                mutation_event.orig_len if isinstance(mutation_event, me.ListExtend) else len(mutated_obj) - 1,
                 len(mutated_obj)
             ):
                 if namespace_scope is None:
@@ -275,7 +276,7 @@ class TraceStatement:
                     is_subscript=True,
                     propagate=False,
                 )
-        elif isinstance(mutation_event, ListInsert):
+        elif isinstance(mutation_event, me.ListInsert):
             assert mutated_obj is namespace_scope.obj
             namespace_scope.shuffle_symbols_upward_from(mutation_event.pos)
             namespace_scope.upsert_data_symbol_for_name(
@@ -287,9 +288,18 @@ class TraceStatement:
                 is_subscript=True,
                 propagate=True,
             )
-        elif isinstance(mutation_event, (ListPop, ListRemove)) and mutation_event.pos is not None:
+        elif isinstance(mutation_event, (me.ListPop, me.ListRemove)) and mutation_event.pos is not None:
             assert mutated_obj is namespace_scope.obj
             namespace_scope.delete_data_symbol_for_name(mutation_event.pos, is_subscript=True)
+        elif isinstance(mutation_event, me.NamespaceClear):
+            for name in sorted(
+                (
+                    dsym.name for dsym in
+                    namespace_scope.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)
+                ), reverse=True
+            ):
+                print(name)
+                namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
 
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:
@@ -297,7 +307,7 @@ class TraceStatement:
         for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
             logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
             Timestamp.update_usage_info(mutation_arg_dsyms)
-            if isinstance(mutation_event, ArgMutate):
+            if isinstance(mutation_event, me.ArgMutate):
                 for mutated_sym in mutation_arg_dsyms:
                     if mutated_sym is None or mutated_sym.is_anonymous:
                         continue
@@ -310,12 +320,12 @@ class TraceStatement:
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
             should_propagate = True
-            if isinstance(mutation_event, (ListAppend, ListExtend, ListInsert, ListPop, ListRemove)):
+            if not isinstance(mutation_event, (me.MutatingMethodEventNotYetImplemented, me.StandardMutation)):
                 should_propagate = False
                 mutation_upsert_deps: Set[DataSymbol] = set()
-                if isinstance(mutation_event, (ListAppend, ListInsert)):
+                if isinstance(mutation_event, (me.ListAppend, me.ListInsert)):
                     mutation_arg_dsyms, mutation_upsert_deps = mutation_upsert_deps, mutation_arg_dsyms
-                self._handle_list_mutation(mutation_event, mutated_obj_id, mutation_upsert_deps)
+                self._handle_specific_mutation_type(mutation_event, mutated_obj_id, mutation_upsert_deps)
             Timestamp.update_usage_info(nbs().aliases[mutated_obj_id])
             for mutated_sym in nbs().aliases[mutated_obj_id]:
                 mutated_sym.update_deps(

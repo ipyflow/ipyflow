@@ -148,3 +148,9 @@ def test_fancy_slice_assign_augassign():
 
 def test_pass():
     run_cell('if True: pass')
+
+
+def test_none_key():
+    run_cell('d = {}')
+    run_cell('d[None] = None')
+    run_cell('d.clear()')

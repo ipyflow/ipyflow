@@ -155,7 +155,6 @@ for foo in lst:
     assert response['fresh_cells'] == [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
 
 
-@skipif_known_failing
 def test_no_freshness_for_alias_assignment_post_mutation():
     cells = {
         0: 'x = []',
@@ -433,3 +432,35 @@ def test_list_pop():
 
 def test_list_remove():
     _test_list_delete_helper('lst.remove(3)')
+
+
+def test_list_clear():
+    cells = {
+        0: 'lst = [0]',
+        1: 'logging.info(lst[0])',
+        2: 'logging.info(lst)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('lst.clear()', 3)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2]
+
+
+def test_dict_clear():
+    cells = {
+        0: 'd = {0: 0}',
+        1: 'logging.info(d[0])',
+        2: 'logging.info(d)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('d.clear()', 3)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [2]

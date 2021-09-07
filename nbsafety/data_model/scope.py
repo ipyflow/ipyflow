@@ -14,10 +14,11 @@ except ImportError:
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.data_model.timestamp import Timestamp
+from nbsafety.utils.misc_utils import GetterFallback
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Generator, Iterable, Iterator, List, Optional, Set, Tuple, Union
+    from typing import Any, Dict, Generator, Iterable, Iterator, List, Mapping, Optional, Set, Tuple, Union
     from nbsafety.types import SupportedIndexType
 
 
@@ -88,7 +89,7 @@ class Scope:
         return ret
 
     @staticmethod
-    def _get_name_to_obj_mapping(obj: Any, dsym: DataSymbol) -> Dict[SupportedIndexType, Any]:
+    def _get_name_to_obj_mapping(obj: Any, dsym: DataSymbol) -> Mapping[SupportedIndexType, Any]:
         if obj is None:
             return get_ipython().ns_table['user_global']
         elif dsym is not None and dsym.is_subscript:
@@ -104,7 +105,7 @@ class Scope:
                         except:
                             continue
                 else:
-                    name_to_obj = obj.__dict__
+                    name_to_obj = GetterFallback([obj.__dict__, getattr(type(obj), '__dict__', {})])  # type: ignore
             except:  # noqa
                 return dict(inspect.getmembers(obj))
         return name_to_obj
@@ -130,11 +131,11 @@ class Scope:
             if next_dsym is None:
                 break
             else:
-                yield next_dsym, None if is_last else chain.symbols[i + 1], False, is_last
-            try:
-                obj = self._get_name_to_obj_mapping(obj, next_dsym)[name]
-            except (KeyError, IndexError, Exception):
-                break
+                try:
+                    obj = self._get_name_to_obj_mapping(obj, next_dsym)[name]
+                    yield next_dsym, None if is_last else chain.symbols[i + 1], False, is_last
+                except (KeyError, IndexError, Exception):
+                    break
             cur_scope = nbs().namespaces.get(id(obj), None)
             if cur_scope is None:
                 break

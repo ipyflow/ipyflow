@@ -317,6 +317,9 @@ def _live_dsym_unsafe(dsym: DataSymbol, next_ref: SupportedIndexType) -> bool:
         return True
     if isinstance(dsym.obj, dict) and next_ref not in dsym.obj:
         return True
+    if not isinstance(dsym.obj, (dict, list, tuple)) and isinstance(next_ref, str) and not hasattr(dsym.obj, next_ref):
+        # TODO: fix this once we can distinguish between attrs and subscripts in the chain
+        return True
     return False
 
 

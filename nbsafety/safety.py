@@ -144,7 +144,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self._line_magic = self._make_line_magic()
         self._last_refused_code: Optional[str] = None
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
-        self._prev_exec_fresh_cell_ids: Set[CellId] = set()
         self._cell_counter = 1
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
@@ -247,10 +246,6 @@ class NotebookSafety(singletons.NotebookSafety):
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             response['exec_mode'] = self.mut_settings.exec_mode.value
             response['last_executed_cell_id'] = cell_id
-            cur_fresh_cells = set(response['fresh_cells'])
-            new_fresh_cells = cur_fresh_cells - self._prev_exec_fresh_cell_ids
-            self._prev_exec_fresh_cell_ids = cur_fresh_cells
-            response['new_fresh_cells'] = list(new_fresh_cells)
             response['highlights_enabled'] = self.mut_settings.highlights_enabled
             if comm is not None:
                 comm.send(response)
@@ -268,6 +263,7 @@ class NotebookSafety(singletons.NotebookSafety):
             content_by_cell_id = self.cell_content_by_cell_id
         stale_cells = set()
         fresh_cells = []
+        new_fresh_cells = []
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         cell_ids_needing_typecheck = self.get_cell_ids_needing_typecheck()
@@ -306,11 +302,14 @@ class NotebookSafety(singletons.NotebookSafety):
                     # TODO: implement phantom cell usage detection here
                     pass
 
-                if (
-                    self._get_max_timestamp_cell_num_for_symbols(checker_result.deep_live, checker_result.shallow_live) >
-                    self._counter_by_cell_id.get(cell_id, cast(int, float('inf')))
-                ) and cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
-                    fresh_cells.append(cell_id)
+                if cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
+                    max_timestamp_cell_num = self._get_max_timestamp_cell_num_for_symbols(
+                        checker_result.deep_live, checker_result.shallow_live
+                    )
+                    if max_timestamp_cell_num > self._counter_by_cell_id.get(cell_id, cast(int, float('inf'))):
+                        fresh_cells.append(cell_id)
+                    if max_timestamp_cell_num >= self._last_execution_counter:
+                        new_fresh_cells.append(cell_id)
             except SyntaxError:
                 continue
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
@@ -352,6 +351,7 @@ class NotebookSafety(singletons.NotebookSafety):
             #  or at least change the name to a more general "unsafe_cells" or equivalent
             'stale_cells': list(stale_cells | self._typecheck_error_cells),
             'fresh_cells': fresh_cells,
+            'new_fresh_cells': new_fresh_cells,
             'stale_links': {
                 stale_cell_id: list(refresher_cell_ids)
                 for stale_cell_id, refresher_cell_ids in stale_links.items()
@@ -415,7 +415,7 @@ class NotebookSafety(singletons.NotebookSafety):
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, self.global_scope, only_yield_successful_resolutions=True
         )
-        stale_symbols = set(dsym for dsym in live_symbols if dsym.is_stale)
+        stale_symbols = {dsym for dsym in live_symbols if dsym.is_stale}
         self.live_symbols_by_cell_counter[cell_ctr] = live_symbols
         return CheckerResult(
             live=live_symbols,

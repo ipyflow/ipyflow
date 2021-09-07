@@ -427,7 +427,7 @@ const connectToComm = (
     } else if (msg.content.data['type'] === 'cell_freshness') {
       staleCells = new Set(msg.content.data['stale_cells'] as string[]);
       freshCells = new Set(msg.content.data['fresh_cells'] as string[]);
-      newFreshCells = new Set([...newFreshCells, ...msg.content.data['fresh_cells'] as string[]])
+      newFreshCells = new Set([...newFreshCells, ...msg.content.data['new_fresh_cells'] as string[]])
       staleLinks = msg.content.data['stale_links'] as { [id: string]: string[] };
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
       lastCellExecPositionIdx = msg.content.data['last_cell_exec_position_idx'] as number;

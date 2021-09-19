@@ -464,3 +464,20 @@ def test_dict_clear():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [2]
+
+
+def test_adhoc_pandas_series_update():
+    cells = {
+        0: 'import pandas as pd',
+        1: 'df = pd.DataFrame({1: [2, 3], 4: [5, 7]})',
+        2: 'df["foo"] = [8, 9]',
+        3: 'df.foo.dropna(inplace=True)',
+    }
+    run_all_cells(cells)
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == []
+    run_cell('df["foo"] = [8, 9]')
+    response = nbs().check_and_link_multiple_cells(cells)
+    assert response['stale_cells'] == []
+    assert response['fresh_cells'] == [3]

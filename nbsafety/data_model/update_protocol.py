@@ -32,6 +32,7 @@ class UpdateProtocol:
             self.updated_sym.children_by_cell_position.values(),
         )
         directly_updated_symbols = nbs().aliases[self.updated_sym.obj_id] if mutated else {self.updated_sym}
+        directly_updated_symbols |= self._maybe_get_adhoc_pandas_updated_syms()
         self._collect_updated_symbols_and_refresh_namespaces(
             directly_updated_symbols, propagate_to_namespace_descendents
         )
@@ -48,6 +49,24 @@ class UpdateProtocol:
         self.seen |= new_deps  # don't propagate to stuff on RHS
         for dsym in updated_symbols_with_ancestors:
             self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
+
+    def _maybe_get_adhoc_pandas_updated_syms(self):
+        try:
+            import pandas
+        except ImportError:
+            return set()
+
+        if self.updated_sym.obj is None or not isinstance(self.updated_sym.obj, pandas.Series):
+            return set()
+
+        ns = self.updated_sym.containing_namespace
+        if ns is None or ns.obj is None or not isinstance(ns.obj, pandas.DataFrame):
+            return set()
+
+        name = self.updated_sym.name
+        return {
+            ns.lookup_data_symbol_by_name_this_indentation(name, is_subscript=is_sub) for is_sub in [True, False]
+        } - {None}
 
     def _collect_updated_symbols_and_refresh_namespaces(
         self, updated_symbols: Iterable[DataSymbol], refresh_descendent_namespaces: bool

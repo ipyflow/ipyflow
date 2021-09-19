@@ -6,10 +6,6 @@ import logging
 from typing import cast, TYPE_CHECKING, Sequence
 
 from IPython import get_ipython
-try:
-    import pandas
-except ImportError:
-    pandas = None
 
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
@@ -24,6 +20,15 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
+
+
+def _try_get_pandas():
+    pandas = None
+    try:
+        import pandas
+    except ImportError:
+        pass
+    return pandas
 
 
 class Scope:
@@ -96,6 +101,7 @@ class Scope:
             return obj
         else:
             try:
+                pandas = _try_get_pandas()
                 if (pandas is not None) and isinstance(obj, pandas.DataFrame):
                     # FIXME: hack to get it working w/ pandas, which doesn't play nicely w/ inspect.getmembers
                     name_to_obj = {}

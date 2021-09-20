@@ -57,7 +57,7 @@ class Scope:
         return self._data_symbol_by_name
 
     @property
-    def non_namespace_parent_scope(self):
+    def non_namespace_parent_scope(self) -> Optional[Scope]:
         # a scope nested inside of a namespace scope does not have access
         # to unqualified members of the namespace scope
         if self.is_global:
@@ -69,7 +69,7 @@ class Scope:
     def make_child_scope(self, scope_name) -> Scope:
         return Scope(scope_name, parent_scope=self)
 
-    def put(self, name: SupportedIndexType, val: DataSymbol):
+    def put(self, name: SupportedIndexType, val: DataSymbol) -> None:
         self._data_symbol_by_name[name] = val
         val.containing_scope = self
 

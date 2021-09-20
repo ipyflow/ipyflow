@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class Namespace(Scope):

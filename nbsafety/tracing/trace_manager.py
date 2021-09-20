@@ -15,7 +15,8 @@ from nbsafety import singletons
 from nbsafety.analysis.attr_symbols import CallPoint
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.data_model.scope import Scope, NamespaceScope
+from nbsafety.data_model.namespace import Namespace
+from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
 from nbsafety.run_mode import SafetyRunMode
@@ -45,9 +46,9 @@ if TYPE_CHECKING:
     ObjId = int
     MutationCandidate = Tuple[Tuple[Any, Optional[str], Optional[str]], MutationEvent, List[Set[DataSymbol]], List[Any]]
     Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
-    SavedStoreData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    SavedDelData = Tuple[NamespaceScope, Any, AttrSubVal, bool]
-    SavedComplexSymbolLoadData = Tuple[NamespaceScope, Any, AttrSubVal, bool, Optional[str]]
+    SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
+    SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
+    SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
 
 
 logger = logging.getLogger(__name__)
@@ -269,7 +270,7 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
         self.node_id_to_saved_live_subscript_refs: Dict[NodeId, Set[DataSymbol]] = {}
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
-        self.node_id_to_loaded_literal_scope: Dict[NodeId, NamespaceScope] = {}
+        self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
 
         self.call_stack: TraceStack = self._make_stack()
@@ -282,7 +283,7 @@ class TraceManager(SliceTraceManager):
             # this one gets set regardless of whether tracing enabled
             self.next_stmt_node_id: Optional[NodeId] = None
 
-            self.pending_class_namespaces: List[NamespaceScope] = []
+            self.pending_class_namespaces: List[Namespace] = []
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = nbs().global_scope
@@ -301,7 +302,7 @@ class TraceManager(SliceTraceManager):
             self.lexical_literal_stack: TraceStack = self._make_stack()
             with self.lexical_literal_stack.register_stack_state():
                 # `None` means use 'cur_frame_original_scope'
-                self.active_literal_scope: Optional[NamespaceScope] = None
+                self.active_literal_scope: Optional[Namespace] = None
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter
@@ -365,7 +366,7 @@ class TraceManager(SliceTraceManager):
                 # exception events are followed by return events until we hit an except clause
                 # no need to track dependencies in this case
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
-                    return_to_stmt.class_scope = cast(NamespaceScope, self.cur_frame_original_scope)
+                    return_to_stmt.class_scope = cast(Namespace, self.cur_frame_original_scope)
                 elif isinstance(trace_stmt.stmt_node, ast.Return) or inside_anonymous_call:
                     if not trace_stmt.lambda_call_point_deps_done_once:
                         trace_stmt.lambda_call_point_deps_done_once = True
@@ -499,7 +500,7 @@ class TraceManager(SliceTraceManager):
             data_symbols.update(self.resolve_loaded_symbols(ref))
         return data_symbols
 
-    def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> NamespaceScope:
+    def _get_namespace_for_obj(self, obj: Any, obj_name: Optional[str] = None) -> Namespace:
         obj_id = id(obj)
         ns = nbs().namespaces.get(obj_id, None)
         if ns is not None:
@@ -519,7 +520,7 @@ class TraceManager(SliceTraceManager):
                 scope_name = nbs().get_first_full_symbol(obj_id).name if obj_name is None else obj_name
             except AttributeError:
                 scope_name = '<unknown namespace>'
-            ns = NamespaceScope(obj, scope_name, parent_scope=None)
+            ns = Namespace(obj, scope_name, parent_scope=None)
         # FIXME: brittle strategy for determining parent scope of obj
         if ns.parent_scope is None:
             if (
@@ -895,7 +896,7 @@ class TraceManager(SliceTraceManager):
     def before_literal(self, *_, **__):
         parent_scope = self.active_literal_scope or self.cur_frame_original_scope
         with self.lexical_literal_stack.push():
-            self.active_literal_scope = NamespaceScope(None, NamespaceScope.ANONYMOUS, parent_scope)
+            self.active_literal_scope = Namespace(None, Namespace.ANONYMOUS, parent_scope)
 
     @register_handler((TraceEvent.after_dict_literal, TraceEvent.after_list_literal, TraceEvent.after_tuple_literal))
     @skip_when_tracing_disabled

@@ -6,7 +6,7 @@ from typing import List, TYPE_CHECKING
 from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
 
@@ -73,7 +73,7 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.symbols.extend(tracer().resolve_loaded_symbols(node))
         self.generic_visit([node.args, node.keywords])
 
-    def _get_attr_or_subscript_namespace(self, node: Union[ast.Attribute, ast.Subscript]) -> Optional[NamespaceScope]:
+    def _get_attr_or_subscript_namespace(self, node: Union[ast.Attribute, ast.Subscript]) -> Optional[Namespace]:
         with self._push_symbols():
             self.visit(node.value)
             symbols = self.symbols

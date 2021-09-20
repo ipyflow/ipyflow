@@ -7,7 +7,7 @@ import nbsafety.tracing.mutation_event as me
 from nbsafety.analysis.symbol_edges import get_symbol_edges
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.data_model.scope import NamespaceScope
+from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
@@ -25,7 +25,7 @@ class TraceStatement:
     def __init__(self, frame: FrameType, stmt_node: ast.stmt):
         self.frame: FrameType = frame
         self.stmt_node = stmt_node
-        self.class_scope: Optional[NamespaceScope] = None
+        self.class_scope: Optional[Namespace] = None
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
 
@@ -49,7 +49,7 @@ class TraceStatement:
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
             # so we make it immediately
-            pending_ns = old_scope.make_child_scope(self.stmt_node.name, obj=NamespaceScope.PENDING_CLASS_PLACEHOLDER)
+            pending_ns = Namespace.make_child_namespace(old_scope, self.stmt_node.name)
             tracer().pending_class_namespaces.append(pending_ns)
             return pending_ns
 
@@ -116,7 +116,7 @@ class TraceStatement:
             return
         ns = nbs().namespaces.get(id(obj), None)
         if ns is None:
-            ns = NamespaceScope(obj, str(name), scope)
+            ns = Namespace(obj, str(name), scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
             ns.upsert_data_symbol_for_name(i, inner_dep.obj, deps, self.stmt_node, is_subscript=True)
@@ -129,7 +129,7 @@ class TraceStatement:
         )
 
     def _handle_store_target_tuple_unpack_from_namespace(
-        self, target: Union[ast.List, ast.Tuple], rhs_namespace: NamespaceScope
+        self, target: Union[ast.List, ast.Tuple], rhs_namespace: Namespace
     ):
         saved_starred_node: Optional[ast.Starred] = None
         saved_starred_deps = []
@@ -259,7 +259,7 @@ class TraceStatement:
                 len(mutated_obj)
             ):
                 if namespace_scope is None:
-                    namespace_scope = NamespaceScope(
+                    namespace_scope = Namespace(
                         mutated_obj,
                         mutated_sym.name,
                         parent_scope=mutated_sym.containing_scope

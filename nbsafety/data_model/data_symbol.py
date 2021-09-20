@@ -22,7 +22,8 @@ if TYPE_CHECKING:
     from typing import Any, Dict, List, Optional, Set
 
     # avoid circular imports
-    from nbsafety.data_model.scope import Scope, NamespaceScope
+    from nbsafety.data_model.scope import Scope
+    from nbsafety.data_model.namespace import Namespace
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -213,7 +214,7 @@ class DataSymbol:
         if not self.containing_scope.is_namespace_scope:
             return self
         else:
-            containing_scope = cast('NamespaceScope', self.containing_scope)
+            containing_scope = cast('Namespace', self.containing_scope)
             for alias in nbs().aliases[containing_scope.obj_id]:
                 if alias.is_globally_accessible:
                     return alias.get_top_level()
@@ -267,9 +268,9 @@ class DataSymbol:
         return nbs().namespaces.get(self.obj_id, None)
 
     @property
-    def containing_namespace(self) -> Optional[NamespaceScope]:
+    def containing_namespace(self) -> Optional[Namespace]:
         if self.containing_scope.is_namespace_scope:
-            return cast('NamespaceScope', self.containing_scope)
+            return cast('Namespace', self.containing_scope)
         else:
             return None
 

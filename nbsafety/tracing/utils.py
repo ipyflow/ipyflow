@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Any, Dict, List, Tuple, Union
-    from nbsafety.data_model.scope import NamespaceScope
+    from nbsafety.data_model.namespace import Namespace
 
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ logger.setLevel(logging.ERROR)
 
 # TODO: add generate return type to signature
 def match_container_obj_or_namespace_with_literal_nodes(
-    container_obj_or_namespace: Union[NamespaceScope, Dict[Any, Any], List[Any], Tuple[Any, ...]],
+    container_obj_or_namespace: Union[Namespace, Dict[Any, Any], List[Any], Tuple[Any, ...]],
     literal_node: Union[ast.Dict, ast.List, ast.Tuple],
 ):
     try:

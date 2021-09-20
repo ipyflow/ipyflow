@@ -31,7 +31,8 @@ from nbsafety.ipython_utils import (
 )
 from nbsafety import line_magics
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.data_model.scope import Scope, NamespaceScope
+from nbsafety.data_model.namespace import Namespace
+from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode, SafetyRunMode
 from nbsafety import singletons
@@ -109,7 +110,7 @@ class NotebookSafety(singletons.NotebookSafety):
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.settrace = settrace or sys.settrace
-        self.namespaces: Dict[int, NamespaceScope] = {}
+        self.namespaces: Dict[int, Namespace] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()

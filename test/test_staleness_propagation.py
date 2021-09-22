@@ -2221,6 +2221,26 @@ def test_global_var():
     assert_detected()
 
 
+@skipif_known_failing
+def test_nonlocal_var():
+    cell_template = """
+# %safety trace_messages enable
+def f():
+    x = 0
+    y = x + 1
+    def g():
+        {stmt}
+        x = 42
+    g()
+    logging.info(y)
+f()
+"""
+    run_cell(cell_template.format(stmt='pass'))
+    assert_not_detected()
+    run_cell(cell_template.format(stmt='nonlocal x'))
+    assert_detected()
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

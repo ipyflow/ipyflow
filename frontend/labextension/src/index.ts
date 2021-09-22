@@ -3,7 +3,6 @@ import {
 } from '@jupyterlab/coreutils/lib/interfaces';
 
 import {
-  ILayoutRestorer,
   JupyterFrontEnd,
   JupyterFrontEndPlugin
 } from '@jupyterlab/application';
@@ -31,11 +30,10 @@ const NBSAFETY_KERNEL_NAME: string = 'nbsafety';
  */
 const extension: JupyterFrontEndPlugin<void> = {
   id: 'jupyterlab-nbsafety',
-  requires: [ILayoutRestorer, INotebookTracker],
+  requires: [INotebookTracker],
   autoStart: true,
   activate: (
     app: JupyterFrontEnd,
-    restorer: ILayoutRestorer,
     notebooks: INotebookTracker
   ) => {
     notebooks.widgetAdded.connect((sender, nbPanel) => {

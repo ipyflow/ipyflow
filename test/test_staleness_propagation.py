@@ -2210,6 +2210,17 @@ def test_list_sum_simple():
     assert_detected()
 
 
+def test_global_var():
+    run_cell('x = 0')
+    run_cell('y = x + 1')
+    run_cell('def f(): global x; x = 42')
+    run_cell('logging.info(y)')
+    assert_not_detected()
+    run_cell('f()')
+    run_cell('logging.info(y)')
+    assert_detected()
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

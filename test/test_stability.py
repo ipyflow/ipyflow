@@ -154,3 +154,10 @@ def test_none_key():
     run_cell('d = {}')
     run_cell('d[None] = None')
     run_cell('d.clear()')
+
+
+def test_global_var():
+    run_cell('x = 0')
+    run_cell('def f(): global x; x = 42')
+    run_cell('f()')
+    run_cell('assert x == 42')

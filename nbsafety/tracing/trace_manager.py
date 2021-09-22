@@ -447,8 +447,13 @@ class TraceManager(SliceTraceManager):
     ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[DataSymbol]]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
-            obj = frame.f_locals[target]
-            return self.cur_frame_original_scope, target, obj, False, set()
+            try:
+                obj = frame.f_locals[target]
+                scope = self.cur_frame_original_scope
+            except KeyError:
+                obj = frame.f_globals[target]
+                scope = nbs().global_scope
+            return scope, target, obj, False, set()
         (
             scope, obj, attr_or_sub, is_subscript
         ) = self.node_id_to_saved_store_data.pop(target)

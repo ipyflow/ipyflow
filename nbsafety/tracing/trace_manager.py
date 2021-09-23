@@ -456,7 +456,16 @@ class TraceManager(SliceTraceManager):
             if scope.symtab is not None:
                 try:
                     target_sym = scope.symtab.lookup(target)
-                    if target_sym.is_nonlocal() and scope.parent_scope is not None:  # type: ignore
+                    # this nonsense is necessary because the "is_nonlocal" method
+                    # is not available on Python <= 3.7;
+                    # the below check seems to work consistently across all Python versions
+                    is_nonlocal = getattr(
+                        target_sym, 'is_nonlocal',
+                        lambda: not target_sym.is_global()
+                                    and target_sym.is_assigned()
+                                    and target_sym.is_free()
+                    )()
+                    if is_nonlocal:
                         scope = scope.parent_scope
                     elif target_sym.is_global():
                         lut = frame.f_globals

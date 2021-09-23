@@ -153,6 +153,10 @@ class NotebookSafety(singletons.NotebookSafety):
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
     @property
+    def current_cell_content(self):
+        return self.cell_content_by_counter[self.cell_counter()]
+
+    @property
     def is_develop(self) -> bool:
         return self.settings.mode == SafetyRunMode.DEVELOP
 
@@ -362,14 +366,18 @@ class NotebookSafety(singletons.NotebookSafety):
 
     @staticmethod
     def _get_cell_ast(cell):
+        return ast.parse(NotebookSafety.sanitize_code(cell))
+
+    @staticmethod
+    def sanitize_code(code):
         lines = []
-        for line in cell.strip().split('\n'):
+        for line in code.strip().split('\n'):
             # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
             # we filter line magics, but for %time, we would ideally like to trace the statement being timed
             # TODO: how to do this?
-            if _NB_MAGIC_PATTERN.search(line) is None:
+            if _NB_MAGIC_PATTERN.search(line.strip()) is None:
                 lines.append(line)
-        return ast.parse('\n'.join(lines))
+        return '\n'.join(lines)
 
     @staticmethod
     def _get_max_timestamp_cell_num_for_symbols(deep_symbols: Set[DataSymbol], shallow_symbols: Set[DataSymbol]) -> int:

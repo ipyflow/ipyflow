@@ -2221,23 +2221,28 @@ def test_global_var():
     assert_detected()
 
 
-@skipif_known_failing
 def test_nonlocal_var():
     cell_template = """
-# %safety trace_messages enable
+z = 0
 def f():
     x = 0
-    y = x + 1
     def g():
         {stmt}
         x = 42
-    g()
-    logging.info(y)
-f()
+    global z
+    z = x
+    return g
+g = f()
 """
     run_cell(cell_template.format(stmt='pass'))
+    run_cell('y = z + 1')
+    run_cell('g()')
+    run_cell('logging.info(y)')
     assert_not_detected()
     run_cell(cell_template.format(stmt='nonlocal x'))
+    run_cell('y = z + 1')
+    run_cell('g()')
+    run_cell('logging.info(y)')
     assert_detected()
 
 

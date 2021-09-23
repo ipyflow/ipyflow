@@ -407,6 +407,7 @@ class DataSymbol:
             #  symbol for a given statement. We need a more precise way to determine
             #  the symbol being called than by looking at the stmt in question.
             nbs().statement_to_func_cell[id(stmt_node)] = self
+            self.call_scope = self.containing_scope.make_child_scope(self.name)
         return stmt_node
 
     def _refresh_cached_obj(self):

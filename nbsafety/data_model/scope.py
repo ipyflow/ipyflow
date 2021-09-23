@@ -2,6 +2,7 @@
 import ast
 import inspect
 import logging
+import symtable
 from typing import cast, TYPE_CHECKING
 
 from IPython import get_ipython
@@ -9,7 +10,7 @@ from IPython import get_ipython
 from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.utils.misc_utils import GetterFallback
-from nbsafety.singletons import nbs
+from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Set, Tuple, Union
@@ -37,9 +38,11 @@ class Scope:
         self,
         scope_name: str = GLOBAL_SCOPE_NAME,
         parent_scope: Optional[Scope] = None,
+        symtab: Optional[symtable.SymbolTable] = None,
     ):
         self.scope_name = str(scope_name)
         self.parent_scope = parent_scope  # None iff this is the global scope
+        self.symtab = symtab
         self._data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 
     def __hash__(self):
@@ -67,7 +70,18 @@ class Scope:
         return self.parent_scope
 
     def make_child_scope(self, scope_name) -> Scope:
-        return Scope(scope_name, parent_scope=self)
+        symtab = tracer().cur_cell_symtab if self.is_global else self.symtab
+        child_symtab = None
+        if symtab is not None:
+            try:
+                sym = symtab.lookup(scope_name)
+                if sym.is_namespace():
+                    child_symtab = sym.get_namespace()
+            except KeyError:
+                pass
+            except ValueError:
+                pass
+        return Scope(scope_name, parent_scope=self, symtab=child_symtab)
 
     def put(self, name: SupportedIndexType, val: DataSymbol) -> None:
         self._data_symbol_by_name[name] = val
@@ -235,9 +249,9 @@ class Scope:
         )
         if implicit and symbol_type != DataSymbolType.ANONYMOUS:
             assert prev_dsym is None, 'expected None, got %s' % prev_dsym
-        if prev_dsym is not None and self.is_globally_accessible:
+        if prev_dsym is not None:
             prev_obj = DataSymbol.NULL if prev_dsym.obj is None else prev_dsym.obj
-            # TODO: handle case where new dc is of different type
+            # TODO: handle case where new dsym is of different type
             if name in self.data_symbol_by_name(prev_dsym.is_subscript) and prev_dsym.symbol_type == symbol_type:
                 prev_dsym.update_obj_ref(obj, refresh_cached=False)
                 # old_dsym.update_type(symbol_type)

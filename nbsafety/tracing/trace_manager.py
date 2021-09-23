@@ -5,6 +5,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 import functools
 import logging
+import symtable
 import sys
 from typing import cast, TYPE_CHECKING
 
@@ -272,6 +273,9 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
+        self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
+            nbs().sanitize_code(nbs().current_cell_content), f'<cell-{nbs().cell_counter()}>', 'exec'
+        )
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():
@@ -447,9 +451,20 @@ class TraceManager(SliceTraceManager):
     ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[DataSymbol]]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
+            scope = self.cur_frame_original_scope
+            lut = frame.f_locals
+            if scope.symtab is not None:
+                try:
+                    target_sym = scope.symtab.lookup(target)
+                    if target_sym.is_nonlocal() and scope.parent_scope is not None:  # type: ignore
+                        scope = scope.parent_scope
+                    elif target_sym.is_global():
+                        lut = frame.f_globals
+                        scope = nbs().global_scope
+                except KeyError:
+                    pass
             try:
-                obj = frame.f_locals[target]
-                scope = self.cur_frame_original_scope
+                obj = lut[target]
             except KeyError:
                 obj = frame.f_globals[target]
                 scope = nbs().global_scope

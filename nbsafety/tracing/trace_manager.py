@@ -446,38 +446,41 @@ class TraceManager(SliceTraceManager):
             ref = id(ref)
         return ref
 
+    def _resolve_store_data_for_simple_target(self, target: str, frame: FrameType):
+        scope = self.cur_frame_original_scope
+        lut = frame.f_locals
+        if scope.symtab is not None:
+            try:
+                target_sym = scope.symtab.lookup(target)
+                # this nonsense is necessary because the "is_nonlocal" method
+                # is not available on Python <= 3.7;
+                # the below check seems to work consistently across all Python versions
+                is_nonlocal = getattr(
+                    target_sym, 'is_nonlocal',
+                    lambda: not target_sym.is_global()
+                            and target_sym.is_assigned()
+                            and target_sym.is_free()
+                )()
+                if is_nonlocal:
+                    scope = scope.parent_scope
+                elif target_sym.is_global():
+                    lut = frame.f_globals
+                    scope = nbs().global_scope
+            except KeyError:
+                pass
+        try:
+            obj = lut[target]
+        except KeyError:
+            obj = frame.f_globals[target]
+            scope = nbs().global_scope
+        return scope, target, obj, False, set()
+
     def resolve_store_data_for_target(
         self, target: Union[str, int, ast.AST], frame: FrameType
     ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[DataSymbol]]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
-            scope = self.cur_frame_original_scope
-            lut = frame.f_locals
-            if scope.symtab is not None:
-                try:
-                    target_sym = scope.symtab.lookup(target)
-                    # this nonsense is necessary because the "is_nonlocal" method
-                    # is not available on Python <= 3.7;
-                    # the below check seems to work consistently across all Python versions
-                    is_nonlocal = getattr(
-                        target_sym, 'is_nonlocal',
-                        lambda: not target_sym.is_global()
-                                    and target_sym.is_assigned()
-                                    and target_sym.is_free()
-                    )()
-                    if is_nonlocal:
-                        scope = scope.parent_scope
-                    elif target_sym.is_global():
-                        lut = frame.f_globals
-                        scope = nbs().global_scope
-                except KeyError:
-                    pass
-            try:
-                obj = lut[target]
-            except KeyError:
-                obj = frame.f_globals[target]
-                scope = nbs().global_scope
-            return scope, target, obj, False, set()
+            return self._resolve_store_data_for_simple_target(target, frame)
         (
             scope, obj, attr_or_sub, is_subscript
         ) = self.node_id_to_saved_store_data.pop(target)

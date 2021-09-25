@@ -285,3 +285,10 @@ History
 * Misc bugfixes and improvements;
 * Ignore mutating calls when determining fresh cells;
 * Experimental reactivity prototype;
+
+0.0.74 (2021-09-24)
+-------------------
+* Misc bugfixes and improvements;
+* Fix bug where function scope overridden on redefinition;
+* Handle global / nonlocal state;
+* Get rid of unnecessary frontend dep, thereby fixing retrolab compat issue;

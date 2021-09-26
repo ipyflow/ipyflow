@@ -84,7 +84,9 @@ class TraceStack:
             self._manager.__dict__[stack_item_name] = stack_item
 
     def clear(self):
-        self._stack = []
+        self._stack = self._stack[:1]
+        if len(self._stack) > 0:
+            self.pop()
 
     def __len__(self):
         return len(self._stack)

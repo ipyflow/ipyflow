@@ -246,20 +246,19 @@ class Namespace(Scope):
 
     def transfer_symbols_to(self, new_ns: Namespace) -> None:
         for dsym in list(self.all_data_symbols_this_indentation(exclude_class=True, is_subscript=False)):
-            dsym.update_obj_ref(getattr(new_ns.obj, cast(str, dsym.name), None))
+            try:
+                inner_obj = nbs().retrieve_namespace_attr_or_sub(new_ns.obj, dsym.name, is_subscript=False)
+            except AttributeError:
+                inner_obj = None
+            dsym.update_obj_ref(inner_obj)
             logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
             self._data_symbol_by_name.pop(dsym.name, None)
             new_ns._data_symbol_by_name[dsym.name] = dsym
             dsym.containing_scope = new_ns
         for dsym in list(self.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)):
-            if isinstance(new_ns.obj, Sequence) and hasattr(new_ns.obj, '__len__'):
-                if isinstance(dsym.name, int) and dsym.name < len(new_ns.obj):
-                    inner_obj = new_ns.obj[dsym.name]
-                else:
-                    inner_obj = None
-            elif hasattr(new_ns.obj, '__contains__') and dsym.name in new_ns.obj:
-                inner_obj = new_ns.obj[dsym.name]
-            else:
+            try:
+                inner_obj = nbs().retrieve_namespace_attr_or_sub(new_ns.obj, dsym.name, is_subscript=True)
+            except (IndexError, KeyError):
                 inner_obj = None
             dsym.update_obj_ref(inner_obj)
             logger.info("shuffle %s from %s to %s", dsym, self, new_ns)

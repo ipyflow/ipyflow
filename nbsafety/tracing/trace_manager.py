@@ -31,6 +31,10 @@ from nbsafety.tracing.mutation_event import (
     StandardMutation,
     resolve_mutating_method,
 )
+from nbsafety.tracing.mutation_special_cases import (
+    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
+    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
+)
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
@@ -69,26 +73,6 @@ ARG_MUTATION_EXCEPTED_MODULES = {
     'sns',
     'widget',
 }
-
-
-METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN: Set[Tuple[int, str]] = set()
-METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = set()
-
-try:
-    import pylab
-    pylab_id = id(pylab)
-    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN.add((pylab_id, 'figure'))
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((pylab_id, 'show'))
-except ImportError:
-    pass
-
-try:
-    import matplotlib.pyplot as plt
-    plt_id = id(plt)
-    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN.add((plt_id, 'figure'))
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((plt_id, 'show'))
-except ImportError:
-    pass
 
 
 class BaseTraceManager(singletons.TraceManager):

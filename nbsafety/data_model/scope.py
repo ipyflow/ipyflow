@@ -131,7 +131,6 @@ class Scope:
         chain members is a CallPoint).
         """
         cur_scope = self
-        obj = None
         for i, name in enumerate(chain.symbols):
             is_last = i == len(chain.symbols) - 1
             if isinstance(name, CallPoint):
@@ -143,12 +142,8 @@ class Scope:
             if next_dsym is None:
                 break
             else:
-                try:
-                    obj = self._get_name_to_obj_mapping(obj, next_dsym)[name]
-                    yield next_dsym, None if is_last else chain.symbols[i + 1], False, is_last
-                except (KeyError, IndexError, Exception):
-                    break
-            cur_scope = nbs().namespaces.get(id(obj), None)
+                yield next_dsym, None if is_last else chain.symbols[i + 1], False, is_last
+            cur_scope = next_dsym.namespace
             if cur_scope is None:
                 break
 

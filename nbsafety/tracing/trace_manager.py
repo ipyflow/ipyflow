@@ -283,7 +283,7 @@ class TraceManager(SliceTraceManager):
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
             self.mutations: List[Mutation] = []
-            self.saved_assign_rhs_obj_id: Optional[int] = None
+            self.saved_assign_rhs_obj: Optional[Any] = None
             # this one gets set regardless of whether tracing enabled
             self.next_stmt_node_id: Optional[NodeId] = None
 
@@ -323,6 +323,7 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_loaded_literal_scope.clear()
         self.node_id_to_saved_dict_key.clear()
         self.prev_node_id_in_cur_frame = None
+        self.saved_assign_rhs_obj = None
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -484,7 +485,13 @@ class TraceManager(SliceTraceManager):
         (
             scope, obj, attr_or_sub, is_subscript
         ) = self.node_id_to_saved_store_data.pop(target)
-        attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
+        if isinstance(obj, (dict, list)):
+            # we can be reasonably sure that the object on the rhs is the same thing
+            # that gets stashed in `obj` for these cases, so use it instead of doing
+            # the lookup (which may have side effects) to reduce intrusiveness
+            attr_or_sub_obj = self.saved_assign_rhs_obj
+        else:
+            attr_or_sub_obj = nbs().retrieve_namespace_attr_or_sub(obj, attr_or_sub, is_subscript)
         if attr_or_sub_obj is None:
             scope_to_use = scope
         else:
@@ -628,7 +635,7 @@ class TraceManager(SliceTraceManager):
     @register_handler(TraceEvent.after_assign_rhs)
     @skip_when_tracing_disabled
     def after_assign_rhs(self, obj: Any, *_, **__):
-        self.saved_assign_rhs_obj_id = id(obj)
+        self.saved_assign_rhs_obj = obj
 
     @register_handler(TraceEvent.subscript_slice)
     @skip_when_tracing_disabled

@@ -163,7 +163,7 @@ class TraceStatement:
                 None if skip_namespace_check
                 # next branch will always return None if skip_namespace_check is true,
                 # but we skip it anyway just for the sake of explicitness
-                else nbs().namespaces.get(tracer().saved_assign_rhs_obj_id, None)
+                else nbs().namespaces.get(id(tracer().saved_assign_rhs_obj), None)
             )
             if rhs_namespace is None:
                 self._handle_store_target_tuple_unpack_from_deps(target, resolve_rval_symbols(value))

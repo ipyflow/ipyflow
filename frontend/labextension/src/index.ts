@@ -407,7 +407,7 @@ const connectToComm = (
       return;
     }
     refreshNodeMapping(notebook);
-    for (const [id, _] of Object.entries(cellsById)) {
+    for (const [id] of Object.entries(cellsById)) {
       if (orderIdxById[id] < lastCellExecPositionIdx) {
         continue;
       }

@@ -29,12 +29,16 @@ class GetterPipeline:
             item = stage[item]
         return item
 
-    def keys(self):
-        return self.stages[0].keys()
-
     def items(self):
-        for k in self.keys():
-            yield k, self[k]
+        for k in self.stages[0].keys():
+            try:
+                yield k, self[k]
+            except KeyError:
+                pass
+
+    def keys(self):
+        for k, _ in self.items():
+            yield k
 
     def values(self):
         for _, v in self.items():

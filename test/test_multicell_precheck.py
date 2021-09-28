@@ -30,12 +30,13 @@ def override_settings(**kwargs):
         nbs().settings = old_settings
 
 
-def run_cell(cell, cell_id=None, **kwargs):
-    """Mocks the `change active cell` portion of the comm protocol"""
-    if cell_id is None:
-        cell_id = nbs().cell_counter()
-    nbs().set_active_cell(cell_id)
-    run_cell_(cell, **kwargs)
+def run_cell(cell, cell_id, **kwargs):
+    # print()
+    # print('*******************************************')
+    # print('running', cell)
+    # print('*******************************************')
+    # print()
+    run_cell_(cell, cell_id=cell_id, **kwargs)
 
 
 def run_all_cells(cells: Dict[int, str], **kwargs):
@@ -477,7 +478,7 @@ def test_adhoc_pandas_series_update():
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == []
-    run_cell('df["foo"] = [8, 9]')
+    run_cell('df["foo"] = [8, 9]', 4)
     response = nbs().check_and_link_multiple_cells(cells)
     assert response['stale_cells'] == []
     assert response['fresh_cells'] == [3]

@@ -16,11 +16,12 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 
 
 def run_cell(cell: str, cell_id=None, **kwargs) -> None:
-    """Mocks the `change active cell` portion of the comm protocol"""
-    if cell_id is None:
-        cell_id = nbs().cell_counter()
-    nbs().set_active_cell(cell_id)
-    run_cell_(cell, **kwargs)
+    # print()
+    # print('*******************************************')
+    # print('running', cell)
+    # print('*******************************************')
+    # print()
+    run_cell_(cell, cell_id=cell_id, **kwargs)
 
 
 def run_reactively(cell: str) -> Set[int]:

@@ -6,7 +6,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Iterable, Set
+    from typing import Generator, Iterable, Set
 
     # avoid circular imports
     from nbsafety.data_model.data_symbol import DataSymbol
@@ -29,7 +29,7 @@ class UpdateProtocol:
             "updated sym %s (containing scope %s) with children %s",
             self.updated_sym,
             self.updated_sym.containing_scope,
-            self.updated_sym.children_by_cell_position.values(),
+            self.updated_sym.children,
         )
         directly_updated_symbols = nbs().aliases[self.updated_sym.obj_id] if mutated else {self.updated_sym}
         directly_updated_symbols |= self._maybe_get_adhoc_pandas_updated_syms()
@@ -92,7 +92,7 @@ class UpdateProtocol:
                         dsym_ns.all_data_symbols_this_indentation(), refresh_descendent_namespaces
                     )
 
-    def _propagate_staleness_to_namespace_parents(self, dsym: DataSymbol, skip_seen_check=False):
+    def _propagate_staleness_to_namespace_parents(self, dsym: DataSymbol, skip_seen_check: bool = False) -> None:
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)
@@ -111,26 +111,20 @@ class UpdateProtocol:
                 logger.warning('propagate from namespace parent of %s to child %s', dsym, child)
                 self._propagate_staleness_to_deps(child)
 
-    def _non_class_to_instance_children(self, dsym):
+    def _non_class_to_instance_children(self, dsym: DataSymbol) -> Generator[DataSymbol, None, None]:
         if self.updated_sym is dsym:
-            for dep_introduced_pos, dsym_children in dsym.children_by_cell_position.items():
-                if not nbs().settings.backwards_cell_staleness_propagation and dep_introduced_pos <= nbs().active_cell_position_idx:
-                    continue
-                yield from dsym_children
+            yield from dsym.children
             return
-        for dep_introduced_pos, dsym_children in dsym.children_by_cell_position.items():
-            if not nbs().settings.backwards_cell_staleness_propagation and dep_introduced_pos <= nbs().active_cell_position_idx:
-                continue
-            for child in dsym_children:
-                # Next, complicated check to avoid propagating along a class -> instance edge.
-                # The only time this is OK is when we changed the class, which will not be the case here.
-                child_namespace = child.namespace
-                if child_namespace is not None and child_namespace.cloned_from is not None:
-                    if child_namespace.cloned_from.obj_id == dsym.obj_id:
-                        continue
-                yield child
+        for child in dsym.children:
+            # Next, complicated check to avoid propagating along a class -> instance edge.
+            # The only time this is OK is when we changed the class, which will not be the case here.
+            child_namespace = child.namespace
+            if child_namespace is not None and child_namespace.cloned_from is not None:
+                if child_namespace.cloned_from.obj_id == dsym.obj_id:
+                    continue
+            yield child
 
-    def _propagate_staleness_to_namespace_children(self, dsym: DataSymbol, skip_seen_check=False):
+    def _propagate_staleness_to_namespace_children(self, dsym: DataSymbol, skip_seen_check: bool = False) -> None:
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)
@@ -141,7 +135,7 @@ class UpdateProtocol:
             logger.warning('propagate from %s to namespace child %s', dsym, ns_child)
             self._propagate_staleness_to_deps(ns_child)
 
-    def _propagate_staleness_to_deps(self, dsym: DataSymbol, skip_seen_check=False):
+    def _propagate_staleness_to_deps(self, dsym: DataSymbol, skip_seen_check: bool = False) -> None:
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)

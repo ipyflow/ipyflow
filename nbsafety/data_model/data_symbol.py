@@ -80,7 +80,7 @@ class DataSymbol:
         self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
         self.parents: Set[DataSymbol] = set()
-        self.children_by_cell_position: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        self.children: Set[DataSymbol] = set()
 
         self.call_scope: Optional[Scope] = None
         if self.is_function:
@@ -541,14 +541,13 @@ class DataSymbol:
         new_deps.discard(self)
         if overwrite:
             for parent in self.parents - new_deps:
-                for parent_children in parent.children_by_cell_position.values():
-                    parent_children.discard(self)
+                parent.children.discard(self)
             self.parents.clear()
 
         for new_parent in new_deps - self.parents:
             if new_parent is None:
                 continue
-            new_parent.children_by_cell_position[nbs().active_cell_position_idx].add(self)
+            new_parent.children.add(self)
             self.parents.add(new_parent)
         self.required_timestamp = Timestamp.uninitialized()
         if mutated or isinstance(self.stmt_node, ast.AugAssign):

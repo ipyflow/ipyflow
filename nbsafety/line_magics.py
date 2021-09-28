@@ -68,11 +68,7 @@ def show_deps(symbols: str) -> Optional[str]:
             logger.warning('Could not find symbol metadata for %s', astunparse.unparse(unresolved).strip())
         for dsym in dsyms:
             parents = {par for par in dsym.parents if par.is_user_accessible}
-            children: Set[DataSymbol] = set()
-            children = children.union(
-                *({child for child in children if child.is_user_accessible}
-                  for children in dsym.children_by_cell_position.values())
-            )
+            children = {child for child in dsym.children if child.is_user_accessible}
             dsym_extra_info = f'defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}'
             if dsym.required_timestamp.is_initialized:
                 dsym_extra_info += f'; required: {dsym.required_timestamp.cell_num}'
@@ -187,8 +183,7 @@ def remove_dep(line_: str) -> None:
     if parent_data_sym not in child_data_sym.parents:
         logger.warning('The two symbols do not have a dependency relation')
         return
-    for children in parent_data_sym.children_by_cell_position.values():
-        children.remove(child_data_sym)
+    parent_data_sym.children.remove(child_data_sym)
     child_data_sym.parents.remove(parent_data_sym)
 
 
@@ -205,7 +200,7 @@ def add_dep(line_: str) -> None:
     if parent_data_sym in child_data_sym.parents:
         logger.warning('The two symbols already have a dependency relation')
         return
-    parent_data_sym.children_by_cell_position[-1].add(child_data_sym)
+    parent_data_sym.children.add(child_data_sym)
     child_data_sym.parents.add(parent_data_sym)
 
 

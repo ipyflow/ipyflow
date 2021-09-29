@@ -76,13 +76,13 @@ class MutableNotebookSafetySettings:
 
 
 class CheckerResult(NamedTuple):
-    live: Set[DataSymbol]
-    deep_live: Set[DataSymbol]
-    shallow_live: Set[DataSymbol]
-    live_cells: Set[int]
-    live_cells_from_calls: Set[int]
-    dead: Set[DataSymbol]
-    stale: Set[DataSymbol]
+    live: Set[DataSymbol]           # all live symbols in the cell
+    deep_live: Set[DataSymbol]      # live symbols used in their entirety
+    shallow_live: Set[DataSymbol]   # live symbols for which only a portion (attr or subscript) is used
+    used_cells: Set[int]            # last updated timestamps of the live symbols
+    live_cells: Set[int]            # cells that define a symbol that was called in the cell
+    dead: Set[DataSymbol]           # symbols that are definitely assigned to
+    stale: Set[DataSymbol]          # live symbols that have one or more ancestors with more recent timestamps
 
 
 class FrontendCheckerResult(NamedTuple):
@@ -91,6 +91,7 @@ class FrontendCheckerResult(NamedTuple):
     new_fresh_cells: Set[CellId]
     stale_links: Dict[CellId, Set[CellId]]
     refresher_links: Dict[CellId, Set[CellId]]
+    phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -282,9 +283,20 @@ class NotebookSafety(singletons.NotebookSafety):
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
 
+    def _compute_phantom_cell_info(self, cell_id: CellId, used_cells: Set[int]) -> Dict[CellId, Set[int]]:
+        used_cell_counters_by_cell_id = defaultdict(set)
+        used_cell_counters_by_cell_id[cell_id].add(self.cell_counter())
+        for cell_num in used_cells:
+            used_cell_counters_by_cell_id[self._cell_id_by_counter[cell_num]].add(cell_num)
+        return {
+            cell_id: cell_execs
+            for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
+            if len(cell_execs) >= 2
+        }
+
     def check_and_link_multiple_cells(
-        self,
-        content_by_cell_id: Optional[Dict[CellId, str]] = None,
+            self,
+            content_by_cell_id: Optional[Dict[CellId, str]] = None,
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None,
         update_liveness_time_versions: bool = False,
     ) -> FrontendCheckerResult:
@@ -296,6 +308,7 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         cell_ids_needing_typecheck = self.get_cell_ids_needing_typecheck()
+        phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         for cell_id, cell_content in content_by_cell_id.items():
             if cell_id not in self._run_cells:
                 continue
@@ -322,13 +335,14 @@ class NotebookSafety(singletons.NotebookSafety):
                             self._typecheck_error_cells.discard(cell_id)
                         else:
                             self._typecheck_error_cells.add(cell_id)
-                    except Exception as e:
-                        logger.info('Exception ocurred during type checking: %s', e)
+                    except Exception:
+                        logger.exception('Exception occurred during type checking')
                         self._typecheck_error_cells.discard(cell_id)
 
                 if self.settings.mark_phantom_cell_usages_unsafe:
-                    # TODO: implement phantom cell usage detection here
-                    pass
+                    phantom_cell_info_for_cell = self._compute_phantom_cell_info(cell_id, checker_result.used_cells)
+                    if len(phantom_cell_info_for_cell) > 0:
+                        phantom_cell_info[cell_id] = phantom_cell_info_for_cell
 
                 if cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
                     max_timestamp_cell_num = self._get_max_timestamp_cell_num_for_symbols(
@@ -382,6 +396,7 @@ class NotebookSafety(singletons.NotebookSafety):
             new_fresh_cells=new_fresh_cells,
             stale_links=stale_links,
             refresher_links=refresher_links,
+            phantom_cell_info=phantom_cell_info,
         )
 
     @staticmethod
@@ -412,7 +427,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self, cell_id: CellId, content_by_cell_id: Dict[CellId, str], checker_result: CheckerResult
     ) -> str:
         live_cell_counters = {self._counter_by_cell_id[cell_id]}
-        for live_cell_num in checker_result.live_cells_from_calls:
+        for live_cell_num in checker_result.live_cells:
             live_cell_id = self._cell_id_by_counter[live_cell_num]
             if self._counter_by_cell_id[live_cell_id] == live_cell_num:
                 live_cell_counters.add(live_cell_num)
@@ -436,7 +451,7 @@ class NotebookSafety(singletons.NotebookSafety):
             get_live_symbols_and_cells_for_references(
                 live_symbol_refs, self.global_scope, cell_ctr, update_liveness_time_versions=True
             )
-        deep_live_symbols, shallow_live_symbols, live_cells_from_calls = get_live_symbols_and_cells_for_references(
+        deep_live_symbols, shallow_live_symbols, live_cells = get_live_symbols_and_cells_for_references(
             live_symbol_refs, self.global_scope, cell_ctr, update_liveness_time_versions=False
         )
         live_symbols = deep_live_symbols | shallow_live_symbols
@@ -453,8 +468,12 @@ class NotebookSafety(singletons.NotebookSafety):
             live=live_symbols,
             deep_live=deep_live_symbols,
             shallow_live=shallow_live_symbols,
-            live_cells={sym.timestamp.cell_num for sym in live_symbols},
-            live_cells_from_calls=live_cells_from_calls,
+            used_cells={
+                sym.timestamp.cell_num for sym in deep_live_symbols
+            } | {
+                sym.timestamp_excluding_ns_descendents.cell_num for sym in shallow_live_symbols
+            },
+            live_cells=live_cells,
             dead=dead_symbols,
             stale=stale_symbols,
         )
@@ -481,21 +500,21 @@ class NotebookSafety(singletons.NotebookSafety):
         )
 
     @staticmethod
-    def _stale_cell_warning(cell_execs: Set[int]):
+    def _phantom_cell_warning(cell_execs: Set[int]):
         if len(cell_execs) < 2:
             raise ValueError('Expected cell that was executed at least twice')
         logger.warning(
             f'Detected usages of symbols across same cell executed multiple times (timestamps {cell_execs}) '
         )
 
-    def _safety_precheck_cell_new(self, cell: str, cell_id: Optional[CellId]) -> None:
+    def _safety_precheck_cell(self, cell: str, cell_id: Optional[CellId]) -> None:
         checker_result = self.check_and_link_multiple_cells(
             {cell_id: cell}, update_liveness_time_versions=self.mut_settings.static_slicing_enabled
         )
         if cell_id in checker_result.stale_cells:
             self.safety_issue_detected = True
 
-    def _safety_precheck_cell(self, cell: str, cell_id: Optional[CellId]) -> bool:
+    def _safety_precheck_cell_old(self, cell: str, cell_id: Optional[CellId]) -> bool:
         """
         This method statically checks the cell to be executed for stale symbols and other safety issues.
         If any safety issues are detected, it returns `True`. Otherwise (or on syntax error), return `False`.
@@ -513,7 +532,7 @@ class NotebookSafety(singletons.NotebookSafety):
         checker_result = self._check_cell_and_resolve_symbols(
             cell_ast, self.cell_counter(), update_liveness_time_versions=self.mut_settings.static_slicing_enabled
         )
-        stale_symbols, live_symbols, live_cells = checker_result.stale, checker_result.live, checker_result.live_cells
+        stale_symbols, live_symbols, used_cells = checker_result.stale, checker_result.live, checker_result.used_cells
         stale_sym_usage_warning_counter = 0
         phantom_cell_usage_warning_counter = 0
         if self._last_refused_code is None or cell != self._last_refused_code:
@@ -529,21 +548,13 @@ class NotebookSafety(singletons.NotebookSafety):
                 if stale_sym_usage_warning_counter > 0:
                     logger.warning('\n\n(Run cell again to override and execute anyway.)')
             if self.settings.mark_phantom_cell_usages_unsafe:
-                used_cell_counters_by_cell_id = defaultdict(set)
-                used_cell_counters_by_cell_id[cell_id].add(self.cell_counter())
-                for cell_num in live_cells:
-                    used_cell_counters_by_cell_id[self._cell_id_by_counter[cell_num]].add(cell_num)
-                phantom_cell_info = {
-                    cell_id: cell_execs
-                    for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
-                    if len(cell_execs) >= 2
-                }
+                phantom_cell_info = self._compute_phantom_cell_info(cell_id, used_cells)
                 for used_cell_execs in phantom_cell_info.values():
                     if phantom_cell_usage_warning_counter >= self._MAX_STALE_CELL_WARNINGS:
                         logger.warning(f'{len(phantom_cell_info) - phantom_cell_usage_warning_counter} '
                                        'more cells with symbol usages from phantom cells skipped...')
                         break
-                    self._stale_cell_warning(used_cell_execs)
+                    self._phantom_cell_warning(used_cell_execs)
                     phantom_cell_usage_warning_counter += 1
             if self.settings.mark_typecheck_failures_unsafe:
                 # TODO: implement typechecking here, same as in `check_and_link_multiple_cells`

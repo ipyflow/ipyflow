@@ -350,8 +350,8 @@ def get_live_symbols_and_cells_for_references(
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
 ) -> Tuple[Set[DataSymbol], Set[DataSymbol], Set[int]]:
-    deep_dsyms: Set[DataSymbol] = set()
-    shallow_dsyms: Set[DataSymbol] = set()
+    deep_live_dsyms: Set[DataSymbol] = set()
+    shallow_live_dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[Tuple[DataSymbol, int]] = set()
     only_symbol_refs = (ref[0] for ref in symbol_refs)
     only_stmt_counters = (ref[1] for ref in symbol_refs)
@@ -368,13 +368,13 @@ def get_live_symbols_and_cells_for_references(
         if is_called:
             called_dsyms.add((dsym, stmt_ctr))
         else:
-            _handle_live_symbol(dsym, next_ref, deep_dsyms, shallow_dsyms)
+            _handle_live_symbol(dsym, next_ref, deep_live_dsyms, shallow_live_dsyms)
     deep_live_from_calls, shallow_live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
         called_dsyms, cell_ctr, update_liveness_time_versions
     )
-    deep_dsyms |= deep_live_from_calls
-    shallow_dsyms |= shallow_live_from_calls
-    return deep_dsyms, shallow_dsyms, live_cells
+    deep_live_dsyms |= deep_live_from_calls
+    shallow_live_dsyms |= shallow_live_from_calls
+    return deep_live_dsyms, shallow_live_dsyms, live_cells
 
 
 def _compute_call_chain_live_symbols_and_cells(

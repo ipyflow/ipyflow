@@ -31,7 +31,7 @@ def run_reactively(cell: str) -> Set[int]:
     while next_cell_to_run is not None:
         run_cell(next_cell_to_run, cell_id=next_cell_to_run_id)
         next_cell_to_run = None
-        fresh = sorted(nbs().check_and_link_multiple_cells()['fresh_cells'])
+        fresh = sorted(nbs().check_and_link_multiple_cells().fresh_cells)
         for fresh_cell_id in fresh:
             if fresh_cell_id not in executed_cells:
                 executed_cells.add(fresh_cell_id)

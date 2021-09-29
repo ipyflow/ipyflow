@@ -85,6 +85,25 @@ class CheckerResult(NamedTuple):
     stale: Set[DataSymbol]
 
 
+class FrontendCheckerResult(NamedTuple):
+    stale_cells: Set[CellId]
+    fresh_cells: Set[CellId]
+    new_fresh_cells: Set[CellId]
+    stale_links: Dict[CellId, Set[CellId]]
+    refresher_links: Dict[CellId, Set[CellId]]
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            'stale_cells': list(self.stale_cells),
+            'fresh_cells': list(self.fresh_cells),
+            'new_fresh_cells': list(self.new_fresh_cells),
+            'stale_links': {cell_id: list(linked_cell_ids) for cell_id, linked_cell_ids in self.stale_links.items()},
+            'refresher_links': {
+                cell_id: list(linked_cell_ids) for cell_id, linked_cell_ids in self.refresher_links.items()
+            },
+        }
+
+
 class NotebookSafety(singletons.NotebookSafety):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
 
@@ -153,8 +172,12 @@ class NotebookSafety(singletons.NotebookSafety):
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
     @property
-    def current_cell_content(self):
+    def current_cell_content(self) -> str:
         return self.cell_content_by_counter[self.cell_counter()]
+
+    @property
+    def active_cell_id(self) -> CellId:
+        return self._cell_id_by_counter[self.cell_counter()]
 
     @property
     def is_develop(self) -> bool:
@@ -246,7 +269,7 @@ class NotebookSafety(singletons.NotebookSafety):
             else:
                 order_index_by_id = request['order_index_by_cell_id']
                 last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
-            response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id)
+            response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id).to_json()
             response['type'] = 'cell_freshness'
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             response['exec_mode'] = self.mut_settings.exec_mode.value
@@ -262,26 +285,26 @@ class NotebookSafety(singletons.NotebookSafety):
     def check_and_link_multiple_cells(
         self,
         content_by_cell_id: Optional[Dict[CellId, str]] = None,
-        order_index_by_cell_id: Optional[Dict[CellId, int]] = None
-    ) -> Dict[str, Any]:
+        order_index_by_cell_id: Optional[Dict[CellId, int]] = None,
+        update_liveness_time_versions: bool = False,
+    ) -> FrontendCheckerResult:
         if content_by_cell_id is None:
             content_by_cell_id = self.cell_content_by_cell_id
         stale_cells = set()
-        fresh_cells = []
-        new_fresh_cells = []
+        fresh_cells = set()
+        new_fresh_cells = set()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         cell_ids_needing_typecheck = self.get_cell_ids_needing_typecheck()
         for cell_id, cell_content in content_by_cell_id.items():
             if cell_id not in self._run_cells:
                 continue
-            if (
-                order_index_by_cell_id is not None
-                and order_index_by_cell_id.get(cell_id, -1) <= self.active_cell_position_idx
-            ):
-                continue
             try:
-                checker_result = self._check_cell_and_resolve_symbols(cell_content, self._counter_by_cell_id[cell_id])
+                checker_result = self._check_cell_and_resolve_symbols(
+                    cell_content,
+                    self._counter_by_cell_id[cell_id],
+                    update_liveness_time_versions=update_liveness_time_versions,
+                )
                 stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
                 if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
@@ -312,13 +335,13 @@ class NotebookSafety(singletons.NotebookSafety):
                         checker_result.deep_live, checker_result.shallow_live
                     )
                     if max_timestamp_cell_num > self._counter_by_cell_id.get(cell_id, cast(int, float('inf'))):
-                        fresh_cells.append(cell_id)
+                        fresh_cells.add(cell_id)
                     if max_timestamp_cell_num >= self._last_execution_counter:
-                        new_fresh_cells.append(cell_id)
+                        new_fresh_cells.add(cell_id)
             except SyntaxError:
                 continue
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
-        refresher_links: Dict[CellId, List[CellId]] = defaultdict(list)
+        refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         for stale_cell_id in stale_cells:
             stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             refresher_cell_ids: Set[CellId] = set()
@@ -343,7 +366,7 @@ class NotebookSafety(singletons.NotebookSafety):
         for stale_cell_id in stale_cells:
             stale_links[stale_cell_id] -= stale_cells
             for refresher_cell_id in stale_links[stale_cell_id]:
-                refresher_links[refresher_cell_id].append(stale_cell_id)
+                refresher_links[refresher_cell_id].add(stale_cell_id)
         if self.settings.mark_typecheck_failures_unsafe:
             # TODO: actually do the type checking
             #  nested symbols in particular will need some thought
@@ -351,18 +374,15 @@ class NotebookSafety(singletons.NotebookSafety):
         for typecheck_error_cell in self._typecheck_error_cells:
             if typecheck_error_cell not in stale_links:
                 stale_links[typecheck_error_cell] = set()
-        return {
+        return FrontendCheckerResult(
             # TODO: we should probably have separate fields for stale vs non-typechecking cells,
             #  or at least change the name to a more general "unsafe_cells" or equivalent
-            'stale_cells': list(stale_cells | self._typecheck_error_cells),
-            'fresh_cells': fresh_cells,
-            'new_fresh_cells': new_fresh_cells,
-            'stale_links': {
-                stale_cell_id: list(refresher_cell_ids)
-                for stale_cell_id, refresher_cell_ids in stale_links.items()
-            },
-            'refresher_links': refresher_links,
-        }
+            stale_cells=stale_cells | self._typecheck_error_cells,
+            fresh_cells=fresh_cells,
+            new_fresh_cells=new_fresh_cells,
+            stale_links=stale_links,
+            refresher_links=refresher_links,
+        )
 
     @staticmethod
     def _get_cell_ast(cell):
@@ -426,6 +446,9 @@ class NotebookSafety(singletons.NotebookSafety):
         )
         stale_symbols = {dsym for dsym in live_symbols if dsym.is_stale}
         self.live_symbols_by_cell_counter[cell_ctr] = live_symbols
+        if update_liveness_time_versions:
+            for sym in live_symbols:
+                self.cell_counter_by_live_symbol[sym].add(cell_ctr)
         return CheckerResult(
             live=live_symbols,
             deep_live=deep_live_symbols,
@@ -464,6 +487,13 @@ class NotebookSafety(singletons.NotebookSafety):
         logger.warning(
             f'Detected usages of symbols across same cell executed multiple times (timestamps {cell_execs}) '
         )
+
+    def _safety_precheck_cell_new(self, cell: str, cell_id: Optional[CellId]) -> None:
+        checker_result = self.check_and_link_multiple_cells(
+            {cell_id: cell}, update_liveness_time_versions=self.mut_settings.static_slicing_enabled
+        )
+        if cell_id in checker_result.stale_cells:
+            self.safety_issue_detected = True
 
     def _safety_precheck_cell(self, cell: str, cell_id: Optional[CellId]) -> bool:
         """
@@ -778,26 +808,27 @@ class NotebookSafety(singletons.NotebookSafety):
             self._last_execution_counter = self.cell_counter()
 
             cell_id, self._active_cell_id = self._active_cell_id, None
-            if cell_id is not None:
-                self._counter_by_cell_id[cell_id] = self._last_execution_counter
-                self._cell_id_by_counter[self._last_execution_counter] = cell_id
-                # add to run_cells even if it fails precheck, since an attempt
-                # to run indicates that the user is interested in this cell, so
-                # we should add this cell to the set of cells that get checked
-                # in various ways in the post-exec hook.
-                self._run_cells.add(cell_id)
+            assert cell_id is not None
+            self._counter_by_cell_id[cell_id] = self._last_execution_counter
+            self._cell_id_by_counter[self._last_execution_counter] = cell_id
+            # add to run_cells even if it fails precheck, since an attempt
+            # to run indicates that the user is interested in this cell, so
+            # we should add this cell to the set of cells that get checked
+            # in various ways in the post-exec hook.
+            self._run_cells.add(cell_id)
 
             # Stage 1: Precheck.
-            if self._safety_precheck_cell(cell, cell_id) and self.settings.mark_stale_symbol_usages_unsafe:
-                # set this back in case we need it (e.g. user overrides and reruns)
-                self._active_cell_id = cell_id
-                # FIXME: hack to increase cell number
-                #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
-                if is_async:
-                    ret = await run_cell_func('None')  # pragma: no cover
-                else:
-                    ret = run_cell_func('None')
-                return ret
+            self._safety_precheck_cell(cell, cell_id)
+            # if self._safety_precheck_cell_old(cell, cell_id):
+            #     # set this back in case we need it (e.g. user overrides and reruns)
+            #     self._active_cell_id = cell_id
+            #     # FIXME: hack to increase cell number
+            #     #  ideally we shouldn't show a cell number at all if we fail precheck since nothing executed
+            #     if is_async:
+            #         ret = await run_cell_func('None')  # pragma: no cover
+            #     else:
+            #         ret = run_cell_func('None')
+            #     return ret
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:

@@ -292,3 +292,11 @@ History
 * Fix bug where function scope overridden on redefinition;
 * Handle global / nonlocal state;
 * Get rid of unnecessary frontend dep, thereby fixing retrolab compat issue;
+
+0.0.75 (2021-09-28)
+-------------------
+* Fix state transition bug where current scope not restored;
+* Make checker results strongly typed;
+* No more warning for stale usages; just show the highlight;
+* Various fixes to reduce intrusiveness (no attribute / subscript dereferencing at check time);
+* Bump frontend dependencies to more secure versions;

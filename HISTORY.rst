@@ -300,3 +300,7 @@ History
 * No more warning for stale usages; just show the highlight;
 * Various fixes to reduce intrusiveness (no attribute / subscript dereferencing at check time);
 * Bump frontend dependencies to more secure versions;
+
+0.0.75 (2021-09-29)
+-------------------
+* Get rid of accidental debug logging statement;

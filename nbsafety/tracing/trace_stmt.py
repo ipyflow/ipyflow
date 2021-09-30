@@ -298,7 +298,6 @@ class TraceStatement:
                     namespace_scope.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)
                 ), reverse=True
             ):
-                print(name)
                 namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
 
     def handle_dependencies(self):

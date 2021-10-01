@@ -2246,6 +2246,13 @@ g = f()
     assert_detected()
 
 
+def test_reimport_does_not_propagate():
+    run_cell('import numpy as np')
+    run_cell('arr = np.zeros(3)')
+    run_cell('import numpy as np')
+    assert_not_detected()
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

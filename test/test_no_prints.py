@@ -9,9 +9,13 @@ import os
 import nbsafety
 
 
+join = os.path.join
+root = join(os.curdir, nbsafety.__name__)
+
+
 _EXCEPTED_FILES = {
-    f'./{nbsafety.__name__}/_version.py',
-    f'./{nbsafety.__name__}/kernel/install.py'
+    join(root, '_version.py'),
+    join(join(root, 'kernel'), 'install.py'),
 }
 
 
@@ -34,11 +38,11 @@ class ContainsPrintVisitor(ast.NodeVisitor):
 
 def test_no_prints():
     contains_print = ContainsPrintVisitor()
-    for root, _, files in os.walk(os.path.join(os.curdir, nbsafety.__name__)):
+    for path, _, files in os.walk(root):
         for filename in files:
             if not filename.endswith('.py') or filename in _EXCEPTED_FILES:
                 continue
-            filename = os.path.join(root, filename)
+            filename = os.path.join(path, filename)
             if filename in _EXCEPTED_FILES:
                 continue
             assert not contains_print(filename), f'file {filename} had a print statement!'

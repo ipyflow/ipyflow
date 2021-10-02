@@ -1,8 +1,14 @@
 # -*- coding: future_annotations -*-
 import logging
+from typing import TYPE_CHECKING
 
 from nbsafety.singletons import nbs
+from nbsafety.data_model.code_cell import CodeCell
 from test.utils import make_safety_fixture, skipif_known_failing
+
+if TYPE_CHECKING:
+    from typing import Set
+    from nbsafety.types import CellId
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -21,12 +27,19 @@ def run_cell(cell, cell_id=None, **kwargs):
     run_cell_(cell, **kwargs)
 
 
+def get_cell_ids_needing_typecheck() -> Set[CellId]:
+    return {cell.cell_id for cell in CodeCell.all_run_cells() if cell.needs_typecheck}
+
+
 def test_int_change_to_str_triggers_typecheck():
     run_cell('a = 1', 1)
-    assert not nbs().get_cell_ids_needing_typecheck()
+    assert not get_cell_ids_needing_typecheck()
     run_cell('b = 2', 2)
-    assert not nbs().get_cell_ids_needing_typecheck()
+    assert not get_cell_ids_needing_typecheck()
     run_cell('logging.info(a + b)', 3)
-    assert not nbs().get_cell_ids_needing_typecheck()
+    assert not get_cell_ids_needing_typecheck()
     run_cell('b = "b"', 4)
-    assert nbs().get_cell_ids_needing_typecheck() == {3}
+    assert get_cell_ids_needing_typecheck() == {3}
+    nbs().check_and_link_multiple_cells()
+    assert not get_cell_ids_needing_typecheck()
+    assert not CodeCell.from_id(3)._checker_result.typechecks

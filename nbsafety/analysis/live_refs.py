@@ -6,8 +6,6 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
-from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
@@ -16,6 +14,8 @@ from nbsafety.tracing.mutation_event import resolve_mutating_method
 if TYPE_CHECKING:
     from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
     from nbsafety.types import SupportedIndexType, SymbolRef
+    from nbsafety.data_model.data_symbol import DataSymbol
+    from nbsafety.data_model.scope import Scope
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)

@@ -11,8 +11,9 @@ try:
 except ImportError:
     numpy = None
 
-from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
 from nbsafety.data_model import sizing
+from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
+from nbsafety.data_model.code_cell import CodeCell
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.singletons import nbs, tracer
@@ -339,7 +340,8 @@ class DataSymbol:
         self._tombstone = False
         self._cached_out_of_sync = True
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
-            nbs().cell_counters_needing_typecheck |= nbs().cell_counter_by_live_symbol.get(self, set())
+            for cell_ctr in nbs().cell_counter_by_live_symbol.get(self, []):
+                CodeCell.from_counter(cell_ctr).needs_typecheck = True
         self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             new_ns = nbs().namespaces.get(self.obj_id, None)

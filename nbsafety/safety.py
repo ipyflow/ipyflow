@@ -10,18 +10,11 @@ import json
 import logging
 import re
 import sys
-import shlex
-import subprocess
 from typing import cast, TYPE_CHECKING, NamedTuple
 
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
-from nbsafety.analysis.live_refs import (
-    compute_live_dead_symbol_refs,
-    get_symbols_for_references,
-    get_live_symbols_and_cells_for_references,
-)
 from nbsafety.ipython_utils import (
     CellNotRunYetError,
     ast_transformer_context,
@@ -73,16 +66,6 @@ class MutableNotebookSafetySettings:
     static_slicing_enabled: bool
     dynamic_slicing_enabled: bool
     exec_mode: ExecutionMode
-
-
-class CheckerResult(NamedTuple):
-    live: Set[DataSymbol]           # all live symbols in the cell
-    deep_live: Set[DataSymbol]      # live symbols used in their entirety
-    shallow_live: Set[DataSymbol]   # live symbols for which only a portion (attr or subscript) is used
-    used_cells: Set[int]            # last updated timestamps of the live symbols
-    live_cells: Set[int]            # cells that define a symbol that was called in the cell
-    dead: Set[DataSymbol]           # symbols that are definitely assigned to
-    stale: Set[DataSymbol]          # live symbols that have one or more ancestors with more recent timestamps
 
 
 class FrontendCheckerResult(NamedTuple):
@@ -145,8 +128,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
         self.live_symbols_by_cell_counter: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        self.cell_counters_needing_typecheck: Set[int] = set()
-        self._typecheck_error_cells: Set[CellId] = set()
         self._active_cell_id: Optional[str] = None
         self.active_cell_position_idx = -1
         self._last_execution_counter = 0
@@ -284,44 +265,30 @@ class NotebookSafety(singletons.NotebookSafety):
         new_fresh_cells = set()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
-        cell_ids_needing_typecheck = self.get_cell_ids_needing_typecheck()
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         if cells is None:
             cells = CodeCell.all_run_cells()
         for cell in cells:
             cell_id = cell.cell_id
             try:
-                checker_result = self._check_cell_and_resolve_symbols(
-                    cell,
-                    update_liveness_time_versions=update_liveness_time_versions,
+                checker_result = cell.check_and_resolve_symbols(
+                    update_liveness_time_versions=update_liveness_time_versions
                 )
                 stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
-                if len(stale_symbols) > 0:
+                if len(stale_symbols) > 0 or not checker_result.typechecks:
+                    # TODO: separate category for whether the cell has typecheck errors
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_cells.add(cell_id)
 
                 for dead_sym in dead_symbols:
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
 
-                if self.settings.mark_typecheck_failures_unsafe and cell_id in cell_ids_needing_typecheck:
-                    typecheck_slice = self._build_typecheck_slice(cell, checker_result)
-                    try:
-                        # TODO: parse the output in order to pass up to the user
-                        ret = subprocess.call(f"mypy -c {shlex.quote(typecheck_slice)}", shell=True)
-                        if ret == 0:
-                            self._typecheck_error_cells.discard(cell_id)
-                        else:
-                            self._typecheck_error_cells.add(cell_id)
-                    except Exception:
-                        logger.exception('Exception occurred during type checking')
-                        self._typecheck_error_cells.discard(cell_id)
-
                 if self.settings.mark_phantom_cell_usages_unsafe:
                     phantom_cell_info_for_cell = self._compute_phantom_cell_info(cell_id, checker_result.used_cells)
                     if len(phantom_cell_info_for_cell) > 0:
                         phantom_cell_info[cell_id] = phantom_cell_info_for_cell
 
-                if cell_id not in stale_cells and cell_id not in self._typecheck_error_cells:
+                if cell_id not in stale_cells:
                     max_timestamp_cell_num = self._get_max_timestamp_cell_num_for_symbols(
                         checker_result.deep_live, checker_result.shallow_live
                     )
@@ -358,17 +325,10 @@ class NotebookSafety(singletons.NotebookSafety):
             stale_links[stale_cell_id] -= stale_cells
             for refresher_cell_id in stale_links[stale_cell_id]:
                 refresher_links[refresher_cell_id].add(stale_cell_id)
-        if self.settings.mark_typecheck_failures_unsafe:
-            # TODO: actually do the type checking
-            #  nested symbols in particular will need some thought
-            self.cell_counters_needing_typecheck.clear()
-        for typecheck_error_cell in self._typecheck_error_cells:
-            if typecheck_error_cell not in stale_links:
-                stale_links[typecheck_error_cell] = set()
         return FrontendCheckerResult(
             # TODO: we should probably have separate fields for stale vs non-typechecking cells,
             #  or at least change the name to a more general "unsafe_cells" or equivalent
-            stale_cells=stale_cells | self._typecheck_error_cells,
+            stale_cells=stale_cells,
             fresh_cells=fresh_cells,
             new_fresh_cells=new_fresh_cells,
             stale_links=stale_links,
@@ -385,72 +345,12 @@ class NotebookSafety(singletons.NotebookSafety):
             max_timestamp_cell_num = max(max_timestamp_cell_num, dsym.timestamp_excluding_ns_descendents.cell_num)
         return max_timestamp_cell_num
 
-    def _build_typecheck_slice(
-        self, cell: CodeCell, checker_result: CheckerResult
-    ) -> str:
-        live_cell_counters = {cell.cell_ctr}
-        for live_cell_num in checker_result.live_cells:
-            if CodeCell.from_counter(live_cell_num).is_current:
-                live_cell_counters.add(live_cell_num)
-        live_cells = [CodeCell.from_counter(ctr) for ctr in sorted(live_cell_counters)]
-        top_level_symbols = {sym.get_top_level() for sym in checker_result.live}
-        top_level_symbols.discard(None)
-        return '{type_declarations}\n\n{content}'.format(
-            type_declarations='\n'.join(f'{sym.name}: {sym.get_type_annotation_string()}' for sym in top_level_symbols),
-            content='\n'.join(live_cell.sanitized_content() for live_cell in live_cells),
-        )
-
-    def _check_cell_and_resolve_symbols(
-        self, cell: CodeCell, update_liveness_time_versions: bool = False
-    ) -> CheckerResult:
-        for dsym in self.live_symbols_by_cell_counter[cell.cell_ctr]:
-            dsym.timestamp_by_liveness_time_by_cell_counter[cell.cell_ctr].clear()
-        live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(cell.ast(), scope=self.global_scope)
-        if update_liveness_time_versions:
-            get_live_symbols_and_cells_for_references(
-                live_symbol_refs, self.global_scope, cell.cell_ctr, update_liveness_time_versions=True
-            )
-        deep_live_symbols, shallow_live_symbols, live_cells = get_live_symbols_and_cells_for_references(
-            live_symbol_refs, self.global_scope, cell.cell_ctr, update_liveness_time_versions=False
-        )
-        live_symbols = deep_live_symbols | shallow_live_symbols
-        # only mark dead attrsubs as killed if we can traverse the entire chain
-        dead_symbols, _ = get_symbols_for_references(
-            dead_symbol_refs, self.global_scope, only_yield_successful_resolutions=True
-        )
-        stale_symbols = {dsym for dsym in live_symbols if dsym.is_stale}
-        self.live_symbols_by_cell_counter[cell.cell_ctr] = live_symbols
-        if update_liveness_time_versions:
-            for sym in live_symbols:
-                self.cell_counter_by_live_symbol[sym].add(cell.cell_ctr)
-        return CheckerResult(
-            live=live_symbols,
-            deep_live=deep_live_symbols,
-            shallow_live=shallow_live_symbols,
-            used_cells={
-                sym.timestamp.cell_num for sym in deep_live_symbols
-            } | {
-                sym.timestamp_excluding_ns_descendents.cell_num for sym in shallow_live_symbols
-            },
-            live_cells=live_cells,
-            dead=dead_symbols,
-            stale=stale_symbols,
-        )
-
     def _safety_precheck_cell(self, cell: CodeCell) -> None:
         checker_result = self.check_and_link_multiple_cells(
             [cell], update_liveness_time_versions=self.mut_settings.static_slicing_enabled
         )
         if cell.cell_id in checker_result.stale_cells:
             self.safety_issue_detected = True
-
-    def get_cell_ids_needing_typecheck(self) -> Set[CellId]:
-        cell_ids_needing_typecheck = set()
-        for cell_ctr in self.cell_counters_needing_typecheck:
-            cell = CodeCell.from_counter(cell_ctr)
-            if cell.is_current:
-                cell_ids_needing_typecheck.add(cell.cell_id)
-        return cell_ids_needing_typecheck
 
     def _resync_symbols(self, symbols: Iterable[DataSymbol]):
         for dsym in symbols:
@@ -549,7 +449,7 @@ class NotebookSafety(singletons.NotebookSafety):
             - dict (int, str): map from required cell number to code
                 representing dependencies
         """
-        if cell_num not in CodeCell.cell_by_cell_ctr:
+        if cell_num not in CodeCell._cell_by_cell_ctr:
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
         if stmt_level:
@@ -566,7 +466,7 @@ class NotebookSafety(singletons.NotebookSafety):
             return {dep: CodeCell.from_counter(dep).content for dep in deps}
 
     def compute_slice_stmts(self, cell_num: int) -> Dict[int, List[ast.stmt]]:
-        if cell_num not in CodeCell.cell_by_cell_ctr:
+        if cell_num not in CodeCell._cell_by_cell_ctr:
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
         deps_stmt: Set[Timestamp] = self._compute_slice_impl(

@@ -18,7 +18,6 @@ from IPython.core.magic import register_cell_magic, register_line_magic
 from nbsafety.ipython_utils import (
     CellNotRunYetError,
     ast_transformer_context,
-    cell_counter,
     run_cell,
     save_number_of_currently_executing_cell,
 )
@@ -130,16 +129,13 @@ class NotebookSafety(singletons.NotebookSafety):
         self.live_symbols_by_cell_counter: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self._active_cell_id: Optional[str] = None
         self.active_cell_position_idx = -1
-        self._last_execution_counter = 0
         self.safety_issue_detected = False
         if cell_magic_name is None:
             self._cell_magic = None
         else:
             self._cell_magic = self._make_cell_magic(cell_magic_name)
         self._line_magic = self._make_line_magic()
-        self._last_refused_code: Optional[str] = None
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
-        self._cell_counter = 1
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
@@ -170,10 +166,7 @@ class NotebookSafety(singletons.NotebookSafety):
         return None
 
     def cell_counter(self) -> int:
-        if self.settings.store_history:
-            return cell_counter()
-        else:
-            return self._cell_counter
+        return CodeCell.exec_counter()
 
     def reset_cell_counter(self):
         # only called in test context
@@ -182,7 +175,7 @@ class NotebookSafety(singletons.NotebookSafety):
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time_by_cell_counter.clear()
-        self._cell_counter = 1
+        CodeCell.clear()
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
         ret = self._exception_raised_during_execution
@@ -198,7 +191,7 @@ class NotebookSafety(singletons.NotebookSafety):
             raise e
 
     def set_name_to_cell_num_mapping(self, frame: FrameType):
-        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = self.cell_counter()
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = CodeCell.exec_counter()
 
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping
@@ -245,7 +238,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def _compute_phantom_cell_info(self, cell_id: CellId, used_cells: Set[int]) -> Dict[CellId, Set[int]]:
         used_cell_counters_by_cell_id = defaultdict(set)
-        used_cell_counters_by_cell_id[cell_id].add(self.cell_counter())
+        used_cell_counters_by_cell_id[cell_id].add(CodeCell.exec_counter())
         for cell_num in used_cells:
             used_cell_counters_by_cell_id[CodeCell.from_counter(cell_num).cell_id].add(cell_num)
         return {
@@ -294,7 +287,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     )
                     if max_timestamp_cell_num > cell.cell_ctr:
                         fresh_cells.add(cell_id)
-                    if max_timestamp_cell_num >= self._last_execution_counter:
+                    if max_timestamp_cell_num >= CodeCell.exec_counter():
                         new_fresh_cells.add(cell_id)
             except SyntaxError:
                 continue
@@ -579,11 +572,11 @@ class NotebookSafety(singletons.NotebookSafety):
             self._saved_debug_message = None
         ret = None
         with save_number_of_currently_executing_cell():
-            self._last_execution_counter = self.cell_counter()
-
             cell_id, self._active_cell_id = self._active_cell_id, None
             assert cell_id is not None
-            cell = CodeCell.create_and_track(cell_id, self._last_execution_counter, cell_content)
+            cell = CodeCell.create_and_track(
+                cell_id, cell_content, validate_ipython_counter=self.settings.store_history
+            )
 
             # Stage 1: Precheck.
             self._safety_precheck_cell(cell)
@@ -600,7 +593,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
                 self._resync_symbols([
                     # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == self.cell_counter()
+                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == CodeCell.exec_counter()
                 ])
                 self._gc()
             except Exception as e:
@@ -608,8 +601,6 @@ class NotebookSafety(singletons.NotebookSafety):
                 if self.is_test:
                     self.set_exception_raised_during_execution(e)
             finally:
-                if not self.settings.store_history:
-                    self._cell_counter += 1
                 return ret
 
     def _make_cell_magic(self, cell_magic_name):

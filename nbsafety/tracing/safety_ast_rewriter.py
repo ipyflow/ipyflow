@@ -5,6 +5,7 @@ import traceback
 from typing import TYPE_CHECKING, cast
 
 from nbsafety.singletons import nbs
+from nbsafety.data_model.code_cell import CodeCell
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
 from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.tracing.stmt_mapper import StatementMapper
@@ -27,12 +28,12 @@ class SafetyAstRewriter(ast.NodeTransformer):
         try:
             mapper = StatementMapper(
                 self._cell_id,
-                nbs().statement_cache[nbs().cell_counter()],
+                nbs().statement_cache[CodeCell.exec_counter()],
                 nbs().ast_node_by_id,
                 nbs().parent_node_by_id,
             )
             orig_to_copy_mapping = mapper(node)
-            nbs().cell_ast_by_counter[nbs().cell_counter()] = cast(ast.Module, orig_to_copy_mapping[id(node)])
+            nbs().cell_ast_by_counter[CodeCell.exec_counter()] = cast(ast.Module, orig_to_copy_mapping[id(node)])
             # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
             # modifies existing ones), since StatementInserter relies on being able to map these
             node = AstEavesdropper(orig_to_copy_mapping).visit(node)

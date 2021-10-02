@@ -93,7 +93,7 @@ class DataSymbol:
         self._timestamp: Timestamp = Timestamp.uninitialized()
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
-        self._defined_cell_num = nbs().cell_counter()
+        self._defined_cell_num = CodeCell.exec_counter()
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be stale
         self.required_timestamp: Timestamp = self.timestamp

@@ -11,6 +11,7 @@ from nbsafety.analysis.live_refs import (
     get_symbols_for_references,
     get_live_symbols_and_cells_for_references,
 )
+from nbsafety.ipython_utils import cell_counter as ipy_cell_counter
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
@@ -39,6 +40,7 @@ class CheckerResult(NamedTuple):
 class CodeCell:
     _current_cell_by_cell_id: Dict[CellId, CodeCell] = {}
     _cell_by_cell_ctr: Dict[int, CodeCell] = {}
+    _cell_counter: int = 0
 
     def __init__(self, cell_id: CellId, cell_ctr: int, content: str) -> None:
         self.cell_id: CellId = cell_id
@@ -57,7 +59,13 @@ class CodeCell:
         return hash((self.cell_id, self.cell_ctr))
 
     @classmethod
-    def create_and_track(cls, cell_id: CellId, cell_ctr: int, content: str) -> CodeCell:
+    def create_and_track(
+        cls, cell_id: CellId, content: str, validate_ipython_counter: bool = True
+    ) -> CodeCell:
+        cls._cell_counter += 1
+        cell_ctr = cls._cell_counter
+        if validate_ipython_counter:
+            assert cell_ctr == ipy_cell_counter()
         cell = cls(cell_id, cell_ctr, content)
         cls._cell_by_cell_ctr[cell_ctr] = cell
         cur_cell = cls._current_cell_by_cell_id.get(cell_id, None)
@@ -70,6 +78,15 @@ class CodeCell:
     def clear(cls):
         cls._current_cell_by_cell_id.clear()
         cls._cell_by_cell_ctr.clear()
+        cls._cell_counter = 0
+
+    @classmethod
+    def exec_counter(cls) -> int:
+        return cls._cell_counter
+
+    @classmethod
+    def next_exec_counter(cls) -> int:
+        return cls.exec_counter() + 1
 
     @classmethod
     def all_run_cells(cls) -> Generator[CodeCell, None, None]:
@@ -102,7 +119,7 @@ class CodeCell:
 
     @classmethod
     def current_cell(cls) -> CodeCell:
-        return cls._cell_by_cell_ctr[nbs().cell_counter()]
+        return cls._cell_by_cell_ctr[cls._cell_counter]
 
     def check_and_resolve_symbols(
         self, update_liveness_time_versions: bool = False

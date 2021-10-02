@@ -259,7 +259,7 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
         self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
-            CodeCell.current_cell().sanitized_content(), f'<cell-{nbs().cell_counter()}>', 'exec'
+            CodeCell.current_cell().sanitized_content(), f'<cell-{CodeCell.exec_counter()}>', 'exec'
         )
 
         self.call_stack: TraceStack = self._make_stack()

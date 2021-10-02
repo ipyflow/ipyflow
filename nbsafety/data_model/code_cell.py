@@ -38,9 +38,9 @@ class CheckerResult(NamedTuple):
     typechecks: bool                # whether the cell typechecks successfully
 
 
-class CodeCell:
-    _current_cell_by_cell_id: Dict[CellId, CodeCell] = {}
-    _cell_by_cell_ctr: Dict[int, CodeCell] = {}
+class ExecutedCodeCell:
+    _current_cell_by_cell_id: Dict[CellId, ExecutedCodeCell] = {}
+    _cell_by_cell_ctr: Dict[int, ExecutedCodeCell] = {}
     _cell_counter: int = 0
 
     def __init__(self, cell_id: CellId, cell_ctr: int, content: str) -> None:
@@ -63,7 +63,7 @@ class CodeCell:
     @classmethod
     def create_and_track(
         cls, cell_id: CellId, content: str, validate_ipython_counter: bool = True
-    ) -> CodeCell:
+    ) -> ExecutedCodeCell:
         cls._cell_counter += 1
         cell_ctr = cls._cell_counter
         if validate_ipython_counter:
@@ -91,15 +91,15 @@ class CodeCell:
         return cls.exec_counter() + 1
 
     @classmethod
-    def all_run_cells(cls) -> Generator[CodeCell, None, None]:
+    def all_run_cells(cls) -> Generator[ExecutedCodeCell, None, None]:
         yield from cls._current_cell_by_cell_id.values()
 
     @classmethod
-    def from_counter(cls, ctr: int) -> CodeCell:
+    def from_counter(cls, ctr: int) -> ExecutedCodeCell:
         return cls._cell_by_cell_ctr[ctr]
 
     @classmethod
-    def from_id(cls, cell_id: CellId) -> Optional[CodeCell]:
+    def from_id(cls, cell_id: CellId) -> Optional[ExecutedCodeCell]:
         return cls._current_cell_by_cell_id.get(cell_id, None)
 
     def sanitized_content(self):
@@ -120,11 +120,11 @@ class CodeCell:
         return self._cached_ast
 
     @property
-    def is_current(self) -> bool:
+    def is_current_for_id(self) -> bool:
         return self._current_cell_by_cell_id.get(self.cell_id, None) is self
 
     @classmethod
-    def current_cell(cls) -> CodeCell:
+    def current_cell(cls) -> ExecutedCodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
 
     @property
@@ -175,7 +175,7 @@ class CodeCell:
         used_cell_counters_by_cell_id = defaultdict(set)
         used_cell_counters_by_cell_id[self.cell_id].add(self.exec_counter())
         for cell_num in used_cells:
-            used_cell_counters_by_cell_id[CodeCell.from_counter(cell_num).cell_id].add(cell_num)
+            used_cell_counters_by_cell_id[ExecutedCodeCell.from_counter(cell_num).cell_id].add(cell_num)
         return {
             cell_id: cell_execs
             for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
@@ -186,9 +186,9 @@ class CodeCell:
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level
         live_cell_counters = {self.cell_ctr}
         for live_cell_num in self._checker_result.live_cells:
-            if CodeCell.from_counter(live_cell_num).is_current:
+            if ExecutedCodeCell.from_counter(live_cell_num).is_current_for_id:
                 live_cell_counters.add(live_cell_num)
-        live_cells = [CodeCell.from_counter(ctr) for ctr in sorted(live_cell_counters)]
+        live_cells = [ExecutedCodeCell.from_counter(ctr) for ctr in sorted(live_cell_counters)]
         top_level_symbols = {sym.get_top_level() for sym in self._checker_result.live}
         top_level_symbols.discard(None)
         return '{type_declarations}\n\n{content}'.format(

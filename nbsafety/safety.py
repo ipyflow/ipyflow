@@ -22,7 +22,7 @@ from nbsafety.ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from nbsafety import line_magics
-from nbsafety.data_model.code_cell import CodeCell
+from nbsafety.data_model.code_cell import ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
@@ -92,7 +92,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def __init__(self, cell_magic_name=None, use_comm=False, settrace=None, **kwargs):
         super().__init__()
-        CodeCell.clear()
+        ExecutedCodeCell.clear()
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
@@ -161,7 +161,7 @@ class NotebookSafety(singletons.NotebookSafety):
         return None
 
     def cell_counter(self) -> int:
-        return CodeCell.exec_counter()
+        return ExecutedCodeCell.exec_counter()
 
     def reset_cell_counter(self):
         # only called in test context
@@ -170,7 +170,7 @@ class NotebookSafety(singletons.NotebookSafety):
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time_by_cell_counter.clear()
-        CodeCell.clear()
+        ExecutedCodeCell.clear()
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
         ret = self._exception_raised_during_execution
@@ -186,7 +186,7 @@ class NotebookSafety(singletons.NotebookSafety):
             raise e
 
     def set_name_to_cell_num_mapping(self, frame: FrameType):
-        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = CodeCell.exec_counter()
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = ExecutedCodeCell.exec_counter()
 
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping
@@ -232,7 +232,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def check_and_link_multiple_cells(
         self,
-        cells: Optional[Iterable[CodeCell]] = None,
+        cells: Optional[Iterable[ExecutedCodeCell]] = None,
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None,
         update_liveness_time_versions: bool = False,
     ) -> FrontendCheckerResult:
@@ -243,7 +243,7 @@ class NotebookSafety(singletons.NotebookSafety):
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         if cells is None:
-            cells = CodeCell.all_run_cells()
+            cells = ExecutedCodeCell.all_run_cells()
         for cell in cells:
             cell_id = cell.cell_id
             try:
@@ -271,7 +271,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     )
                     if max_timestamp_cell_num > cell.cell_ctr:
                         fresh_cells.add(cell_id)
-                    if max_timestamp_cell_num >= CodeCell.exec_counter():
+                    if max_timestamp_cell_num >= ExecutedCodeCell.exec_counter():
                         new_fresh_cells.add(cell_id)
             except SyntaxError:
                 continue
@@ -320,7 +320,7 @@ class NotebookSafety(singletons.NotebookSafety):
             max_timestamp_cell_num = max(max_timestamp_cell_num, dsym.timestamp_excluding_ns_descendents.cell_num)
         return max_timestamp_cell_num
 
-    def _safety_precheck_cell(self, cell: CodeCell) -> None:
+    def _safety_precheck_cell(self, cell: ExecutedCodeCell) -> None:
         checker_result = self.check_and_link_multiple_cells(
             [cell], update_liveness_time_versions=self.mut_settings.static_slicing_enabled
         )
@@ -424,7 +424,7 @@ class NotebookSafety(singletons.NotebookSafety):
             - dict (int, str): map from required cell number to code
                 representing dependencies
         """
-        if cell_num not in CodeCell._cell_by_cell_ctr:
+        if cell_num not in ExecutedCodeCell._cell_by_cell_ctr:
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
         if stmt_level:
@@ -434,14 +434,14 @@ class NotebookSafety(singletons.NotebookSafety):
                 ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
                 for ctr, stmts in stmts_by_cell_num.items()
             }
-            ret[cell_num] = CodeCell.from_counter(cell_num).content
+            ret[cell_num] = ExecutedCodeCell.from_counter(cell_num).content
             return ret
         else:
             deps: Set[int] = self._compute_slice_impl(cell_num, set(), defaultdict(set), defaultdict(set))
-            return {dep: CodeCell.from_counter(dep).content for dep in deps}
+            return {dep: ExecutedCodeCell.from_counter(dep).content for dep in deps}
 
     def compute_slice_stmts(self, cell_num: int) -> Dict[int, List[ast.stmt]]:
-        if cell_num not in CodeCell._cell_by_cell_ctr:
+        if cell_num not in ExecutedCodeCell._cell_by_cell_ctr:
             raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
 
         deps_stmt: Set[Timestamp] = self._compute_slice_impl(
@@ -452,14 +452,14 @@ class NotebookSafety(singletons.NotebookSafety):
         for ts in sorted(deps_stmt):
             if ts.cell_num > cell_num:
                 break
-            stmt = CodeCell.from_counter(ts.cell_num).ast().body[ts.stmt_num]
+            stmt = ExecutedCodeCell.from_counter(ts.cell_num).ast().body[ts.stmt_num]
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue
             seen_stmt_ids.add(stmt_id)
             if stmt is not None:
                 stmts_by_cell_num[ts.cell_num].append(stmt)
-        stmts_by_cell_num[cell_num] = list(CodeCell.from_counter(cell_num).ast().body)
+        stmts_by_cell_num[cell_num] = list(ExecutedCodeCell.from_counter(cell_num).ast().body)
         return dict(stmts_by_cell_num)
 
     def _compute_slice_impl(
@@ -556,7 +556,7 @@ class NotebookSafety(singletons.NotebookSafety):
         with save_number_of_currently_executing_cell():
             cell_id, self._active_cell_id = self._active_cell_id, None
             assert cell_id is not None
-            cell = CodeCell.create_and_track(
+            cell = ExecutedCodeCell.create_and_track(
                 cell_id, cell_content, validate_ipython_counter=self.settings.store_history
             )
 
@@ -575,7 +575,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
                 self._resync_symbols([
                     # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == CodeCell.exec_counter()
+                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == ExecutedCodeCell.exec_counter()
                 ])
                 self._gc()
             except Exception as e:

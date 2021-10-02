@@ -6,7 +6,7 @@ import logging
 import shlex
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.data_model.code_cell import CodeCell
+from nbsafety.data_model.code_cell import ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.ipython_utils import CellNotRunYetError
 from nbsafety.run_mode import ExecutionMode
@@ -151,7 +151,7 @@ def make_slice(line: str) -> Optional[str]:
         return None
     cell_num = args.cell_num
     if cell_num is None:
-        cell_num = CodeCell.exec_counter() - 1
+        cell_num = ExecutedCodeCell.exec_counter() - 1
     try:
         deps = list(nbs().compute_slice(cell_num, stmt_level=args.stmt).items())
         deps.sort()

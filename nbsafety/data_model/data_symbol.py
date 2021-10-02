@@ -13,7 +13,7 @@ except ImportError:
 
 from nbsafety.data_model import sizing
 from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
-from nbsafety.data_model.code_cell import CodeCell
+from nbsafety.data_model.code_cell import ExecutedCodeCell
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.singletons import nbs, tracer
@@ -93,7 +93,7 @@ class DataSymbol:
         self._timestamp: Timestamp = Timestamp.uninitialized()
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
-        self._defined_cell_num = CodeCell.exec_counter()
+        self._defined_cell_num = ExecutedCodeCell.exec_counter()
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be stale
         self.required_timestamp: Timestamp = self.timestamp
@@ -107,7 +107,8 @@ class DataSymbol:
 
         self.fresher_ancestors: Set[DataSymbol] = set()
 
-        self.cells_where_live: Set[CodeCell] = set()
+        # cells where this symbol was live
+        self.cells_where_live: Set[ExecutedCodeCell] = set()
 
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit

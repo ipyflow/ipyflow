@@ -3,7 +3,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nbsafety.singletons import nbs
-from nbsafety.data_model.code_cell import CodeCell
+from nbsafety.data_model.code_cell import ExecutedCodeCell
 from test.utils import make_safety_fixture, skipif_known_failing
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ def run_cell(cell, cell_id=None, **kwargs):
 
 
 def get_cell_ids_needing_typecheck() -> Set[CellId]:
-    return {cell.cell_id for cell in CodeCell.all_run_cells() if cell.needs_typecheck}
+    return {cell.cell_id for cell in ExecutedCodeCell.all_run_cells() if cell.needs_typecheck}
 
 
 def test_int_change_to_str_triggers_typecheck():
@@ -42,4 +42,4 @@ def test_int_change_to_str_triggers_typecheck():
     assert get_cell_ids_needing_typecheck() == {3}
     nbs().check_and_link_multiple_cells()
     assert not get_cell_ids_needing_typecheck()
-    assert not CodeCell.from_id(3)._checker_result.typechecks
+    assert not ExecutedCodeCell.from_id(3)._checker_result.typechecks

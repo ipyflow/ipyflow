@@ -4,6 +4,7 @@ import logging
 import re
 import shlex
 import subprocess
+from collections import defaultdict
 from typing import TYPE_CHECKING, NamedTuple
 
 from nbsafety.analysis.live_refs import (
@@ -47,6 +48,7 @@ class CodeCell:
         self.cell_ctr: int = cell_ctr
         self.content: str = content
         self.needs_typecheck: bool = False
+        self._cached_ast: Optional[ast.Module] = None
         self._checker_result: Optional[CheckerResult] = None
 
     def __str__(self):
@@ -110,8 +112,12 @@ class CodeCell:
                 lines.append(line)
         return '\n'.join(lines)
 
-    def ast(self) -> ast.Module:
-        return ast.parse(self.sanitized_content())
+    def ast(self, override: Optional[ast.Module] = None) -> ast.Module:
+        if override is not None:
+            self._cached_ast = override
+        if self._cached_ast is None:
+            self._cached_ast = ast.parse(self.sanitized_content())
+        return self._cached_ast
 
     @property
     def is_current(self) -> bool:
@@ -121,10 +127,17 @@ class CodeCell:
     def current_cell(cls) -> CodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
 
+    @property
+    def live_symbols(self) -> Set[DataSymbol]:
+        if self._checker_result is None:
+            return set()
+        else:
+            return self._checker_result.live
+
     def check_and_resolve_symbols(
         self, update_liveness_time_versions: bool = False
     ) -> CheckerResult:
-        for dsym in nbs().live_symbols_by_cell_counter[self.cell_ctr]:
+        for dsym in self.live_symbols:
             dsym.timestamp_by_liveness_time_by_cell_counter[self.cell_ctr].clear()
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(self.ast(), scope=nbs().global_scope)
         if update_liveness_time_versions:
@@ -140,10 +153,8 @@ class CodeCell:
             dead_symbol_refs, nbs().global_scope, only_yield_successful_resolutions=True
         )
         stale_symbols = {dsym for dsym in live_symbols if dsym.is_stale}
-        nbs().live_symbols_by_cell_counter[self.cell_ctr] = live_symbols
-        if update_liveness_time_versions:
-            for sym in live_symbols:
-                nbs().cell_counter_by_live_symbol[sym].add(self.cell_ctr)
+        for sym in live_symbols:
+            sym.cells_where_live.add(self)
         self._checker_result = CheckerResult(
             live=live_symbols,
             deep_live=deep_live_symbols,
@@ -159,6 +170,17 @@ class CodeCell:
             typechecks=self._typechecks()
         )
         return self._checker_result
+
+    def compute_phantom_cell_info(self, used_cells: Set[int]) -> Dict[CellId, Set[int]]:
+        used_cell_counters_by_cell_id = defaultdict(set)
+        used_cell_counters_by_cell_id[self.cell_id].add(self.exec_counter())
+        for cell_num in used_cells:
+            used_cell_counters_by_cell_id[CodeCell.from_counter(cell_num).cell_id].add(cell_num)
+        return {
+            cell_id: cell_execs
+            for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
+            if len(cell_execs) >= 2
+        }
 
     def _build_typecheck_slice(self) -> str:
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level

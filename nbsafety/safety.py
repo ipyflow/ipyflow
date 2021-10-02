@@ -121,12 +121,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.loop_iter_flag_names: Set[str] = set()
         self.parent_node_by_id: Dict[int, ast.AST] = {}
-        # TODO: we have a lot of fields concerning cells; they should probably get their own
-        #  abstraction in the data model via a dedicated class
-        self.cell_ast_by_counter: Dict[int, ast.Module] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self.cell_counter_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
-        self.live_symbols_by_cell_counter: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self._active_cell_id: Optional[str] = None
         self.active_cell_position_idx = -1
         self.safety_issue_detected = False
@@ -223,7 +218,7 @@ class NotebookSafety(singletons.NotebookSafety):
             else:
                 order_index_by_id = request['order_index_by_cell_id']
                 last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
-            response = self.check_and_link_multiple_cells(cells_by_id, order_index_by_id).to_json()
+            response = self.check_and_link_multiple_cells(order_index_by_cell_id=order_index_by_id).to_json()
             response['type'] = 'cell_freshness'
             response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             response['exec_mode'] = self.mut_settings.exec_mode.value
@@ -235,17 +230,6 @@ class NotebookSafety(singletons.NotebookSafety):
             dbg_msg = 'Unsupported request type for request %s' % request
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
-
-    def _compute_phantom_cell_info(self, cell_id: CellId, used_cells: Set[int]) -> Dict[CellId, Set[int]]:
-        used_cell_counters_by_cell_id = defaultdict(set)
-        used_cell_counters_by_cell_id[cell_id].add(CodeCell.exec_counter())
-        for cell_num in used_cells:
-            used_cell_counters_by_cell_id[CodeCell.from_counter(cell_num).cell_id].add(cell_num)
-        return {
-            cell_id: cell_execs
-            for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
-            if len(cell_execs) >= 2
-        }
 
     def check_and_link_multiple_cells(
         self,
@@ -269,7 +253,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 )
                 stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
                 if len(stale_symbols) > 0 or not checker_result.typechecks:
-                    # TODO: separate category for whether the cell has typecheck errors
+                    # TODO: we should probably have separate fields for stale vs non-typechecking cells,
+                    #  or at least change the name to a more general "unsafe_cells" or equivalent
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_cells.add(cell_id)
 
@@ -277,7 +262,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
 
                 if self.settings.mark_phantom_cell_usages_unsafe:
-                    phantom_cell_info_for_cell = self._compute_phantom_cell_info(cell_id, checker_result.used_cells)
+                    phantom_cell_info_for_cell = cell.compute_phantom_cell_info(checker_result.used_cells)
                     if len(phantom_cell_info_for_cell) > 0:
                         phantom_cell_info[cell_id] = phantom_cell_info_for_cell
 
@@ -319,8 +304,6 @@ class NotebookSafety(singletons.NotebookSafety):
             for refresher_cell_id in stale_links[stale_cell_id]:
                 refresher_links[refresher_cell_id].add(stale_cell_id)
         return FrontendCheckerResult(
-            # TODO: we should probably have separate fields for stale vs non-typechecking cells,
-            #  or at least change the name to a more general "unsafe_cells" or equivalent
             stale_cells=stale_cells,
             fresh_cells=fresh_cells,
             new_fresh_cells=new_fresh_cells,
@@ -470,14 +453,14 @@ class NotebookSafety(singletons.NotebookSafety):
         for ts in sorted(deps_stmt):
             if ts.cell_num > cell_num:
                 break
-            stmt = self.cell_ast_by_counter[ts.cell_num].body[ts.stmt_num]
+            stmt = CodeCell.from_counter(ts.cell_num).ast().body[ts.stmt_num]
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue
             seen_stmt_ids.add(stmt_id)
             if stmt is not None:
                 stmts_by_cell_num[ts.cell_num].append(stmt)
-        stmts_by_cell_num[cell_num] = list(ast.parse(CodeCell.from_counter(cell_num).content).body)
+        stmts_by_cell_num[cell_num] = list(CodeCell.from_counter(cell_num).ast().body)
         return dict(stmts_by_cell_num)
 
     def _compute_slice_impl(

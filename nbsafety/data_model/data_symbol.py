@@ -107,6 +107,8 @@ class DataSymbol:
 
         self.fresher_ancestors: Set[DataSymbol] = set()
 
+        self.cells_where_live: Set[CodeCell] = set()
+
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
 
@@ -340,8 +342,8 @@ class DataSymbol:
         self._tombstone = False
         self._cached_out_of_sync = True
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
-            for cell_ctr in nbs().cell_counter_by_live_symbol.get(self, []):
-                CodeCell.from_counter(cell_ctr).needs_typecheck = True
+            for cell in self.cells_where_live:
+                cell.needs_typecheck = True
         self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             new_ns = nbs().namespaces.get(self.obj_id, None)

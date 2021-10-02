@@ -138,7 +138,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.loop_iter_flag_names: Set[str] = set()
-        self.cell_id_by_ast_id: Dict[int, CellId] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         # TODO: we have a lot of fields concerning cells; they should probably get their own
         #  abstraction in the data model via a dedicated class
@@ -242,12 +241,6 @@ class NotebookSafety(singletons.NotebookSafety):
         elif request['type'] == 'cell_freshness':
             if self._active_cell_id is None:
                 self._active_cell_id = request.get('executed_cell_id', None)
-                if self._active_cell_id is not None:
-                    # self._counter_by_cell_id[self._active_cell_id] = self._last_execution_counter
-                    # self._cell_id_by_counter[self._last_execution_counter] = self._active_cell_id
-                    # self._run_cells.add(self._active_cell_id)
-                    for ast_id in [ast_id for ast_id, cell_id in self.cell_id_by_ast_id.items() if cell_id is None]:
-                        self.cell_id_by_ast_id[ast_id] = self._active_cell_id
             cell_id = request.get('executed_cell_id', None)
             cells_by_id = request['content_by_cell_id']
             if self.settings.backwards_cell_staleness_propagation:
@@ -273,7 +266,6 @@ class NotebookSafety(singletons.NotebookSafety):
         used_cell_counters_by_cell_id = defaultdict(set)
         used_cell_counters_by_cell_id[cell_id].add(self.cell_counter())
         for cell_num in used_cells:
-            # used_cell_counters_by_cell_id[self._cell_id_by_counter[cell_num]].add(cell_num)
             used_cell_counters_by_cell_id[CodeCell.from_counter(cell_num).cell_id].add(cell_num)
         return {
             cell_id: cell_execs

@@ -29,7 +29,6 @@ class SafetyAstRewriter(ast.NodeTransformer):
                 self._cell_id,
                 nbs().statement_cache[nbs().cell_counter()],
                 nbs().ast_node_by_id,
-                nbs().cell_id_by_ast_id,
                 nbs().parent_node_by_id,
             )
             orig_to_copy_mapping = mapper(node)

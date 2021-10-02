@@ -22,6 +22,15 @@ class CodeCell:
         self.cell_ctr = cell_ctr
         self.content = content
 
+    def __str__(self):
+        return self.content
+
+    def __repr__(self):
+        return f'<{self.__class__.__name__}[id={self.cell_id},ctr={self.cell_ctr}]>'
+
+    def __hash__(self):
+        return hash((self.cell_id, self.cell_ctr))
+
     @classmethod
     def create_and_track(cls, cell_id: CellId, cell_ctr: int, content: str) -> CodeCell:
         cell = cls(cell_id, cell_ctr, content)

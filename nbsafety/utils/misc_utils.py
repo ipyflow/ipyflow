@@ -9,42 +9,6 @@ class KeyDict(dict):
         return key
 
 
-class GetterPipeline:
-    def __init__(self, stages: Optional[List[Any]] = None):
-        if stages is None:
-            stages = []
-        self.stages = stages
-
-    def __ior__(self, stage):
-        self.stages.append(stage)
-
-    def __or__(self, stage):
-        return GetterPipeline(self.stages + [stage])
-
-    def __ror__(self, stage):
-        return GetterPipeline([stage] + self.stages)
-
-    def __getitem__(self, item):
-        for stage in self.stages:
-            item = stage[item]
-        return item
-
-    def items(self):
-        for k in self.stages[0].keys():
-            try:
-                yield k, self[k]
-            except KeyError:
-                pass
-
-    def keys(self):
-        for k, _ in self.items():
-            yield k
-
-    def values(self):
-        for _, v in self.items():
-            yield v
-
-
 class GetterFallback:
     def __init__(self, stages: Sequence[Mapping[Any, Any]]):
         self.stages = stages

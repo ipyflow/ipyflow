@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 import pytest
 
+from nbsafety.data_model.code_cell import CodeCell
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.safety import NotebookSafety
 from nbsafety.singletons import nbs

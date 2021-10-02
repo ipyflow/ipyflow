@@ -2,6 +2,7 @@
 import logging
 from typing import TYPE_CHECKING
 
+from nbsafety.data_model.code_cell import CodeCell
 from nbsafety.singletons import nbs
 from test.utils import make_safety_fixture
 
@@ -24,18 +25,18 @@ def run_cell(cell: str, cell_id=None, **kwargs) -> None:
     run_cell_(cell, cell_id=cell_id, **kwargs)
 
 
-def run_reactively(cell: str) -> Set[int]:
+def run_reactively(cell_content: str) -> Set[int]:
     executed_cells = set()
-    next_cell_to_run = cell
+    next_content_to_run = cell_content
     next_cell_to_run_id = None
-    while next_cell_to_run is not None:
-        run_cell(next_cell_to_run, cell_id=next_cell_to_run_id)
-        next_cell_to_run = None
+    while next_content_to_run is not None:
+        run_cell(next_content_to_run, cell_id=next_cell_to_run_id)
+        next_content_to_run = None
         fresh = sorted(nbs().check_and_link_multiple_cells().fresh_cells)
         for fresh_cell_id in fresh:
             if fresh_cell_id not in executed_cells:
                 executed_cells.add(fresh_cell_id)
-                next_cell_to_run = nbs().cell_content_by_cell_id[fresh_cell_id]
+                next_content_to_run = CodeCell.from_id(fresh_cell_id).content
                 next_cell_to_run_id = fresh_cell_id
                 break
     return executed_cells

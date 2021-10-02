@@ -15,6 +15,7 @@ from IPython import get_ipython
 from nbsafety import singletons
 from nbsafety.analysis.attr_symbols import CallPoint
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
+from nbsafety.data_model.code_cell import CodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
@@ -258,7 +259,7 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
         self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
-            nbs().sanitize_code(nbs().current_cell_content), f'<cell-{nbs().cell_counter()}>', 'exec'
+            CodeCell.current_cell().sanitized_content(), f'<cell-{nbs().cell_counter()}>', 'exec'
         )
 
         self.call_stack: TraceStack = self._make_stack()

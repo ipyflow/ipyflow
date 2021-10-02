@@ -211,7 +211,6 @@ class NotebookSafety(singletons.NotebookSafety):
             if self._active_cell_id is None:
                 self._active_cell_id = request.get('executed_cell_id', None)
             cell_id = request.get('executed_cell_id', None)
-            cells_by_id = request['content_by_cell_id']
             if self.settings.backwards_cell_staleness_propagation:
                 order_index_by_id = None
                 last_cell_exec_position_idx = -1

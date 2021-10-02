@@ -257,10 +257,8 @@ const connectToComm = (
     if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
-    const content_by_cell_id: {[id: string]: string} = {};
     const order_index_by_cell_id: {[id: string]: number} = {};
     notebook.widgets.forEach((itercell, idx) => {
-      content_by_cell_id[itercell.model.id] = itercell.model.value.text;
       order_index_by_cell_id[itercell.model.id] = idx;
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(freshClass);
@@ -270,7 +268,6 @@ const connectToComm = (
     const payload = {
       type: 'cell_freshness',
       executed_cell_id: cell.id,
-      content_by_cell_id: content_by_cell_id,
       order_index_by_cell_id: order_index_by_cell_id,
     };
     comm.send(payload).done.then(() => {

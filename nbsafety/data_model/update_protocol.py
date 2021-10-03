@@ -142,6 +142,7 @@ class UpdateProtocol:
         if dsym not in nbs().updated_symbols:
             if dsym.should_mark_stale(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
+                dsym.fresher_ancestor_timestamps.add(self.updated_sym.timestamp)
                 dsym.required_timestamp = Timestamp.current()
                 self._propagate_staleness_to_namespace_parents(dsym, skip_seen_check=True)
                 self._propagate_staleness_to_namespace_children(dsym, skip_seen_check=True)

@@ -33,7 +33,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
                 nbs().parent_node_by_id,
             )
             orig_to_copy_mapping = mapper(node)
-            ExecutedCodeCell.current_cell().ast(override=cast(ast.Module, orig_to_copy_mapping[id(node)]))
+            ExecutedCodeCell.current_cell().to_ast(override=cast(ast.Module, orig_to_copy_mapping[id(node)]))
             # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
             # modifies existing ones), since StatementInserter relies on being able to map these
             node = AstEavesdropper(orig_to_copy_mapping).visit(node)

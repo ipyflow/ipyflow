@@ -1,6 +1,5 @@
 # -*- coding: future_annotations -*-
 import ast
-import astunparse
 import asyncio
 from collections import defaultdict
 from contextlib import contextmanager
@@ -16,7 +15,6 @@ from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
 from nbsafety.ipython_utils import (
-    CellNotRunYetError,
     ast_transformer_context,
     run_cell,
     save_number_of_currently_executing_cell,
@@ -33,11 +31,9 @@ from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, TypeVar, Union
+    from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
     from types import FrameType
     from nbsafety.types import CellId, SupportedIndexType
-
-    TimestampOrCounter = TypeVar('TimestampOrCounter', Timestamp, int)
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -243,7 +239,7 @@ class NotebookSafety(singletons.NotebookSafety):
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         if cells is None:
-            cells = ExecutedCodeCell.all_run_cells()
+            cells = ExecutedCodeCell.all_cells_most_recently_run_for_each_id()
         for cell in cells:
             cell_id = cell.cell_id
             try:
@@ -410,143 +406,6 @@ class NotebookSafety(singletons.NotebookSafety):
                 'child_cells': child_cells,
             }
         return cell_metadata
-
-    def compute_slice(self, cell_num: int, stmt_level: bool = False) -> Dict[int, str]:
-        """
-        Gets a dictionary object of cell dependencies for the cell with
-        the specified execution counter.
-
-        Args:
-            - cell_num (int): cell to get dependencies for, defaults to last
-                execution counter
-
-        Returns:
-            - dict (int, str): map from required cell number to code
-                representing dependencies
-        """
-        if cell_num not in ExecutedCodeCell._cell_by_cell_ctr:
-            raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
-
-        if stmt_level:
-            stmts_by_cell_num = self.compute_slice_stmts(cell_num)
-            stmts_by_cell_num.pop(cell_num, None)
-            ret = {
-                ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
-                for ctr, stmts in stmts_by_cell_num.items()
-            }
-            ret[cell_num] = ExecutedCodeCell.from_counter(cell_num).content
-            return ret
-        else:
-            deps: Set[int] = self._compute_slice_impl(cell_num, set(), defaultdict(set), defaultdict(set))
-            return {dep: ExecutedCodeCell.from_counter(dep).content for dep in deps}
-
-    def compute_slice_stmts(self, cell_num: int) -> Dict[int, List[ast.stmt]]:
-        if cell_num not in ExecutedCodeCell._cell_by_cell_ctr:
-            raise CellNotRunYetError(f'Cell {cell_num} has not been run yet.')
-
-        deps_stmt: Set[Timestamp] = self._compute_slice_impl(
-            Timestamp(cell_num, -1), set(), defaultdict(set), defaultdict(set)
-        )
-        stmts_by_cell_num = defaultdict(list)
-        seen_stmt_ids = set()
-        for ts in sorted(deps_stmt):
-            if ts.cell_num > cell_num:
-                break
-            stmt = ExecutedCodeCell.from_counter(ts.cell_num).ast().body[ts.stmt_num]
-            stmt_id = id(stmt)
-            if stmt is None or stmt_id in seen_stmt_ids:
-                continue
-            seen_stmt_ids.add(stmt_id)
-            if stmt is not None:
-                stmts_by_cell_num[ts.cell_num].append(stmt)
-        stmts_by_cell_num[cell_num] = list(ExecutedCodeCell.from_counter(cell_num).ast().body)
-        return dict(stmts_by_cell_num)
-
-    def _compute_slice_impl(
-        self,
-        seed_ts: TimestampOrCounter,
-        dependencies: Set[TimestampOrCounter],
-        timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-        timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-    ) -> Set[TimestampOrCounter]:
-
-        for sym in self.all_data_symbols():
-            if self.mut_settings.dynamic_slicing_enabled:
-                for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
-                    if sym_timestamp_when_used < used_time:
-                        if isinstance(seed_ts, Timestamp):
-                            timestamp_to_dynamic_ts_deps[used_time].add(sym_timestamp_when_used)
-                        else:
-                            timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
-            if self.mut_settings.static_slicing_enabled:
-                for timestamp_by_liveness_time in sym.timestamp_by_liveness_time_by_cell_counter.values():
-                    for liveness_time, sym_timestamp_when_used in list(timestamp_by_liveness_time.items()):
-                        if sym_timestamp_when_used < liveness_time:
-                            if isinstance(seed_ts, Timestamp):
-                                timestamp_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
-                            else:
-                                timestamp_to_static_ts_deps[liveness_time.cell_num].add(
-                                    sym_timestamp_when_used.cell_num
-                                )
-
-        # ensure we at least get the static deps
-        self._get_ts_dependencies(
-            seed_ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-        )
-        if isinstance(seed_ts, Timestamp):
-            for ts in list(timestamp_to_dynamic_ts_deps.keys() | timestamp_to_static_ts_deps.keys()):
-                if ts.cell_num == seed_ts.cell_num:
-                    self._get_ts_dependencies(
-                        ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-                    )
-        return dependencies
-
-    def _get_ts_dependencies(
-        self,
-        timestamp: TimestampOrCounter,
-        dependencies: Set[TimestampOrCounter],
-        timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-        timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-    ) -> None:
-        """
-        For a given cell, this function recursively populates a set of
-        cell numbers that the given cell depends on, based on the live symbols.
-
-        Args:
-            - dependencies (set<int>): set of cell numbers so far that exist
-            - cell_num (int): current cell to get dependencies for
-            - cell_num_to_dynamic_deps (dict<int, set<int>>): mapping from cell 
-            num to version of cells where its symbols were used
-            - cell_num_to_static_deps (dict<int, set<int>>): mapping from cell 
-            num to version of cells where its symbols were defined
-
-        Returns:
-            None
-        """
-        # Base case: cell already in dependencies
-        if timestamp in dependencies:
-            return
-        if isinstance(timestamp, int) and timestamp < 0:
-            return
-        if isinstance(timestamp, Timestamp) and not timestamp.is_initialized:
-            return
-
-        # Add current cell to dependencies
-        dependencies.add(timestamp)
-
-        # Retrieve cell numbers for the dependent symbols
-        # Add dynamic and static dependencies
-        dep_timestamps = timestamp_to_dynamic_ts_deps[timestamp]
-        logger.info('dynamic ts deps for %s: %s', timestamp, dep_timestamps)
-        static_ts_deps = timestamp_to_static_ts_deps[timestamp]
-        dep_timestamps |= static_ts_deps
-        logger.info('static ts deps for %d: %s', timestamp, static_ts_deps)
-
-        # For each dependent cell, recursively get their dependencies
-        for ts in dep_timestamps - dependencies:
-            self._get_ts_dependencies(
-                ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-            )
 
     async def safe_execute(self, cell_content: str, is_async: bool, run_cell_func):
         if self._saved_debug_message is not None:  # pragma: no cover

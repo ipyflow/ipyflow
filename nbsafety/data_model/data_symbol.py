@@ -106,6 +106,7 @@ class DataSymbol:
         self.updated_timestamps: Set[Timestamp] = set()
 
         self.fresher_ancestors: Set[DataSymbol] = set()
+        self.fresher_ancestor_timestamps: Set[Timestamp] = set()
 
         # cells where this symbol was live
         self.cells_where_live: Set[ExecutedCodeCell] = set()
@@ -555,6 +556,8 @@ class DataSymbol:
             new_parent.children.add(self)
             self.parents.add(new_parent)
         self.required_timestamp = Timestamp.uninitialized()
+        self.fresher_ancestors.clear()
+        self.fresher_ancestor_timestamps.clear()
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.update_usage_info()
         equal_to_old = not mutated and self.prev_obj_definitely_equal_to_current_obj(prev_obj)
@@ -595,7 +598,6 @@ class DataSymbol:
         seen: Set[DataSymbol] = None,
     ) -> None:
         self._temp_disable_warnings = False
-        self.fresher_ancestors.clear()
         if bump_version:
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
             ns = self.containing_namespace

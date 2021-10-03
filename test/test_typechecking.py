@@ -28,7 +28,7 @@ def run_cell(cell, cell_id=None, **kwargs):
 
 
 def get_cell_ids_needing_typecheck() -> Set[CellId]:
-    return {cell.cell_id for cell in ExecutedCodeCell.all_run_cells() if cell.needs_typecheck}
+    return {cell.cell_id for cell in ExecutedCodeCell.all_cells_most_recently_run_for_each_id() if cell.needs_typecheck}
 
 
 def test_int_change_to_str_triggers_typecheck():

@@ -8,7 +8,6 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model.code_cell import ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.ipython_utils import CellNotRunYetError
 from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
@@ -153,10 +152,10 @@ def make_slice(line: str) -> Optional[str]:
     if cell_num is None:
         cell_num = ExecutedCodeCell.exec_counter() - 1
     try:
-        deps = list(nbs().compute_slice(cell_num, stmt_level=args.stmt).items())
+        deps = list(ExecutedCodeCell.from_counter(cell_num).compute_slice(stmt_level=args.stmt).items())
         deps.sort()
         return '\n\n'.join(f'# Cell {cell_num}\n' + content for cell_num, content in deps)
-    except CellNotRunYetError:
+    except KeyError:
         logger.warning("Cell %d has not yet been run", cell_num)
     return None
 

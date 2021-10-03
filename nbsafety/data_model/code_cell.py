@@ -331,7 +331,7 @@ def _get_ts_dependencies(
     logger.info('dynamic ts deps for %s: %s', timestamp, dep_timestamps)
     static_ts_deps = timestamp_to_static_ts_deps[timestamp]
     dep_timestamps |= static_ts_deps
-    logger.info('static ts deps for %d: %s', timestamp, static_ts_deps)
+    logger.info('static ts deps for %s: %s', timestamp, static_ts_deps)
 
     # For each dependent cell, recursively get their dependencies
     for ts in dep_timestamps - dependencies:

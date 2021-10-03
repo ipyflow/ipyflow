@@ -18,7 +18,7 @@ from nbsafety.ipython_utils import cell_counter as ipy_cell_counter
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Dict, Generator, List, Optional, Set, TypeVar
+    from typing import Dict, Generator, List, Optional, Set, Type, TypeVar
     from nbsafety.data_model.data_symbol import DataSymbol
     from nbsafety.types import CellId
     TimestampOrCounter = TypeVar('TimestampOrCounter', Timestamp, int)
@@ -39,6 +39,10 @@ class CheckerResult(NamedTuple):
     dead: Set[DataSymbol]           # symbols that are definitely assigned to
     stale: Set[DataSymbol]          # live symbols that have one or more ancestors with more recent timestamps
     typechecks: bool                # whether the cell typechecks successfully
+
+
+def cells() -> Type[ExecutedCodeCell]:
+    return ExecutedCodeCell
 
 
 class ExecutedCodeCell:

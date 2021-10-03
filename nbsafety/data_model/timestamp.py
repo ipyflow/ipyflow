@@ -21,6 +21,8 @@ class Timestamp(NamedTuple):
 
     @classmethod
     def current(cls) -> Timestamp:
+        # TODO: shouldn't have to go through nbs() singleton to get the cell counter,
+        #  but the dependency structure prevents us from importing from nbsafety.data_model.code_cell
         return cls(nbs().cell_counter(), tracer().module_stmt_counter())
 
     @classmethod

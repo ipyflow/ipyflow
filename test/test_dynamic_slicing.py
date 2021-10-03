@@ -2,7 +2,7 @@
 import functools
 import logging
 
-from nbsafety.data_model.code_cell import ExecutedCodeCell
+from nbsafety.data_model.code_cell import cells
 from nbsafety.singletons import nbs
 from test.utils import make_safety_fixture
 
@@ -46,11 +46,11 @@ def run_cell(cell):
 
 
 def compute_slice_stmts(cell_num):
-    return ExecutedCodeCell.from_counter(cell_num).compute_slice_stmts()
+    return cells().from_counter(cell_num).compute_slice_stmts()
 
 
 def compute_slice(cell_num):
-    return ExecutedCodeCell.from_counter(cell_num).compute_slice()
+    return cells().from_counter(cell_num).compute_slice()
 
 
 def num_stmts_in_slice(cell_num: int) -> int:

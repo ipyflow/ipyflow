@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from IPython import get_ipython
 import pytest
 
-from nbsafety.data_model.code_cell import ExecutedCodeCell
+from nbsafety.data_model.code_cell import cells
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.safety import NotebookSafety
 from nbsafety.singletons import nbs
@@ -35,7 +35,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
 
     def run_cell(code, cell_id=None, ignore_exceptions=False):
         if cell_id is None:
-            cell_id = ExecutedCodeCell.next_exec_counter()
+            cell_id = cells().next_exec_counter()
         nbs().set_active_cell(cell_id)
         get_ipython().run_cell_magic(nbs().cell_magic_name, None, code)
         try:

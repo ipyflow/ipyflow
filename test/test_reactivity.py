@@ -2,7 +2,7 @@
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.data_model.code_cell import ExecutedCodeCell
+from nbsafety.data_model.code_cell import cells
 from nbsafety.singletons import nbs
 from test.utils import make_safety_fixture
 
@@ -36,7 +36,7 @@ def run_reactively(cell_content: str) -> Set[int]:
         for fresh_cell_id in fresh:
             if fresh_cell_id not in executed_cells:
                 executed_cells.add(fresh_cell_id)
-                next_content_to_run = ExecutedCodeCell.from_id(fresh_cell_id).content
+                next_content_to_run = cells().from_id(fresh_cell_id).content
                 next_cell_to_run_id = fresh_cell_id
                 break
     return executed_cells

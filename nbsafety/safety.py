@@ -20,7 +20,7 @@ from nbsafety.ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from nbsafety import line_magics
-from nbsafety.data_model.code_cell import ExecutedCodeCell
+from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
@@ -88,7 +88,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def __init__(self, cell_magic_name=None, use_comm=False, settrace=None, **kwargs):
         super().__init__()
-        ExecutedCodeCell.clear()
+        cells().clear()
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
@@ -157,7 +157,7 @@ class NotebookSafety(singletons.NotebookSafety):
         return None
 
     def cell_counter(self) -> int:
-        return ExecutedCodeCell.exec_counter()
+        return cells().exec_counter()
 
     def reset_cell_counter(self):
         # only called in test context
@@ -166,7 +166,7 @@ class NotebookSafety(singletons.NotebookSafety):
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time_by_cell_counter.clear()
-        ExecutedCodeCell.clear()
+        cells().clear()
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:
         ret = self._exception_raised_during_execution
@@ -182,7 +182,7 @@ class NotebookSafety(singletons.NotebookSafety):
             raise e
 
     def set_name_to_cell_num_mapping(self, frame: FrameType):
-        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = ExecutedCodeCell.exec_counter()
+        self._cell_name_to_cell_num_mapping[frame.f_code.co_filename] = cells().exec_counter()
 
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping
@@ -228,7 +228,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def check_and_link_multiple_cells(
         self,
-        cells: Optional[Iterable[ExecutedCodeCell]] = None,
+        cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
         order_index_by_cell_id: Optional[Dict[CellId, int]] = None,
         update_liveness_time_versions: bool = False,
     ) -> FrontendCheckerResult:
@@ -238,9 +238,9 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
-        if cells is None:
-            cells = ExecutedCodeCell.all_cells_most_recently_run_for_each_id()
-        for cell in cells:
+        if cells_to_check is None:
+            cells_to_check = cells().all_cells_most_recently_run_for_each_id()
+        for cell in cells_to_check:
             cell_id = cell.cell_id
             try:
                 checker_result = cell.check_and_resolve_symbols(
@@ -267,7 +267,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     )
                     if max_timestamp_cell_num > cell.cell_ctr:
                         fresh_cells.add(cell_id)
-                    if max_timestamp_cell_num >= ExecutedCodeCell.exec_counter():
+                    if max_timestamp_cell_num >= cells().exec_counter():
                         new_fresh_cells.add(cell_id)
             except SyntaxError:
                 continue
@@ -415,7 +415,7 @@ class NotebookSafety(singletons.NotebookSafety):
         with save_number_of_currently_executing_cell():
             cell_id, self._active_cell_id = self._active_cell_id, None
             assert cell_id is not None
-            cell = ExecutedCodeCell.create_and_track(
+            cell = cells().create_and_track(
                 cell_id, cell_content, validate_ipython_counter=self.settings.store_history
             )
 
@@ -434,7 +434,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
                 self._resync_symbols([
                     # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == ExecutedCodeCell.exec_counter()
+                    sym for sym in self.all_data_symbols() if sym.timestamp.cell_num == cells().exec_counter()
                 ])
                 self._gc()
             except Exception as e:

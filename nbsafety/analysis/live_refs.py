@@ -364,7 +364,7 @@ def get_live_symbols_and_cells_for_references(
     ):
         if update_liveness_time_versions:
             ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
-            dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
+            dsym.timestamp_by_liveness_time[Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
         if is_called:
             called_dsyms.add((dsym, stmt_ctr))
         else:
@@ -406,7 +406,7 @@ def _compute_call_chain_live_symbols_and_cells(
                 _handle_live_symbol(dsym, next_ref, deep_live, shallow_live)
                 if update_liveness_time_versions:
                     ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
-                    dsym.timestamp_by_liveness_time_by_cell_counter[cell_ctr][used_time] = ts_to_use
+                    dsym.timestamp_by_liveness_time[used_time] = ts_to_use
     return deep_live, shallow_live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
 
 

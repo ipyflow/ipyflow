@@ -144,8 +144,6 @@ class ExecutedCodeCell:
     def check_and_resolve_symbols(
         self, update_liveness_time_versions: bool = False
     ) -> CheckerResult:
-        for dsym in self.live_symbols:
-            dsym.timestamp_by_liveness_time_by_cell_counter[self.cell_ctr].clear()
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(self.to_ast(), scope=nbs().global_scope)
         if update_liveness_time_versions:
             get_live_symbols_and_cells_for_references(
@@ -274,15 +272,14 @@ def _compute_slice_impl(seed_ts: TimestampOrCounter) -> Set[TimestampOrCounter]:
                     else:
                         timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
         if nbs().mut_settings.static_slicing_enabled:
-            for timestamp_by_liveness_time in sym.timestamp_by_liveness_time_by_cell_counter.values():
-                for liveness_time, sym_timestamp_when_used in list(timestamp_by_liveness_time.items()):
-                    if sym_timestamp_when_used < liveness_time:
-                        if isinstance(seed_ts, Timestamp):
-                            timestamp_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
-                        else:
-                            timestamp_to_static_ts_deps[liveness_time.cell_num].add(
-                                sym_timestamp_when_used.cell_num
-                            )
+            for liveness_time, sym_timestamp_when_used in list(sym.timestamp_by_liveness_time.items()):
+                if sym_timestamp_when_used < liveness_time:
+                    if isinstance(seed_ts, Timestamp):
+                        timestamp_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
+                    else:
+                        timestamp_to_static_ts_deps[liveness_time.cell_num].add(
+                            sym_timestamp_when_used.cell_num
+                        )
 
     # ensure we at least get the static deps
     _get_ts_dependencies(

@@ -165,7 +165,7 @@ class NotebookSafety(singletons.NotebookSafety):
         for sym in self.all_data_symbols():
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
-            sym.timestamp_by_liveness_time_by_cell_counter.clear()
+            sym.timestamp_by_liveness_time.clear()
         cells().clear()
 
     def set_exception_raised_during_execution(self, new_val: Optional[Exception] = None) -> Optional[Exception]:

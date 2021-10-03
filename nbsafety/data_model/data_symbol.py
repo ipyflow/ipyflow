@@ -101,7 +101,7 @@ class DataSymbol:
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.timestamp_by_used_time: Dict[Timestamp, Timestamp] = {}
         # History of definitions at time of liveness
-        self.timestamp_by_liveness_time_by_cell_counter: Dict[int, Dict[Timestamp, Timestamp]] = defaultdict(dict)
+        self.timestamp_by_liveness_time: Dict[Timestamp, Timestamp] = {}
         # All timestamps associated with this symbol
         self.updated_timestamps: Set[Timestamp] = set()
 

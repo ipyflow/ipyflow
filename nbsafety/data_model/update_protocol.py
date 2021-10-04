@@ -77,6 +77,8 @@ class UpdateProtocol:
                 continue
             dsym.updated_timestamps.add(Timestamp.current())
             self.seen.add(dsym)
+            for cell in dsym.cells_where_deep_live:
+                cell.add_used_cell_counter(dsym, nbs().cell_counter())
             containing_ns = dsym.containing_namespace
             if containing_ns is not None:
                 logger.warning('containing scope for %s: %s; ids %s, %s', dsym, containing_ns, dsym.obj_id, containing_ns.obj_id)

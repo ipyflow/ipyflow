@@ -209,13 +209,10 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_id = request.get('executed_cell_id', None)
             if self.settings.backwards_cell_staleness_propagation:
                 order_index_by_id = None
-                last_cell_exec_position_idx = -1
             else:
                 order_index_by_id = request['order_index_by_cell_id']
-                last_cell_exec_position_idx = order_index_by_id.get(cell_id, -1)
             response = self.check_and_link_multiple_cells(order_index_by_cell_id=order_index_by_id).to_json()
             response['type'] = 'cell_freshness'
-            response['last_cell_exec_position_idx'] = last_cell_exec_position_idx
             response['exec_mode'] = self.mut_settings.exec_mode.value
             response['last_executed_cell_id'] = cell_id
             response['highlights_enabled'] = self.mut_settings.highlights_enabled
@@ -233,6 +230,7 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
     ) -> FrontendCheckerResult:
         stale_cells = set()
+        typecheck_error_cells = set()
         fresh_cells = set()
         new_fresh_cells = set()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
@@ -246,14 +244,14 @@ class NotebookSafety(singletons.NotebookSafety):
                 checker_result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=update_liveness_time_versions
                 )
-                stale_symbols, dead_symbols = checker_result.stale, checker_result.dead
-                if len(stale_symbols) > 0 or not checker_result.typechecks:
-                    # TODO: we should probably have separate fields for stale vs non-typechecking cells,
-                    #  or at least change the name to a more general "unsafe_cells" or equivalent
+                # stale_symbols = cell.get_stale_symbols(checker_result.live, order_index_by_cell_id or {})
+                stale_symbols = {sym for sym in checker_result.live if sym.is_stale}
+                if len(stale_symbols) > 0:
                     stale_symbols_by_cell_id[cell_id] = stale_symbols
                     stale_cells.add(cell_id)
-
-                for dead_sym in dead_symbols:
+                if not checker_result.typechecks:
+                    typecheck_error_cells.add(cell_id)
+                for dead_sym in checker_result.dead:
                     killing_cell_ids_for_symbol[dead_sym].add(cell_id)
 
                 if self.settings.mark_phantom_cell_usages_unsafe:
@@ -262,8 +260,8 @@ class NotebookSafety(singletons.NotebookSafety):
                         phantom_cell_info[cell_id] = phantom_cell_info_for_cell
 
                 if cell_id not in stale_cells:
-                    max_timestamp_cell_num = self._get_max_timestamp_cell_num_for_symbols(
-                        checker_result.deep_live, checker_result.shallow_live
+                    max_timestamp_cell_num = cell.get_max_used_live_symbol_cell_counter(
+                        checker_result.live, order_index_by_cell_id or {}
                     )
                     if max_timestamp_cell_num > cell.cell_ctr:
                         fresh_cells.add(cell_id)
@@ -299,7 +297,9 @@ class NotebookSafety(singletons.NotebookSafety):
             for refresher_cell_id in stale_links[stale_cell_id]:
                 refresher_links[refresher_cell_id].add(stale_cell_id)
         return FrontendCheckerResult(
-            stale_cells=stale_cells,
+            # TODO: we should probably have separate fields for stale vs non-typechecking cells,
+            #  or at least change the name to a more general "unsafe_cells" or equivalent
+            stale_cells=stale_cells | typecheck_error_cells,
             fresh_cells=fresh_cells,
             new_fresh_cells=new_fresh_cells,
             stale_links=stale_links,

@@ -42,4 +42,4 @@ def test_int_change_to_str_triggers_typecheck():
     assert get_cell_ids_needing_typecheck() == {3}
     nbs().check_and_link_multiple_cells()
     assert not get_cell_ids_needing_typecheck()
-    assert not cells().from_id(3)._checker_result.typechecks
+    assert cells().from_id(3)._cached_typecheck_result is False

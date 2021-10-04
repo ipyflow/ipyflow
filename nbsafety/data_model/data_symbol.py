@@ -109,7 +109,8 @@ class DataSymbol:
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
 
         # cells where this symbol was live
-        self.cells_where_live: Set[ExecutedCodeCell] = set()
+        self.cells_where_deep_live: Set[ExecutedCodeCell] = set()
+        self.cells_where_shallow_live: Set[ExecutedCodeCell] = set()
 
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
@@ -126,6 +127,10 @@ class DataSymbol:
                 # not ideal because it relies on the `self` convention but is probably
                 # acceptable for the use case of improving readable names
                 ns.scope_name = self.name
+
+    @property
+    def cells_where_live(self) -> Set[ExecutedCodeCell]:
+        return self.cells_where_deep_live | self.cells_where_shallow_live
 
     def __repr__(self) -> str:
         return f'<{self.readable_name}>'
@@ -345,7 +350,9 @@ class DataSymbol:
         self._cached_out_of_sync = True
         if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
             for cell in self.cells_where_live:
-                cell.needs_typecheck = True
+                cell.invalidate_typecheck_result()
+        self.cells_where_shallow_live.clear()
+        self.cells_where_deep_live.clear()
         self.obj = obj
         if self.cached_obj_id is not None and self.cached_obj_id != self.obj_id:
             new_ns = nbs().namespaces.get(self.obj_id, None)
@@ -600,10 +607,15 @@ class DataSymbol:
         self._temp_disable_warnings = False
         if bump_version:
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
+            for cell in self.cells_where_live:
+                cell.add_used_cell_counter(self, self._timestamp.cell_num)
             ns = self.containing_namespace
             if ns is not None:
                 # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
                 ns.max_descendent_timestamp = self._timestamp
+                for alias in nbs().aliases[ns.obj_id]:
+                    for cell in alias.cells_where_deep_live:
+                        cell.add_used_cell_counter(alias, self._timestamp.cell_num)
             self.updated_timestamps.add(self._timestamp)
             self._version += 1
         if refresh_descendent_namespaces:

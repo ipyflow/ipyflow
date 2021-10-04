@@ -54,9 +54,9 @@ class ExecutedCodeCell:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
         self.content: str = content
-        self.needs_typecheck: bool = False
+        self._used_cell_counters_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
         self._cached_ast: Optional[ast.Module] = None
-        self._checker_result: Optional[CheckerResult] = None
+        self._cached_typecheck_result: Optional[bool] = None if nbs().settings.mark_typecheck_failures_unsafe else True
 
     def __str__(self):
         return self.content
@@ -66,6 +66,10 @@ class ExecutedCodeCell:
 
     def __hash__(self):
         return hash((self.cell_id, self.cell_ctr))
+
+    def add_used_cell_counter(self, sym: DataSymbol, ctr: int) -> None:
+        if ctr > 0:
+            self._used_cell_counters_by_live_symbol[sym].add(ctr)
 
     @classmethod
     def create_and_track(
@@ -134,12 +138,37 @@ class ExecutedCodeCell:
     def current_cell(cls) -> ExecutedCodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
 
-    @property
-    def live_symbols(self) -> Set[DataSymbol]:
-        if self._checker_result is None:
-            return set()
-        else:
-            return self._checker_result.live
+    # def get_stale_symbols(
+    #     self, live_symbols: Set[DataSymbol], order_index_by_cell_id: Dict[CellId, int]
+    # ) -> Set[DataSymbol]:
+    #     stale_symbols = set()
+    #     this_cell_pos = order_index_by_cell_id.get(self.cell_id, -1)
+    #     for sym in live_symbols:
+    #         if not sym.is_stale:
+    #             continue
+    #         syms_to_consider = {sym}
+    #         if sym.namespace is not None:
+    #             syms_to_consider |= sym.namespace.namespace_stale_symbols
+    #         for maybe_stale_sym in syms_to_consider:
+    #             for ts in maybe_stale_sym.fresher_ancestor_timestamps:
+    #                 if order_index_by_cell_id.get(self.from_counter(ts.cell_num).cell_id, -1) <= this_cell_pos:
+    #                     stale_symbols.add(sym)
+    #                     break
+    #             else:
+    #                 continue
+    #             break
+    #     return stale_symbols
+
+    def get_max_used_live_symbol_cell_counter(
+        self, live_symbols: Set[DataSymbol], order_index_by_cell_id: Dict[CellId, int]
+    ) -> int:
+        max_used_cell_ctr = -1
+        this_cell_pos = order_index_by_cell_id.get(self.cell_id, -1)
+        for sym in live_symbols:
+            for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym, []):
+                if order_index_by_cell_id.get(self.from_counter(cell_ctr).cell_id, -1) <= this_cell_pos:
+                    max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
+        return max_used_cell_ctr
 
     def check_and_resolve_symbols(
         self, update_liveness_time_versions: bool = False
@@ -158,9 +187,13 @@ class ExecutedCodeCell:
             dead_symbol_refs, nbs().global_scope, only_yield_successful_resolutions=True
         )
         stale_symbols = {dsym for dsym in live_symbols if dsym.is_stale}
-        for sym in live_symbols:
-            sym.cells_where_live.add(self)
-        self._checker_result = CheckerResult(
+        for sym in deep_live_symbols:
+            sym.cells_where_deep_live.add(self)
+            self.add_used_cell_counter(sym, sym.timestamp.cell_num)
+        for sym in shallow_live_symbols:
+            sym.cells_where_shallow_live.add(self)
+            self.add_used_cell_counter(sym, sym.timestamp_excluding_ns_descendents.cell_num)
+        return CheckerResult(
             live=live_symbols,
             deep_live=deep_live_symbols,
             shallow_live=shallow_live_symbols,
@@ -172,47 +205,53 @@ class ExecutedCodeCell:
             live_cells=live_cells,
             dead=dead_symbols,
             stale=stale_symbols,
-            typechecks=self._typechecks()
+            typechecks=self._typechecks(live_cells, live_symbols),
         )
-        return self._checker_result
 
     def compute_phantom_cell_info(self, used_cells: Set[int]) -> Dict[CellId, Set[int]]:
         used_cell_counters_by_cell_id = defaultdict(set)
         used_cell_counters_by_cell_id[self.cell_id].add(self.exec_counter())
         for cell_num in used_cells:
-            used_cell_counters_by_cell_id[ExecutedCodeCell.from_counter(cell_num).cell_id].add(cell_num)
+            used_cell_counters_by_cell_id[self.from_counter(cell_num).cell_id].add(cell_num)
         return {
             cell_id: cell_execs
             for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
             if len(cell_execs) >= 2
         }
 
-    def _build_typecheck_slice(self) -> str:
+    def _build_typecheck_slice(self, live_cell_ctrs: Set[int], live_symbols: Set[DataSymbol]) -> str:
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level
         live_cell_counters = {self.cell_ctr}
-        for live_cell_num in self._checker_result.live_cells:
-            if ExecutedCodeCell.from_counter(live_cell_num).is_current_for_id:
+        for live_cell_num in live_cell_ctrs:
+            if self.from_counter(live_cell_num).is_current_for_id:
                 live_cell_counters.add(live_cell_num)
-        live_cells = [ExecutedCodeCell.from_counter(ctr) for ctr in sorted(live_cell_counters)]
-        top_level_symbols = {sym.get_top_level() for sym in self._checker_result.live}
+        live_cells = [self.from_counter(ctr) for ctr in sorted(live_cell_counters)]
+        top_level_symbols = {sym.get_top_level() for sym in live_symbols}
         top_level_symbols.discard(None)
         return '{type_declarations}\n\n{content}'.format(
             type_declarations='\n'.join(f'{sym.name}: {sym.get_type_annotation_string()}' for sym in top_level_symbols),
             content='\n'.join(live_cell.sanitized_content() for live_cell in live_cells),
         )
 
-    def _typechecks(self) -> bool:
-        if not self.needs_typecheck:
-            return True if self._checker_result is None else self._checker_result.typechecks
-        self.needs_typecheck = False
-        typecheck_slice = self._build_typecheck_slice()
+    def _typechecks(self, live_cell_ctrs: Set[int], live_symbols: Set[DataSymbol]) -> bool:
+        if self._cached_typecheck_result is not None:
+            return self._cached_typecheck_result
+        typecheck_slice = self._build_typecheck_slice(live_cell_ctrs, live_symbols)
         try:
             # TODO: parse the output in order to pass up to the user
             ret = subprocess.call(f"mypy -c {shlex.quote(typecheck_slice)}", shell=True)
-            return ret == 0
+            self._cached_typecheck_result = (ret == 0)
         except Exception:
             logger.exception('Exception occurred during type checking')
-            return True
+            self._cached_typecheck_result = True
+        return self._cached_typecheck_result
+
+    @property
+    def needs_typecheck(self):
+        return self._cached_typecheck_result is None
+
+    def invalidate_typecheck_result(self):
+        self._cached_typecheck_result = None
 
     def compute_slice(self, stmt_level: bool = False) -> Dict[int, str]:
         """
@@ -238,7 +277,7 @@ class ExecutedCodeCell:
             return ret
         else:
             deps: Set[int] = _compute_slice_impl(self.cell_ctr)
-            return {dep: ExecutedCodeCell.from_counter(dep).content for dep in deps}
+            return {dep: self.from_counter(dep).content for dep in deps}
 
     def compute_slice_stmts(self) -> Dict[int, List[ast.stmt]]:
         deps_stmt: Set[Timestamp] = _compute_slice_impl(Timestamp(self.cell_ctr, -1))
@@ -247,7 +286,7 @@ class ExecutedCodeCell:
         for ts in sorted(deps_stmt):
             if ts.cell_num > self.cell_ctr:
                 break
-            stmt = ExecutedCodeCell.from_counter(ts.cell_num).to_ast().body[ts.stmt_num]
+            stmt = self.from_counter(ts.cell_num).to_ast().body[ts.stmt_num]
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue

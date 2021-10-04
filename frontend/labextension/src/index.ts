@@ -39,7 +39,7 @@ const extension: JupyterFrontEndPlugin<void> = {
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
-        clearCellState(nbPanel.content, -1);
+        clearCellState(nbPanel.content);
         activeCell = nbPanel.content.activeCell;
         activeCellId = nbPanel.content.activeCell.model.id;
         let commDisconnectHandler = () => {};
@@ -50,7 +50,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           );
         }
         session.kernelChanged.connect((_, args) => {
-          clearCellState(nbPanel.content, -1);
+          clearCellState(nbPanel.content);
           commDisconnectHandler();
           commDisconnectHandler = () => {};
           if (args.newValue !== null && args.newValue.name === NBSAFETY_KERNEL_NAME) {
@@ -69,7 +69,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           if ((status === 'idle' || status === 'busy') && shouldReconnect) {
             shouldReconnect = false;
             session.ready.then(() => {
-              clearCellState(nbPanel.content, -1);
+              clearCellState(nbPanel.content);
               commDisconnectHandler();
               commDisconnectHandler = () => {};
               if (session.session.kernel.name === NBSAFETY_KERNEL_NAME) {
@@ -98,7 +98,6 @@ let staleCells: Set<string> = new Set();
 let freshCells: Set<string> = new Set();
 let staleLinks: {[id: string]: string[]} = {}
 let refresherLinks: {[id: string]: string[]} = {}
-let lastCellExecPositionIdx: number = -1;
 let activeCell: Cell<ICellModel> = null;
 let activeCellId: string = null;
 let cellsById: {[id: string]: HTMLElement} = {};
@@ -186,14 +185,8 @@ const refreshNodeMapping = (notebook: Notebook) => {
   });
 }
 
-const clearCellState = (notebook: Notebook, execIdx?: number) => {
-  if (execIdx === null) {
-    execIdx = lastCellExecPositionIdx;
-  }
+const clearCellState = (notebook: Notebook) => {
   notebook.widgets.forEach((cell, idx) => {
-    if (idx < execIdx) {
-      return;
-    }
     cell.node.classList.remove(staleClass);
     cell.node.classList.remove(refresherClass);
     cell.node.classList.remove(freshClass);
@@ -277,7 +270,7 @@ const connectToComm = (
         freshCells = executedReactiveFreshCells;
         newFreshCells = new Set<string>();
         executedReactiveFreshCells = new Set<string>();
-        updateUI(notebook, -1);
+        updateUI(notebook);
       }
     });
   };
@@ -398,16 +391,13 @@ const connectToComm = (
     }
   };
 
-  const updateUI = (notebook: Notebook, execIdx?: number) => {
-    clearCellState(notebook, execIdx);
+  const updateUI = (notebook: Notebook) => {
+    clearCellState(notebook);
     if (!lastExecutionHighlightsEnabled) {
       return;
     }
     refreshNodeMapping(notebook);
     for (const [id] of Object.entries(cellsById)) {
-      if (orderIdxById[id] < lastCellExecPositionIdx) {
-        continue;
-      }
       updateOneCellUI(id);
     }
   };
@@ -425,7 +415,6 @@ const connectToComm = (
       newFreshCells = new Set([...newFreshCells, ...msg.content.data['new_fresh_cells'] as string[]])
       staleLinks = msg.content.data['stale_links'] as { [id: string]: string[] };
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
-      lastCellExecPositionIdx = msg.content.data['last_cell_exec_position_idx'] as number;
       cellPendingExecution = null;
       const exec_mode = msg.content.data['exec_mode'] as string;
       lastExecutionMode = exec_mode;

@@ -161,3 +161,13 @@ def test_global_var():
     run_cell('def f(): global x; x = 42')
     run_cell('f()')
     run_cell('assert x == 42')
+
+
+def test_syntax_error_does_not_completely_mess_up_kernel():
+    # first run a cell w/ syntax error, then one w/out
+    # the second cell should be fine
+    try:
+        run_cell('x ++= 5')
+    except SyntaxError:
+        pass
+    run_cell('x = 5')

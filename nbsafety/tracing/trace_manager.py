@@ -258,9 +258,16 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
-        self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
-            cells().current_cell().sanitized_content(), f'<cell-{cells().exec_counter()}>', 'exec'
-        )
+        try:
+            self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
+                cells().current_cell().sanitized_content(), f'<cell-{cells().exec_counter()}>', 'exec'
+            )
+        except:
+            # it'll just give a syntax error anyway when we try to execute;
+            # do this just for the benefit of the type checker
+            self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
+                '', f'<cell-{cells().exec_counter()}>', 'exec'
+            )
 
         self.call_stack: TraceStack = self._make_stack()
         with self.call_stack.register_stack_state():

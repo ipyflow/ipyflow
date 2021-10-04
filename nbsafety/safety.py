@@ -318,7 +318,8 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def _safety_precheck_cell(self, cell: ExecutedCodeCell) -> None:
         checker_result = self.check_and_link_multiple_cells(
-            cells_to_check=[cell], update_liveness_time_versions=self.mut_settings.static_slicing_enabled
+            cells_to_check=[cell],
+            update_liveness_time_versions=self.mut_settings.static_slicing_enabled,
         )
         if cell.cell_id in checker_result.stale_cells:
             self.safety_issue_detected = True
@@ -438,7 +439,6 @@ class NotebookSafety(singletons.NotebookSafety):
                 ])
                 self._gc()
             except Exception as e:
-                # logger.exception('exception occurred during execution')
                 if self.is_test:
                     self.set_exception_raised_during_execution(e)
             finally:

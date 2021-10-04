@@ -212,7 +212,11 @@ class NotebookSafety(singletons.NotebookSafety):
                 cells_to_check = cells().all_cells_most_recently_run_for_each_id()
             else:
                 order_index_by_id = request['order_index_by_cell_id']
-                cells_to_check = (cells().from_id(cell_id) for cell_id in order_index_by_id)
+                cells_to_check = (
+                    cell for cell in (
+                        cells().from_id(cell_id) for cell_id in order_index_by_id
+                    ) if cell is not None
+                )
             cells().set_cell_positions(order_index_by_id)
             response = self.check_and_link_multiple_cells(cells_to_check=cells_to_check).to_json()
             response['type'] = 'cell_freshness'
@@ -248,8 +252,10 @@ class NotebookSafety(singletons.NotebookSafety):
             except SyntaxError:
                 continue
             cell_id = cell.cell_id
-            # stale_symbols = cell.get_stale_symbols(checker_result.live)
-            stale_symbols = {sym for sym in checker_result.live if sym.is_stale}
+            if cells().position_independent:
+                stale_symbols = {sym for sym in checker_result.live if sym.is_stale}
+            else:
+                stale_symbols = {sym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
             if len(stale_symbols) > 0:
                 stale_symbols_by_cell_id[cell_id] = stale_symbols
                 stale_cells.add(cell_id)

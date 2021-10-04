@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
@@ -50,6 +51,7 @@ class ExecutedCodeCell:
     _cell_by_cell_ctr: Dict[int, ExecutedCodeCell] = {}
     _cell_counter: int = 0
     _position_by_cell_id: Dict[CellId, int] = {}
+    position_independent = True
 
     def __init__(self, cell_id: CellId, cell_ctr: int, content: str) -> None:
         self.cell_id: CellId = cell_id
@@ -97,7 +99,12 @@ class ExecutedCodeCell:
 
     @classmethod
     def set_cell_positions(cls, order_index_by_cell_id: Optional[Dict[CellId, int]]):
-        cls._position_by_cell_id = order_index_by_cell_id or {}
+        if order_index_by_cell_id is None:
+            cls.position_independent = True
+            cls._position_by_cell_id = {}
+        else:
+            cls.position_independent = False
+            cls._position_by_cell_id = order_index_by_cell_id
 
     @property
     def position(self) -> int:
@@ -150,25 +157,6 @@ class ExecutedCodeCell:
     @classmethod
     def current_cell(cls) -> ExecutedCodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
-
-    # def get_stale_symbols(self, live_symbols: Set[DataSymbol]) -> Set[DataSymbol]:
-    #     stale_symbols = set()
-    #     this_cell_pos = self.position
-    #     for sym in live_symbols:
-    #         if not sym.is_stale:
-    #             continue
-    #         syms_to_consider = {sym}
-    #         if sym.namespace is not None:
-    #             syms_to_consider |= sym.namespace.namespace_stale_symbols
-    #         for maybe_stale_sym in syms_to_consider:
-    #             for ts in maybe_stale_sym.fresher_ancestor_timestamps:
-    #                 if self.from_timestamp(ts).position <= this_cell_pos:
-    #                     stale_symbols.add(sym)
-    #                     break
-    #             else:
-    #                 continue
-    #             break
-    #     return stale_symbols
 
     def get_max_used_live_symbol_cell_counter(self, live_symbols: Set[DataSymbol]) -> int:
         max_used_cell_ctr = -1

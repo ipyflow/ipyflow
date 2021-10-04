@@ -112,6 +112,9 @@ class DataSymbol:
         self.cells_where_deep_live: Set[ExecutedCodeCell] = set()
         self.cells_where_shallow_live: Set[ExecutedCodeCell] = set()
 
+        self._last_computed_staleness_cache_ts: int = -1
+        self._is_stale_at_position_cache: Dict[int, bool] = {}
+
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
 
@@ -508,6 +511,43 @@ class DataSymbol:
         if self.disable_warnings or self._temp_disable_warnings:
             return False
         return self.timestamp < self.required_timestamp or len(self.namespace_stale_symbols) > 0
+
+    def _is_stale_at_position_impl(self, pos: int) -> bool:
+        for par, timestamps in self.parents.items():
+            for ts in timestamps:
+                dep_introduced_pos = cells().from_timestamp(ts).position
+                if dep_introduced_pos > pos:
+                    continue
+                for updated_ts in par.updated_timestamps:
+                    if cells().from_timestamp(updated_ts).position > dep_introduced_pos:
+                        continue
+                    if updated_ts.cell_num > ts.cell_num or par.is_stale_at_position(ts.cell_num):
+                        # logger.error("sym: %s", self)
+                        # logger.error("pos: %s", pos)
+                        # logger.error("parent: %s", par)
+                        # logger.error("dep introdced ts: %s", ts)
+                        # logger.error("dep introdced pos: %s", dep_introduced_pos)
+                        # logger.error("par updated ts: %s", updated_ts)
+                        # logger.error("par updated position: %s", cells().from_timestamp(updated_ts).position)
+                        return True
+        for sym in self.namespace_stale_symbols:
+            if sym.is_stale_at_position(ts.cell_num):
+                return True
+        return False
+
+    def is_stale_at_position(self, pos: int) -> bool:
+        if not self.is_stale:
+            return False
+        if cells().exec_counter() > self._last_computed_staleness_cache_ts:
+            self._is_stale_at_position_cache.clear()
+            self._last_computed_staleness_cache_ts = cells().exec_counter()
+        if pos in self._is_stale_at_position_cache:
+            return self._is_stale_at_position_cache[pos]
+        is_stale = self._is_stale_at_position_impl(pos)
+        self._is_stale_at_position_cache[pos] = is_stale
+        return is_stale
+
+
 
     def should_mark_stale(self, updated_dep):
         if self.disable_warnings:

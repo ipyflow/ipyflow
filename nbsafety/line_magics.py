@@ -8,6 +8,7 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
@@ -152,7 +153,7 @@ def make_slice(line: str) -> Optional[str]:
     if cell_num is None:
         cell_num = cells().exec_counter() - 1
     try:
-        deps = list(cells().from_counter(cell_num).compute_slice(stmt_level=args.stmt).items())
+        deps = list(cells().from_timestamp(cell_num).compute_slice(stmt_level=args.stmt).items())
         deps.sort()
         return '\n\n'.join(f'# Cell {cell_num}\n' + content for cell_num, content in deps)
     except KeyError:
@@ -183,8 +184,8 @@ def remove_dep(line_: str) -> None:
     if parent_data_sym not in child_data_sym.parents:
         logger.warning('The two symbols do not have a dependency relation')
         return
-    parent_data_sym.children.remove(child_data_sym)
-    child_data_sym.parents.remove(parent_data_sym)
+    del parent_data_sym.children[child_data_sym]
+    del child_data_sym.parents[parent_data_sym]
 
 
 def add_dep(line_: str) -> None:
@@ -200,8 +201,8 @@ def add_dep(line_: str) -> None:
     if parent_data_sym in child_data_sym.parents:
         logger.warning('The two symbols already have a dependency relation')
         return
-    parent_data_sym.children.add(child_data_sym)
-    child_data_sym.parents.add(parent_data_sym)
+    parent_data_sym.children[child_data_sym].append(Timestamp.current())
+    child_data_sym.parents[parent_data_sym].append(Timestamp.current())
 
 
 def turn_off_warnings_for(line_: str) -> None:

@@ -80,8 +80,8 @@ class DataSymbol:
         self.containing_scope = containing_scope
         self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
-        self.parents: Set[DataSymbol] = set()
-        self.children: Set[DataSymbol] = set()
+        self.parents: Dict[DataSymbol, List[Timestamp]] = defaultdict(list)
+        self.children: Dict[DataSymbol, List[Timestamp]] = defaultdict(list)
 
         self.call_scope: Optional[Scope] = None
         if self.is_function:
@@ -553,15 +553,15 @@ class DataSymbol:
         logger.warning("symbol %s new deps %s", self, new_deps)
         new_deps.discard(self)
         if overwrite:
-            for parent in self.parents - new_deps:
-                parent.children.discard(self)
+            for parent in self.parents.keys() - new_deps:
+                parent.children.pop(self, None)
             self.parents.clear()
 
-        for new_parent in new_deps - self.parents:
+        for new_parent in new_deps - self.parents.keys():
             if new_parent is None:
                 continue
-            new_parent.children.add(self)
-            self.parents.add(new_parent)
+            new_parent.children[self].append(Timestamp.current())
+            self.parents[new_parent].append(Timestamp.current())
         self.required_timestamp = Timestamp.uninitialized()
         self.fresher_ancestors.clear()
         self.fresher_ancestor_timestamps.clear()

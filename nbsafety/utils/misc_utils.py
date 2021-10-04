@@ -1,4 +1,5 @@
 # -*- coding: future_annotations -*-
+from collections import defaultdict
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any, List, Mapping, Optional, Sequence

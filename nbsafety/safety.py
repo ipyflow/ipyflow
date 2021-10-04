@@ -209,9 +209,12 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_id = request.get('executed_cell_id', None)
             if self.settings.backwards_cell_staleness_propagation:
                 order_index_by_id = None
+                cells_to_check = cells().all_cells_most_recently_run_for_each_id()
             else:
                 order_index_by_id = request['order_index_by_cell_id']
-            response = self.check_and_link_multiple_cells(order_index_by_cell_id=order_index_by_id).to_json()
+                cells_to_check = (cells().from_id(cell_id) for cell_id in order_index_by_id)
+            cells().set_cell_positions(order_index_by_id)
+            response = self.check_and_link_multiple_cells(cells_to_check=cells_to_check).to_json()
             response['type'] = 'cell_freshness'
             response['exec_mode'] = self.mut_settings.exec_mode.value
             response['last_executed_cell_id'] = cell_id
@@ -226,7 +229,6 @@ class NotebookSafety(singletons.NotebookSafety):
     def check_and_link_multiple_cells(
         self,
         cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
-        order_index_by_cell_id: Optional[Dict[CellId, int]] = None,
         update_liveness_time_versions: bool = False,
     ) -> FrontendCheckerResult:
         stale_cells = set()
@@ -239,36 +241,34 @@ class NotebookSafety(singletons.NotebookSafety):
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         for cell in cells_to_check:
-            cell_id = cell.cell_id
             try:
                 checker_result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=update_liveness_time_versions
                 )
-                # stale_symbols = cell.get_stale_symbols(checker_result.live, order_index_by_cell_id or {})
-                stale_symbols = {sym for sym in checker_result.live if sym.is_stale}
-                if len(stale_symbols) > 0:
-                    stale_symbols_by_cell_id[cell_id] = stale_symbols
-                    stale_cells.add(cell_id)
-                if not checker_result.typechecks:
-                    typecheck_error_cells.add(cell_id)
-                for dead_sym in checker_result.dead:
-                    killing_cell_ids_for_symbol[dead_sym].add(cell_id)
-
-                if self.settings.mark_phantom_cell_usages_unsafe:
-                    phantom_cell_info_for_cell = cell.compute_phantom_cell_info(checker_result.used_cells)
-                    if len(phantom_cell_info_for_cell) > 0:
-                        phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-
-                if cell_id not in stale_cells:
-                    max_timestamp_cell_num = cell.get_max_used_live_symbol_cell_counter(
-                        checker_result.live, order_index_by_cell_id or {}
-                    )
-                    if max_timestamp_cell_num > cell.cell_ctr:
-                        fresh_cells.add(cell_id)
-                    if max_timestamp_cell_num >= cells().exec_counter():
-                        new_fresh_cells.add(cell_id)
             except SyntaxError:
                 continue
+            cell_id = cell.cell_id
+            # stale_symbols = cell.get_stale_symbols(checker_result.live)
+            stale_symbols = {sym for sym in checker_result.live if sym.is_stale}
+            if len(stale_symbols) > 0:
+                stale_symbols_by_cell_id[cell_id] = stale_symbols
+                stale_cells.add(cell_id)
+            if not checker_result.typechecks:
+                typecheck_error_cells.add(cell_id)
+            for dead_sym in checker_result.dead:
+                killing_cell_ids_for_symbol[dead_sym].add(cell_id)
+
+            if self.settings.mark_phantom_cell_usages_unsafe:
+                phantom_cell_info_for_cell = cell.compute_phantom_cell_info(checker_result.used_cells)
+                if len(phantom_cell_info_for_cell) > 0:
+                    phantom_cell_info[cell_id] = phantom_cell_info_for_cell
+
+            if cell_id not in stale_cells:
+                max_timestamp_cell_num = cell.get_max_used_live_symbol_cell_counter(checker_result.live)
+                if max_timestamp_cell_num > cell.cell_ctr:
+                    fresh_cells.add(cell_id)
+                if max_timestamp_cell_num >= cells().exec_counter():
+                    new_fresh_cells.add(cell_id)
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         for stale_cell_id in stale_cells:
@@ -318,7 +318,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def _safety_precheck_cell(self, cell: ExecutedCodeCell) -> None:
         checker_result = self.check_and_link_multiple_cells(
-            [cell], update_liveness_time_versions=self.mut_settings.static_slicing_enabled
+            cells_to_check=[cell], update_liveness_time_versions=self.mut_settings.static_slicing_enabled
         )
         if cell.cell_id in checker_result.stale_cells:
             self.safety_issue_detected = True

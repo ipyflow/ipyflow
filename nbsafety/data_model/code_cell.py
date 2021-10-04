@@ -49,6 +49,7 @@ class ExecutedCodeCell:
     _current_cell_by_cell_id: Dict[CellId, ExecutedCodeCell] = {}
     _cell_by_cell_ctr: Dict[int, ExecutedCodeCell] = {}
     _cell_counter: int = 0
+    _position_by_cell_id: Dict[CellId, int] = {}
 
     def __init__(self, cell_id: CellId, cell_ctr: int, content: str) -> None:
         self.cell_id: CellId = cell_id
@@ -89,9 +90,18 @@ class ExecutedCodeCell:
 
     @classmethod
     def clear(cls):
-        cls._current_cell_by_cell_id.clear()
-        cls._cell_by_cell_ctr.clear()
+        cls._current_cell_by_cell_id = {}
+        cls._cell_by_cell_ctr = {}
         cls._cell_counter = 0
+        cls._position_by_cell_id = {}
+
+    @classmethod
+    def set_cell_positions(cls, order_index_by_cell_id: Optional[Dict[CellId, int]]):
+        cls._position_by_cell_id = order_index_by_cell_id or {}
+
+    @property
+    def position(self) -> int:
+        return self._position_by_cell_id.get(self.cell_id, -1)
 
     @classmethod
     def exec_counter(cls) -> int:
@@ -106,8 +116,11 @@ class ExecutedCodeCell:
         yield from cls._current_cell_by_cell_id.values()
 
     @classmethod
-    def from_counter(cls, ctr: int) -> ExecutedCodeCell:
-        return cls._cell_by_cell_ctr[ctr]
+    def from_timestamp(cls, ts: TimestampOrCounter) -> ExecutedCodeCell:
+        if isinstance(ts, Timestamp):
+            return cls._cell_by_cell_ctr[ts.cell_num]
+        else:
+            return cls._cell_by_cell_ctr[ts]
 
     @classmethod
     def from_id(cls, cell_id: CellId) -> Optional[ExecutedCodeCell]:
@@ -138,11 +151,9 @@ class ExecutedCodeCell:
     def current_cell(cls) -> ExecutedCodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
 
-    # def get_stale_symbols(
-    #     self, live_symbols: Set[DataSymbol], order_index_by_cell_id: Dict[CellId, int]
-    # ) -> Set[DataSymbol]:
+    # def get_stale_symbols(self, live_symbols: Set[DataSymbol]) -> Set[DataSymbol]:
     #     stale_symbols = set()
-    #     this_cell_pos = order_index_by_cell_id.get(self.cell_id, -1)
+    #     this_cell_pos = self.position
     #     for sym in live_symbols:
     #         if not sym.is_stale:
     #             continue
@@ -151,7 +162,7 @@ class ExecutedCodeCell:
     #             syms_to_consider |= sym.namespace.namespace_stale_symbols
     #         for maybe_stale_sym in syms_to_consider:
     #             for ts in maybe_stale_sym.fresher_ancestor_timestamps:
-    #                 if order_index_by_cell_id.get(self.from_counter(ts.cell_num).cell_id, -1) <= this_cell_pos:
+    #                 if self.from_timestamp(ts).position <= this_cell_pos:
     #                     stale_symbols.add(sym)
     #                     break
     #             else:
@@ -159,14 +170,12 @@ class ExecutedCodeCell:
     #             break
     #     return stale_symbols
 
-    def get_max_used_live_symbol_cell_counter(
-        self, live_symbols: Set[DataSymbol], order_index_by_cell_id: Dict[CellId, int]
-    ) -> int:
+    def get_max_used_live_symbol_cell_counter(self, live_symbols: Set[DataSymbol]) -> int:
         max_used_cell_ctr = -1
-        this_cell_pos = order_index_by_cell_id.get(self.cell_id, -1)
+        this_cell_pos = self.position
         for sym in live_symbols:
             for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym, []):
-                if order_index_by_cell_id.get(self.from_counter(cell_ctr).cell_id, -1) <= this_cell_pos:
+                if self.from_timestamp(cell_ctr).position <= this_cell_pos:
                     max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
         return max_used_cell_ctr
 
@@ -212,7 +221,7 @@ class ExecutedCodeCell:
         used_cell_counters_by_cell_id = defaultdict(set)
         used_cell_counters_by_cell_id[self.cell_id].add(self.exec_counter())
         for cell_num in used_cells:
-            used_cell_counters_by_cell_id[self.from_counter(cell_num).cell_id].add(cell_num)
+            used_cell_counters_by_cell_id[self.from_timestamp(cell_num).cell_id].add(cell_num)
         return {
             cell_id: cell_execs
             for cell_id, cell_execs in used_cell_counters_by_cell_id.items()
@@ -223,9 +232,9 @@ class ExecutedCodeCell:
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level
         live_cell_counters = {self.cell_ctr}
         for live_cell_num in live_cell_ctrs:
-            if self.from_counter(live_cell_num).is_current_for_id:
+            if self.from_timestamp(live_cell_num).is_current_for_id:
                 live_cell_counters.add(live_cell_num)
-        live_cells = [self.from_counter(ctr) for ctr in sorted(live_cell_counters)]
+        live_cells = [self.from_timestamp(ctr) for ctr in sorted(live_cell_counters)]
         top_level_symbols = {sym.get_top_level() for sym in live_symbols}
         top_level_symbols.discard(None)
         return '{type_declarations}\n\n{content}'.format(
@@ -277,7 +286,7 @@ class ExecutedCodeCell:
             return ret
         else:
             deps: Set[int] = _compute_slice_impl(self.cell_ctr)
-            return {dep: self.from_counter(dep).content for dep in deps}
+            return {dep: self.from_timestamp(dep).content for dep in deps}
 
     def compute_slice_stmts(self) -> Dict[int, List[ast.stmt]]:
         deps_stmt: Set[Timestamp] = _compute_slice_impl(Timestamp(self.cell_ctr, -1))
@@ -286,7 +295,7 @@ class ExecutedCodeCell:
         for ts in sorted(deps_stmt):
             if ts.cell_num > self.cell_ctr:
                 break
-            stmt = self.from_counter(ts.cell_num).to_ast().body[ts.stmt_num]
+            stmt = self.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue

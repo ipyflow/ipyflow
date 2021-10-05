@@ -301,6 +301,10 @@ History
 * Various fixes to reduce intrusiveness (no attribute / subscript dereferencing at check time);
 * Bump frontend dependencies to more secure versions;
 
-0.0.75 (2021-09-29)
+0.0.76 (2021-09-29)
 -------------------
 * Get rid of accidental debug logging statement;
+
+0.0.77 (2021-10-04)
+-------------------
+* Fix regression that caused kernel to crash on syntax errors;

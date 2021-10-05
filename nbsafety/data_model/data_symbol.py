@@ -531,7 +531,7 @@ class DataSymbol:
                         # logger.error("par updated position: %s", cells().from_timestamp(updated_ts).position)
                         return True
         for sym in self.namespace_stale_symbols:
-            if sym.is_stale_at_position(ts.cell_num):
+            if sym.is_stale_at_position(pos):
                 return True
         return False
 

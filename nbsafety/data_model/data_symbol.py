@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 import ast
+import builtins
 from collections import defaultdict
 from enum import Enum
 import logging
@@ -16,6 +17,7 @@ from nbsafety.data_model.annotation_utils import get_type_annotation, make_annot
 from nbsafety.data_model.code_cell import ExecutedCodeCell, cells
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
+from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
@@ -536,6 +538,7 @@ class DataSymbol:
         return False
 
     def is_stale_at_position(self, pos: int) -> bool:
+        assert not hasattr(builtins, EMIT_EVENT), 'this should be called outside of tracing / execution context'
         if not self.is_stale:
             return False
         if cells().exec_counter() > self._last_computed_staleness_cache_ts:

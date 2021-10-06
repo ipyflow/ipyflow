@@ -25,7 +25,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.run_mode import ExecutionMode, SafetyRunMode
+from nbsafety.run_mode import ExecutionMode, FlowOrder, SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
@@ -46,7 +46,6 @@ class NotebookSafetySettings(NamedTuple):
     store_history: bool
     test_context: bool
     use_comm: bool
-    backwards_cell_staleness_propagation: bool
     track_dependencies: bool
     mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
@@ -61,6 +60,7 @@ class MutableNotebookSafetySettings:
     static_slicing_enabled: bool
     dynamic_slicing_enabled: bool
     exec_mode: ExecutionMode
+    flow_order: FlowOrder
 
 
 class FrontendCheckerResult(NamedTuple):
@@ -93,7 +93,6 @@ class NotebookSafety(singletons.NotebookSafety):
             store_history=kwargs.pop('store_history', True),
             test_context=kwargs.pop('test_context', False),
             use_comm=use_comm,
-            backwards_cell_staleness_propagation=True,
             track_dependencies=True,
             mark_stale_symbol_usages_unsafe=kwargs.pop('mark_stale_symbol_usages_unsafe', True),
             mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
@@ -106,6 +105,7 @@ class NotebookSafety(singletons.NotebookSafety):
             static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
             dynamic_slicing_enabled=kwargs.pop('dynamic_slicing_enabled', True),
             exec_mode=ExecutionMode(kwargs.pop('exec_mode', ExecutionMode.NORMAL)),
+            flow_order=FlowOrder(kwargs.pop('flow_order', FlowOrder.ANY_ORDER)),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.settrace = settrace or sys.settrace
@@ -207,16 +207,16 @@ class NotebookSafety(singletons.NotebookSafety):
             if self._active_cell_id is None:
                 self._active_cell_id = request.get('executed_cell_id', None)
             cell_id = request.get('executed_cell_id', None)
-            if self.settings.backwards_cell_staleness_propagation:
-                order_index_by_id = None
-                cells_to_check = cells().all_cells_most_recently_run_for_each_id()
-            else:
+            if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
                 order_index_by_id = request['order_index_by_cell_id']
                 cells_to_check = (
                     cell for cell in (
-                        cells().from_id(cell_id) for cell_id in order_index_by_id
-                    ) if cell is not None
+                    cells().from_id(cell_id) for cell_id in order_index_by_id
+                ) if cell is not None
                 )
+            else:
+                order_index_by_id = None
+                cells_to_check = cells().all_cells_most_recently_run_for_each_id()
             cells().set_cell_positions(order_index_by_id)
             response = self.check_and_link_multiple_cells(cells_to_check=cells_to_check).to_json()
             response['type'] = 'cell_freshness'
@@ -504,6 +504,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.turn_on_warnings_for(line)
             elif cmd in ('mode', 'exec_mode'):
                 return line_magics.set_exec_mode(line)
+            elif cmd in ('flow', 'flow_order', 'semantics', 'flow_semantics'):
+                return line_magics.set_flow_order(line)
             elif cmd in line_magic_names:
                 logger.warning('We have a magic for %s, but have not yet registered it', cmd)
                 return None

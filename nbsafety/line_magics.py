@@ -9,7 +9,7 @@ from typing import cast, TYPE_CHECKING
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.run_mode import ExecutionMode
+from nbsafety.run_mode import FlowOrder, ExecutionMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -243,3 +243,16 @@ def set_exec_mode(line_: str) -> None:
         logger.warning(usage)
         return
     nbs().mut_settings.exec_mode = exec_mode
+
+
+def set_flow_order(line_: str) -> None:
+    line_ = line_.lower().strip()
+    usage = f'Usage: %safety flow [{FlowOrder.ANY_ORDER}|{FlowOrder.IN_ORDER}]'
+    if line_.startswith('any') or line_ in ('unordered', 'both'):
+        flow_order = FlowOrder.ANY_ORDER
+    elif line_.startswith('in') or line_ in ('ordered', 'linear'):
+        flow_order = FlowOrder.IN_ORDER
+    else:
+        logger.warning(usage)
+        return
+    nbs().mut_settings.flow_order = flow_order

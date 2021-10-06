@@ -308,3 +308,7 @@ History
 0.0.77 (2021-10-04)
 -------------------
 * Fix regression that caused kernel to crash on syntax errors;
+
+0.0.78 (2021-10-05)
+-------------------
+* Expose in-order and any-order flow semantics via line magic;

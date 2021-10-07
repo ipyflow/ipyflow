@@ -18,6 +18,7 @@ from nbsafety.data_model.code_cell import ExecutedCodeCell, cells
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.extra_builtins import EMIT_EVENT
+from nbsafety.run_mode import FlowOrder
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
@@ -541,6 +542,8 @@ class DataSymbol:
         assert not hasattr(builtins, EMIT_EVENT), 'this should be called outside of tracing / execution context'
         if not self.is_stale:
             return False
+        if nbs().mut_settings.flow_order == FlowOrder.ANY_ORDER:
+            return True
         if cells().exec_counter() > self._last_computed_staleness_cache_ts:
             self._is_stale_at_position_cache.clear()
             self._last_computed_staleness_cache_ts = cells().exec_counter()

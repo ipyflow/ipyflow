@@ -6,6 +6,7 @@ import re
 import shlex
 import subprocess
 from collections import defaultdict
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, NamedTuple
 
 from nbsafety.analysis.live_refs import (
@@ -15,6 +16,7 @@ from nbsafety.analysis.live_refs import (
 )
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.ipython_utils import cell_counter as ipy_cell_counter
+from nbsafety.run_mode import FlowOrder
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
@@ -51,7 +53,6 @@ class ExecutedCodeCell:
     _cell_by_cell_ctr: Dict[int, ExecutedCodeCell] = {}
     _cell_counter: int = 0
     _position_by_cell_id: Dict[CellId, int] = {}
-    position_independent = True
 
     def __init__(self, cell_id: CellId, cell_ctr: int, content: str) -> None:
         self.cell_id: CellId = cell_id
@@ -60,6 +61,7 @@ class ExecutedCodeCell:
         self._used_cell_counters_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
         self._cached_ast: Optional[ast.Module] = None
         self._cached_typecheck_result: Optional[bool] = None if nbs().settings.mark_typecheck_failures_unsafe else True
+        self._fresh: bool = False
 
     def __str__(self):
         return self.content
@@ -73,6 +75,11 @@ class ExecutedCodeCell:
     def add_used_cell_counter(self, sym: DataSymbol, ctr: int) -> None:
         if ctr > 0:
             self._used_cell_counters_by_live_symbol[sym].add(ctr)
+
+    def set_fresh(self, new_fresh: bool) -> bool:
+        old_fresh = self._fresh
+        self._fresh = new_fresh
+        return old_fresh
 
     @classmethod
     def create_and_track(
@@ -98,13 +105,19 @@ class ExecutedCodeCell:
         cls._position_by_cell_id = {}
 
     @classmethod
-    def set_cell_positions(cls, order_index_by_cell_id: Optional[Dict[CellId, int]]):
-        if order_index_by_cell_id is None:
-            cls.position_independent = True
-            cls._position_by_cell_id = {}
-        else:
-            cls.position_independent = False
-            cls._position_by_cell_id = order_index_by_cell_id
+    def set_cell_positions(cls, order_index_by_cell_id: Dict[CellId, int]):
+        cls._position_by_cell_id = order_index_by_cell_id
+
+    @classmethod
+    @contextmanager
+    def _override_position_index_for_current_flow_semantics(cls) -> Generator[None, None, None]:
+        orig_position_by_cell_id = cls._position_by_cell_id
+        try:
+            if nbs().mut_settings.flow_order == FlowOrder.ANY_ORDER:
+                cls.set_cell_positions({})
+            yield
+        finally:
+            cls.set_cell_positions(orig_position_by_cell_id)
 
     @property
     def position(self) -> int:
@@ -159,13 +172,14 @@ class ExecutedCodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
 
     def get_max_used_live_symbol_cell_counter(self, live_symbols: Set[DataSymbol]) -> int:
-        max_used_cell_ctr = -1
-        this_cell_pos = self.position
-        for sym in live_symbols:
-            for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym, []):
-                if self.from_timestamp(cell_ctr).position <= this_cell_pos:
-                    max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
-        return max_used_cell_ctr
+        with self._override_position_index_for_current_flow_semantics():
+            max_used_cell_ctr = -1
+            this_cell_pos = self.position
+            for sym in live_symbols:
+                for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym, []):
+                    if self.from_timestamp(cell_ctr).position <= this_cell_pos:
+                        max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
+            return max_used_cell_ctr
 
     def check_and_resolve_symbols(
         self, update_liveness_time_versions: bool = False

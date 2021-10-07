@@ -313,6 +313,6 @@ History
 -------------------
 * Expose in-order and any-order flow semantics via line magic;
 
-0.0.79 (2021-10-08)
+0.0.79 (2021-10-06)
 -------------------
 * Improve detection of whether cell is newly fresh;

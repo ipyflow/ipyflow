@@ -18,7 +18,7 @@ from nbsafety.data_model.code_cell import ExecutedCodeCell, cells
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.extra_builtins import EMIT_EVENT
-from nbsafety.run_mode import FlowOrder
+from nbsafety.run_mode import ExecutionMode, FlowOrder
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
@@ -392,6 +392,9 @@ class DataSymbol:
         return total
 
     def prev_obj_definitely_equal_to_current_obj(self, prev_obj: Optional[Any]) -> bool:
+        if nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
+            # always bump timestamps for reactive mode
+            return False
         if prev_obj is None:
             return False
         if not self._cached_out_of_sync or self.obj_id == self.cached_obj_id:

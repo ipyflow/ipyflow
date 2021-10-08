@@ -214,7 +214,9 @@ class NotebookSafety(singletons.NotebookSafety):
                     cells().from_id(cell_id) for cell_id in order_index_by_id
                 ) if cell is not None
             )
-            response = self.check_and_link_multiple_cells(cells_to_check=cells_to_check).to_json()
+            response = self.check_and_link_multiple_cells(
+                cells_to_check=cells_to_check, last_executed_cell_pos=order_index_by_id.get(cell_id, None)
+            ).to_json()
             response['type'] = 'cell_freshness'
             response['exec_mode'] = self.mut_settings.exec_mode.value
             response['last_executed_cell_id'] = cell_id
@@ -230,6 +232,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self,
         cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
         update_liveness_time_versions: bool = False,
+        last_executed_cell_pos: Optional[int] = None,
     ) -> FrontendCheckerResult:
         stale_cells = set()
         typecheck_error_cells = set()
@@ -237,10 +240,11 @@ class NotebookSafety(singletons.NotebookSafety):
         new_fresh_cells = set()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
+        dead_symbols_seen_so_far: Set[DataSymbol] = set()
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
-        for cell in cells_to_check:
+        for cell in sorted(cells_to_check, key=lambda c: c.position):
             try:
                 checker_result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=update_liveness_time_versions
@@ -264,12 +268,15 @@ class NotebookSafety(singletons.NotebookSafety):
 
             is_fresh = (
                 cell_id not in stale_cells and
-                cell.get_max_used_live_symbol_cell_counter(checker_result.live) > cell.cell_ctr
+                cell.get_max_used_live_symbol_cell_counter(checker_result.live - dead_symbols_seen_so_far) > cell.cell_ctr
             )
             if is_fresh:
                 fresh_cells.add(cell_id)
             if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
                 new_fresh_cells.add(cell_id)
+            if last_executed_cell_pos is not None and self.mut_settings.flow_order == FlowOrder.IN_ORDER:
+                if cell.position > last_executed_cell_pos:
+                    dead_symbols_seen_so_far |= checker_result.dead
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         for stale_cell_id in stale_cells:

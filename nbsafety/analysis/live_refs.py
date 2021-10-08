@@ -7,7 +7,7 @@ from typing import cast, TYPE_CHECKING
 from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.run_mode import ExecutionMode
+from nbsafety.run_mode import ExecutionMode, FlowOrder
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import resolve_mutating_method
 
@@ -92,7 +92,8 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         # TODO: ideally under the current abstraction we should
         #  not be resolving static references to symbols here
         if (
-            self._scope is not None
+            nbs().mut_settings.flow_order == FlowOrder.ANY_ORDER
+            and self._scope is not None
             and len(this_assign_live) == 1
             and len(this_assign_dead) == 1
             and not (this_assign_dead <= self.dead)
@@ -112,7 +113,6 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
                     # either (a) it's a no-op (so treat it as such), or
                     #        (b) lhs is newer and it doesn't make sense to refresh
                     this_assign_live.clear()
-                    this_assign_dead.clear()
         this_assign_dead -= {live[0] for live in this_assign_live}
         # for ref in this_assign_dead:
         #     if isinstance(ref, AttrSubSymbolChain) and len(ref.symbols) > 1:

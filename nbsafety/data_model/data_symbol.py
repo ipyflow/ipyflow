@@ -604,7 +604,7 @@ class DataSymbol:
         if overwrite:
             for parent in self.parents.keys() - new_deps:
                 parent.children.pop(self, None)
-            self.parents.clear()
+                self.parents.pop(self, None)
 
         for new_parent in new_deps - self.parents.keys():
             if new_parent is None:

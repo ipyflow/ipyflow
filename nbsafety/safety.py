@@ -240,11 +240,12 @@ class NotebookSafety(singletons.NotebookSafety):
         new_fresh_cells = set()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
-        dead_symbols_seen_so_far: Set[DataSymbol] = set()
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         for cell in sorted(cells_to_check, key=lambda c: c.position):
+            if last_executed_cell_pos is not None and cell.position <= last_executed_cell_pos:
+                continue
             try:
                 checker_result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=update_liveness_time_versions
@@ -252,7 +253,10 @@ class NotebookSafety(singletons.NotebookSafety):
             except SyntaxError:
                 continue
             cell_id = cell.cell_id
-            stale_symbols = {sym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
+            if self.mut_settings.flow_order == FlowOrder.STRICT:
+                stale_symbols = set()
+            else:
+                stale_symbols = {sym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
             if len(stale_symbols) > 0:
                 stale_symbols_by_cell_id[cell_id] = stale_symbols
                 stale_cells.add(cell_id)
@@ -265,18 +269,20 @@ class NotebookSafety(singletons.NotebookSafety):
                 phantom_cell_info_for_cell = cell.compute_phantom_cell_info(checker_result.used_cells)
                 if len(phantom_cell_info_for_cell) > 0:
                     phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-
             is_fresh = (
                 cell_id not in stale_cells and
-                cell.get_max_used_live_symbol_cell_counter(checker_result.live - dead_symbols_seen_so_far) > cell.cell_ctr
+                cell.get_max_used_live_symbol_cell_counter(checker_result.live) > cell.cell_ctr
             )
+            if self.mut_settings.flow_order == FlowOrder.STRICT:
+                for dead_sym in checker_result.dead:
+                    if dead_sym.timestamp.cell_num > cell.cell_ctr:
+                        is_fresh = True
             if is_fresh:
                 fresh_cells.add(cell_id)
             if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
                 new_fresh_cells.add(cell_id)
-            if last_executed_cell_pos is not None and self.mut_settings.flow_order == FlowOrder.IN_ORDER:
-                if cell.position > last_executed_cell_pos:
-                    dead_symbols_seen_so_far |= checker_result.dead
+            if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
+                break
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         for stale_cell_id in stale_cells:
@@ -285,6 +291,11 @@ class NotebookSafety(singletons.NotebookSafety):
             refresher_cell_ids = refresher_cell_ids.union(
                 *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)
             )
+            if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
+                refresher_cell_ids = {
+                    cid for cid in refresher_cell_ids
+                    if cells().from_id(cid).position < cells().from_id(stale_cell_id).position
+                }
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells

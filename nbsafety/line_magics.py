@@ -252,6 +252,8 @@ def set_flow_order(line_: str) -> None:
         flow_order = FlowOrder.ANY_ORDER
     elif line_.startswith('in') or line_ in ('ordered', 'linear'):
         flow_order = FlowOrder.IN_ORDER
+    elif line_.startswith('strict'):
+        flow_order = FlowOrder.STRICT
     else:
         logger.warning(usage)
         return

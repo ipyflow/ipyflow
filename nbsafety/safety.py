@@ -244,8 +244,9 @@ class NotebookSafety(singletons.NotebookSafety):
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         for cell in sorted(cells_to_check, key=lambda c: c.position):
-            if last_executed_cell_pos is not None and cell.position <= last_executed_cell_pos:
-                continue
+            if self.mut_settings.flow_order != FlowOrder.ANY_ORDER:
+                if last_executed_cell_pos is not None and cell.position <= last_executed_cell_pos:
+                    continue
             try:
                 checker_result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=update_liveness_time_versions

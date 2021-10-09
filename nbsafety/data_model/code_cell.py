@@ -1,6 +1,5 @@
 # -*- coding: future_annotations -*-
 import ast
-import astunparse
 import logging
 import re
 import shlex
@@ -14,16 +13,19 @@ from nbsafety.analysis.live_refs import (
     get_symbols_for_references,
     get_live_symbols_and_cells_for_references,
 )
+from nbsafety.analysis.slicing import (
+    compute_slice as compute_slice_impl,
+    compute_slice_stmts as compute_slice_stmts_impl,
+)
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.ipython_utils import cell_counter as ipy_cell_counter
 from nbsafety.run_mode import FlowOrder
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Dict, Generator, List, Optional, Set, Type, TypeVar
+    from typing import Dict, Generator, List, Optional, Set, Type
     from nbsafety.data_model.data_symbol import DataSymbol
-    from nbsafety.types import CellId
-    TimestampOrCounter = TypeVar('TimestampOrCounter', Timestamp, int)
+    from nbsafety.types import CellId, TimestampOrCounter
 
 
 logger = logging.getLogger(__name__)
@@ -265,127 +267,7 @@ class ExecutedCodeCell:
         self._cached_typecheck_result = None
 
     def compute_slice(self, stmt_level: bool = False) -> Dict[int, str]:
-        """
-        Gets a dictionary object of cell dependencies for the cell with
-        the specified execution counter.
-
-        Args:
-            - cell_num (int): cell to get dependencies for, defaults to last
-                execution counter
-
-        Returns:
-            - dict (int, str): map from required cell number to code
-                representing dependencies
-        """
-        if stmt_level:
-            stmts_by_cell_num = self.compute_slice_stmts()
-            stmts_by_cell_num.pop(self.cell_ctr, None)
-            ret = {
-                ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
-                for ctr, stmts in stmts_by_cell_num.items()
-            }
-            ret[self.cell_ctr] = self.content
-            return ret
-        else:
-            deps: Set[int] = _compute_slice_impl(self.cell_ctr)
-            return {dep: self.from_timestamp(dep).content for dep in deps}
+        return compute_slice_impl(self, stmt_level=stmt_level)
 
     def compute_slice_stmts(self) -> Dict[int, List[ast.stmt]]:
-        deps_stmt: Set[Timestamp] = _compute_slice_impl(Timestamp(self.cell_ctr, -1))
-        stmts_by_cell_num = defaultdict(list)
-        seen_stmt_ids = set()
-        for ts in sorted(deps_stmt):
-            if ts.cell_num > self.cell_ctr:
-                break
-            stmt = self.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
-            stmt_id = id(stmt)
-            if stmt is None or stmt_id in seen_stmt_ids:
-                continue
-            seen_stmt_ids.add(stmt_id)
-            if stmt is not None:
-                stmts_by_cell_num[ts.cell_num].append(stmt)
-        stmts_by_cell_num[self.cell_ctr] = list(self.to_ast().body)
-        return dict(stmts_by_cell_num)
-
-
-def _compute_slice_impl(seed_ts: TimestampOrCounter) -> Set[TimestampOrCounter]:
-    dependencies: Set[TimestampOrCounter] = set()
-    timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
-    timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
-
-    for sym in nbs().all_data_symbols():
-        if nbs().mut_settings.dynamic_slicing_enabled:
-            for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
-                if sym_timestamp_when_used < used_time:
-                    if isinstance(seed_ts, Timestamp):
-                        timestamp_to_dynamic_ts_deps[used_time].add(sym_timestamp_when_used)
-                    else:
-                        timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
-        if nbs().mut_settings.static_slicing_enabled:
-            for liveness_time, sym_timestamp_when_used in list(sym.timestamp_by_liveness_time.items()):
-                if sym_timestamp_when_used < liveness_time:
-                    if isinstance(seed_ts, Timestamp):
-                        timestamp_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
-                    else:
-                        timestamp_to_static_ts_deps[liveness_time.cell_num].add(
-                            sym_timestamp_when_used.cell_num
-                        )
-
-    # ensure we at least get the static deps
-    _get_ts_dependencies(
-        seed_ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-    )
-    if isinstance(seed_ts, Timestamp):
-        for ts in list(timestamp_to_dynamic_ts_deps.keys() | timestamp_to_static_ts_deps.keys()):
-            if ts.cell_num == seed_ts.cell_num:
-                _get_ts_dependencies(
-                    ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-                )
-    return dependencies
-
-
-def _get_ts_dependencies(
-    timestamp: TimestampOrCounter,
-    dependencies: Set[TimestampOrCounter],
-    timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-    timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-) -> None:
-    """
-    For a given timestamps, this function recursively populates a set of
-    timestamps that the given timestamp depends on, based on the live symbols.
-
-    Args:
-        - timestamp (ts_or_int): current timestamp / cell to get dependencies for
-        - dependencies (set<ts_or_int>): set of timestamps / cell coutners so far that exist
-        - cell_num_to_dynamic_deps (dict<ts_or_int, set<ts_or_int>>): mapping from used timestamp
-        to timestamp of symbol definition
-        - timestamp_to_static_ts_deps (dict<ts_or_int, set<ts_or_int>>): mapping from used timestamp
-        to timestamp of symbol definition (for statically computed timestamps)
-
-    Returns:
-        None
-    """
-    # Base case: cell already in dependencies
-    if timestamp in dependencies:
-        return
-    if isinstance(timestamp, int) and timestamp < 0:
-        return
-    if isinstance(timestamp, Timestamp) and not timestamp.is_initialized:
-        return
-
-    # Add current cell to dependencies
-    dependencies.add(timestamp)
-
-    # Retrieve cell numbers for the dependent symbols
-    # Add dynamic and static dependencies
-    dep_timestamps = timestamp_to_dynamic_ts_deps[timestamp]
-    logger.info('dynamic ts deps for %s: %s', timestamp, dep_timestamps)
-    static_ts_deps = timestamp_to_static_ts_deps[timestamp]
-    dep_timestamps |= static_ts_deps
-    logger.info('static ts deps for %s: %s', timestamp, static_ts_deps)
-
-    # For each dependent cell, recursively get their dependencies
-    for ts in dep_timestamps - dependencies:
-        _get_ts_dependencies(
-            ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-        )
+        return compute_slice_stmts_impl(self)

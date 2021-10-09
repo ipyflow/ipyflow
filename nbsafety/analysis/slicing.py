@@ -101,46 +101,50 @@ def _compute_slice_impl(seed_ts: TimestampOrCounter) -> Set[TimestampOrCounter]:
     return dependencies
 
 
-def compute_slice(cell: ExecutedCodeCell, stmt_level: bool = False) -> Dict[int, str]:
-    """
-    Gets a dictionary object of cell dependencies for the cell with
-    the specified execution counter.
+class CodeCellSlicingMixin:
+    def compute_slice(  # type: ignore
+        self: ExecutedCodeCell, stmt_level: bool = False
+    ) -> Dict[int, str]:
+        """
+        Gets a dictionary object of cell dependencies for the cell with
+        the specified execution counter.
 
-    Args:
-        - cell_num (int): cell to get dependencies for, defaults to last
-            execution counter
+        Args:
+            - cell_num (int): cell to get dependencies for, defaults to last
+                execution counter
 
-    Returns:
-        - dict (int, str): map from required cell number to code
-            representing dependencies
-    """
-    if stmt_level:
-        stmts_by_cell_num = compute_slice_stmts(cell)
-        stmts_by_cell_num.pop(cell.cell_ctr, None)
-        ret = {
-            ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
-            for ctr, stmts in stmts_by_cell_num.items()
-        }
-        ret[cell.cell_ctr] = cell.content
-        return ret
-    else:
-        deps: Set[int] = _compute_slice_impl(cell.cell_ctr)
-        return {dep: cell.from_timestamp(dep).content for dep in deps}
+        Returns:
+            - dict (int, str): map from required cell number to code
+                representing dependencies
+        """
+        if stmt_level:
+            stmts_by_cell_num = self.compute_slice_stmts()
+            stmts_by_cell_num.pop(self.cell_ctr, None)
+            ret = {
+                ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
+                for ctr, stmts in stmts_by_cell_num.items()
+            }
+            ret[self.cell_ctr] = self.content
+            return ret
+        else:
+            deps: Set[int] = _compute_slice_impl(self.cell_ctr)
+            return {dep: self.from_timestamp(dep).content for dep in deps}
 
-
-def compute_slice_stmts(cell: ExecutedCodeCell) -> Dict[int, List[ast.stmt]]:
-    deps_stmt: Set[Timestamp] = _compute_slice_impl(Timestamp(cell.cell_ctr, -1))
-    stmts_by_cell_num = defaultdict(list)
-    seen_stmt_ids = set()
-    for ts in sorted(deps_stmt):
-        if ts.cell_num > cell.cell_ctr:
-            break
-        stmt = cell.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
-        stmt_id = id(stmt)
-        if stmt is None or stmt_id in seen_stmt_ids:
-            continue
-        seen_stmt_ids.add(stmt_id)
-        if stmt is not None:
-            stmts_by_cell_num[ts.cell_num].append(stmt)
-    stmts_by_cell_num[cell.cell_ctr] = list(cell.to_ast().body)
-    return dict(stmts_by_cell_num)
+    def compute_slice_stmts(  # type: ignore
+        self: ExecutedCodeCell,
+    ) -> Dict[int, List[ast.stmt]]:
+        deps_stmt: Set[Timestamp] = _compute_slice_impl(Timestamp(self.cell_ctr, -1))
+        stmts_by_cell_num = defaultdict(list)
+        seen_stmt_ids = set()
+        for ts in sorted(deps_stmt):
+            if ts.cell_num > self.cell_ctr:
+                break
+            stmt = self.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
+            stmt_id = id(stmt)
+            if stmt is None or stmt_id in seen_stmt_ids:
+                continue
+            seen_stmt_ids.add(stmt_id)
+            if stmt is not None:
+                stmts_by_cell_num[ts.cell_num].append(stmt)
+        stmts_by_cell_num[self.cell_ctr] = list(self.to_ast().body)
+        return dict(stmts_by_cell_num)

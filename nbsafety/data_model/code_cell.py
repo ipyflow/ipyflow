@@ -13,10 +13,7 @@ from nbsafety.analysis.live_refs import (
     get_symbols_for_references,
     get_live_symbols_and_cells_for_references,
 )
-from nbsafety.analysis.slicing import (
-    compute_slice as compute_slice_impl,
-    compute_slice_stmts as compute_slice_stmts_impl,
-)
+from nbsafety.analysis.slicing import CodeCellSlicingMixin
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.ipython_utils import cell_counter as ipy_cell_counter
 from nbsafety.run_mode import FlowOrder
@@ -50,7 +47,7 @@ def cells() -> Type[ExecutedCodeCell]:
     return ExecutedCodeCell
 
 
-class ExecutedCodeCell:
+class ExecutedCodeCell(CodeCellSlicingMixin):
     _current_cell_by_cell_id: Dict[CellId, ExecutedCodeCell] = {}
     _cell_by_cell_ctr: Dict[int, ExecutedCodeCell] = {}
     _cell_counter: int = 0
@@ -265,9 +262,3 @@ class ExecutedCodeCell:
 
     def invalidate_typecheck_result(self):
         self._cached_typecheck_result = None
-
-    def compute_slice(self, stmt_level: bool = False) -> Dict[int, str]:
-        return compute_slice_impl(self, stmt_level=stmt_level)
-
-    def compute_slice_stmts(self) -> Dict[int, List[ast.stmt]]:
-        return compute_slice_stmts_impl(self)

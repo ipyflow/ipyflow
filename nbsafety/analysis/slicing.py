@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 def _get_ts_dependencies(

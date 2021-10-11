@@ -293,12 +293,12 @@ class NotebookSafety(singletons.NotebookSafety):
                 is_fresh = False
                 if self.mut_settings.dynamic_slicing_enabled:
                     for par in cell.dynamic_parents:
-                        if cells().from_id(par).cell_ctr > cell.cell_ctr:
+                        if par.cell_ctr > cell.cell_ctr:
                             is_fresh = True
                             break
                 if not is_fresh and self.mut_settings.static_slicing_enabled:
                     for par in cell.static_parents:
-                        if cells().from_id(par).cell_ctr > cell.cell_ctr:
+                        if par.cell_ctr > cell.cell_ctr:
                             is_fresh = True
                             break
             else:
@@ -320,11 +320,11 @@ class NotebookSafety(singletons.NotebookSafety):
                     if cell.cell_id in stale_cells:
                         continue
                     if self.mut_settings.dynamic_slicing_enabled:
-                        if cell.dynamic_parents & (fresh_cells | stale_cells):
+                        if cell.dynamic_parent_ids & (fresh_cells | stale_cells):
                             stale_cells.add(cell.cell_id)
                             continue
                     if self.mut_settings.static_slicing_enabled:
-                        if cell.static_parents & (fresh_cells | stale_cells):
+                        if cell.static_parent_ids & (fresh_cells | stale_cells):
                             stale_cells.add(cell.cell_id)
                 if prev_stale_cells == stale_cells:
                     break
@@ -340,9 +340,9 @@ class NotebookSafety(singletons.NotebookSafety):
             refresher_cell_ids: Set[CellId] = set()
             if self.mut_settings.flow_order == FlowOrder.DAG:
                 if self.mut_settings.dynamic_slicing_enabled:
-                    refresher_cell_ids |= cells().from_id(stale_cell_id).dynamic_parents & eligible_refresher_for_dag
+                    refresher_cell_ids |= cells().from_id(stale_cell_id)._dynamic_parents & eligible_refresher_for_dag
                 if self.mut_settings.static_slicing_enabled:
-                    refresher_cell_ids |= cells().from_id(stale_cell_id).static_parents & eligible_refresher_for_dag
+                    refresher_cell_ids |= cells().from_id(stale_cell_id)._static_parents & eligible_refresher_for_dag
             else:
                 stale_syms = stale_symbols_by_cell_id.get(stale_cell_id, set())
                 refresher_cell_ids = refresher_cell_ids.union(

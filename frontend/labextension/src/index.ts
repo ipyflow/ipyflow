@@ -420,6 +420,7 @@ const connectToComm = (
       refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
       cellPendingExecution = null;
       const exec_mode = msg.content.data['exec_mode'] as string;
+      const flow_order = msg.content.data['flow_order']
       lastExecutionMode = exec_mode;
       lastExecutionHighlightsEnabled = msg.content.data['highlights_enabled'] as boolean;
       if (exec_mode === 'normal') {
@@ -435,9 +436,16 @@ const connectToComm = (
           }
           if (newFreshCells.has(cell.model.id) && !executedReactiveFreshCells.has(cell.model.id)) {
             if (cell.model.type === 'code') {
-              cellPendingExecution = (cell as CodeCell);
+              const codeCell = (cell as CodeCell);
+              if (cellPendingExecution === null) {
+                cellPendingExecution = codeCell;
+                // break early if using one of the order-based semantics
+                found = (flow_order === 'in_order' || flow_order === 'strict');
+              } else if (codeCell.model.executionCount !== null && codeCell.model.executionCount < cellPendingExecution.model.executionCount) {
+                // otherwise, execute in order of earliest execution counter
+                cellPendingExecution = codeCell;
+              }
             }
-            found = true;
           }
         });
       } else {

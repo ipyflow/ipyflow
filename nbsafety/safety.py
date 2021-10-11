@@ -228,6 +228,7 @@ class NotebookSafety(singletons.NotebookSafety):
             ).to_json()
             response['type'] = 'cell_freshness'
             response['exec_mode'] = self.mut_settings.exec_mode.value
+            response['flow_order'] = self.mut_settings.flow_order.value
             response['last_executed_cell_id'] = cell_id
             response['highlights_enabled'] = self.mut_settings.highlights_enabled
             if comm is not None:

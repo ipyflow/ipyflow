@@ -364,7 +364,11 @@ def get_live_symbols_and_cells_for_references(
     ):
         if update_liveness_time_versions:
             ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
-            dsym.timestamp_by_liveness_time[Timestamp(cell_ctr, stmt_ctr)] = ts_to_use
+            liveness_time = Timestamp(cell_ctr, stmt_ctr)
+            assert liveness_time > ts_to_use
+            if ts_to_use.is_initialized:
+                nbs().add_static_data_dep(liveness_time, ts_to_use)
+                dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
         if is_called:
             called_dsyms.add((dsym, stmt_ctr))
         else:

@@ -254,6 +254,8 @@ def set_flow_order(line_: str) -> None:
         flow_order = FlowOrder.IN_ORDER
     elif line_.startswith('strict'):
         flow_order = FlowOrder.STRICT
+    elif line_.startswith('dag'):
+        flow_order = FlowOrder.DAG
     else:
         logger.warning(usage)
         return

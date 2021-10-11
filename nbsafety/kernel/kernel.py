@@ -29,7 +29,7 @@ class SafeKernel(IPythonKernel):
         """
         cell_id = parent.get('metadata', {}).get('cellId', None)
         if cell_id is not None:
-            nbs().set_active_cell(cell_id, position_idx=None)
+            nbs().set_active_cell(cell_id)
         return super().init_metadata(parent)
 
     if inspect.iscoroutinefunction(IPythonKernel.do_execute):

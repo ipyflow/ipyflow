@@ -24,3 +24,4 @@ class FlowOrder(Enum):
     ANY_ORDER = 'any_order'
     IN_ORDER = 'in_order'
     STRICT = 'strict'
+    DAG = 'dag'

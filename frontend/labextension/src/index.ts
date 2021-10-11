@@ -271,6 +271,9 @@ const connectToComm = (
         newFreshCells = new Set<string>();
         executedReactiveFreshCells = new Set<string>();
         updateUI(notebook);
+        comm.send({
+          type: 'reactivity_cleanup',
+        });
       }
     });
   };

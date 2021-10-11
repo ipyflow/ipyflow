@@ -20,7 +20,7 @@ from nbsafety.run_mode import FlowOrder
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Dict, Generator, List, Optional, Set, Type
+    from typing import Dict, Generator, List, Optional, Set, Type, Union
     from nbsafety.data_model.data_symbol import DataSymbol
     from nbsafety.types import CellId, TimestampOrCounter
 
@@ -57,6 +57,10 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
         self.content: str = content
+        self.dynamic_parents: Set[CellId] = set()
+        self.dynamic_children: Set[CellId] = set()
+        self.static_parents: Set[CellId] = set()
+        self.static_children: Set[CellId] = set()
         self._used_cell_counters_by_live_symbol: Dict[DataSymbol, Set[int]] = defaultdict(set)
         self._cached_ast: Optional[ast.Module] = None
         self._cached_typecheck_result: Optional[bool] = None if nbs().settings.mark_typecheck_failures_unsafe else True
@@ -80,15 +84,31 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self._fresh = new_fresh
         return old_fresh
 
+    def add_dynamic_parent(self, parent: Union[ExecutedCodeCell, CellId]) -> None:
+        pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
+        if pid == self.cell_id:
+            return
+        self.dynamic_parents.add(pid)
+        self.from_id(pid).dynamic_children.add(self.cell_id)
+
+    def add_static_parent(self, parent: Union[ExecutedCodeCell, CellId]) -> None:
+        pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
+        if pid == self.cell_id:
+            return
+        self.static_parents.add(pid)
+        self.from_id(pid).static_children.add(self.cell_id)
+
     @classmethod
-    def create_and_track(
-        cls, cell_id: CellId, content: str, validate_ipython_counter: bool = True
-    ) -> ExecutedCodeCell:
+    def create_and_track(cls, cell_id: CellId, content: str, validate_ipython_counter: bool = True) -> ExecutedCodeCell:
         cls._cell_counter += 1
         cell_ctr = cls._cell_counter
         if validate_ipython_counter:
             assert cell_ctr == ipy_cell_counter()
+        prev_cell = cls.from_id(cell_id)
         cell = cls(cell_id, cell_ctr, content)
+        if prev_cell is not None:
+            cell.dynamic_children = prev_cell.dynamic_children
+            cell.static_children = prev_cell.static_children
         cls._cell_by_cell_ctr[cell_ctr] = cell
         cur_cell = cls._current_cell_by_cell_id.get(cell_id, None)
         cur_cell_ctr = None if cur_cell is None else cur_cell.cell_ctr

@@ -111,6 +111,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self.settrace = settrace or sys.settrace
         self.namespaces: Dict[int, Namespace] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
+        self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
@@ -119,7 +121,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[str] = None
-        self.active_cell_position_idx = -1
         self.safety_issue_detected = False
         if cell_magic_name is None:
             self._cell_magic = None
@@ -159,9 +160,19 @@ class NotebookSafety(singletons.NotebookSafety):
     def cell_counter(self) -> int:
         return cells().exec_counter()
 
+    def add_dynamic_data_dep(self, child: Timestamp, parent: Timestamp):
+        self.dynamic_data_deps[child].add(parent)
+        cells().from_timestamp(child).add_dynamic_parent(cells().from_timestamp(parent))
+
+    def add_static_data_dep(self, child: Timestamp, parent: Timestamp):
+        self.static_data_deps[child].add(parent)
+        cells().from_timestamp(child).add_static_parent(cells().from_timestamp(parent))
+
     def reset_cell_counter(self):
         # only called in test context
         assert not self.settings.store_history
+        self.dynamic_data_deps.clear()
+        self.static_data_deps.clear()
         for sym in self.all_data_symbols():
             sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = Timestamp.uninitialized()
             sym.timestamp_by_used_time.clear()
@@ -187,10 +198,8 @@ class NotebookSafety(singletons.NotebookSafety):
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping
 
-    def set_active_cell(self, cell_id, position_idx=-1):
+    def set_active_cell(self, cell_id):
         self._active_cell_id = cell_id
-        if position_idx is not None:
-            self.active_cell_position_idx = position_idx
 
     def _comm_target(self, comm, open_msg):
         @comm.on_msg
@@ -202,10 +211,10 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def handle(self, request, comm=None):
         if request['type'] == 'change_active_cell':
-            self.set_active_cell(request['active_cell_id'], position_idx=request.get('active_cell_order_idx', -1))
+            self.set_active_cell(request['active_cell_id'])
         elif request['type'] == 'cell_freshness':
             if self._active_cell_id is None:
-                self._active_cell_id = request.get('executed_cell_id', None)
+                self.set_active_cell(request.get('executed_cell_id', None))
             cell_id = request.get('executed_cell_id', None)
             order_index_by_id = request['order_index_by_cell_id']
             cells().set_cell_positions(order_index_by_id)
@@ -215,7 +224,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 ) if cell is not None
             )
             response = self.check_and_link_multiple_cells(
-                cells_to_check=cells_to_check, last_executed_cell_pos=order_index_by_id.get(cell_id, None)
+                cells_to_check=cells_to_check, last_executed_cell_id=cell_id
             ).to_json()
             response['type'] = 'cell_freshness'
             response['exec_mode'] = self.mut_settings.exec_mode.value
@@ -223,6 +232,9 @@ class NotebookSafety(singletons.NotebookSafety):
             response['highlights_enabled'] = self.mut_settings.highlights_enabled
             if comm is not None:
                 comm.send(response)
+        elif request['type'] == 'reactivity_cleanup':
+            for cell in cells().all_cells_most_recently_run_for_each_id():
+                cell.set_fresh(False)
         else:
             dbg_msg = 'Unsupported request type for request %s' % request
             logger.error(dbg_msg)
@@ -232,8 +244,12 @@ class NotebookSafety(singletons.NotebookSafety):
         self,
         cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
         update_liveness_time_versions: bool = False,
-        last_executed_cell_pos: Optional[int] = None,
+        last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
+        if last_executed_cell_id is None:
+            last_executed_cell_pos = None
+        else:
+            last_executed_cell_pos = cells().from_id(last_executed_cell_id).position
         stale_cells = set()
         typecheck_error_cells = set()
         fresh_cells = set()
@@ -243,8 +259,9 @@ class NotebookSafety(singletons.NotebookSafety):
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
-        for cell in sorted(cells_to_check, key=lambda c: c.position):
-            if self.mut_settings.flow_order != FlowOrder.ANY_ORDER:
+        cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
+        for cell in cells_to_check:
+            if self.mut_settings.flow_order not in (FlowOrder.ANY_ORDER, FlowOrder.DAG):
                 if last_executed_cell_pos is not None and cell.position <= last_executed_cell_pos:
                     continue
             try:
@@ -254,7 +271,7 @@ class NotebookSafety(singletons.NotebookSafety):
             except SyntaxError:
                 continue
             cell_id = cell.cell_id
-            if self.mut_settings.flow_order == FlowOrder.STRICT:
+            if self.mut_settings.flow_order in (FlowOrder.STRICT, FlowOrder.DAG):
                 stale_symbols = set()
             else:
                 stale_symbols = {sym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
@@ -266,14 +283,25 @@ class NotebookSafety(singletons.NotebookSafety):
             for dead_sym in checker_result.dead:
                 killing_cell_ids_for_symbol[dead_sym].add(cell_id)
 
+            is_fresh = cell_id not in stale_cells
             if self.settings.mark_phantom_cell_usages_unsafe:
                 phantom_cell_info_for_cell = cell.compute_phantom_cell_info(checker_result.used_cells)
                 if len(phantom_cell_info_for_cell) > 0:
                     phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-            is_fresh = (
-                cell_id not in stale_cells and
-                cell.get_max_used_live_symbol_cell_counter(checker_result.live) > cell.cell_ctr
-            )
+            if self.mut_settings.flow_order == FlowOrder.DAG:
+                is_fresh = False
+                if self.mut_settings.dynamic_slicing_enabled:
+                    for par in cell.dynamic_parents:
+                        if cells().from_id(par).cell_ctr > cell.cell_ctr:
+                            is_fresh = True
+                            break
+                if not is_fresh and self.mut_settings.static_slicing_enabled:
+                    for par in cell.static_parents:
+                        if cells().from_id(par).cell_ctr > cell.cell_ctr:
+                            is_fresh = True
+                            break
+            else:
+                is_fresh = is_fresh and cell.get_max_used_live_symbol_cell_counter(checker_result.live) > cell.cell_ctr
             if self.mut_settings.flow_order == FlowOrder.STRICT:
                 for dead_sym in checker_result.dead:
                     if dead_sym.timestamp.cell_num > cell.cell_ctr:
@@ -284,19 +312,48 @@ class NotebookSafety(singletons.NotebookSafety):
                 new_fresh_cells.add(cell_id)
             if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
                 break
+        if self.mut_settings.flow_order == FlowOrder.DAG:
+            prev_stale_cells: Set[CellId] = set()
+            while True:
+                for cell in cells_to_check:
+                    if cell.cell_id in stale_cells:
+                        continue
+                    if self.mut_settings.dynamic_slicing_enabled:
+                        if cell.dynamic_parents & (fresh_cells | stale_cells):
+                            stale_cells.add(cell.cell_id)
+                            continue
+                    if self.mut_settings.static_slicing_enabled:
+                        if cell.static_parents & (fresh_cells | stale_cells):
+                            stale_cells.add(cell.cell_id)
+                if prev_stale_cells == stale_cells:
+                    break
+                prev_stale_cells = set(stale_cells)
+            fresh_cells -= stale_cells
+            new_fresh_cells -= stale_cells
+            for cell_id in stale_cells:
+                cells().from_id(cell_id).set_fresh(False)
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
+        eligible_refresher_for_dag = fresh_cells | stale_cells
         for stale_cell_id in stale_cells:
-            stale_syms = stale_symbols_by_cell_id[stale_cell_id]
             refresher_cell_ids: Set[CellId] = set()
-            refresher_cell_ids = refresher_cell_ids.union(
-                *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)
-            )
+            if self.mut_settings.flow_order == FlowOrder.DAG:
+                if self.mut_settings.dynamic_slicing_enabled:
+                    refresher_cell_ids |= cells().from_id(stale_cell_id).dynamic_parents & eligible_refresher_for_dag
+                if self.mut_settings.static_slicing_enabled:
+                    refresher_cell_ids |= cells().from_id(stale_cell_id).static_parents & eligible_refresher_for_dag
+            else:
+                stale_syms = stale_symbols_by_cell_id.get(stale_cell_id, set())
+                refresher_cell_ids = refresher_cell_ids.union(
+                    *(killing_cell_ids_for_symbol[stale_sym] for stale_sym in stale_syms)
+                )
             if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
                 refresher_cell_ids = {
                     cid for cid in refresher_cell_ids
                     if cells().from_id(cid).position < cells().from_id(stale_cell_id).position
                 }
+            if last_executed_cell_id is not None:
+                refresher_cell_ids.discard(last_executed_cell_id)
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
         # transitive closer up until we hit non-stale refresher cells
@@ -387,10 +444,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 if top_level_sym.is_import:
                     cell_num_to_used_imports[used_time.cell_num].add(top_level_sym)
                 else:
-                    if sym_timestamp_when_used < used_time:
-                        cell_num_to_dynamic_cell_parents[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
-                        cell_num_to_dynamic_inputs[used_time.cell_num].add(top_level_sym)
-                        cell_num_to_dynamic_cell_children[sym_timestamp_when_used.cell_num].add(used_time.cell_num)
+                    cell_num_to_dynamic_cell_parents[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
+                    cell_num_to_dynamic_inputs[used_time.cell_num].add(top_level_sym)
+                    cell_num_to_dynamic_cell_children[sym_timestamp_when_used.cell_num].add(used_time.cell_num)
                     cell_num_to_dynamic_outputs[sym_timestamp_when_used.cell_num].add(top_level_sym)
             if not top_level_sym.is_import:
                 for updated_time in sym.updated_timestamps:

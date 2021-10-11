@@ -21,8 +21,7 @@ logger.setLevel(logging.WARNING)
 def _get_ts_dependencies(
     timestamp: TimestampOrCounter,
     dependencies: Set[TimestampOrCounter],
-    timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
-    timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
+    timestamp_to_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
 ) -> None:
     """
     For a given timestamps, this function recursively populates a set of
@@ -52,52 +51,51 @@ def _get_ts_dependencies(
 
     # Retrieve cell numbers for the dependent symbols
     # Add dynamic and static dependencies
-    dep_timestamps = timestamp_to_dynamic_ts_deps[timestamp]
+    dep_timestamps = timestamp_to_ts_deps[timestamp]
     logger.info('dynamic ts deps for %s: %s', timestamp, dep_timestamps)
-    static_ts_deps = timestamp_to_static_ts_deps[timestamp]
-    dep_timestamps |= static_ts_deps
-    logger.info('static ts deps for %s: %s', timestamp, static_ts_deps)
 
     # For each dependent cell, recursively get their dependencies
     for ts in dep_timestamps - dependencies:
-        _get_ts_dependencies(
-            ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-        )
+        _get_ts_dependencies(ts, dependencies, timestamp_to_ts_deps)
+
+
+def _coarsen_timestamps(graph: Dict[Timestamp, Set[Timestamp]]) -> Dict[int, Set[int]]:
+    coarsened: Dict[int, Set[int]] = defaultdict(set)
+    for child, parents in graph.items():
+        for par in parents:
+            coarsened[child.cell_num].add(par.cell_num)
+    return coarsened
+
+
+def _graph_union(
+    graph: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
+    subsumed: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
+):
+    for child, parents in subsumed.items():
+        graph[child] |= parents
+    return graph
 
 
 def _compute_slice_impl(seed_ts: TimestampOrCounter) -> Set[TimestampOrCounter]:
     dependencies: Set[TimestampOrCounter] = set()
-    timestamp_to_dynamic_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
-    timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
-
-    for sym in nbs().all_data_symbols():
-        if nbs().mut_settings.dynamic_slicing_enabled:
-            for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
-                if sym_timestamp_when_used < used_time:
-                    if isinstance(seed_ts, Timestamp):
-                        timestamp_to_dynamic_ts_deps[used_time].add(sym_timestamp_when_used)
-                    else:
-                        timestamp_to_dynamic_ts_deps[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
-        if nbs().mut_settings.static_slicing_enabled:
-            for liveness_time, sym_timestamp_when_used in list(sym.timestamp_by_liveness_time.items()):
-                if sym_timestamp_when_used < liveness_time:
-                    if isinstance(seed_ts, Timestamp):
-                        timestamp_to_static_ts_deps[liveness_time].add(sym_timestamp_when_used)
-                    else:
-                        timestamp_to_static_ts_deps[liveness_time.cell_num].add(
-                            sym_timestamp_when_used.cell_num
-                        )
+    timestamp_to_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
+    if nbs().mut_settings.dynamic_slicing_enabled:
+        if isinstance(seed_ts, Timestamp):
+            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, nbs().dynamic_data_deps)
+        else:
+            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, _coarsen_timestamps(nbs().dynamic_data_deps))
+    if nbs().mut_settings.static_slicing_enabled:
+        if isinstance(seed_ts, Timestamp):
+            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, nbs().static_data_deps)
+        else:
+            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, _coarsen_timestamps(nbs().static_data_deps))
 
     # ensure we at least get the static deps
-    _get_ts_dependencies(
-        seed_ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-    )
+    _get_ts_dependencies(seed_ts, dependencies, timestamp_to_ts_deps)
     if isinstance(seed_ts, Timestamp):
-        for ts in list(timestamp_to_dynamic_ts_deps.keys() | timestamp_to_static_ts_deps.keys()):
+        for ts in list(timestamp_to_ts_deps.keys()):
             if ts.cell_num == seed_ts.cell_num:
-                _get_ts_dependencies(
-                    ts, dependencies, timestamp_to_dynamic_ts_deps, timestamp_to_static_ts_deps
-                )
+                _get_ts_dependencies(ts, dependencies, timestamp_to_ts_deps)
     return dependencies
 
 

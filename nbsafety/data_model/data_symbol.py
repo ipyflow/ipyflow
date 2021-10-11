@@ -545,7 +545,7 @@ class DataSymbol:
         assert not hasattr(builtins, EMIT_EVENT), 'this should be called outside of tracing / execution context'
         if not self.is_stale:
             return False
-        if nbs().mut_settings.flow_order == FlowOrder.ANY_ORDER:
+        if nbs().mut_settings.flow_order in (FlowOrder.ANY_ORDER, FlowOrder.DAG):
             return True
         if cells().exec_counter() > self._last_computed_staleness_cache_ts:
             self._is_stale_at_position_cache.clear()
@@ -640,10 +640,10 @@ class DataSymbol:
             used_time = Timestamp.current()
         if nbs().is_develop:
             logger.info('sym `%s` used in cell %d last updated in cell %d', self, used_time.cell_num, self.timestamp)
-        if used_time not in self.timestamp_by_used_time and self.timestamp < used_time:
-            self.timestamp_by_used_time[used_time] = (
-                self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
-            )
+        ts_to_use = self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
+        if ts_to_use.is_initialized and used_time not in self.timestamp_by_used_time and ts_to_use < used_time:
+            nbs().add_dynamic_data_dep(used_time, ts_to_use)
+            self.timestamp_by_used_time[used_time] = ts_to_use
 
     def refresh(
         self,

@@ -195,11 +195,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             self.generic_visit(node.args)
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
-        self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
-        if isinstance(node.func, (ast.Attribute, ast.Subscript)):
-            with self.attrsub_context():
-                self.visit(node.func)
-        else:
+        if not self._inside_attrsub:
+            self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
+        with self.attrsub_context():
             self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute):

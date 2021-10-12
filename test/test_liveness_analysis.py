@@ -1,19 +1,37 @@
 # -*- coding: future_annotations -*-
 import ast
 import sys
+from typing import TYPE_CHECKING
 
+from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts
+from .utils import make_safety_fixture
+
+if TYPE_CHECKING:
+    from typing import Set
+    from nbsafety.types import SymbolRef
+
+
+_safety_fixture, _ = make_safety_fixture()
+
+
+def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:
+    simplified = set()
+    for sym in symbols:
+        if isinstance(sym, AttrSubSymbolChain):
+            sym = sym.symbols[0]
+        if isinstance(sym, CallPoint):
+            sym = sym.symbol
+        if isinstance(sym, str):
+            simplified.add(sym)
+    return simplified
 
 
 def compute_live_dead_symbol_refs(code):
     live, dead = compute_live_dead_symbol_refs_with_stmts(code)
     live = {ref[0] for ref in live}
-    live, dead = _remove_callpoints(live), _remove_callpoints(dead)
+    live, dead = _simplify_symbol_refs(live), _simplify_symbol_refs(dead)
     return live, dead
-
-
-def _remove_callpoints(symbols):
-    return set(sym for sym in symbols if isinstance(sym, str))
 
 
 def test_simple():
@@ -44,7 +62,7 @@ def test_comprehension_with_killed_elt():
 
 def test_comprehension_with_live_elt():
     live, dead = compute_live_dead_symbol_refs('[x for y in range(10) for _ in range(11)]')
-    assert live == {'x', 'range'}
+    assert live == {'x', 'range'}, 'got %s' % live
     assert dead == {'y', '_'}
 
 

@@ -40,6 +40,19 @@ def extract_reactive_vars(s: str) -> List[str]:
     return reactive_vars
 
 
+def replace_reactive_vars(s: str) -> str:
+    portions = []
+    while True:
+        m = REACTIVE_VAR_REGEX.match(s)
+        if m is None:
+            break
+        start, end = m.span(1)
+        portions.append(s[:start])
+        portions.append(s[start + 1:end])
+        s = s[end:]
+    return "".join(portions)
+
+
 def test_simple():
     assert REACTIVE_VAR_REGEX.match("") is None
     assert REACTIVE_VAR_REGEX.match("foo") is None
@@ -51,5 +64,8 @@ def test_simple():
     assert REACTIVE_VAR_REGEX.match("\n$foo bar").group(1) == "$foo"
     assert REACTIVE_VAR_REGEX.match("\n'$foo' $bar").group(1) == "$bar"
     assert extract_reactive_vars("$foo $bar") == ["$foo", "$bar"]
+    assert replace_reactive_vars("$foo $bar") == "foo bar"
     assert extract_reactive_vars("$foo bar $baz42") == ["$foo", "$baz42"]
+    assert replace_reactive_vars("$foo bar $baz42") == "foo bar baz42"
     assert extract_reactive_vars("$foo $42bar $_baz42") == ["$foo", "$_baz42"]
+    assert replace_reactive_vars("$foo $42bar $_baz42") == "foo $42bar _baz42"

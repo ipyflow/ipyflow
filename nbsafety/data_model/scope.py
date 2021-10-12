@@ -136,7 +136,7 @@ class Scope:
             if isinstance(name, CallPoint):
                 next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
                 if next_dsym is not None:
-                    yield next_dsym, None if is_last else chain.symbols[i + 1], True, False
+                    yield next_dsym, None if is_last else chain.symbols[i + 1], True, is_last
                 break
             next_dsym = cur_scope.lookup_data_symbol_by_name(name)
             if next_dsym is None:

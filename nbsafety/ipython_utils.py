@@ -49,6 +49,10 @@ def ast_transformer_context(transformers):
     return _IPY.ast_transformer_context(transformers)
 
 
+def input_transformer_context(transformers):
+    return _IPY.input_transformer_context(transformers)
+
+
 def cell_counter() -> int:
     if _IPY.cell_counter is None:
         raise ValueError('should be inside context manager here')

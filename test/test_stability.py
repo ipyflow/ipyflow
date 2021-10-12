@@ -7,7 +7,7 @@ logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
 # _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture()
+_safety_fixture, run_cell_ = make_safety_fixture(enable_reactive_variables=True)
 
 
 def run_cell(cell, **kwargs):
@@ -171,3 +171,9 @@ def test_syntax_error_does_not_completely_mess_up_kernel():
     except SyntaxError:
         pass
     run_cell('x = 5')
+
+
+def test_reactive_variable_does_not_break():
+    run_cell('x = 0')
+    run_cell('y = $x + 1')
+    run_cell('print($y)')

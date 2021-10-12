@@ -4,7 +4,7 @@ import copy
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Set
+    from typing import Dict, List, Optional, Set, Tuple
     from nbsafety.types import CellId
 
 
@@ -15,11 +15,15 @@ class StatementMapper(ast.NodeVisitor):
         line_to_stmt_map: Dict[int, ast.stmt],
         id_map: Dict[int, ast.AST],
         parent_map: Dict[int, ast.AST],
+        reactive_node_ids: Set[int],
+        reactive_var_positions: Set[Tuple[int, int]],
     ):
         self._cell_id: Optional[CellId] = cell_id
         self.line_to_stmt_map = line_to_stmt_map
         self.id_map = id_map
         self.parent_map = parent_map
+        self.reactive_node_ids = reactive_node_ids
+        self.reactive_var_positions = reactive_var_positions
         self.traversal: List[ast.AST] = []
 
     def __call__(self, node: ast.Module) -> Dict[int, ast.AST]:
@@ -36,6 +40,8 @@ class StatementMapper(ast.NodeVisitor):
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
             self.id_map[id(nc)] = nc
+            if isinstance(nc, ast.Name) and (nc.lineno, nc.col_offset) in self.reactive_var_positions:
+                self.reactive_node_ids.add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

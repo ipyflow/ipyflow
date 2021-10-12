@@ -16,10 +16,12 @@ from IPython.core.magic import register_cell_magic, register_line_magic
 
 from nbsafety.ipython_utils import (
     ast_transformer_context,
+    input_transformer_context,
     run_cell,
     save_number_of_currently_executing_cell,
 )
 from nbsafety import line_magics
+from nbsafety.analysis.reactive_vars import make_tracking_reactive_variable_replacer
 from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
@@ -50,6 +52,7 @@ class NotebookSafetySettings(NamedTuple):
     mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool
+    enable_reactive_variables: bool
     mode: SafetyRunMode
 
 
@@ -97,6 +100,7 @@ class NotebookSafety(singletons.NotebookSafety):
             mark_stale_symbol_usages_unsafe=kwargs.pop('mark_stale_symbol_usages_unsafe', True),
             mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
             mark_phantom_cell_usages_unsafe=kwargs.pop('mark_phantom_cell_usages_unsafe', False),
+            enable_reactive_variables=kwargs.pop('enable_reactive_variables', False),
             mode=SafetyRunMode.get(),
         )
         self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
@@ -117,6 +121,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_symbols: Set[DataSymbol] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
+        self.reactive_variable_node_ids: Set[int] = set()
         self.loop_iter_flag_names: Set[str] = set()
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
@@ -543,8 +548,12 @@ class NotebookSafety(singletons.NotebookSafety):
 
         try:
             with TraceManager.instance().tracing_context():
-                with ast_transformer_context([SafetyAstRewriter(cell_id)]):
-                    yield
+                ast_rewriter = SafetyAstRewriter(cell_id)
+                with input_transformer_context([
+                    make_tracking_reactive_variable_replacer(ast_rewriter)
+                ] if self.settings.enable_reactive_variables else []):
+                    with ast_transformer_context([ast_rewriter]):
+                        yield
         finally:
             TraceManager.clear_instance()
 

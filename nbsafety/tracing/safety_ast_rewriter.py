@@ -11,7 +11,7 @@ from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.tracing.stmt_mapper import StatementMapper
 
 if TYPE_CHECKING:
-    from typing import Optional
+    from typing import Optional, Set, Tuple
     from nbsafety.types import CellId
 
 
@@ -22,6 +22,10 @@ logger.setLevel(logging.WARNING)
 class SafetyAstRewriter(ast.NodeTransformer):
     def __init__(self, cell_id: Optional[CellId]):
         self._cell_id: Optional[CellId] = cell_id
+        self._reacive_var_positions: Set[Tuple[int, int]] = set()
+
+    def register_reactive_var_position(self, lineno: int, col_offset: int) -> None:
+        self._reacive_var_positions.add((lineno, col_offset))
 
     def visit(self, node: ast.AST):
         assert isinstance(node, ast.Module)
@@ -31,6 +35,8 @@ class SafetyAstRewriter(ast.NodeTransformer):
                 nbs().statement_cache[cells().exec_counter()],
                 nbs().ast_node_by_id,
                 nbs().parent_node_by_id,
+                nbs().reactive_variable_node_ids,
+                self._reacive_var_positions,
             )
             orig_to_copy_mapping = mapper(node)
             cells().current_cell().to_ast(override=cast(ast.Module, orig_to_copy_mapping[id(node)]))

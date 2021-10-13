@@ -2,6 +2,10 @@
 import ast
 
 from nbsafety.analysis.symbol_ref import get_attrsub_symbol_chain, Atom as at
+from .utils import make_safety_fixture
+
+
+_safety_fixture, _ = make_safety_fixture()
 
 
 def test_basic():

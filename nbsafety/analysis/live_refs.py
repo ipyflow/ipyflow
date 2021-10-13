@@ -1,6 +1,7 @@
 # -*- coding: future_annotations -*-
 import ast
 import logging
+import sys
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.symbol_ref import get_attrsub_symbol_chain, SymbolRef, Atom
@@ -125,8 +126,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self.live |= this_assign_live
         self.dead |= this_assign_dead
 
-    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
-        self.visit_Assign_impl([node.target], node.value)
+    if sys.version_info >= (3, 8):
+        def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
+            self.visit_Assign_impl([node.target], node.value)
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self.visit_Assign_impl(node.targets, node.value)

@@ -23,28 +23,29 @@ class CallPoint(CommonEqualityMixin):
         return self.symbol + '(...)'
 
 
-class AttrSubSymbolChain(CommonEqualityMixin):
+class SymbolRef(CommonEqualityMixin):
     def __init__(self, symbols: Sequence[Union[SupportedIndexType, CallPoint]]):
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
-        self.symbols: Tuple[Union[SupportedIndexType, CallPoint], ...] = tuple(symbols)
-        self.call_points = tuple(sym for sym in self.symbols if isinstance(sym, CallPoint))
+        if isinstance(symbols, str):
+            symbols = [symbols]
+        self.chain: Tuple[Union[SupportedIndexType, CallPoint], ...] = tuple(symbols)
 
     def __hash__(self):
-        return hash(self.symbols)
+        return hash(self.chain)
 
     def __repr__(self):
-        return repr(self.symbols)
+        return repr(self.chain)
 
 
 class GetAttrSubSymbols(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Union[str, int, Tuple[Union[str, int], ...], CallPoint]] = []
 
-    def __call__(self, node: Union[ast.Attribute, ast.Subscript, ast.Call, ast.Name]) -> AttrSubSymbolChain:
+    def __call__(self, node: Union[ast.Attribute, ast.Subscript, ast.Call, ast.Name]) -> SymbolRef:
         self.visit(node)
         self.symbol_chain.reverse()
-        return AttrSubSymbolChain(self.symbol_chain)
+        return SymbolRef(self.symbol_chain)
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
@@ -92,13 +93,13 @@ class GetAttrSubSymbols(ast.NodeVisitor):
         return
 
 
-def get_attrsub_symbol_chain(maybe_node: Union[str, ast.Attribute, ast.Subscript, ast.Call]) -> AttrSubSymbolChain:
-    if isinstance(maybe_node, (ast.Attribute, ast.Subscript, ast.Call)):
+def get_attrsub_symbol_chain(maybe_node: Union[str, ast.Name, ast.Attribute, ast.Subscript, ast.Call]) -> SymbolRef:
+    if isinstance(maybe_node, (ast.Name, ast.Attribute, ast.Subscript, ast.Call)):
         node = maybe_node
     else:
-        node = cast('Union[ast.Attribute, ast.Subscript, ast.Call]',
+        node = cast('Union[ast.Name, ast.Attribute, ast.Subscript, ast.Call]',
                     cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
-    if not isinstance(node, (ast.Attribute, ast.Subscript, ast.Call)):
+    if not isinstance(node, (ast.Name, ast.Attribute, ast.Subscript, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
     return GetAttrSubSymbols()(node)
 

@@ -7,22 +7,19 @@ from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, CallPoint a
 def test_basic():
     node = ast.parse('a.b.c.d.e.f').body[0].value
     symchain = get_attrsub_symbol_chain(node)
-    assert symchain.symbols == ('a', 'b', 'c', 'd', 'e', 'f')
-    assert symchain.call_points == ()
+    assert symchain.chain == ('a', 'b', 'c', 'd', 'e', 'f')
 
 
 def test_calls_none_at_endpoints():
     node = ast.parse('a.b.c().d.e().f').body[0].value
     symchain = get_attrsub_symbol_chain(node)
-    assert symchain.symbols == ('a', 'b', Cp('c'), 'd', Cp('e'), 'f')
-    assert symchain.call_points == (Cp('c'), Cp('e'))
+    assert symchain.chain == ('a', 'b', Cp('c'), 'd', Cp('e'), 'f')
 
 
 def test_calls_at_endpoints():
     node = ast.parse('a().b.c().d.e.f()').body[0].value
     symchain = get_attrsub_symbol_chain(node)
-    assert symchain.symbols == (Cp('a'), 'b', Cp('c'), 'd', 'e', Cp('f'))
-    assert symchain.call_points == (Cp('a'), Cp('c'), Cp('f'))
+    assert symchain.chain == (Cp('a'), 'b', Cp('c'), 'd', 'e', Cp('f'))
 
 
 def test_hash():

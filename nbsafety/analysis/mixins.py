@@ -4,18 +4,18 @@ from contextlib import contextmanager
 from typing import Sequence, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Union
+    from typing import Generator, Union
 
 
 class SkipUnboundArgsMixin(ast.NodeVisitor):
     # Only need to check for default arguments
-    def visit_arguments(self, node):
+    def visit_arguments(self, node) -> None:
         self.visit(node.defaults)
         self.visit(node.kw_defaults)
 
 
 class VisitListsMixin(ast.NodeVisitor):
-    def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]):
+    def generic_visit(self, node: Union[ast.AST, Sequence[ast.AST]]) -> None:
         if node is None:
             return
         elif isinstance(node, Sequence):
@@ -27,7 +27,7 @@ class VisitListsMixin(ast.NodeVisitor):
 
 class SaveOffAttributesMixin:
     @contextmanager
-    def push_attributes(self, **kwargs):
+    def push_attributes(self, **kwargs) -> Generator[None, None, None]:
         for k in kwargs:
             if not hasattr(self, k):
                 raise AttributeError('requested to save unfound attribute %s of object %s' % (k, self))

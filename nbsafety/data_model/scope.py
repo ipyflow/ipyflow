@@ -7,7 +7,7 @@ from typing import cast, TYPE_CHECKING
 
 from IPython import get_ipython
 
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.attr_symbols import SymbolRef, CallPoint
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.utils.misc_utils import GetterFallback
 from nbsafety.singletons import nbs, tracer
@@ -123,7 +123,7 @@ class Scope:
         return name_to_obj
 
     def gen_data_symbols_for_attrsub_chain(
-        self, chain: AttrSubSymbolChain
+        self, chain: SymbolRef
     ) -> Generator[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool], None, None]:
         """
         Generates progressive symbols appearing in an AttrSub chain until
@@ -131,24 +131,24 @@ class Scope:
         chain members is a CallPoint).
         """
         cur_scope = self
-        for i, name in enumerate(chain.symbols):
-            is_last = i == len(chain.symbols) - 1
+        for i, name in enumerate(chain.chain):
+            is_last = i == len(chain.chain) - 1
             if isinstance(name, CallPoint):
                 next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
                 if next_dsym is not None:
-                    yield next_dsym, None if is_last else chain.symbols[i + 1], True, is_last
+                    yield next_dsym, None if is_last else chain.chain[i + 1], True, is_last
                 break
             next_dsym = cur_scope.lookup_data_symbol_by_name(name)
             if next_dsym is None:
                 break
             else:
-                yield next_dsym, None if is_last else chain.symbols[i + 1], False, is_last
+                yield next_dsym, None if is_last else chain.chain[i + 1], False, is_last
             cur_scope = next_dsym.namespace
             if cur_scope is None:
                 break
 
     def get_most_specific_data_symbol_for_attrsub_chain(
-        self, chain: AttrSubSymbolChain
+        self, chain: SymbolRef
     ) -> Optional[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool]]:
         """
         Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).

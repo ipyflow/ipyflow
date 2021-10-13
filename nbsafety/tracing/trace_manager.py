@@ -641,15 +641,17 @@ class TraceManager(SliceTraceManager):
         )
         subscript_live_refs = []
         for ref, _ in live:
-            if isinstance(ref, str):
-                subscript_live_refs.append(ref)
+            if len(ref.chain) != 1:
                 continue
-            # AttrSubSymbolChain
-            first_in_chain = ref.symbols[0]
+            first_in_chain = ref.chain[0]
             # skip attribute / subscripts as these will get handled in attrsub_tracer anyway
             # instead just check for length-1 "chains" that are just fn calls
-            if isinstance(first_in_chain, CallPoint) and len(ref.symbols) == 1:
+            if isinstance(first_in_chain, str):
+                subscript_live_refs.append(first_in_chain)
+            elif isinstance(first_in_chain, CallPoint):
                 subscript_live_refs.append(first_in_chain.symbol)
+            else:
+                raise TypeError('got unexpected type for %s' % first_in_chain)
         self.node_id_to_saved_live_subscript_refs[node_id] = self.resolve_symbols(set(subscript_live_refs))
         Timestamp.update_usage_info(
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs

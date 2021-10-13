@@ -3,7 +3,7 @@ import ast
 import sys
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis.attr_symbols import AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.attr_symbols import SymbolRef, CallPoint
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts
 from .utils import make_safety_fixture
 
@@ -18,8 +18,8 @@ _safety_fixture, _ = make_safety_fixture()
 def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:
     simplified = set()
     for sym in symbols:
-        if isinstance(sym, AttrSubSymbolChain):
-            sym = sym.symbols[0]
+        if isinstance(sym, SymbolRef):
+            sym = sym.chain[0]
         if isinstance(sym, CallPoint):
             sym = sym.symbol
         if isinstance(sym, str):

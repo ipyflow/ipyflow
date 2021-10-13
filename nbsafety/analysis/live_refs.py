@@ -4,7 +4,7 @@ import itertools
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, AttrSubSymbolChain, CallPoint
+from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, SymbolRef, CallPoint
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode, FlowOrder
@@ -13,7 +13,7 @@ from nbsafety.tracing.mutation_event import resolve_mutating_method
 
 if TYPE_CHECKING:
     from typing import Generator, Iterable, List, Optional, Set, Tuple, Union
-    from nbsafety.types import SupportedIndexType, SymbolRef
+    from nbsafety.types import SupportedIndexType
     from nbsafety.data_model.data_symbol import DataSymbol
     from nbsafety.data_model.scope import Scope
 
@@ -23,7 +23,7 @@ logger.setLevel(logging.ERROR)
 
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
-    def __init__(self, scope: Optional[Scope] = None, init_killed: Optional[Set[str]] = None):
+    def __init__(self, scope: Optional[Scope] = None, init_killed: Optional[Set[str]] = None) -> None:
         self._scope = scope
         self._module_stmt_counter = 0
         # live symbols also include the stmt counter of when they were live, for slicing purposes later
@@ -37,7 +37,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self._inside_attrsub = False
         self._skip_simple_names = False
 
-    def __call__(self, node: ast.AST):
+    def __call__(self, node: ast.AST) -> Tuple[Set[Tuple[SymbolRef, int]], Set[SymbolRef]]:
         """
         This function should be called when we want to do a liveness check on a
         cell's corresponding ast.Module.
@@ -60,23 +60,23 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
     def args_context(self):
         return self.push_attributes(_skip_simple_names=False)
 
-    def _add_attrsub_to_live_if_eligible(self, ref: AttrSubSymbolChain):
+    def _add_attrsub_to_live_if_eligible(self, ref: SymbolRef) -> None:
         if ref in self.dead:
             return
-        if len(ref.symbols) == 0:
+        if len(ref.chain) == 0:
             # can happen if user made syntax error like [1, 2, 3][4, 5, 6] (e.g. forgot comma)
             return
-        leading_symbol = ref.symbols[0]
-        if isinstance(leading_symbol, str) and leading_symbol in self.dead:
+        leading_symbol = ref.chain[0]
+        if isinstance(leading_symbol, str) and SymbolRef(leading_symbol) in self.dead:
             return
-        if isinstance(leading_symbol, CallPoint) and leading_symbol.symbol in self.dead:
+        if isinstance(leading_symbol, CallPoint) and SymbolRef(leading_symbol.symbol) in self.dead:
             return
         self.live.add((ref, self._module_stmt_counter))
 
     # the idea behind this one is that we don't treat a symbol as dead
     # if it is used on the RHS of an assignment
-    def visit_Assign_impl(self, targets, value, aug_assign_target=None):
-        this_assign_live = set()
+    def visit_Assign_impl(self, targets, value, aug_assign_target=None) -> None:
+        this_assign_live: Set[Tuple[SymbolRef, int]] = set()
         # we won't mutate overall dead for visiting simple targets, and we need it to avoid adding false positive lives
         with self.push_attributes(live=this_assign_live):
             self.visit(value)
@@ -126,24 +126,22 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self.live |= this_assign_live
         self.dead |= this_assign_dead
 
-    def visit_NamedExpr(self, node):
+    def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit_Assign_impl([node.target], node.value)
 
-    def visit_Assign(self, node: ast.Assign):
+    def visit_Assign(self, node: ast.Assign) -> None:
         self.visit_Assign_impl(node.targets, node.value)
 
-    def visit_AnnAssign(self, node: ast.AnnAssign):
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         self.visit_Assign_impl([node.target], node.value)
 
-    def visit_AugAssign(self, node: ast.AugAssign):
+    def visit_AugAssign(self, node: ast.AugAssign) -> None:
         self.visit_Assign_impl([], node.value, aug_assign_target=node.target)
 
     def visit_Assign_target(
         self, target_node: Union[ast.Attribute, ast.Name, ast.Subscript, ast.Tuple, ast.List, ast.expr]
-    ):
-        if isinstance(target_node, ast.Name):
-            self.dead.add(target_node.id)
-        elif isinstance(target_node, (ast.Attribute, ast.Subscript)):
+    ) -> None:
+        if isinstance(target_node, (ast.Name, ast.Attribute, ast.Subscript)):
             self.dead.add(get_attrsub_symbol_chain(target_node))
             if isinstance(target_node, ast.Subscript):
                 with self.live_context():
@@ -156,28 +154,29 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         else:
             logger.warning('unsupported type for node %s' % target_node)
 
-    def visit_FunctionDef(self, node: ast.FunctionDef):
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self.generic_visit(node.args.defaults)
         self.generic_visit(node.decorator_list)
-        self.dead.add(node.name)
+        self.dead.add(SymbolRef(node.name))
 
-    def visit_Name(self, node):
+    def visit_Name(self, node: ast.Name) -> None:
+        ref = SymbolRef(node.id)
         if self._in_kill_context:
-            self.dead.add(node.id)
-        elif not self._skip_simple_names and node.id not in self.dead:
-            self.live.add((node.id, self._module_stmt_counter))
+            self.dead.add(ref)
+        elif not self._skip_simple_names and ref not in self.dead:
+            self.live.add((ref, self._module_stmt_counter))
 
-    def visit_Tuple_or_List(self, node):
+    def visit_Tuple_or_List(self, node: Union[ast.List, ast.Tuple]) -> None:
         for elt in node.elts:
             self.visit(elt)
 
-    def visit_List(self, node):
+    def visit_List(self, node: ast.List) -> None:
         self.visit_Tuple_or_List(node)
 
-    def visit_Tuple(self, node):
+    def visit_Tuple(self, node: ast.Tuple) -> None:
         self.visit_Tuple_or_List(node)
 
-    def visit_For(self, node: ast.For):
+    def visit_For(self, node: ast.For) -> None:
         # Case "for a,b in something: "
         self.visit(node.iter)
         with self.kill_context():
@@ -185,12 +184,12 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         for line in node.body:
             self.visit(line)
 
-    def visit_ClassDef(self, node: ast.ClassDef):
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.generic_visit(node.bases)
         self.generic_visit(node.decorator_list)
-        self.dead.add(node.name)
+        self.dead.add(SymbolRef(node.name))
 
-    def visit_Call(self, node: ast.Call):
+    def visit_Call(self, node: ast.Call) -> None:
         with self.args_context():
             self.generic_visit(node.args)
             for kwarg in node.keywords:
@@ -200,13 +199,13 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         with self.attrsub_context():
             self.visit(node.func)
 
-    def visit_Attribute(self, node: ast.Attribute):
+    def visit_Attribute(self, node: ast.Attribute) -> None:
         if not self._inside_attrsub:
             self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
         with self.attrsub_context():
             self.visit(node.value)
 
-    def visit_Subscript(self, node: ast.Subscript):
+    def visit_Subscript(self, node: ast.Subscript) -> None:
         if not self._inside_attrsub:
             self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
         with self.attrsub_context():
@@ -214,22 +213,22 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         with self.attrsub_context(inside=False):
             self.visit(node.slice)
 
-    def visit_Delete(self, node: ast.Delete):
+    def visit_Delete(self, node: ast.Delete) -> None:
         pass
 
-    def visit_GeneratorExp(self, node):
+    def visit_GeneratorExp(self, node) -> None:
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
-    def visit_DictComp(self, node):
+    def visit_DictComp(self, node) -> None:
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
-    def visit_ListComp(self, node):
+    def visit_ListComp(self, node) -> None:
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
-    def visit_SetComp(self, node):
+    def visit_SetComp(self, node) -> None:
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
-    def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
+    def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node) -> None:
         # TODO: as w/ for loop, this will have false positives on later live references
         for gen in node.generators:
             self.visit(gen.iter)
@@ -238,17 +237,18 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         # visit the elt at the end to ensure we don't add it to live vars if it was one of the generator targets
         self.visit(node.elt)
 
-    def visit_Lambda(self, node):
+    def visit_Lambda(self, node: ast.Lambda) -> None:
         with self.kill_context():
             self.visit(node.args)
 
-    def visit_arg(self, node):
+    def visit_arg(self, node) -> None:
+        ref = SymbolRef(node.arg)
         if self._in_kill_context:
-            self.dead.add(node.arg)
-        elif not self._skip_simple_names and node.arg not in self.dead:
-            self.live.add((node.arg, self._module_stmt_counter))
+            self.dead.add(ref)
+        elif not self._skip_simple_names and ref not in self.dead:
+            self.live.add((ref, self._module_stmt_counter))
 
-    def visit_Module(self, node: ast.Module):
+    def visit_Module(self, node: ast.Module) -> None:
         for child in node.body:
             assert isinstance(child, ast.stmt)
             self.visit(child)
@@ -265,28 +265,23 @@ def gen_symbols_for_references(
     if stmt_counters is None:
         stmt_counters = (None for _ in itertools.count())
     for symbol_ref, stmt_counter in zip(symbol_refs, stmt_counters):
-        if isinstance(symbol_ref, str):
-            dsym = scope.lookup_data_symbol_by_name(symbol_ref)
-            if dsym is not None:
-                yield dsym, None, False, True, stmt_counter
-        elif isinstance(symbol_ref, AttrSubSymbolChain):
-            if update_liveness_time_versions:
-                # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
-                #  Right now, yielding the intermediate elts of the chain will yield false positives in the
-                #  event of namespace stale children.
-                for dsym, next_ref, is_called, success in scope.gen_data_symbols_for_attrsub_chain(symbol_ref):
-                    if only_yield_successful_resolutions and not success:
-                        continue
-                    yield dsym, next_ref, is_called, success, stmt_counter
-            else:
-                dsym_et_al = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
-                if dsym_et_al is not None:
-                    dsym, next_ref, is_called, success = dsym_et_al
-                    if success or not only_yield_successful_resolutions:
-                        yield dsym, next_ref, is_called, success, stmt_counter
-        else:
+        if not isinstance(symbol_ref, SymbolRef):
             logger.warning('invalid type for ref %s', symbol_ref)
             continue
+        if update_liveness_time_versions:
+            # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
+            #  Right now, yielding the intermediate elts of the chain will yield false positives in the
+            #  event of namespace stale children.
+            for dsym, next_ref, is_called, success in scope.gen_data_symbols_for_attrsub_chain(symbol_ref):
+                if only_yield_successful_resolutions and not success:
+                    continue
+                yield dsym, next_ref, is_called, success, stmt_counter
+        else:
+            dsym_et_al = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
+            if dsym_et_al is not None:
+                dsym, next_ref, is_called, success = dsym_et_al
+                if success or not only_yield_successful_resolutions:
+                    yield dsym, next_ref, is_called, success, stmt_counter
 
 
 def get_symbols_for_references(

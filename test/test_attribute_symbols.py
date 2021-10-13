@@ -1,11 +1,28 @@
 # -*- coding: future_annotations -*-
 import ast
 
-from nbsafety.analysis.symbol_ref import get_attrsub_symbol_chain, Atom as at
+from nbsafety.analysis.symbol_ref import get_attrsub_symbol_chain, Atom
 from .utils import make_safety_fixture
 
 
 _safety_fixture, _ = make_safety_fixture()
+
+
+def at(sym: str, **kwargs) -> Atom:
+    return Atom(sym, **kwargs)
+
+
+def cat(sym: str, **kwargs) -> Atom:
+    return at(sym, is_callpoint=True, **kwargs)
+
+
+def test_unit_chain():
+    node = ast.parse('sym').body[0].value
+    symchain = get_attrsub_symbol_chain(node)
+    assert symchain.chain == (at('sym'),)
+    node = ast.parse('sym()').body[0].value
+    symchain = get_attrsub_symbol_chain(node)
+    assert symchain.chain == (cat('sym'),)
 
 
 def test_basic():
@@ -17,13 +34,13 @@ def test_basic():
 def test_calls_none_at_endpoints():
     node = ast.parse('a.b.c().d.e().f').body[0].value
     symchain = get_attrsub_symbol_chain(node)
-    assert symchain.chain == (at('a'), at('b'), at('c', is_callpoint=True), at('d'), at('e', is_callpoint=True), at('f'))
+    assert symchain.chain == (at('a'), at('b'), cat('c'), at('d'), cat('e'), at('f'))
 
 
 def test_calls_at_endpoints():
     node = ast.parse('a().b.c().d.e.f()').body[0].value
     symchain = get_attrsub_symbol_chain(node)
-    assert symchain.chain == (at('a', is_callpoint=True), at('b'), at('c', is_callpoint=True), at('d'), at('e'), at('f', is_callpoint=True))
+    assert symchain.chain == (cat('a'), at('b'), cat('c'), at('d'), at('e'), cat('f'))
 
 
 def test_hash():

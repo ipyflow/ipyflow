@@ -1,10 +1,10 @@
 # -*- coding: future_annotations -*-
 import ast
-import itertools
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.analysis.attr_symbols import get_attrsub_symbol_chain, SymbolRef, CallPoint
+from nbsafety.analysis.symbol_ref import get_attrsub_symbol_chain, SymbolRef, Atom
+from nbsafety.analysis.live_symbols import LiveSymbolRef
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode, FlowOrder
@@ -27,7 +27,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self._scope = scope
         self._module_stmt_counter = 0
         # live symbols also include the stmt counter of when they were live, for slicing purposes later
-        self.live: Set[Tuple[SymbolRef, int]] = set()
+        self.live: Set[LiveSymbolRef] = set()
         if init_killed is None:
             self.dead: Set[SymbolRef] = set()
         else:
@@ -37,7 +37,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self._inside_attrsub = False
         self._skip_simple_names = False
 
-    def __call__(self, node: ast.AST) -> Tuple[Set[Tuple[SymbolRef, int]], Set[SymbolRef]]:
+    def __call__(self, node: ast.AST) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
         """
         This function should be called when we want to do a liveness check on a
         cell's corresponding ast.Module.
@@ -61,22 +61,21 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         return self.push_attributes(_skip_simple_names=False)
 
     def _add_attrsub_to_live_if_eligible(self, ref: SymbolRef) -> None:
-        if ref in self.dead:
+        if ref.nonreactive() in self.dead:
             return
         if len(ref.chain) == 0:
             # can happen if user made syntax error like [1, 2, 3][4, 5, 6] (e.g. forgot comma)
             return
-        leading_symbol = ref.chain[0]
-        if isinstance(leading_symbol, str) and SymbolRef(leading_symbol) in self.dead:
-            return
-        if isinstance(leading_symbol, CallPoint) and SymbolRef(leading_symbol.symbol) in self.dead:
-            return
-        self.live.add((ref, self._module_stmt_counter))
+        leading_atom = ref.chain[0]
+        if isinstance(leading_atom.value, str):
+            if SymbolRef(leading_atom) in self.dead or SymbolRef(Atom(leading_atom.value, is_callpoint=False)) in self.dead:
+                return
+        self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 
     # the idea behind this one is that we don't treat a symbol as dead
     # if it is used on the RHS of an assignment
     def visit_Assign_impl(self, targets, value, aug_assign_target=None) -> None:
-        this_assign_live: Set[Tuple[SymbolRef, int]] = set()
+        this_assign_live: Set[LiveSymbolRef] = set()
         # we won't mutate overall dead for visiting simple targets, and we need it to avoid adding false positive lives
         with self.push_attributes(live=this_assign_live):
             self.visit(value)
@@ -102,7 +101,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         ):
             lhs, rhs = [
                 get_symbols_for_references(x, self._scope, only_yield_successful_resolutions=True)[0]
-                for x in (this_assign_dead, (live[0] for live in this_assign_live))
+                for x in (this_assign_dead, (live.ref for live in this_assign_live))
             ]
             if len(lhs) == 1 and len(rhs) == 1:
                 syms: List[DataSymbol] = [next(iter(x)) for x in (lhs, rhs)]
@@ -113,7 +112,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
                     # either (a) it's a no-op (so treat it as such), or
                     #        (b) lhs is newer and it doesn't make sense to refresh
                     this_assign_live.clear()
-        this_assign_dead -= {live[0] for live in this_assign_live}
+        this_assign_dead -= {live.ref for live in this_assign_live}
         # for ref in this_assign_dead:
         #     if isinstance(ref, AttrSubSymbolChain) and len(ref.symbols) > 1:
         #         this_assign_live.add(
@@ -164,7 +163,9 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         if self._in_kill_context:
             self.dead.add(ref)
         elif not self._skip_simple_names and ref not in self.dead:
-            self.live.add((ref, self._module_stmt_counter))
+            if id(node) in nbs().reactive_variable_node_ids:
+                ref.chain[0].is_reactive = True
+            self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 
     def visit_Tuple_or_List(self, node: Union[ast.List, ast.Tuple]) -> None:
         for elt in node.elts:
@@ -246,7 +247,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         if self._in_kill_context:
             self.dead.add(ref)
         elif not self._skip_simple_names and ref not in self.dead:
-            self.live.add((ref, self._module_stmt_counter))
+            self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 
     def visit_Module(self, node: ast.Module) -> None:
         for child in node.body:
@@ -258,30 +259,22 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
 def gen_symbols_for_references(
     symbol_refs: Iterable[SymbolRef],
     scope: Scope,
-    only_yield_successful_resolutions: bool,
-    stmt_counters: Optional[Iterable[int]] = None,
-    update_liveness_time_versions: bool = False,
-) -> Generator[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool, Optional[int]], None, None]:
-    if stmt_counters is None:
-        stmt_counters = (None for _ in itertools.count())
-    for symbol_ref, stmt_counter in zip(symbol_refs, stmt_counters):
-        if not isinstance(symbol_ref, SymbolRef):
-            logger.warning('invalid type for ref %s', symbol_ref)
-            continue
-        if update_liveness_time_versions:
+    only_yield_final_symbol: bool,
+    yield_all_intermediate_symbols: bool = False,
+) -> Generator[Tuple[DataSymbol, Optional[Atom], bool, bool], None, None]:
+    assert not (only_yield_final_symbol and yield_all_intermediate_symbols)
+    for symbol_ref in symbol_refs:
+        if yield_all_intermediate_symbols and not only_yield_final_symbol:
             # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
             #  Right now, yielding the intermediate elts of the chain will yield false positives in the
             #  event of namespace stale children.
-            for dsym, next_ref, is_called, success in scope.gen_data_symbols_for_attrsub_chain(symbol_ref):
-                if only_yield_successful_resolutions and not success:
-                    continue
-                yield dsym, next_ref, is_called, success, stmt_counter
+            yield from scope.gen_data_symbols_for_attrsub_chain(symbol_ref)
         else:
             dsym_et_al = scope.get_most_specific_data_symbol_for_attrsub_chain(symbol_ref)
             if dsym_et_al is not None:
                 dsym, next_ref, is_called, success = dsym_et_al
-                if success or not only_yield_successful_resolutions:
-                    yield dsym, next_ref, is_called, success, stmt_counter
+                if success or not only_yield_final_symbol:
+                    yield dsym, next_ref, is_called, success
 
 
 def get_symbols_for_references(
@@ -292,7 +285,7 @@ def get_symbols_for_references(
     dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[DataSymbol] = set()
     for dsym, is_called, *_ in gen_symbols_for_references(
-        symbol_refs, scope, only_yield_successful_resolutions=only_yield_successful_resolutions
+        symbol_refs, scope, only_yield_final_symbol=only_yield_successful_resolutions
     ):
         if is_called:
             called_dsyms.add(dsym)
@@ -301,8 +294,9 @@ def get_symbols_for_references(
     return dsyms, called_dsyms
 
 
-def _live_dsym_is_mutating(dsym: DataSymbol, next_ref: CallPoint) -> bool:
-    return resolve_mutating_method(dsym.obj, next_ref.symbol) is not None
+def _live_dsym_is_mutating(dsym: DataSymbol, next_ref: Atom) -> bool:
+    assert next_ref.is_callpoint
+    return resolve_mutating_method(dsym.obj, cast(str, next_ref.value)) is not None
 
 
 def _live_dsym_unsafe(dsym: DataSymbol, next_ref: SupportedIndexType) -> bool:
@@ -318,27 +312,30 @@ def _live_dsym_unsafe(dsym: DataSymbol, next_ref: SupportedIndexType) -> bool:
 
 def _handle_live_symbol(
     dsym: DataSymbol,
-    next_ref: Optional[Union[SupportedIndexType, CallPoint]],
+    next_ref: Optional[Atom],
     deep_live: Set[DataSymbol],
     shallow_live: Set[DataSymbol]
-):
+) -> None:
     if next_ref is None:
         deep_live.add(dsym)
-    elif isinstance(next_ref, CallPoint) and _live_dsym_is_mutating(dsym, next_ref):
+    elif not next_ref.is_callpoint:
+        if _live_dsym_unsafe(dsym, next_ref.value):
+            return
+        else:
+            shallow_live.add(dsym)
+    elif _live_dsym_is_mutating(dsym, next_ref):  # isinstance(next_ref, CallPoint)
         if nbs().mut_settings.exec_mode == ExecutionMode.NORMAL:
             shallow_live.add(dsym)
         elif nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
             return
         else:
             raise ValueError('not sure how to handle execution mode %s' % nbs().mut_settings.exec_mode)
-    elif not isinstance(next_ref, CallPoint) and _live_dsym_unsafe(dsym, next_ref):
-        return
     else:
         deep_live.add(dsym)
 
 
 def get_live_symbols_and_cells_for_references(
-    symbol_refs: Set[Tuple[SymbolRef, int]],
+    symbol_refs: Set[LiveSymbolRef],
     scope: Scope,
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
@@ -346,26 +343,24 @@ def get_live_symbols_and_cells_for_references(
     deep_live_dsyms: Set[DataSymbol] = set()
     shallow_live_dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[Tuple[DataSymbol, int]] = set()
-    only_symbol_refs = (ref[0] for ref in symbol_refs)
-    only_stmt_counters = (ref[1] for ref in symbol_refs)
-    for dsym, next_ref, is_called, success, stmt_ctr in gen_symbols_for_references(
-        only_symbol_refs,
-        scope,
-        only_yield_successful_resolutions=False,
-        stmt_counters=only_stmt_counters,
-        update_liveness_time_versions=update_liveness_time_versions,
-    ):
-        if update_liveness_time_versions:
-            ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
-            liveness_time = Timestamp(cell_ctr, stmt_ctr)
-            assert liveness_time > ts_to_use
-            if ts_to_use.is_initialized:
-                nbs().add_static_data_dep(liveness_time, ts_to_use)
-                dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
-        if is_called:
-            called_dsyms.add((dsym, stmt_ctr))
-        else:
-            _handle_live_symbol(dsym, next_ref, deep_live_dsyms, shallow_live_dsyms)
+    for live_symbol_ref in symbol_refs:
+        for dsym, next_ref, is_called, success in gen_symbols_for_references(
+            [live_symbol_ref.ref],
+            scope,
+            only_yield_final_symbol=False,
+            yield_all_intermediate_symbols=update_liveness_time_versions,
+        ):
+            if update_liveness_time_versions:
+                ts_to_use = dsym.timestamp if success else dsym.timestamp_excluding_ns_descendents
+                liveness_time = Timestamp(cell_ctr, live_symbol_ref.timestamp)
+                assert liveness_time > ts_to_use
+                if ts_to_use.is_initialized:
+                    nbs().add_static_data_dep(liveness_time, ts_to_use)
+                    dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
+            if is_called:
+                called_dsyms.add((dsym, live_symbol_ref.timestamp))
+            else:
+                _handle_live_symbol(dsym, next_ref, deep_live_dsyms, shallow_live_dsyms)
     deep_live_from_calls, shallow_live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
         called_dsyms, cell_ctr, update_liveness_time_versions
     )
@@ -395,7 +390,7 @@ def _compute_call_chain_live_symbols_and_cells(
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
         for dsym, next_ref, is_called, success, *_ in gen_symbols_for_references(
-            (ref[0] for ref in live_refs), called_dsym.call_scope, only_yield_successful_resolutions=False
+            (ref.ref for ref in live_refs), called_dsym.call_scope, only_yield_final_symbol=False
         ):
             if is_called:
                 worklist.append((dsym, stmt_ctr))
@@ -411,7 +406,7 @@ def compute_live_dead_symbol_refs(
     code: Union[ast.AST, List[ast.stmt], str],
     scope: Scope = None,
     init_killed: Optional[Set[str]] = None,
-) -> Tuple[Set[Tuple[SymbolRef, int]], Set[SymbolRef]]:
+) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
     if init_killed is None:
         init_killed = set()
     if isinstance(code, str):

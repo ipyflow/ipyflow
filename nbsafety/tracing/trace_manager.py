@@ -13,7 +13,6 @@ import astunparse
 from IPython import get_ipython
 
 from nbsafety import singletons
-from nbsafety.analysis.attr_symbols import CallPoint
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
@@ -640,18 +639,9 @@ class TraceManager(SliceTraceManager):
             nbs().ast_node_by_id[slice_node_id], scope=self.cur_frame_original_scope
         )
         subscript_live_refs = []
-        for ref, _ in live:
-            if len(ref.chain) != 1:
-                continue
-            first_in_chain = ref.chain[0]
-            # skip attribute / subscripts as these will get handled in attrsub_tracer anyway
-            # instead just check for length-1 "chains" that are just fn calls
-            if isinstance(first_in_chain, str):
-                subscript_live_refs.append(first_in_chain)
-            elif isinstance(first_in_chain, CallPoint):
-                subscript_live_refs.append(first_in_chain.symbol)
-            else:
-                raise TypeError('got unexpected type for %s' % first_in_chain)
+        for ref in live:
+            if len(ref.ref.chain) == 1:
+                subscript_live_refs.append(cast(str, ref.ref.chain[0].value))
         self.node_id_to_saved_live_subscript_refs[node_id] = self.resolve_symbols(set(subscript_live_refs))
         Timestamp.update_usage_info(
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs

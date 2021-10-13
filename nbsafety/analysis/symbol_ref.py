@@ -2,6 +2,7 @@
 import ast
 from typing import cast, Union, TYPE_CHECKING
 
+from nbsafety.singletons import nbs
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
@@ -9,27 +10,41 @@ if TYPE_CHECKING:
     from nbsafety.types import SupportedIndexType
 
 
-class CallPoint(CommonEqualityMixin):
-    def __init__(self, symbol: str):
-        self.symbol = symbol
+class Atom(CommonEqualityMixin):
+    def __init__(
+        self,
+        value: SupportedIndexType,
+        is_callpoint: bool = False,
+        is_subscript: bool = False,
+        is_reactive: bool = False,
+    ):
+        self.value = value
+        self.is_callpoint = is_callpoint
+        self.is_subscript = is_subscript
+        self.is_reactive = is_reactive
+
+    def nonreactive(self) -> Atom:
+        return self.__class__(self.value, is_callpoint=self.is_callpoint, is_subscript=self.is_subscript, is_reactive=False)
 
     def __hash__(self):
-        return hash(self.symbol)
+        return hash((self.value, self.is_callpoint, self.is_subscript, self.is_reactive))
 
     def __repr__(self):
         return repr(str(self))
 
     def __str__(self):
-        return self.symbol + '(...)'
+        return self.value + ('(...)' if self.is_callpoint else '')
 
 
 class SymbolRef(CommonEqualityMixin):
-    def __init__(self, symbols: Sequence[Union[SupportedIndexType, CallPoint]]):
+    def __init__(self, symbols: Union[str, Atom, Sequence[Atom]]):
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
         if isinstance(symbols, str):
+            symbols = [Atom(symbols)]
+        elif isinstance(symbols, Atom):
             symbols = [symbols]
-        self.chain: Tuple[Union[SupportedIndexType, CallPoint], ...] = tuple(symbols)
+        self.chain: Tuple[Atom, ...] = tuple(symbols)
 
     def __hash__(self):
         return hash(self.chain)
@@ -37,10 +52,13 @@ class SymbolRef(CommonEqualityMixin):
     def __repr__(self):
         return repr(self.chain)
 
+    def nonreactive(self) -> SymbolRef:
+        return self.__class__([atom.nonreactive() for atom in self.chain])
+
 
 class GetAttrSubSymbols(ast.NodeVisitor):
     def __init__(self):
-        self.symbol_chain: List[Union[str, int, Tuple[Union[str, int], ...], CallPoint]] = []
+        self.symbol_chain: List[Atom] = []
 
     def __call__(self, node: Union[ast.Attribute, ast.Subscript, ast.Call, ast.Name]) -> SymbolRef:
         self.visit(node)
@@ -49,43 +67,44 @@ class GetAttrSubSymbols(ast.NodeVisitor):
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
-            self.symbol_chain.append(CallPoint(node.func.attr))
+            self.symbol_chain.append(Atom(node.func.attr, is_callpoint=True))
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
             if isinstance(node.func.slice, ast.Constant):
-                self.symbol_chain.append(CallPoint(str(node.func.slice.value)))
+                self.symbol_chain.append(Atom(str(node.func.slice.value), is_callpoint=True))
             elif isinstance(node.func.slice, ast.Index) and isinstance(node.func.slice.value, (ast.Str, ast.Num)):
                 if isinstance(node.func.slice.value, ast.Str):
-                    self.symbol_chain.append(CallPoint(node.func.slice.value.s))
+                    self.symbol_chain.append(Atom(node.func.slice.value.s, is_callpoint=True, is_subscript=True))
                 else:
-                    self.symbol_chain.append(CallPoint(str(node.func.slice.value.n)))
+                    self.symbol_chain.append(Atom(str(node.func.slice.value.n), is_callpoint=True, is_subscript=True))
                 self.visit(node.func.value)
         elif isinstance(node.func, ast.Name):
-            self.symbol_chain.append(CallPoint(node.func.id))
+            self.visit(node.func)
+            self.symbol_chain[-1].is_callpoint = True
         elif isinstance(node.func, ast.Call):
             # TODO: handle this case too, e.g. f.g()().h
             pass
         else:
             raise TypeError('invalid type for node.func %s' % node.func)
 
-    def visit_Attribute(self, node):
-        self.symbol_chain.append(node.attr)
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        self.symbol_chain.append(Atom(node.attr))
         self.visit(node.value)
 
-    def visit_Subscript(self, node):
+    def visit_Subscript(self, node: ast.Subscript) -> None:
         resolved = resolve_slice_to_constant(node)
         if resolved is not None:
             if isinstance(resolved, ast.Name):
                 # FIXME: hack to make the static checker stop here
                 # In the future, it should try to attempt to resolve
                 # the value of the ast.Name node
-                self.symbol_chain.append(CallPoint(resolved.id))
+                self.symbol_chain.append(Atom(resolved.id, is_subscript=True))
             else:
-                self.symbol_chain.append(resolved)
+                self.symbol_chain.append(Atom(resolved, is_subscript=True))
         self.visit(node.value)
 
-    def visit_Name(self, node):
-        self.symbol_chain.append(node.id)
+    def visit_Name(self, node: ast.Name) -> None:
+        self.symbol_chain.append(Atom(node.id, is_reactive=id(node) in nbs().reactive_variable_node_ids))
 
     def generic_visit(self, node):
         # raise ValueError('we should never get here: %s' % node)

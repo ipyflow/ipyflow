@@ -3,7 +3,7 @@ import ast
 import logging
 from typing import List, TYPE_CHECKING
 
-from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
+from nbsafety.analysis.symbol_ref import resolve_slice_to_constant
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace

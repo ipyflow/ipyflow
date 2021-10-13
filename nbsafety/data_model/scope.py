@@ -7,13 +7,13 @@ from typing import cast, TYPE_CHECKING
 
 from IPython import get_ipython
 
-from nbsafety.analysis.attr_symbols import SymbolRef, CallPoint
+from nbsafety.analysis.symbol_ref import SymbolRef, Atom
 from nbsafety.data_model.data_symbol import DataSymbol, DataSymbolType
 from nbsafety.utils.misc_utils import GetterFallback
-from nbsafety.singletons import nbs, tracer
+from nbsafety.singletons import tracer
 
 if TYPE_CHECKING:
-    from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Set, Tuple, Union
+    from typing import Any, Dict, Generator, Iterable, List, Mapping, Optional, Set, Tuple
     from nbsafety.data_model.namespace import Namespace
     from nbsafety.types import SupportedIndexType
 
@@ -123,33 +123,33 @@ class Scope:
         return name_to_obj
 
     def gen_data_symbols_for_attrsub_chain(
-        self, chain: SymbolRef
-    ) -> Generator[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool], None, None]:
+        self, symbol_ref: SymbolRef
+    ) -> Generator[Tuple[DataSymbol, Optional[Atom], bool, bool], None, None]:
         """
         Generates progressive symbols appearing in an AttrSub chain until
         this can no longer be done semi-statically (e.g. because one of the
         chain members is a CallPoint).
         """
         cur_scope = self
-        for i, name in enumerate(chain.chain):
-            is_last = i == len(chain.chain) - 1
-            if isinstance(name, CallPoint):
-                next_dsym = cur_scope.lookup_data_symbol_by_name(name.symbol)
+        for i, name in enumerate(symbol_ref.chain):
+            is_last = i == len(symbol_ref.chain) - 1
+            if name.is_callpoint:
+                next_dsym = cur_scope.lookup_data_symbol_by_name(name.value)
                 if next_dsym is not None:
-                    yield next_dsym, None if is_last else chain.chain[i + 1], True, is_last
+                    yield next_dsym, None if is_last else symbol_ref.chain[i + 1], True, is_last
                 break
-            next_dsym = cur_scope.lookup_data_symbol_by_name(name)
+            next_dsym = cur_scope.lookup_data_symbol_by_name(name.value)
             if next_dsym is None:
                 break
             else:
-                yield next_dsym, None if is_last else chain.chain[i + 1], False, is_last
+                yield next_dsym, None if is_last else symbol_ref.chain[i + 1], False, is_last
             cur_scope = next_dsym.namespace
             if cur_scope is None:
                 break
 
     def get_most_specific_data_symbol_for_attrsub_chain(
         self, chain: SymbolRef
-    ) -> Optional[Tuple[DataSymbol, Optional[Union[SupportedIndexType, CallPoint]], bool, bool]]:
+    ) -> Optional[Tuple[DataSymbol, Optional[Atom], bool, bool]]:
         """
         Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """

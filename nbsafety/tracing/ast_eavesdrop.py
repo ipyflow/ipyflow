@@ -5,7 +5,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 import sys
 
-from nbsafety.analysis.attr_symbols import resolve_slice_to_constant
+from nbsafety.analysis.symbol_ref import resolve_slice_to_constant
 from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast

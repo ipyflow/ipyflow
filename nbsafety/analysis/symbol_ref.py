@@ -2,11 +2,13 @@
 import ast
 from typing import cast, Union, TYPE_CHECKING
 
+from nbsafety.analysis.resolved_symbols import ResolvedDataSymbol
 from nbsafety.singletons import nbs
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import Any, List, Optional, Sequence, Tuple, Union
+    from typing import Any, Generator, List, Optional, Sequence, Tuple, Union
+    from nbsafety.data_model.data_symbol import Scope
     from nbsafety.types import SupportedIndexType
 
 
@@ -55,8 +57,46 @@ class SymbolRef(CommonEqualityMixin):
     def nonreactive(self) -> SymbolRef:
         return self.__class__([atom.nonreactive() for atom in self.chain])
 
+    def gen_resolved_symbols(
+        self,
+        scope: Scope,
+        only_yield_final_symbol: bool,
+        yield_all_intermediate_symbols: bool = False,
+    ) -> Generator[ResolvedDataSymbol, None, None]:
+        assert not (only_yield_final_symbol and yield_all_intermediate_symbols)
+        if yield_all_intermediate_symbols and not only_yield_final_symbol:
+            # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
+            #  Right now, yielding the intermediate elts of the chain will yield false positives in the
+            #  event of namespace stale children.
+            for dsym, atom, next_atom in scope.gen_data_symbols_for_attrsub_chain(self):
+                yield ResolvedDataSymbol(dsym, atom, next_atom)
+        else:
+            dsym_et_al = scope.get_most_specific_data_symbol_for_attrsub_chain(self)
+            if dsym_et_al is not None:
+                dsym, atom, next_atom = dsym_et_al
+                if next_atom is None or not only_yield_final_symbol:
+                    yield ResolvedDataSymbol(dsym, atom, next_atom)
 
-class GetAttrSubSymbols(ast.NodeVisitor):
+
+class LiveSymbolRef(CommonEqualityMixin):
+    def __init__(self, ref: SymbolRef, timestamp: int) -> None:
+        self.ref = ref
+        self.timestamp = timestamp
+
+    def __hash__(self):
+        return hash((self.ref, self.timestamp))
+
+    def gen_resolved_symbols(
+        self, scope: Scope, only_yield_final_symbol: bool, yield_all_intermediate_symbols: bool = False
+    ):
+        for resolved_sym in self.ref.gen_resolved_symbols(
+            scope, only_yield_final_symbol, yield_all_intermediate_symbols=yield_all_intermediate_symbols
+        ):
+            resolved_sym.liveness_timestamp = self.timestamp
+            yield resolved_sym
+
+
+class GetSymbolRefs(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Atom] = []
 
@@ -120,7 +160,7 @@ def get_attrsub_symbol_chain(maybe_node: Union[str, ast.Name, ast.Attribute, ast
                     cast(ast.Expr, ast.parse(maybe_node).body[0]).value)
     if not isinstance(node, (ast.Name, ast.Attribute, ast.Subscript, ast.Call)):
         raise TypeError('invalid type for node %s' % node)
-    return GetAttrSubSymbols()(node)
+    return GetSymbolRefs()(node)
 
 
 def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIndexType, ast.Name]]:

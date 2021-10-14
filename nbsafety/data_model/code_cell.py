@@ -8,6 +8,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import cast, TYPE_CHECKING, NamedTuple
 
+from nbsafety.analysis.resolved_symbols import ResolvedDataSymbol
 from nbsafety.analysis.live_refs import (
     compute_live_dead_symbol_refs,
     get_symbols_for_references,
@@ -33,13 +34,10 @@ _NB_MAGIC_PATTERN = re.compile(r'(^%|^!|^cd |\?$)')
 
 
 class CheckerResult(NamedTuple):
-    live: Set[DataSymbol]           # all live symbols in the cell
-    deep_live: Set[DataSymbol]      # live symbols used in their entirety
-    shallow_live: Set[DataSymbol]   # live symbols for which only a portion (attr or subscript) is used
+    live: Set[ResolvedDataSymbol]   # all live symbols in the cell
     used_cells: Set[int]            # last updated timestamps of the live symbols
     live_cells: Set[int]            # cells that define a symbol that was called in the cell
     dead: Set[DataSymbol]           # symbols that are definitely assigned to
-    stale: Set[DataSymbol]          # live symbols that have one or more ancestors with more recent timestamps
     typechecks: bool                # whether the cell typechecks successfully
 
 
@@ -227,12 +225,16 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     def current_cell(cls) -> ExecutedCodeCell:
         return cls._cell_by_cell_ctr[cls._cell_counter]
 
-    def get_max_used_live_symbol_cell_counter(self, live_symbols: Set[DataSymbol]) -> int:
+    def get_max_used_live_symbol_cell_counter(
+        self, live_symbols: Set[ResolvedDataSymbol], filter_to_reactive: bool = False
+    ) -> int:
         with self._override_position_index_for_current_flow_semantics():
             max_used_cell_ctr = -1
             this_cell_pos = self.position
             for sym in live_symbols:
-                for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym, []):
+                if filter_to_reactive and not sym.is_reactive:
+                    continue
+                for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym.dsym, []):
                     if self.from_timestamp(cell_ctr).position <= this_cell_pos:
                         max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
             return max_used_cell_ctr
@@ -245,34 +247,30 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             get_live_symbols_and_cells_for_references(
                 live_symbol_refs, nbs().global_scope, self.cell_ctr, update_liveness_time_versions=True
             )
-        deep_live_symbols, shallow_live_symbols, live_cells = get_live_symbols_and_cells_for_references(
+        live_resolved_symbols, live_cells = get_live_symbols_and_cells_for_references(
             live_symbol_refs, nbs().global_scope, self.cell_ctr, update_liveness_time_versions=False
         )
-        live_symbols = deep_live_symbols | shallow_live_symbols
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, nbs().global_scope, only_yield_successful_resolutions=True
         )
-        stale_symbols = {dsym for dsym in live_symbols if dsym.is_stale}
-        for sym in deep_live_symbols:
-            sym.cells_where_deep_live.add(self)
-            self.add_used_cell_counter(sym, sym.timestamp.cell_num)
-        for sym in shallow_live_symbols:
-            sym.cells_where_shallow_live.add(self)
-            self.add_used_cell_counter(sym, sym.timestamp_excluding_ns_descendents.cell_num)
+        for resolved in live_resolved_symbols:
+            if resolved.is_deep:
+                resolved.dsym.cells_where_deep_live.add(self)
+                self.add_used_cell_counter(resolved.dsym, resolved.dsym.timestamp.cell_num)
+            else:
+                resolved.dsym.cells_where_shallow_live.add(self)
+                self.add_used_cell_counter(resolved.dsym, resolved.dsym.timestamp_excluding_ns_descendents.cell_num)
         return CheckerResult(
-            live=live_symbols,
-            deep_live=deep_live_symbols,
-            shallow_live=shallow_live_symbols,
+            live=live_resolved_symbols,
             used_cells={
-                sym.timestamp.cell_num for sym in deep_live_symbols
-            } | {
-                sym.timestamp_excluding_ns_descendents.cell_num for sym in shallow_live_symbols
+                resolved.dsym.timestamp.cell_num if resolved.is_deep
+                else resolved.dsym.timestamp_excluding_ns_descendents.cell_num
+                for resolved in live_resolved_symbols
             },
             live_cells=live_cells,
             dead=dead_symbols,
-            stale=stale_symbols,
-            typechecks=self._typechecks(live_cells, live_symbols),
+            typechecks=self._typechecks(live_cells, live_resolved_symbols),
         )
 
     def compute_phantom_cell_info(self, used_cells: Set[int]) -> Dict[CellId, Set[int]]:
@@ -286,21 +284,21 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             if len(cell_execs) >= 2
         }
 
-    def _build_typecheck_slice(self, live_cell_ctrs: Set[int], live_symbols: Set[DataSymbol]) -> str:
+    def _build_typecheck_slice(self, live_cell_ctrs: Set[int], live_symbols: Set[ResolvedDataSymbol]) -> str:
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level
         live_cell_counters = {self.cell_ctr}
         for live_cell_num in live_cell_ctrs:
             if self.from_timestamp(live_cell_num).is_current_for_id:
                 live_cell_counters.add(live_cell_num)
         live_cells = [self.from_timestamp(ctr) for ctr in sorted(live_cell_counters)]
-        top_level_symbols = {sym.get_top_level() for sym in live_symbols}
+        top_level_symbols = {sym.dsym.get_top_level() for sym in live_symbols}
         top_level_symbols.discard(None)
         return '{type_declarations}\n\n{content}'.format(
             type_declarations='\n'.join(f'{sym.name}: {sym.get_type_annotation_string()}' for sym in top_level_symbols),
             content='\n'.join(live_cell.sanitized_content() for live_cell in live_cells),
         )
 
-    def _typechecks(self, live_cell_ctrs: Set[int], live_symbols: Set[DataSymbol]) -> bool:
+    def _typechecks(self, live_cell_ctrs: Set[int], live_symbols: Set[ResolvedDataSymbol]) -> bool:
         if self._cached_typecheck_result is not None:
             return self._cached_typecheck_result
         typecheck_slice = self._build_typecheck_slice(live_cell_ctrs, live_symbols)

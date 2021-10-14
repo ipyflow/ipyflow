@@ -70,6 +70,7 @@ class FrontendCheckerResult(NamedTuple):
     stale_cells: Set[CellId]
     fresh_cells: Set[CellId]
     new_fresh_cells: Set[CellId]
+    forced_reactive_cells: Set[CellId]
     stale_links: Dict[CellId, Set[CellId]]
     refresher_links: Dict[CellId, Set[CellId]]
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
@@ -79,6 +80,7 @@ class FrontendCheckerResult(NamedTuple):
             'stale_cells': list(self.stale_cells),
             'fresh_cells': list(self.fresh_cells),
             'new_fresh_cells': list(self.new_fresh_cells),
+            'forced_reactive_cells': list(self.forced_reactive_cells),
             'stale_links': {cell_id: list(linked_cell_ids) for cell_id, linked_cell_ids in self.stale_links.items()},
             'refresher_links': {
                 cell_id: list(linked_cell_ids) for cell_id, linked_cell_ids in self.refresher_links.items()
@@ -100,7 +102,7 @@ class NotebookSafety(singletons.NotebookSafety):
             mark_stale_symbol_usages_unsafe=kwargs.pop('mark_stale_symbol_usages_unsafe', True),
             mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
             mark_phantom_cell_usages_unsafe=kwargs.pop('mark_phantom_cell_usages_unsafe', False),
-            enable_reactive_variables=kwargs.pop('enable_reactive_variables', False),
+            enable_reactive_variables=kwargs.pop('enable_reactive_variables', True),
             mode=SafetyRunMode.get(),
         )
         self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
@@ -260,6 +262,7 @@ class NotebookSafety(singletons.NotebookSafety):
         typecheck_error_cells = set()
         fresh_cells = set()
         new_fresh_cells = set()
+        forced_reactive_cells = set()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
@@ -280,7 +283,7 @@ class NotebookSafety(singletons.NotebookSafety):
             if self.mut_settings.flow_order in (FlowOrder.STRICT, FlowOrder.DAG):
                 stale_symbols = set()
             else:
-                stale_symbols = {sym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
+                stale_symbols = {sym.dsym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
             if len(stale_symbols) > 0:
                 stale_symbols_by_cell_id[cell_id] = stale_symbols
                 stale_cells.add(cell_id)
@@ -316,6 +319,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 fresh_cells.add(cell_id)
             if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
                 new_fresh_cells.add(cell_id)
+                if self.mut_settings.exec_mode != ExecutionMode.REACTIVE:
+                    if cell.get_max_used_live_symbol_cell_counter(checker_result.live, filter_to_reactive=True) > cell.cell_ctr:
+                        forced_reactive_cells.add(cell_id)
             if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
                 break
         if self.mut_settings.flow_order == FlowOrder.DAG:
@@ -345,9 +351,9 @@ class NotebookSafety(singletons.NotebookSafety):
             refresher_cell_ids: Set[CellId] = set()
             if self.mut_settings.flow_order == FlowOrder.DAG:
                 if self.mut_settings.dynamic_slicing_enabled:
-                    refresher_cell_ids |= cells().from_id(stale_cell_id)._dynamic_parents & eligible_refresher_for_dag
+                    refresher_cell_ids |= cells().from_id(stale_cell_id).dynamic_parent_ids & eligible_refresher_for_dag
                 if self.mut_settings.static_slicing_enabled:
-                    refresher_cell_ids |= cells().from_id(stale_cell_id)._static_parents & eligible_refresher_for_dag
+                    refresher_cell_ids |= cells().from_id(stale_cell_id).static_parent_ids & eligible_refresher_for_dag
             else:
                 stale_syms = stale_symbols_by_cell_id.get(stale_cell_id, set())
                 refresher_cell_ids = refresher_cell_ids.union(
@@ -385,6 +391,7 @@ class NotebookSafety(singletons.NotebookSafety):
             stale_cells=stale_cells | typecheck_error_cells,
             fresh_cells=fresh_cells,
             new_fresh_cells=new_fresh_cells,
+            forced_reactive_cells=forced_reactive_cells,
             stale_links=stale_links,
             refresher_links=refresher_links,
             phantom_cell_info=phantom_cell_info,

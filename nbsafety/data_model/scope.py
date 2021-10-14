@@ -124,38 +124,38 @@ class Scope:
 
     def gen_data_symbols_for_attrsub_chain(
         self, symbol_ref: SymbolRef
-    ) -> Generator[Tuple[DataSymbol, Optional[Atom], bool, bool], None, None]:
+    ) -> Generator[Tuple[DataSymbol, Atom, Optional[Atom]], None, None]:
         """
         Generates progressive symbols appearing in an AttrSub chain until
         this can no longer be done semi-statically (e.g. because one of the
         chain members is a CallPoint).
         """
         cur_scope = self
-        for i, name in enumerate(symbol_ref.chain):
+        for i, atom in enumerate(symbol_ref.chain):
             is_last = i == len(symbol_ref.chain) - 1
-            if name.is_callpoint:
-                next_dsym = cur_scope.lookup_data_symbol_by_name(name.value)
+            if atom.is_callpoint:
+                next_dsym = cur_scope.lookup_data_symbol_by_name(atom.value)
                 if next_dsym is not None:
-                    yield next_dsym, None if is_last else symbol_ref.chain[i + 1], True, is_last
+                    yield next_dsym, atom, None if is_last else symbol_ref.chain[i + 1]
                 break
-            next_dsym = cur_scope.lookup_data_symbol_by_name(name.value)
+            next_dsym = cur_scope.lookup_data_symbol_by_name(atom.value)
             if next_dsym is None:
                 break
             else:
-                yield next_dsym, None if is_last else symbol_ref.chain[i + 1], False, is_last
+                yield next_dsym, atom, None if is_last else symbol_ref.chain[i + 1]
             cur_scope = next_dsym.namespace
             if cur_scope is None:
                 break
 
     def get_most_specific_data_symbol_for_attrsub_chain(
         self, chain: SymbolRef
-    ) -> Optional[Tuple[DataSymbol, Optional[Atom], bool, bool]]:
+    ) -> Optional[Tuple[DataSymbol, Atom, Optional[Atom]]]:
         """
         Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
         ret = None
-        for dsym, next_ref, is_called, success in self.gen_data_symbols_for_attrsub_chain(chain):
-            ret = dsym, next_ref, is_called, success
+        for dsym, atom, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
+            ret = dsym, atom, next_atom
         return ret
 
     @staticmethod

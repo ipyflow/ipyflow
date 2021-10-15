@@ -113,7 +113,7 @@ class GetSymbolRefs(ast.NodeVisitor):
 
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
-            self.symbol_chain.append(Atom(node.func.attr, is_callpoint=True))
+            self.symbol_chain.append(Atom(node.func.attr, is_callpoint=True, is_reactive=id(node) in nbs().reactive_attribute_node_ids))
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
             if isinstance(node.func.slice, ast.Constant):
@@ -134,7 +134,7 @@ class GetSymbolRefs(ast.NodeVisitor):
             raise TypeError('invalid type for node.func %s' % node.func)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        self.symbol_chain.append(Atom(node.attr))
+        self.symbol_chain.append(Atom(node.attr, is_reactive=id(node) in nbs().reactive_attribute_node_ids))
         self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:

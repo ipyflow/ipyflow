@@ -124,6 +124,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.reactive_variable_node_ids: Set[int] = set()
+        self.reactive_attribute_node_ids: Set[int] = set()
         self.loop_iter_flag_names: Set[str] = set()
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}

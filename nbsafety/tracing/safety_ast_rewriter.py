@@ -36,6 +36,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
                 nbs().ast_node_by_id,
                 nbs().parent_node_by_id,
                 nbs().reactive_variable_node_ids,
+                nbs().reactive_attribute_node_ids,
                 self._reacive_var_positions,
             )
             orig_to_copy_mapping = mapper(node)

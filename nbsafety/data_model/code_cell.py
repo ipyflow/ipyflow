@@ -251,9 +251,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             live_symbol_refs, nbs().global_scope, self.cell_ctr, update_liveness_time_versions=False
         )
         # only mark dead attrsubs as killed if we can traverse the entire chain
-        dead_symbols, _ = get_symbols_for_references(
-            dead_symbol_refs, nbs().global_scope, only_yield_successful_resolutions=True
-        )
+        dead_symbols, _ = get_symbols_for_references(dead_symbol_refs, nbs().global_scope)
         for resolved in live_resolved_symbols:
             if resolved.is_deep:
                 resolved.dsym.cells_where_deep_live.add(self)

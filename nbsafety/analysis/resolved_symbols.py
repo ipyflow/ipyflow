@@ -56,6 +56,8 @@ class ResolvedDataSymbol(CommonEqualityMixin):
     def is_deep(self) -> bool:
         # for live symbols, if it is used in its entirety
         assert self.is_live
+        if self.is_reactive:
+            return True
         if self.next_atom is None:
             return True
         elif not self.next_atom.is_callpoint:

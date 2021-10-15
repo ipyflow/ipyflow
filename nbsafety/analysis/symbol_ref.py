@@ -28,6 +28,9 @@ class Atom(CommonEqualityMixin):
     def nonreactive(self) -> Atom:
         return self.__class__(self.value, is_callpoint=self.is_callpoint, is_subscript=self.is_subscript, is_reactive=False)
 
+    def reactive(self) -> Atom:
+        return self.__class__(self.value, is_callpoint=self.is_callpoint, is_subscript=self.is_subscript, is_reactive=True)
+
     def __hash__(self):
         return hash((self.value, self.is_callpoint, self.is_subscript, self.is_reactive))
 
@@ -64,18 +67,21 @@ class SymbolRef(CommonEqualityMixin):
         yield_all_intermediate_symbols: bool = False,
     ) -> Generator[ResolvedDataSymbol, None, None]:
         assert not (only_yield_final_symbol and yield_all_intermediate_symbols)
-        if yield_all_intermediate_symbols and not only_yield_final_symbol:
-            # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
-            #  Right now, yielding the intermediate elts of the chain will yield false positives in the
-            #  event of namespace stale children.
-            for dsym, atom, next_atom in scope.gen_data_symbols_for_attrsub_chain(self):
+        dsym, atom, next_atom = None, None, None
+        reactive_seen = False
+        for dsym, atom, next_atom in scope.gen_data_symbols_for_attrsub_chain(self):
+            reactive_seen = reactive_seen or atom.is_reactive
+            yield_all_intermediate_symbols = yield_all_intermediate_symbols or reactive_seen
+            if reactive_seen and not atom.is_reactive:
+                atom = atom.reactive()
+            if yield_all_intermediate_symbols:
+                # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
+                #  Right now, yielding the intermediate elts of the chain will yield false positives in the
+                #  event of namespace stale children.
                 yield ResolvedDataSymbol(dsym, atom, next_atom)
-        else:
-            dsym_et_al = scope.get_most_specific_data_symbol_for_attrsub_chain(self)
-            if dsym_et_al is not None:
-                dsym, atom, next_atom = dsym_et_al
-                if next_atom is None or not only_yield_final_symbol:
-                    yield ResolvedDataSymbol(dsym, atom, next_atom)
+        if not yield_all_intermediate_symbols and dsym is not None:
+            if next_atom is None or not only_yield_final_symbol:
+                yield ResolvedDataSymbol(dsym, atom, next_atom)
 
 
 class LiveSymbolRef(CommonEqualityMixin):

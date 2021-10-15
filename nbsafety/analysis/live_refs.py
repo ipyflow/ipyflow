@@ -99,7 +99,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             and isinstance(value, (ast.Attribute, ast.Subscript, ast.Name))
         ):
             lhs, rhs = [
-                get_symbols_for_references(x, self._scope, only_yield_successful_resolutions=True)[0]
+                get_symbols_for_references(x, self._scope)[0]
                 for x in (this_assign_dead, (live.ref for live in this_assign_live))
             ]
             if len(lhs) == 1 and len(rhs) == 1:
@@ -257,14 +257,12 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
 
 
 def get_symbols_for_references(
-    symbol_refs: Iterable[SymbolRef],
-    scope: Scope,
-    only_yield_successful_resolutions: bool = False,
+    symbol_refs: Iterable[SymbolRef], scope: Scope,
 ) -> Tuple[Set[DataSymbol], Set[DataSymbol]]:
     dsyms: Set[DataSymbol] = set()
     called_dsyms: Set[DataSymbol] = set()
     for symbol_ref in symbol_refs:
-        for resolved in symbol_ref.gen_resolved_symbols(scope, only_yield_final_symbol=only_yield_successful_resolutions):
+        for resolved in symbol_ref.gen_resolved_symbols(scope, only_yield_final_symbol=True):
             if resolved.is_called:
                 called_dsyms.add(resolved.dsym)
             else:

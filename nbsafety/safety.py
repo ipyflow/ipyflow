@@ -122,6 +122,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_reactive_symbols: Set[DataSymbol] = set()
+        self.updated_deep_reactive_symbols: Set[DataSymbol] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.reactive_variable_node_ids: Set[int] = set()
@@ -560,6 +561,7 @@ class NotebookSafety(singletons.NotebookSafety):
     def _tracing_context(self, cell_id: CellId):
         self.updated_symbols.clear()
         self.updated_reactive_symbols.clear()
+        self.updated_deep_reactive_symbols.clear()
 
         try:
             with TraceManager.instance().tracing_context():

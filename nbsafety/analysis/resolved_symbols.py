@@ -42,7 +42,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
 
     @property
     def is_reactive(self):
-        return self.atom.is_reactive
+        return self.atom.is_reactive or (self.is_live and self.dsym in nbs().updated_deep_reactive_symbols)
 
     @property
     def is_dead(self):

@@ -130,9 +130,8 @@ def test_stored_reactive_attr():
     assert cells_run - {cell_id} == {2, 3, 5}, 'got %s' % (cells_run - {cell_id})
     cell_id, cells_run = run_cell('ex.$bar = 9001')
     assert cells_run - {cell_id} == {2, 4, 6}
-    # cell_id, cells_run = run_cell('$ex.foo = "wat"')
-    # # TODO: is this the right desired behavior?
-    # assert cells_run - {cell_id} == {2, 3, 4, 5, 6}, 'got %s' % (cells_run - {cell_id})
+    cell_id, cells_run = run_cell('$ex.foo = "wat"')
+    assert cells_run - {cell_id} == {2, 3, 4, 5, 6}, 'got %s' % (cells_run - {cell_id})
     cell_id, cells_run = run_cell('ex = Example("foo", 0)')
     assert cells_run - {cell_id} == {5, 6}
     cell_id, cells_run = run_cell('$ex = Example("foo", 0)')

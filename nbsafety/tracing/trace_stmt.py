@@ -95,14 +95,18 @@ class TraceStatement:
         )
         try:
             symbol_ref = SymbolRef(target)
+            reactive_seen = False
             for resolved in symbol_ref.gen_resolved_symbols(
                 tracer().cur_frame_original_scope,
                 only_yield_final_symbol=False,
                 yield_all_intermediate_symbols=True,
-                inherit_reactivity=True,
+                inherit_reactivity=False,
                 yield_in_reverse=True,
             ):
                 if resolved.is_reactive:
+                    nbs().updated_deep_reactive_symbols.add(resolved.dsym)
+                    reactive_seen = True
+                if reactive_seen:
                     nbs().updated_reactive_symbols.add(resolved.dsym)
         except TypeError:
             pass

@@ -587,7 +587,6 @@ class TraceManager(SliceTraceManager):
                 propagate=is_default_dict,
                 implicit=not is_default_dict,
             )
-            logger.warning("create implicit sym %s", data_sym)
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 import nbsafety.tracing.mutation_event as me
 from nbsafety.analysis.symbol_edges import get_symbol_edges
+from nbsafety.analysis.symbol_ref import SymbolRef
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
@@ -92,6 +93,20 @@ class TraceStatement:
         upserted = scope.upsert_data_symbol_for_name(
             name, obj, deps - excluded_deps, self.stmt_node, is_subscript=is_subscript,
         )
+        try:
+            symbol_ref = SymbolRef(target)
+            for resolved in symbol_ref.gen_resolved_symbols(
+                tracer().cur_frame_original_scope,
+                only_yield_final_symbol=False,
+                yield_all_intermediate_symbols=True,
+                inherit_reactivity=True,
+                yield_in_reverse=True,
+            ):
+                import astunparse
+                if resolved.is_reactive:
+                    nbs().updated_reactive_symbols.add(resolved.dsym)
+        except TypeError:
+            pass
         logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)

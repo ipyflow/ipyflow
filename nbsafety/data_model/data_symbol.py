@@ -23,7 +23,7 @@ from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from nbsafety.types import SupportedIndexType
-    from typing import Any, Dict, List, Optional, Set
+    from typing import Any, Dict, List, Optional, Set, Tuple
 
     # avoid circular imports
     from nbsafety.data_model.scope import Scope
@@ -116,7 +116,7 @@ class DataSymbol:
         self.cells_where_shallow_live: Set[ExecutedCodeCell] = set()
 
         self._last_computed_staleness_cache_ts: int = -1
-        self._is_stale_at_position_cache: Dict[int, bool] = {}
+        self._is_stale_at_position_cache: Dict[Tuple[int, bool], bool] = {}
 
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
@@ -518,7 +518,13 @@ class DataSymbol:
             return False
         return self.timestamp < self.required_timestamp or len(self.namespace_stale_symbols) > 0
 
-    def _is_stale_at_position_impl(self, pos: int) -> bool:
+    @property
+    def is_shallow_stale(self):
+        if self.disable_warnings or self._temp_disable_warnings:
+            return False
+        return self.timestamp < self.required_timestamp
+
+    def _is_stale_at_position_impl(self, pos: int, deep: bool) -> bool:
         for par, timestamps in self.parents.items():
             for ts in timestamps:
                 dep_introduced_pos = cells().from_timestamp(ts).position
@@ -536,27 +542,30 @@ class DataSymbol:
                         # logger.error("par updated ts: %s", updated_ts)
                         # logger.error("par updated position: %s", cells().from_timestamp(updated_ts).position)
                         return True
-        for sym in self.namespace_stale_symbols:
-            if sym.is_stale_at_position(pos):
-                return True
+        if deep:
+            for sym in self.namespace_stale_symbols:
+                if sym.is_stale_at_position(pos):
+                    return True
         return False
 
-    def is_stale_at_position(self, pos: int) -> bool:
+    def is_stale_at_position(self, pos: int, deep: bool = True) -> bool:
         assert not hasattr(builtins, EMIT_EVENT), 'this should be called outside of tracing / execution context'
-        if not self.is_stale:
-            return False
+        if deep:
+            if not self.is_stale:
+                return False
+        else:
+            if not self.is_shallow_stale:
+                return False
         if nbs().mut_settings.flow_order in (FlowOrder.ANY_ORDER, FlowOrder.DAG):
             return True
         if cells().exec_counter() > self._last_computed_staleness_cache_ts:
             self._is_stale_at_position_cache.clear()
             self._last_computed_staleness_cache_ts = cells().exec_counter()
-        if pos in self._is_stale_at_position_cache:
-            return self._is_stale_at_position_cache[pos]
-        is_stale = self._is_stale_at_position_impl(pos)
-        self._is_stale_at_position_cache[pos] = is_stale
+        if (pos, deep) in self._is_stale_at_position_cache:
+            return self._is_stale_at_position_cache[pos, deep]
+        is_stale = self._is_stale_at_position_impl(pos, deep)
+        self._is_stale_at_position_cache[pos, deep] = is_stale
         return is_stale
-
-
 
     def should_mark_stale(self, updated_dep):
         if self.disable_warnings:

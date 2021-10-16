@@ -232,7 +232,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             max_used_cell_ctr = -1
             this_cell_pos = self.position
             for sym in live_symbols:
-                if filter_to_reactive and not sym.is_reactive:
+                if filter_to_reactive and not sym.is_reactive and sym.dsym not in nbs().updated_reactive_symbols:
                     continue
                 for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym.dsym, []):
                     if self.from_timestamp(cell_ctr).position <= this_cell_pos:
@@ -243,12 +243,11 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self, update_liveness_time_versions: bool = False
     ) -> CheckerResult:
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(self.to_ast(), scope=nbs().global_scope)
-        if update_liveness_time_versions:
-            get_live_symbols_and_cells_for_references(
-                live_symbol_refs, nbs().global_scope, self.cell_ctr, update_liveness_time_versions=True
-            )
         live_resolved_symbols, live_cells = get_live_symbols_and_cells_for_references(
-            live_symbol_refs, nbs().global_scope, self.cell_ctr, update_liveness_time_versions=False
+            live_symbol_refs,
+            nbs().global_scope,
+            self.cell_ctr,
+            update_liveness_time_versions=update_liveness_time_versions,
         )
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(dead_symbol_refs, nbs().global_scope)

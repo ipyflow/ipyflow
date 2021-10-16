@@ -121,6 +121,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.global_scope: Scope = Scope()
         self.updated_symbols: Set[DataSymbol] = set()
+        self.updated_reactive_symbols: Set[DataSymbol] = set()
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.reactive_variable_node_ids: Set[int] = set()
@@ -321,7 +322,9 @@ class NotebookSafety(singletons.NotebookSafety):
             if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
                 new_fresh_cells.add(cell_id)
                 if self.mut_settings.exec_mode != ExecutionMode.REACTIVE:
-                    if cell.get_max_used_live_symbol_cell_counter(checker_result.live, filter_to_reactive=True) > cell.cell_ctr:
+                    if cell.get_max_used_live_symbol_cell_counter(
+                        checker_result.live, filter_to_reactive=True
+                    ) > cell.cell_ctr:
                         forced_reactive_cells.add(cell_id)
             if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
                 break
@@ -553,6 +556,7 @@ class NotebookSafety(singletons.NotebookSafety):
     @contextmanager
     def _tracing_context(self, cell_id: CellId):
         self.updated_symbols.clear()
+        self.updated_reactive_symbols.clear()
 
         try:
             with TraceManager.instance().tracing_context():

@@ -280,7 +280,7 @@ def get_live_symbols_and_cells_for_references(
     called_dsyms: Set[Tuple[DataSymbol, int]] = set()
     for live_symbol_ref in symbol_refs:
         for resolved in live_symbol_ref.gen_resolved_symbols(
-            scope, only_yield_final_symbol=False, yield_all_intermediate_symbols=update_liveness_time_versions
+            scope, only_yield_final_symbol=False, yield_all_intermediate_symbols=True
         ):
             if update_liveness_time_versions:
                 ts_to_use = resolved.dsym.timestamp if resolved.is_last else resolved.dsym.timestamp_excluding_ns_descendents

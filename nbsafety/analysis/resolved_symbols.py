@@ -100,4 +100,4 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         return False
 
     def is_stale_at_position(self, pos: int):
-        return self.dsym.is_stale_at_position(pos)
+        return self.dsym.is_stale_at_position(pos, deep=self.is_deep)

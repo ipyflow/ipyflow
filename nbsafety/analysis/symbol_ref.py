@@ -7,8 +7,8 @@ from nbsafety.singletons import nbs
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
-    from typing import Any, Generator, List, Optional, Sequence, Tuple, Union
-    from nbsafety.data_model.data_symbol import Scope
+    from typing import Any, Generator, Iterable, List, Optional, Sequence, Tuple, Union
+    from nbsafety.data_model.data_symbol import DataSymbol, Scope
     from nbsafety.types import SupportedIndexType
 
 
@@ -42,10 +42,14 @@ class Atom(CommonEqualityMixin):
 
 
 class SymbolRef(CommonEqualityMixin):
-    def __init__(self, symbols: Union[str, Atom, Sequence[Atom]]):
+    def __init__(self, symbols: Union[ast.AST, str, Atom, Sequence[Atom]]):
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
-        if isinstance(symbols, str):
+        if isinstance(symbols, (ast.Name, ast.Attribute, ast.Subscript, ast.Call)):
+            symbols = GetSymbolRefs()(symbols).chain
+        elif isinstance(symbols, ast.AST):  # pragma: no cover
+            raise TypeError('unexpected type for %s' % symbols)
+        elif isinstance(symbols, str):
             symbols = [Atom(symbols)]
         elif isinstance(symbols, Atom):
             symbols = [symbols]
@@ -65,14 +69,31 @@ class SymbolRef(CommonEqualityMixin):
         scope: Scope,
         only_yield_final_symbol: bool,
         yield_all_intermediate_symbols: bool = False,
+        inherit_reactivity: bool = True,
+        yield_in_reverse: bool = False,
     ) -> Generator[ResolvedDataSymbol, None, None]:
         assert not (only_yield_final_symbol and yield_all_intermediate_symbols)
+        assert not (yield_in_reverse and not yield_all_intermediate_symbols)
         dsym, atom, next_atom = None, None, None
         reactive_seen = False
-        for dsym, atom, next_atom in scope.gen_data_symbols_for_attrsub_chain(self):
+        if yield_in_reverse:
+            gen: Iterable[Tuple[DataSymbol, Atom, Atom]] = [
+                (resolved.dsym, resolved.atom, resolved.next_atom)
+                for resolved in self.gen_resolved_symbols(
+                    scope,
+                    only_yield_final_symbol=only_yield_final_symbol,
+                    yield_all_intermediate_symbols=True,
+                    inherit_reactivity=False,
+                    yield_in_reverse=False,
+                )
+            ]
+            cast(list, gen).reverse()
+        else:
+            gen = scope.gen_data_symbols_for_attrsub_chain(self)
+        for dsym, atom, next_atom in gen:
             reactive_seen = reactive_seen or atom.is_reactive
             yield_all_intermediate_symbols = yield_all_intermediate_symbols or reactive_seen
-            if reactive_seen and not atom.is_reactive:
+            if inherit_reactivity and reactive_seen and not atom.is_reactive:
                 atom = atom.reactive()
             if yield_all_intermediate_symbols:
                 # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.

@@ -83,7 +83,7 @@ def test_simple_reactive_var_store():
     assert cells_run - {cell_id} == {3}, 'got %s' % cells_run
 
 
-if sys.version_info >= (3, 7):
+if sys.version_info >= (3, 8):
     def test_loaded_reactive_attr():
         assert run_cell(textwrap.dedent(
             """

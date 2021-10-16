@@ -102,7 +102,6 @@ class TraceStatement:
                 inherit_reactivity=True,
                 yield_in_reverse=True,
             ):
-                import astunparse
                 if resolved.is_reactive:
                     nbs().updated_reactive_symbols.add(resolved.dsym)
         except TypeError:

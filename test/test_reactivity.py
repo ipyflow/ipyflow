@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 import logging
+import textwrap
 from typing import TYPE_CHECKING
 
 from nbsafety.data_model.code_cell import cells
@@ -79,3 +80,60 @@ def test_simple_reactive_var_store():
     assert run_cell('$x = 42')[1] == {4, 2}
     cell_id, cells_run = run_cell('$y = 99')
     assert cells_run - {cell_id} == {3}, 'got %s' % cells_run
+
+
+def test_loaded_reactive_attr():
+    assert run_cell(textwrap.dedent(
+        """
+        from dataclasses import dataclass
+        
+        @dataclass
+        class Example:
+            foo: str
+            bar: int
+        
+        ex = Example('hi', 42)
+        """
+    ))[1] == {1}
+    assert run_cell('logging.info($ex)')[1] == {2}
+    assert run_cell('logging.info(ex.$foo)')[1] == {3}
+    assert run_cell('logging.info(ex.$bar)')[1] == {4}
+    assert run_cell('logging.info($ex.foo)')[1] == {5}
+    assert run_cell('logging.info($ex.bar)')[1] == {6}
+    cell_id, cells_run = run_cell('ex.foo = "hello"')
+    assert cells_run - {cell_id} == {2, 3, 5, 6}
+    cell_id, cells_run = run_cell('ex.bar = 9001')
+    assert cells_run - {cell_id} == {2, 4, 5, 6}
+    cell_id, cells_run = run_cell('ex = Example("foo", 0)')
+    assert cells_run - {cell_id} == {2, 3, 4, 5, 6}
+
+
+def test_stored_reactive_attr():
+    assert run_cell(textwrap.dedent(
+        """
+        from dataclasses import dataclass
+        
+        @dataclass
+        class Example:
+            foo: str
+            bar: int
+        
+        ex = Example('hi', 42)
+        """
+    ))[1] == {1}
+    assert run_cell('logging.info(ex)')[1] == {2}
+    assert run_cell('logging.info(ex.foo)')[1] == {3}
+    assert run_cell('logging.info(ex.bar)')[1] == {4}
+    assert run_cell('logging.info(ex.$foo)')[1] == {5}
+    assert run_cell('logging.info(ex.$bar)')[1] == {6}
+    cell_id, cells_run = run_cell('ex.$foo = "hello"')
+    assert cells_run - {cell_id} == {2, 3, 5}, 'got %s' % (cells_run - {cell_id})
+    cell_id, cells_run = run_cell('ex.$bar = 9001')
+    assert cells_run - {cell_id} == {2, 4, 6}
+    # cell_id, cells_run = run_cell('$ex.foo = "wat"')
+    # # TODO: is this the right desired behavior?
+    # assert cells_run - {cell_id} == {2, 3, 4, 5, 6}, 'got %s' % (cells_run - {cell_id})
+    cell_id, cells_run = run_cell('ex = Example("foo", 0)')
+    assert cells_run - {cell_id} == {5, 6}
+    cell_id, cells_run = run_cell('$ex = Example("foo", 0)')
+    assert cells_run - {cell_id} == {2, 3, 4, 5, 6}

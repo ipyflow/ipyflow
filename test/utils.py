@@ -33,7 +33,7 @@ def assert_bool(val, msg=''):
 def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
     os.environ[SafetyRunMode.DEVELOP.value] = '1'
 
-    def run_cell(code, cell_id=None, ignore_exceptions=False):
+    def run_cell(code, cell_id=None, ignore_exceptions=False) -> int:
         if cell_id is None:
             cell_id = cells().next_exec_counter()
         nbs().set_active_cell(cell_id)
@@ -48,6 +48,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         finally:
             sys.last_value = None
             sys.last_traceback = None
+        return cell_id
 
     store_history = kwargs.pop('store_history', False)
     test_context = kwargs.pop('test_context', True)

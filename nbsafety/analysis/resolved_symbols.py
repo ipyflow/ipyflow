@@ -42,7 +42,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
 
     @property
     def is_reactive(self):
-        return self.atom.is_reactive or nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE
+        return self.atom.is_reactive
 
     @property
     def is_dead(self):
@@ -86,7 +86,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         if self.next_atom is None:
             return False
         if self.next_atom.is_callpoint:
-            if self.is_mutating and self.is_reactive:
+            if self.is_mutating and (self.is_reactive or nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE):
                 return True
             else:
                 return False

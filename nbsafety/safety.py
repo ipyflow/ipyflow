@@ -129,7 +129,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.loop_iter_flag_names: Set[str] = set()
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self._active_cell_id: Optional[str] = None
+        self._active_cell_id: Optional[CellId] = None
         self.safety_issue_detected = False
         if cell_magic_name is None:
             self._cell_magic = None
@@ -207,10 +207,14 @@ class NotebookSafety(singletons.NotebookSafety):
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping
 
-    def set_active_cell(self, cell_id):
+    def set_active_cell(self, cell_id: CellId) -> None:
         self._active_cell_id = cell_id
 
-    def _comm_target(self, comm, open_msg):
+    def reactivity_cleanup(self) -> None:
+        for cell in cells().all_cells_most_recently_run_for_each_id():
+            cell.set_fresh(False)
+
+    def _comm_target(self, comm, open_msg) -> None:
         @comm.on_msg
         def _responder(msg):
             request = msg['content']['data']
@@ -218,7 +222,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
         comm.send({'type': 'establish'})
 
-    def handle(self, request, comm=None):
+    def handle(self, request, comm=None) -> None:
         if request['type'] == 'change_active_cell':
             self.set_active_cell(request['active_cell_id'])
         elif request['type'] == 'cell_freshness':
@@ -243,8 +247,7 @@ class NotebookSafety(singletons.NotebookSafety):
             if comm is not None:
                 comm.send(response)
         elif request['type'] == 'reactivity_cleanup':
-            for cell in cells().all_cells_most_recently_run_for_each_id():
-                cell.set_fresh(False)
+            self.reactivity_cleanup()
         else:
             dbg_msg = 'Unsupported request type for request %s' % request
             logger.error(dbg_msg)

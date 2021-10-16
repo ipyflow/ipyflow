@@ -3,12 +3,14 @@ import logging
 from typing import TYPE_CHECKING
 
 from nbsafety.data_model.code_cell import cells
+from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
 from test.utils import make_safety_fixture
 
 if TYPE_CHECKING:
-    from typing import Set
+    from typing import Optional, Set, Tuple
 
+logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
@@ -16,39 +18,64 @@ logging.basicConfig(level=logging.ERROR)
 _safety_fixture, run_cell_ = make_safety_fixture()
 
 
-def run_cell(cell: str, cell_id=None, **kwargs) -> None:
-    # print()
-    # print('*******************************************')
-    # print('running', cell)
-    # print('*******************************************')
-    # print()
-    run_cell_(cell, cell_id=cell_id, **kwargs)
-
-
-def run_reactively(cell_content: str) -> Set[int]:
-    executed_cells = set()
-    next_content_to_run = cell_content
-    next_cell_to_run_id = None
-    while next_content_to_run is not None:
-        run_cell(next_content_to_run, cell_id=next_cell_to_run_id)
-        next_content_to_run = None
-        fresh = sorted(nbs().check_and_link_multiple_cells().fresh_cells)
-        for fresh_cell_id in fresh:
-            if fresh_cell_id not in executed_cells:
-                executed_cells.add(fresh_cell_id)
-                next_content_to_run = cells().from_id(fresh_cell_id).content
-                next_cell_to_run_id = fresh_cell_id
+def run_cell(cell_content: str, cell_id: Optional[int] = None, fresh_are_reactive: bool = False) -> Tuple[int, Set[int]]:
+    orig_mode = nbs().mut_settings.exec_mode
+    try:
+        if fresh_are_reactive:
+            nbs().mut_settings.exec_mode = ExecutionMode.REACTIVE
+        executed_cells = set()
+        reactive_cells = set()
+        next_content_to_run = cell_content
+        next_cell_to_run_id = cell_id
+        while next_content_to_run is not None:
+            executed_cells.add(run_cell_(next_content_to_run, cell_id=next_cell_to_run_id))
+            if len(executed_cells) == 1:
+                cell_id = next(iter(executed_cells))
+            next_content_to_run = None
+            checker_result = nbs().check_and_link_multiple_cells()
+            if fresh_are_reactive:
+                reactive_cells |= checker_result.new_fresh_cells
+            else:
+                reactive_cells |= checker_result.forced_reactive_cells
+            for reactive_cell_id in sorted(reactive_cells - executed_cells):
+                next_content_to_run = cells().from_id(reactive_cell_id).content
+                next_cell_to_run_id = reactive_cell_id
                 break
-    return executed_cells
+        return cell_id, executed_cells
+    finally:
+        nbs().mut_settings.exec_mode = orig_mode
+        nbs().reactivity_cleanup()
+
+
+def run_reactively(cell_content: str, cell_id: Optional[int] = None) -> Tuple[int, Set[int]]:
+    return run_cell(cell_content, cell_id=cell_id, fresh_are_reactive=True)
 
 
 def test_mutate_one_list_entry():
-    run_cell('lst = [1, 2, 3]')
-    run_cell('logging.info(lst[0])')
-    run_cell('logging.info(lst[1])')
-    run_cell('logging.info(lst[2])')
+    assert run_reactively('lst = [1, 2, 3]')[1] == {1}
+    assert run_reactively('logging.info(lst[0])')[1] == {2}
+    assert run_reactively('logging.info(lst[1])')[1] == {3}
+    assert run_reactively('logging.info(lst[2])')[1] == {4}
     for i in range(3):
-        reexeced = run_reactively(f'lst[{i}] += 1')
-        assert reexeced == {i + 2}, 'got %s' % reexeced
-    reexeced = run_reactively('lst.append(3)')
-    assert reexeced == set(), 'got %s' % reexeced
+        cell_id, cells_run = run_reactively(f'lst[{i}] += 1')
+        assert cells_run - {cell_id} == {i + 2}, 'got %s' % cells_run
+    cell_id, cells_run = run_reactively('lst.append(3)')
+    assert cells_run - {cell_id} == set(), 'got %s' % cells_run
+
+
+def test_simple_reactive_var_load():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('y = $x + 1')[1] == {2}
+    assert run_cell('logging.info($y)')[1] == {3}
+    assert run_cell('x = 42')[1] == {4, 2, 3}
+    cell_id, cells_run = run_cell('y = 99')
+    assert cells_run - {cell_id} == {3}
+
+
+def test_simple_reactive_var_store():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('y = x + 1')[1] == {2}
+    assert run_cell('logging.info(y)')[1] == {3}
+    assert run_cell('$x = 42')[1] == {4, 2}
+    cell_id, cells_run = run_cell('$y = 99')
+    assert cells_run - {cell_id} == {3}, 'got %s' % cells_run

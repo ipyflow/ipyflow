@@ -392,11 +392,13 @@ class DataSymbol:
             total -= 1
         return total
 
-    def prev_obj_definitely_equal_to_current_obj(self, prev_obj: Optional[Any]) -> bool:
+    def should_preserve_timestamp(self, prev_obj: Optional[Any]) -> bool:
         if nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
             # always bump timestamps for reactive mode
             return False
         if prev_obj is None:
+            return False
+        if nbs().blocked_reactive_timestamps_by_symbol.get(self, -1) == self.timestamp.cell_num:
             return False
         if not self._cached_out_of_sync or self.obj_id == self.cached_obj_id:
             return True
@@ -626,17 +628,17 @@ class DataSymbol:
         self.fresher_ancestor_timestamps.clear()
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.update_usage_info()
-        equal_to_old = not mutated and self.prev_obj_definitely_equal_to_current_obj(prev_obj)
+        should_preserve_timestamp = not mutated and self.should_preserve_timestamp(prev_obj)
         if refresh:
             self.refresh(
-                bump_version=not equal_to_old or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES,
+                bump_version=not should_preserve_timestamp or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES,
                 # rationale: if this is a mutation for which we have more precise information,
                 # then we don't need to update the ns descendents as this will already have happened.
                 # also don't update ns descendents for things like `a = b`
                 refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents) and not self._is_simple_assign(new_deps),
                 refresh_namespace_stale=not mutated,
             )
-        if propagate and (deleted or not equal_to_old):
+        if propagate and (deleted or not should_preserve_timestamp):
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents, refresh)
         self._refresh_cached_obj()
         tracer().this_stmt_updated_symbols.add(self)

@@ -213,3 +213,10 @@ if sys.version_info >= (3, 8):
         assert cells_run - {cell_id} == set()
         cell_id, cells_run = run_cell('$ex = Example("foo", 0)')
         assert cells_run - {cell_id} == {2, 5, 6}
+
+
+    def test_store_after_blocked_store_reactively_executes():
+        assert run_cell('x = 0')[1] == {1}
+        assert run_cell('logging.info(x)')[1] == {2}
+        assert run_cell('$:x = 42')[1] == {3}
+        assert run_cell('$x = 42')[1] == {4, 2}

@@ -1,11 +1,16 @@
 # -*- coding: future_annotations -*-
 import re
+import sys
 from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Callable, List, Optional, Tuple
+    from typing import Any, Callable, List, Optional, Tuple
     from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
+    if sys.version_info >= (3, 8):
+        Pattern = re.Pattern
+    else:
+        Pattern = Any
 
 
 class AugmentedSymbol(Enum):
@@ -59,7 +64,7 @@ def extract_reactive_vars(s: str) -> List[str]:
 
 
 def get_augmented_syms_and_positions(
-    s: str, regex: Optional[re.Pattern] = None, offset: int = 1
+    s: str, regex: Optional[Pattern] = None, offset: int = 1
 ) -> Tuple[str, List[int]]:
     portions = []
     positions = []

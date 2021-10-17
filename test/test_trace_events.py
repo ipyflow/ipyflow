@@ -158,10 +158,12 @@ def test_list_nested_in_dict():
 
 def test_function_call():
     assert _RECORDED_EVENTS == []
-    run_cell("""
-def foo(x):
-    return [x]
-""")
+    run_cell(
+        """
+        def foo(x):
+            return [x]
+        """
+    )
     throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
@@ -213,14 +215,16 @@ def test_lambda_in_tuple():
 
 def test_fancy_slices():
     assert _RECORDED_EVENTS == []
-    run_cell("""
-import numpy as np
-class Foo:
-    def __init__(self, x):
-        self.x = x
-foo = Foo(1)
-arr = np.zeros((3, 3, 3))
-""")
+    run_cell(
+        """
+        import numpy as np
+        class Foo:
+            def __init__(self, x):
+                self.x = x
+        foo = Foo(1)
+        arr = np.zeros((3, 3, 3))
+        """
+    )
     throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
@@ -301,10 +305,12 @@ arr = np.zeros((3, 3, 3))
 
 def test_for_loop():
     assert _RECORDED_EVENTS == []
-    run_cell("""
-for i in range(10):
-    pass
-""")
+    run_cell(
+        """
+        for i in range(10):
+            pass
+        """
+    )
     throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
@@ -326,11 +332,13 @@ for i in range(10):
 
 def test_while_loop():
     assert _RECORDED_EVENTS == []
-    run_cell("""
-i = 0
-while i < 10:
-    i += 1
-""")
+    run_cell(
+        """
+        i = 0
+        while i < 10:
+            i += 1
+        """
+    )
     throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,
@@ -352,12 +360,14 @@ while i < 10:
 
 def test_for_loop_nested_in_while_loop():
     assert _RECORDED_EVENTS == []
-    run_cell("""
-i = 0
-while i < 10:
-    for j in range(2):
-        i += 1
-""")
+    run_cell(
+        """
+        i = 0
+        while i < 10:
+            for j in range(2):
+                i += 1
+        """
+    )
     throw_and_print_diff_if_recorded_not_equal_to([
         TraceEvent.init_cell,
         TraceEvent.before_stmt,

@@ -1,7 +1,6 @@
 # -*- coding: future_annotations -*-
 import logging
 import sys
-import textwrap
 from typing import TYPE_CHECKING
 
 from nbsafety.data_model.code_cell import cells
@@ -85,7 +84,7 @@ def test_simple_reactive_var_store():
 
 if sys.version_info >= (3, 8):
     def test_loaded_reactive_attr():
-        assert run_cell(textwrap.dedent(
+        assert run_cell(
             """
             from dataclasses import dataclass
             
@@ -96,7 +95,7 @@ if sys.version_info >= (3, 8):
             
             ex = Example('hi', 42)
             """
-        ))[1] == {1}
+        )[1] == {1}
         assert run_cell('logging.info($ex)')[1] == {2}
         assert run_cell('logging.info(ex.$foo)')[1] == {3}
         assert run_cell('logging.info(ex.$bar)')[1] == {4}
@@ -111,7 +110,7 @@ if sys.version_info >= (3, 8):
 
 
     def test_stored_reactive_attr():
-        assert run_cell(textwrap.dedent(
+        assert run_cell(
             """
             from dataclasses import dataclass
             
@@ -122,7 +121,7 @@ if sys.version_info >= (3, 8):
             
             ex = Example('hi', 42)
             """
-        ))[1] == {1}
+        )[1] == {1}
         assert run_cell('logging.info(ex)')[1] == {2}
         assert run_cell('logging.info(ex.foo)')[1] == {3}
         assert run_cell('logging.info(ex.bar)')[1] == {4}

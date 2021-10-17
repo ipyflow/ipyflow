@@ -102,24 +102,33 @@ def test_inner_mutation_considered_fresh():
 def test_update_list_elem():
     force_subscript_symbol_creation = True
     cells = {
-        0: """
-class Foo:
-    def __init__(self):
-        self.counter = 0
-        self.dummy = 0
-        
-    def inc(self):
-        self.counter += 1""",
+        0: (
+            """
+            class Foo:
+                def __init__(self):
+                    self.counter = 0
+                    self.dummy = 0
+                    
+                def inc(self):
+                    self.counter += 1
+            """
+        ),
 
-        1: """
-lst = []
-for i in range(5):
-    x = Foo()
-    lst.append(x)""",
+        1: (
+            """
+            lst = []
+            for i in range(5):
+                x = Foo()
+                lst.append(x)
+            """
+        ),
 
-        2: """
-for foo in lst:
-    foo.inc()""",
+        2: (
+            """
+            for foo in lst:
+                foo.inc()
+            """
+        ),
 
         3: 'logging.info(lst)',
     }

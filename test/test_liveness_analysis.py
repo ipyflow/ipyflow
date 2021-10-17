@@ -1,15 +1,15 @@
 # -*- coding: future_annotations -*-
 import ast
 import sys
+import textwrap
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis.symbol_ref import SymbolRef, Atom
+from nbsafety.analysis.symbol_ref import LiveSymbolRef, SymbolRef
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts
 from .utils import make_safety_fixture
 
 if TYPE_CHECKING:
-    from typing import Set
-    from nbsafety.types import SymbolRef
+    from typing import Set, Tuple, Union
 
 
 _safety_fixture, _ = make_safety_fixture()
@@ -25,7 +25,9 @@ def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:
     return simplified
 
 
-def compute_live_dead_symbol_refs(code):
+def compute_live_dead_symbol_refs(code: Union[str, ast.AST]) -> Tuple[Set[str], Set[str]]:
+    if isinstance(code, str):
+        code = textwrap.dedent(code)
     live, dead = compute_live_dead_symbol_refs_with_stmts(code)
     live = {ref.ref for ref in live}
     live, dead = _simplify_symbol_refs(live), _simplify_symbol_refs(dead)
@@ -33,20 +35,25 @@ def compute_live_dead_symbol_refs(code):
 
 
 def test_simple():
-    live, dead = compute_live_dead_symbol_refs("""
-x = 5
-print(foo, x)""")
+    live, dead = compute_live_dead_symbol_refs(
+        """
+        x = 5
+        print(foo, x)
+        """
+    )
     assert live == {'foo', 'print'}
     assert dead == {'x'}
 
 
 def test_function_body():
-    fbody = ast.parse("""
-def func():
-    y = 42
-    print(foo, bar, baz, x)
-    x = 5
-""").body[0].body
+    fbody = ast.parse(textwrap.dedent(
+        """
+        def func():
+            y = 42
+            print(foo, bar, baz, x)
+            x = 5
+        """
+    )).body[0].body
     live, dead = compute_live_dead_symbol_refs(fbody)
     assert live == {'foo', 'bar', 'baz', 'x', 'print'}
     assert dead == {'x', 'y'}
@@ -71,9 +78,11 @@ def test_subscript_is_live():
 
 if sys.version_info >= (3, 8):
     def test_walrus():
-        live, dead = compute_live_dead_symbol_refs("""
-if (y := (x := x + 1) + 1) > 0:
-    z = y + 1
-""")
+        live, dead = compute_live_dead_symbol_refs(
+            """
+            if (y := (x := x + 1) + 1) > 0:
+                z = y + 1
+            """
+        )
         assert live == {'x'}
         assert dead == {'y', 'z'}, 'got %s' % dead

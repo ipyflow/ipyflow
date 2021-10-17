@@ -1,22 +1,25 @@
 # -*- coding: future_annotations -*-
 import ast
+import textwrap
 
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
 from nbsafety.utils import KeyDict
 
 
-PROGRAM = """
-for i in [foo(x) for x in [1, 2, 3]]:
-    try:
-        logging.info(i)
-    except:
-        logging.warning("warning!")
-    finally:
-        sys.exit(0)
-        
-if False:
-    asdf(qwer(1, 2, a().b[c,d,e](f.g()).h))[a, 7] = foo.bar
-"""
+PROGRAM = textwrap.dedent(
+    """
+    for i in [foo(x) for x in [1, 2, 3]]:
+        try:
+            logging.info(i)
+        except:
+            logging.warning("warning!")
+        finally:
+            sys.exit(0)
+            
+    if False:
+        asdf(qwer(1, 2, a().b[c,d,e](f.g()).h))[a, 7] = foo.bar
+    """
+)
 
 
 def test_ast_rewrite():

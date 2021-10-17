@@ -1,6 +1,7 @@
 # -*- coding: future_annotations -*-
 import os
 import sys
+import textwrap
 from typing import TYPE_CHECKING
 
 from IPython import get_ipython
@@ -37,7 +38,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         if cell_id is None:
             cell_id = cells().next_exec_counter()
         nbs().set_active_cell(cell_id)
-        get_ipython().run_cell_magic(nbs().cell_magic_name, None, code)
+        get_ipython().run_cell_magic(nbs().cell_magic_name, None, textwrap.dedent(code))
         try:
             if not ignore_exceptions and getattr(sys, 'last_value', None) is not None:
                 last_tb = getattr(sys, 'last_traceback', None)

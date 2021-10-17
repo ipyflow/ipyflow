@@ -1,7 +1,6 @@
 # -*- coding: future_annotations -*-
 import logging
 import sys
-import textwrap
 
 from nbsafety.singletons import nbs
 from .utils import assert_bool, make_safety_fixture, skipif_known_failing
@@ -62,7 +61,7 @@ def test_readme_example():
     run_cell('def eval_model_1(): return 0.5')
     run_cell('def eval_model_2(): return 0.85')
     run_cell('models = {"model_1": eval_model_1, "model_2": eval_model_2}')
-    output = textwrap.dedent(
+    output = (
         """
         best_acc, best_model = max((f(), name) for name, f in models.items())
         logging.info(f'The best model was {best_model} with an accuracy of {best_acc}.')
@@ -78,7 +77,7 @@ def test_readme_example():
 #  symbols need to have dependencies on pre-call argument
 #  symbols. The place to do this is in `DataSymbol.create_symbols_for_call_args(...)`
 def test_passed_sym_captured_as_dep_for_mutated_obj():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
@@ -87,7 +86,7 @@ def test_passed_sym_captured_as_dep_for_mutated_obj():
         def mutate(foo, x):
             foo.x = x
         """
-    ))
+    )
     run_cell('foo = Foo(5)')
     run_cell('y = 7')
     run_cell('mutate(foo, y)')
@@ -136,17 +135,17 @@ def test_redef_after_stale_use():
     run_cell('a = 1')
     run_cell('b = a + 1')
     run_cell('a = 3')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         logging.info(b)
         b = 7
         """
-    ))
+    )
     assert_detected('b has stale dependency on old value of a')
 
 
 def test_class_redef():
-    classdef = textwrap.dedent(
+    classdef = (
         """
         class Foo:
             def __init__(self, x):
@@ -200,12 +199,12 @@ def test_lambda_arg():
 
 
 def test_lambda_scope():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo(x):
             return lambda: x + 5
         """
-    ))
+    )
     run_cell('x = 5')
     run_cell('y = 7')
     run_cell('lam = foo(y)')
@@ -220,13 +219,13 @@ def test_lambda_scope():
 
 def test_lambda_with_kwarg_scope():
     run_cell('w = 99')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo(x):
             lam = lambda t=w: t + x + 5
             return lam
         """
-    ))
+    )
     run_cell('x = 5')
     run_cell('y = 7')
     run_cell('lam = foo(y)')
@@ -243,12 +242,12 @@ def test_fundef_params_not_live():
     run_cell('x = 0')
     run_cell('y = x + 6')
     run_cell('x = 42')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(y):
             return y + 9
         """
-    ))
+    )
     assert_not_detected('`y` is not live in the function')
 
 
@@ -296,7 +295,7 @@ def test_empty_list_assignment():
 
 # redefined function example from the project prompt
 def test_redefined_function_in_list():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 5
@@ -304,23 +303,23 @@ def test_redefined_function_in_list():
         def bar():
             return 7
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         funcs_to_run = [foo, bar]
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         accum = 0
         for f in funcs_to_run:
             accum += f()
         logging.info(accum)
         """
-    ))
+    )
     
     # redefine foo here but not funcs_to_run
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 10
@@ -328,36 +327,36 @@ def test_redefined_function_in_list():
         def bar():
             return 7
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         accum = 0
         for f in funcs_to_run:
             accum += f()
         logging.info(accum)
         """
-    ))
+    )
     assert_detected("Did not detect that funcs_to_run's reference was changed")
 
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         funcs_to_run = [foo,bar]
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         accum = 0
         for f in funcs_to_run:
             accum += f()
         logging.info(accum)
         """
-    ))
+    )
     assert_not_detected("There should be no more dependency issue")
 
 
 # like before but the function is called in a list comprehension
 def test_redefined_function_for_funcall_in_list_comp():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 5
@@ -365,19 +364,19 @@ def test_redefined_function_for_funcall_in_list_comp():
         def bar():
             return 7
         """
-    ))
+    )
     run_cell('retvals = [foo(), bar()]')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         accum = 0
         for ret in retvals:
             accum += ret
         logging.info(accum)
         """
-    ))
+    )
 
     # redefine foo here but not funcs_to_run
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 10
@@ -385,14 +384,14 @@ def test_redefined_function_for_funcall_in_list_comp():
         def bar():
             return 7
         """
-    ))
+    )
     run_cell('logging.info(accum)')
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
 # like before but we run the list through a function before iterating
 def test_redefined_function_for_funcall_in_modified_list_comp():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 5
@@ -400,9 +399,9 @@ def test_redefined_function_for_funcall_in_modified_list_comp():
         def bar():
             return 7
         """
-    ))
+    )
     run_cell('retvals = tuple([foo(), bar()])')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         accum = 0
         # for ret in map(lambda x: x * 5, retvals):
@@ -410,10 +409,10 @@ def test_redefined_function_for_funcall_in_modified_list_comp():
             accum += ret
         logging.info(accum)
         """
-    ))
+    )
 
     # redefine foo here but not funcs_to_run
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 10
@@ -421,20 +420,20 @@ def test_redefined_function_for_funcall_in_modified_list_comp():
         def bar():
             return 7
         """
-    ))
+    )
     run_cell('logging.info(accum)')
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
 
 def test_for_loop_with_map():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         accum = 0
         foo = [1, 2, 3, 4, 5]
         for ret in map(lambda x: x * 5, foo):
             accum += ret
         """
-    ))
+    )
     run_cell('logging.info(accum)')
     assert_not_detected('no stale dep foo -> accum')
     run_cell('foo = [0]')
@@ -443,7 +442,7 @@ def test_for_loop_with_map():
 
 
 def test_redefined_function_over_list_comp():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 5
@@ -454,28 +453,28 @@ def test_redefined_function_over_list_comp():
         def baz(lst):
             return map(lambda x: 3*x, lst)
         """
-    ))
+    )
     run_cell('retvals = baz([foo(), bar()])')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         accum = 0
         for ret in map(lambda x: x * 5, retvals):
             accum += ret
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         def baz(lst):
             return map(lambda x: 7*x, lst)
         """
-    ))
+    )
     run_cell('logging.info(accum)')
     assert_detected('Did not detect stale dependency of `accum` on `baz`')
 
 
 # like before but the function is called in a tuple comprehension
 def test_redefined_function_for_funcall_in_tuple_comp():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 5
@@ -483,19 +482,19 @@ def test_redefined_function_for_funcall_in_tuple_comp():
         def bar():
             return 7
         """
-    ))
+    )
     run_cell('retvals = (foo(), bar())')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         accum = 0
         for ret in retvals:
             accum += ret
         logging.info(accum)
         """
-    ))
+    )
 
     # redefine foo here but not funcs_to_run
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def foo():
             return 10
@@ -503,7 +502,7 @@ def test_redefined_function_for_funcall_in_tuple_comp():
         def bar():
             return 7
         """
-    ))
+    )
     run_cell('logging.info(accum)')
     assert_detected('Did not detect stale dependency of `accum` on `foo` and `bar`')
 
@@ -525,13 +524,13 @@ def f():
 def test_symbol_callpoint_2():
     run_cell('x = 0')
     run_cell('y = x + 1')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f():
             y = 9
             return y + 7
         """
-    ))
+    )
     run_cell('z = f()')
     assert_not_detected()
     run_cell('x = 42')
@@ -542,21 +541,21 @@ def test_symbol_callpoint_2():
 def test_symbol_callpoint_3():
     run_cell('x = 0')
     run_cell('y = x + 1')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f():
             return y + 7
         """
-    ))
+    )
     run_cell('z = f()')
     assert_not_detected()
     run_cell('x = 42')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f():
             return y + 7
         """
-    ))
+    )
     run_cell('z = f()')
     assert_detected('`y` as referenced in call of function `f` is stale')
 
@@ -564,12 +563,12 @@ def test_symbol_callpoint_3():
 def test_symbol_callpoint_4():
     run_cell('x = 0')
     run_cell('y = x + 1')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(y):
             return y + 7
         """
-    ))
+    )
     run_cell('z = f(5)')
     assert_not_detected()
     run_cell('x = 42')
@@ -580,12 +579,12 @@ def test_symbol_callpoint_4():
 def test_function_arg_independent_of_outer_staleness():
     run_cell('x = 0')
     run_cell('y = x + 1')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(y):
             return y + 7
         """
-    ))
+    )
     run_cell('z = f(5)')
     assert_not_detected()
     run_cell('x = 42')
@@ -606,12 +605,12 @@ def test_lambda_capture():
 # Tests about variables that have same name but in different scope.
 # There shouldn't be any extra dependency because of the name.
 def test_variable_scope():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def func():
             x = 6
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('y = x')
     run_cell('z = func')
@@ -653,13 +652,13 @@ def test_variable_scope_2():
 
 
 def test_default_args():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         x = 7
         def foo(y=x):
             return y + 5
         """
-    ))
+    )
     run_cell('a = foo()')
     assert_not_detected()
     run_cell('x = 10')
@@ -682,26 +681,26 @@ def test_same_pointer():
 
 
 def test_func_assign_objs():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         a = [1]
         b = [1]
         c = [2]
         d = [3]"""
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         def func(x, y=a):
             e = [c[0] + d[0]]
             f = [x[0] + y[0]]
             return f
         """
-    ))
+    )
     run_cell('z = func(c)')
     run_cell('a = [4]')
     run_cell('logging.info(z[0])')
     assert_detected("Should have detected stale dependency of fn func on a")
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def func(x, y=a):
             logging.info(b[0])
@@ -711,7 +710,7 @@ def test_func_assign_objs():
             return f
         # z = func(c)
         """
-    ))
+    )
     run_cell('z = func(c)')
     run_cell('%safety show_deps z[0]')
     run_cell('logging.info(z[0])')
@@ -738,7 +737,7 @@ def test_func_assign_objs():
 
 
 def test_func_assign_ints():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         a = 1
         b = 1
@@ -749,12 +748,12 @@ def test_func_assign_ints():
             f = x + y
             return f
         """
-    ))
+    )
     run_cell('z = func(c)')
     run_cell('a = 4')
     run_cell('logging.info(z)')
     assert_detected("Should have detected stale dependency of fn func on a")
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def func(x, y=a):
             logging.info(b)
@@ -763,7 +762,7 @@ def test_func_assign_ints():
             return f
         z = func(c)
         """
-    ))
+    )
     run_cell('logging.info(z)')
     assert_not_detected()
     run_cell('c = 3')
@@ -778,7 +777,7 @@ def test_func_assign_ints():
 
 
 def test_func_assign_helper_func():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         x = 3
         a = 4
@@ -789,7 +788,7 @@ def test_func_assign_helper_func():
             return g()
         y = f()
         """
-    ))
+    )
     run_cell('x = 4')
     run_cell('logging.info(y)')
     assert_detected("Should have detected stale dependency of y on x")
@@ -802,7 +801,7 @@ def test_func_assign_helper_func():
 
 
 def test_func_assign_helper_func_2():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         x = 3
         a = 4
@@ -813,7 +812,7 @@ def test_func_assign_helper_func_2():
             return g
         y = f()()
         """
-    ))
+    )
     run_cell('x = 4')
     run_cell('logging.info(y)')
     assert_detected("Should have detected stale dependency of y on x")
@@ -822,14 +821,14 @@ def test_func_assign_helper_func_2():
 def test_branching():
     run_cell('y = 7')
     run_cell('x = y + 3')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         if True:
             b = 5
         else:
             y = 7
         """
-    ))
+    )
     run_cell('logging.info(x)')
     assert_not_detected('false positive on unchanged y')
 
@@ -837,14 +836,14 @@ def test_branching():
 def test_branching_2():
     run_cell('y = 7')
     run_cell('x = y + 3')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         if False:
             b = 5
         else:
             y = 9
         """
-    ))
+    )
     run_cell('logging.info(x)')
     assert_detected('x depends on stale y')
 
@@ -1000,13 +999,13 @@ def test_starred_assignment_in_middle():
 
 
 def test_attributes():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('x = Foo(5)')
     run_cell('y = x.x + 5')
     run_cell('x.x = 8')
@@ -1016,13 +1015,13 @@ def test_attributes():
 
 @skipif_known_failing
 def test_attributes_2():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('x = Foo(5)')
     run_cell('y = x.x + 5')
     run_cell('%safety show_deps x')
@@ -1033,13 +1032,13 @@ def test_attributes_2():
 
 
 def test_attribute_unpacking():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('x = Foo(5)')
     run_cell('y = Foo(6)')
     run_cell('w = 42')
@@ -1069,13 +1068,13 @@ def test_attribute_unpacking():
 
 
 def test_attribute_unpacking_no_overwrite():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('x = Foo(5)')
     run_cell('y = Foo(6)')
     run_cell('w = 42')
@@ -1094,14 +1093,14 @@ def test_attribute_unpacking_no_overwrite():
 
 
 def test_attributes_3():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x, y):
                 self.x = x
                 self.y = y
         """
-    ))
+    )
     run_cell('foo = Foo(5, 6)')
     run_cell('bar = Foo(7, 8)')
     run_cell('y = bar.x + 5')
@@ -1111,14 +1110,14 @@ def test_attributes_3():
 
 
 def test_stale_use_of_attribute():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x, y):
                 self.x = x
                 self.y = y
         """
-    ))
+    )
     run_cell('foo = Foo(5, 6)')
     run_cell('bar = Foo(7, 8)')
     run_cell('foo.x = bar.x + bar.y')
@@ -1128,7 +1127,7 @@ def test_stale_use_of_attribute():
 
 
 def test_attr_manager_active_scope_resets():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         y = 10
         class Foo:
@@ -1138,7 +1137,7 @@ def test_attr_manager_active_scope_resets():
         def f():
             return y
         """
-    ))
+    )
     run_cell('foo = Foo()')
     # if the active scope doesn't reset after done with foo.f(),
     # it will think the `y` referred to by f() is the one in Foo.f's scope.
@@ -1149,14 +1148,14 @@ def test_attr_manager_active_scope_resets():
 
 
 def test_attribute_call_point():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         y = 10
         class Foo:
             def f(self):
                 return y
         """
-    ))
+    )
     run_cell('foo = Foo()')
     run_cell('x = foo.f()')
     run_cell('y = 42')
@@ -1165,7 +1164,7 @@ def test_attribute_call_point():
 
 
 def test_attr_manager_active_scope_with_property():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         y = 10
         class Foo:
@@ -1174,7 +1173,7 @@ def test_attr_manager_active_scope_with_property():
                 y = 11
                 return y
         """
-    ))
+    )
     run_cell('foo = Foo()')
     # if the active scope doesn't reset after done with foo.f(),
     # it will think the `y` referred to by f() is the one in Foo.f's scope.
@@ -1185,7 +1184,7 @@ def test_attr_manager_active_scope_with_property():
 
 
 def test_namespace_scope_resolution():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         y = 42
         class Foo:
@@ -1194,7 +1193,7 @@ def test_namespace_scope_resolution():
             def foo(self):
                 return y
         """
-    ))
+    )
     run_cell('foo = Foo()')
     run_cell('x = foo.foo')
     run_cell('Foo.y = 99')
@@ -1203,7 +1202,7 @@ def test_namespace_scope_resolution():
 
 
 def test_long_chain_attribute():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             shared = 99
@@ -1222,19 +1221,19 @@ def test_long_chain_attribute():
                 def bar(self):
                     return Foo
         """
-    ))
+    )
     run_cell('foo = Foo(5, 6)')
     run_cell('bar = Foo.Bar(7, 8)')
     run_cell('foo.x = 42')
     run_cell('logging.info(bar.a)')
     assert_not_detected()
     run_cell('Foo.Bar(9, 10).foo().shared = 100')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         for _ in range(10**2):
             Foo.Bar(9, 10).foo().shared = 100
         """
-    ))
+    )
     run_cell('logging.info(foo.y)')
     assert_not_detected('we mutated `shared` on obj and not on `Foo` (the one on which `foo.y` depends)')
     run_cell('Foo.Bar(9, 10).bar().shared = 100')
@@ -1332,14 +1331,14 @@ def test_subscript_sensitivity():
 
 def test_subscript_adds():
     run_cell('x = 42')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         d = {
             'foo': x,
             'bar': 77
         }
         """
-    ))
+    )
     run_cell('d["bar"] = 99')
     run_cell('x = 100')
     run_cell('logging.info(d)')
@@ -1378,12 +1377,12 @@ def test_list_mutation_2():
 def test_list_mutation_from_attr():
     run_cell('s = "hello X world X how X are X you X today?"')
     run_cell('lst = []')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         for word in s.split('X'):
             lst.append(word.strip())
         """
-    ))
+    )
     run_cell('s = "foobar"')
     run_cell('logging.info(lst)')
     assert_detected('`lst` depends on stale `s`')
@@ -1401,14 +1400,14 @@ def test_list_mutation_extend_from_attr():
 
 
 def test_lazy_class_scope_resolution():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             shared = 99
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('foo = Foo(10)')
     run_cell('y = 11')
     run_cell('Foo.shared = y + 42')
@@ -1422,12 +1421,12 @@ def test_lazy_class_scope_resolution():
 
 
 def test_new_scope_val_depends_on_old():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             shared = 99
         """
-    ))
+    )
     run_cell('foo = Foo()')
     run_cell('foo.shared = 11')
     run_cell('foo_shared_alias = foo.shared')
@@ -1441,14 +1440,14 @@ def test_new_scope_val_depends_on_old():
 
 
 def test_class_member_mutation_does_not_affect_instance_members():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             shared = 99
             def __init__(self):
                 self.x = 42
         """
-    ))
+    )
     run_cell('foo = Foo()')
     run_cell('Foo.shared = 12')
     run_cell('logging.info(foo.x)')
@@ -1489,14 +1488,14 @@ def test_new_format_string():
 
 
 def test_scope_resolution():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(x):
             def g(x):
                 return 2 * x
             return g(x) + 8
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('y = f(x)')
     run_cell('x = 8')
@@ -1505,14 +1504,14 @@ def test_scope_resolution():
 
 
 def test_scope_resolution_2():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def g(x):
             return 2 * x
         def f(x):
             return g(x) + 8
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('y = f(x)')
     run_cell('x = 8')
@@ -1521,12 +1520,12 @@ def test_scope_resolution_2():
 
 
 def test_funcall_kwarg():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(y):
             return 2 * y + 8
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('z = f(y=x)')
     run_cell('x = 8')
@@ -1535,12 +1534,12 @@ def test_funcall_kwarg():
 
 
 def test_funcall_kwarg_2():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(y):
             return 2 * y + 8
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('y = f(y=x)')
     run_cell('x = 8')
@@ -1549,12 +1548,12 @@ def test_funcall_kwarg_2():
 
 
 def test_funcall_kwarg_3():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(x):
             return 2 * x + 8
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('y = f(x=x)')
     run_cell('x = 8')
@@ -1563,12 +1562,12 @@ def test_funcall_kwarg_3():
 
 
 def test_funcall_kwarg_4():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(x):
             return 2 * x + 8
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('x = f(x=x)')
     run_cell('x = 8')
@@ -1610,14 +1609,14 @@ def test_single_line_dictionary_literal_fix_stale_deps():
 def test_multiline_dictionary_literal():
     run_cell('foo = 5')
     run_cell('bar = 6')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         d = {
             foo: bar,
             'pi': 42,
         }
         """
-    ))
+    )
     run_cell('bar = 7')
     run_cell('logging.info(d)')
     assert_detected('`d` depends on stale `bar`')
@@ -1626,14 +1625,14 @@ def test_multiline_dictionary_literal():
 def test_exception():
     run_cell('lst = list(range(5))')
     run_cell('x = 6')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         try:
             lst[x] = 42
         except:
             lst[0] = 42
         """
-    ))
+    )
     run_cell('x = 7')
     run_cell('logging.info(lst)')
     assert_not_detected('lst should be independent of x due to exception')
@@ -1644,12 +1643,12 @@ def test_for_loop_binding():
     run_cell('b = 1')
     run_cell('c = 2')
     run_cell('lst = [a, b, c]')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         for i in lst:
             pass
         """
-    ))
+    )
     run_cell('a = 3')
     run_cell('logging.info(i)')
     assert_false_positive('`i` should not depend on `a` at end of for loop but this is hard')
@@ -1660,12 +1659,12 @@ def test_for_loop_literal_binding():
     run_cell('a = 0')
     run_cell('b = 1')
     run_cell('c = 2')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         for i in [a, b, c]:
             pass
         """
-    ))
+    )
     run_cell('a = 3')
     run_cell('logging.info(i)')
     assert_not_detected('`i` should not depend on `a` at end of for loop')
@@ -1674,12 +1673,12 @@ def test_for_loop_literal_binding():
 def test_for_loop_partial_dep():
     run_cell('lst = list(range(10))')
     run_cell('s = 0')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         for i in range(5):
             s += lst[i]
         """
-    ))
+    )
     run_cell('lst[-1] = 42')
     run_cell('logging.info(s)')
     assert_not_detected('`s` does not depend on last entry of `lst`')
@@ -1693,13 +1692,13 @@ def test_for_loop_tuple_unpack():
     run_cell('y = (3, 4)')
     run_cell('total_i = 0')
     run_cell('total_j = 0')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         for i, j in [x, y]:
             total_i += i
             total_j += j
         """
-    ))
+    )
     run_cell('logging.info(total_i)')
     assert_not_detected()
     run_cell('logging.info(total_j)')
@@ -1713,12 +1712,12 @@ def test_for_loop_tuple_unpack():
 
 def test_same_cell_redefine():
     run_cell('a = 0')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         b = a + 1
         a = 42
         """
-    ))
+    )
     run_cell('logging.info(b)')
     assert_not_detected('`b` should not be considered as having stale dependency since `a` changed in same cell as `b`')
 
@@ -1740,7 +1739,7 @@ def test_multiple_stmts_in_one_line_2():
 
 
 def test_line_magic():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         %lsmagic
         %lsmagic
@@ -1749,8 +1748,8 @@ def test_line_magic():
         %lsmagic
         a = 0
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         %lsmagic
         %lsmagic
@@ -1758,30 +1757,30 @@ def test_line_magic():
         %lsmagic
         x = a + 1
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         %lsmagic
         %lsmagic
         %lsmagic
         a = 42
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         %lsmagic
         %lsmagic
         logging.info(x)
         """
-    ))
+    )
     assert_detected('`x` depends on stale value of `a`')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         %lsmagic
         logging.info(x)
         %lsmagic
         """
-    ))
+    )
     assert_detected('`x` depends on stale value of `a`')
 
 
@@ -1792,7 +1791,7 @@ def test_exception_stack_unwind():
             f'assert {len_call_stack} == {size}',
             f'"%d vs {size}" % {len_call_stack}',
         ])
-    run_cell(textwrap.dedent(
+    run_cell(
         f"""
         import numpy as np
         from nbsafety.singletons import TraceManager
@@ -1812,11 +1811,11 @@ def test_exception_stack_unwind():
         f()
         {assert_stack_size(0)}
         """
-    ))
+    )
 
 
 def test_throwing_statements_do_not_track_deps():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         z = 10
         def foo():
@@ -1826,15 +1825,15 @@ def test_throwing_statements_do_not_track_deps():
         x = 0
         y = x + 1
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         try:
             x = 42 + foo()
         except:
             pass
         """
-    ))
+    )
     run_cell('logging.info(y)')
     assert_not_detected('no stale dep for `y` because update on `x` threw exception')
     run_cell('z = 99')
@@ -1861,7 +1860,7 @@ def test_attr_use_from_somewhere_else():
 
 
 def test_class_assignment():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self):
@@ -1871,7 +1870,7 @@ def test_class_assignment():
         foo = Bar()
         x = 7
         """
-    ))
+    )
     run_cell('foo.y = x + 1')
     run_cell('x = 42')
     run_cell('logging.info(foo.y)')
@@ -1887,7 +1886,7 @@ def test_no_class_false_positives():
     run_cell('x = 7')
     run_cell('y = x + 1')
     run_cell('x = 42')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         try:
             class Foo:
@@ -1895,7 +1894,7 @@ def test_no_class_false_positives():
         except:
             pass
         """
-    ))
+    )
     assert_not_detected('x inside class scope is different')
 
 
@@ -1949,7 +1948,7 @@ def test_unpack_multiple_from_single():
 
 @skipif_known_failing
 def test_attr_dep_with_top_level_overwrite():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self):
@@ -1958,7 +1957,7 @@ def test_attr_dep_with_top_level_overwrite():
         x = 42
         foo.y = x + 7
         """
-    ))
+    )
     run_cell('x = 43')
     run_cell('logging.info(foo)')  # this should be a 'deep' usage of foo
     assert_detected('logging.info could display `foo.y` which depends on x')
@@ -2011,13 +2010,13 @@ def test_pandas():
 
 
 def test_deeply_nested_arg_and_kwarg_refs_with_attr_calls():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def foo(self, x, y=0):
                 return x + y
         """
-    ))
+    )
     run_cell('x = 1')
     run_cell('y = 2')
     run_cell('foo = Foo()')
@@ -2036,7 +2035,7 @@ def test_deeply_nested_arg_and_kwarg_refs_with_attr_calls():
 
 
 def test_class_member_granularity():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         y = 77
         class Foo:
@@ -2044,7 +2043,7 @@ def test_class_member_granularity():
                 self.x = 10
                 self.y = y
         """
-    ))
+    )
     run_cell('foo = Foo()')
     run_cell('z = foo.x + 7')
     run_cell('y = 42')
@@ -2065,14 +2064,14 @@ def test_no_rhs_propagation():
 def test_if_true():
     run_cell('y = 0')
     run_cell('z = 42')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         if True:
             x = y + 1
         else:
             x = z + 1
         """
-    ))
+    )
     run_cell('z = 43')
     run_cell('logging.info(x)')
     assert_not_detected('`x` not dependent on `z`')
@@ -2083,19 +2082,19 @@ def test_if_true():
 
 def test_tracing_reenabled_after_dup_funcall():
     run_cell('x = 0')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f():
             return 42
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         f()
         f()
         y = x + 1
         """
-    ))
+    )
     run_cell('x = 42')
     run_cell('logging.info(y)')
     assert_detected()
@@ -2104,7 +2103,7 @@ def test_tracing_reenabled_after_dup_funcall():
 def test_one_time_tracing_func():
     run_cell('x = 0')
     run_cell('y = 1')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f(p):
             if p:
@@ -2112,7 +2111,7 @@ def test_one_time_tracing_func():
             else:
                 return y
         """
-    ))
+    )
     run_cell('z = f(False) + 1\nz = f(True) + 1')
     run_cell('y = 2')
     run_cell('logging.info(z)')
@@ -2125,13 +2124,13 @@ def test_one_time_tracing_func():
 def test_tracing_disable_with_nested_calls():
     # run_cell('%safety trace_messages enable')
     run_cell('y = 0')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         def f():
             return y
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         def g(flag):
             if flag:
@@ -2139,13 +2138,13 @@ def test_tracing_disable_with_nested_calls():
             else:
                 return 2
         """
-    ))
-    run_cell(textwrap.dedent(
+    )
+    run_cell(
         """
         g(False)
         x = g(True) + 1
         """
-    ))
+    )
     run_cell('y = 42')
     run_cell('logging.info(x)')
     assert_detected('`x` has dep on stale `y`')
@@ -2222,13 +2221,13 @@ def test_rval_appearance_does_not_overwrite_deps():
 
 
 def test_augassign_does_not_overwrite_deps_for_attributes():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('x, y, z = Foo(0), Foo(5), Foo(10)')
     run_cell('z.x = x.x + 2')
     run_cell('z.x += y.x')
@@ -2238,13 +2237,13 @@ def test_augassign_does_not_overwrite_deps_for_attributes():
 
 
 def test_rval_appearance_does_not_overwrite_deps_for_attributes():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         class Foo:
             def __init__(self, x):
                 self.x = x
         """
-    ))
+    )
     run_cell('x, y, z = Foo(0), Foo(5), Foo(10)')
     run_cell('z.x = x.x + 2')
     run_cell('z.x = z.x + y.x')
@@ -2254,7 +2253,7 @@ def test_rval_appearance_does_not_overwrite_deps_for_attributes():
 
 
 def test_context_manager():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         from contextlib import contextmanager
 
@@ -2262,7 +2261,7 @@ def test_context_manager():
         def foo():
             yield 42
         """
-    ))
+    )
     run_cell('with foo() as bar: x = bar + 7')
     run_cell('bar = 43')
     run_cell('logging.info(x)')
@@ -2271,13 +2270,13 @@ def test_context_manager():
 
 def test_decorator():
     run_cell('foo = lambda f: f')
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         @foo
         def bar(x):
             return x + 42
         """
-    ))
+    )
     run_cell('y = bar(7)')
     run_cell('foo = lambda f: lambda x: f(x + 9)')
     run_cell('logging.info(y)')
@@ -2285,20 +2284,20 @@ def test_decorator():
 
 
 def test_magics_dont_break_things():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         %time dummy = 0
         x = 0
         y = x + 1
         """
-    ))
+    )
     run_cell('x = 42')
     run_cell('logging.info(y)')
     assert_detected('`y` depends on old value `x`')
 
 
 def test_tuple_return():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         x = 0
         y = 1
@@ -2307,7 +2306,7 @@ def test_tuple_return():
         def foo():
             return a, b
         """
-    ))
+    )
     run_cell('t = foo()[1]')
     run_cell('x = 9')
     run_cell('logging.info(t)')
@@ -2318,7 +2317,7 @@ def test_tuple_return():
 
 
 def test_tuple_return_obj():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         x = 0
         y = 1
@@ -2327,7 +2326,7 @@ def test_tuple_return_obj():
         def foo():
             return [a], [b]
         """
-    ))
+    )
     run_cell('t = foo()[1][0]')
     run_cell('x = 9')
     run_cell('logging.info(t)')
@@ -2338,7 +2337,7 @@ def test_tuple_return_obj():
 
 
 def test_property_in_function_arg():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         z = 42
         class Foo:
@@ -2349,7 +2348,7 @@ def test_property_in_function_arg():
         def f(x, y):
             return x + y
         """
-    ))
+    )
     run_cell('foo = Foo()')
     run_cell('w = f(3, foo.bar)')
     run_cell('z = 7')
@@ -2358,7 +2357,7 @@ def test_property_in_function_arg():
 
 
 def test_getter_setter_with_global():
-    run_cell(textwrap.dedent(
+    run_cell(
         """
         z = 42
         class Bar:
@@ -2379,7 +2378,7 @@ def test_getter_setter_with_global():
         def f(x, y):
             return x + y
         """
-    ))
+    )
     run_cell('foo = Bar()')
     run_cell('w = f(3, foo.baz)')
     run_cell('logging.info(w)')
@@ -2430,7 +2429,7 @@ def test_global_var():
 
 
 def test_nonlocal_var():
-    cell_template = textwrap.dedent(
+    cell_template = (
         """
         z = 0
         def f():
@@ -2476,23 +2475,23 @@ def test_reimport_does_not_propagate():
 
 if sys.version_info >= (3, 8):
     def test_walrus_simple():
-        run_cell(textwrap.dedent(
+        run_cell(
             """
             if (x := 1) > 0:
                 y = x + 1
             """
-        ))
+        )
         run_cell('x = 42')
         run_cell('logging.info(y)')
         assert_detected('`y` depends on old value of `x`')
 
     def test_walrus_fancy():
-        run_cell(textwrap.dedent(
+        run_cell(
             """
             if (x := (y := (z := 1) + 1) + 1) > 0:
                 a = x + 1
             """
-        ))
+        )
         run_cell('y = 42')
         run_cell('logging.info(z)')
         assert_not_detected('`z` does not depend on `y`')
@@ -2504,20 +2503,20 @@ if sys.version_info >= (3, 8):
         assert_detected('`a` depends on old value of `y`')
 
     def test_walrus_fancy_attributes():
-        run_cell(textwrap.dedent(
+        run_cell(
             """
             class Foo:
                 def __init__(self, x):
                     self.x = x
             """
-        ))
+        )
         run_cell('foo = Foo(9001)')
-        run_cell(textwrap.dedent(
+        run_cell(
             """
             if (x := (y := (z := 1) + foo.x) + 1) > 0:
                 a = x + 1
             """
-        ))
+        )
         run_cell('foo.x = 42')
         run_cell('logging.info(z)')
         assert_not_detected('`z` does not depend on `foo.x`')

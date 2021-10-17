@@ -257,6 +257,7 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
+        self.this_stmt_updated_symbols: Set[DataSymbol] = set()
         try:
             self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
                 cells().current_cell().sanitized_content(), f'<cell-{cells().exec_counter()}>', 'exec'
@@ -315,6 +316,8 @@ class TraceManager(SliceTraceManager):
         self.node_id_to_saved_dict_key.clear()
         self.prev_node_id_in_cur_frame = None
         self.saved_assign_rhs_obj = None
+        nbs().updated_symbols |= self.this_stmt_updated_symbols
+        self.this_stmt_updated_symbols.clear()
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events

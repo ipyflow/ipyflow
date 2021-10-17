@@ -1,11 +1,16 @@
 # -*- coding: future_annotations -*-
 import ast
 import copy
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Set, Tuple
     from nbsafety.types import CellId
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class StatementMapper(ast.NodeVisitor):
@@ -17,7 +22,10 @@ class StatementMapper(ast.NodeVisitor):
         parent_map: Dict[int, ast.AST],
         reactive_variable_node_ids: Set[int],
         reactive_attribute_node_ids: Set[int],
+        blocking_variable_node_ids: Set[int],
+        blocking_attribute_node_ids: Set[int],
         reactive_var_positions: Set[Tuple[int, int]],
+        blocking_var_positions: Set[Tuple[int, int]],
     ):
         self._cell_id: Optional[CellId] = cell_id
         self.line_to_stmt_map = line_to_stmt_map
@@ -25,7 +33,10 @@ class StatementMapper(ast.NodeVisitor):
         self.parent_map = parent_map
         self.reactive_variable_node_ids = reactive_variable_node_ids
         self.reactive_attribute_node_ids = reactive_attribute_node_ids
+        self.blocking_variable_node_ids = blocking_variable_node_ids
+        self.blocking_attribute_node_ids = blocking_attribute_node_ids
         self.reactive_var_positions = reactive_var_positions
+        self.blocking_var_positions = blocking_var_positions
         self.traversal: List[ast.AST] = []
 
     def __call__(self, node: ast.Module) -> Dict[int, ast.AST]:
@@ -42,12 +53,17 @@ class StatementMapper(ast.NodeVisitor):
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
             self.id_map[id(nc)] = nc
-            if isinstance(nc, ast.Name) and (nc.lineno, nc.col_offset) in self.reactive_var_positions:
-                self.reactive_variable_node_ids.add(id(nc))
-            elif isinstance(nc, ast.Attribute) and (
-                nc.lineno, getattr(nc.value, 'end_col_offset', -2) + 1
-            ) in self.reactive_var_positions:
-                self.reactive_attribute_node_ids.add(id(nc))
+            if isinstance(nc, ast.Name):
+                if (nc.lineno, nc.col_offset) in self.reactive_var_positions:
+                    self.reactive_variable_node_ids.add(id(nc))
+                elif (nc.lineno, nc.col_offset) in self.blocking_var_positions:
+                    self.blocking_variable_node_ids.add(id(nc))
+            elif isinstance(nc, ast.Attribute):
+                lineno, col_offset = nc.lineno, getattr(nc.value, 'end_col_offset', -2) + 1
+                if (lineno, col_offset) in self.reactive_var_positions:
+                    self.reactive_attribute_node_ids.add(id(nc))
+                elif (lineno, col_offset) in self.blocking_var_positions:
+                    self.blocking_attribute_node_ids.add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

@@ -1,4 +1,5 @@
 # -*- coding: future_annotations -*-
+import logging
 from typing import cast, TYPE_CHECKING
 from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
@@ -9,6 +10,10 @@ if TYPE_CHECKING:
     from typing import Optional
     from nbsafety.analysis.symbol_ref import Atom
     from nbsafety.data_model.data_symbol import DataSymbol
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class ResolvedDataSymbol(CommonEqualityMixin):
@@ -42,7 +47,15 @@ class ResolvedDataSymbol(CommonEqualityMixin):
 
     @property
     def is_reactive(self):
+        if self.is_blocking:
+            return False
         return self.atom.is_reactive or (self.is_live and self.dsym in nbs().updated_deep_reactive_symbols)
+
+    @property
+    def is_blocking(self):
+        return self.atom.is_blocking or (
+            self.is_live and nbs().blocked_reactive_timestamps_by_symbol.get(self.dsym, -1) >= self.dsym.timestamp.cell_num
+        )
 
     @property
     def is_dead(self):

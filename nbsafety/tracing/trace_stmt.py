@@ -96,6 +96,7 @@ class TraceStatement:
         try:
             symbol_ref = SymbolRef(target)
             reactive_seen = False
+            blocking_seen = False
             for resolved in symbol_ref.gen_resolved_symbols(
                 tracer().cur_frame_original_scope,
                 only_yield_final_symbol=False,
@@ -103,11 +104,15 @@ class TraceStatement:
                 inherit_reactivity=False,
                 yield_in_reverse=True,
             ):
-                if resolved.is_reactive:
+                if resolved.is_blocking:
+                    blocking_seen = True
+                if resolved.is_reactive and not blocking_seen:
                     nbs().updated_deep_reactive_symbols.add(resolved.dsym)
                     reactive_seen = True
-                if reactive_seen:
+                if reactive_seen and not blocking_seen:
                     nbs().updated_reactive_symbols.add(resolved.dsym)
+                if blocking_seen and resolved.dsym not in nbs().updated_symbols:
+                    nbs().blocked_reactive_timestamps_by_symbol[resolved.dsym] = nbs().cell_counter()
         except TypeError:
             pass
         logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)

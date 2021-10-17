@@ -82,8 +82,28 @@ def test_simple_reactive_var_store():
     assert cells_run - {cell_id} == {3}, 'got %s' % cells_run
 
 
+def test_simple_blocked_reactive_var_store():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('$:y = $x + 1')[1] == {2}
+    assert run_cell('logging.info($y)')[1] == {3}
+    assert run_cell('x = 42')[1] == {4, 2}
+    cell_id, cells_run = run_cell('z = 9001')
+    assert cells_run - {cell_id} == set(), 'got %s' % (cells_run - {cell_id})
+    cell_id, cells_run = run_cell('y = 99')
+    assert cells_run - {cell_id} == {3}
+
+
+def test_simple_blocked_reactive_var_load():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('y = $:x + 1')[1] == {2}
+    assert run_cell('logging.info(y)')[1] == {3}
+    assert run_cell('$x = 42')[1] == {4}
+    cell_id, cells_run = run_cell('$y = 99')
+    assert cells_run - {cell_id} == {3}, 'got %s' % cells_run
+
+
 if sys.version_info >= (3, 8):
-    def test_loaded_reactive_attr():
+    def test_reactive_attr_load():
         assert run_cell(
             """
             from dataclasses import dataclass
@@ -109,7 +129,7 @@ if sys.version_info >= (3, 8):
         assert cells_run - {cell_id} == {2, 3, 4, 5, 6}
 
 
-    def test_stored_reactive_attr():
+    def test_reactive_attr_store():
         assert run_cell(
             """
             from dataclasses import dataclass
@@ -137,3 +157,59 @@ if sys.version_info >= (3, 8):
         assert cells_run - {cell_id} == {5, 6}
         cell_id, cells_run = run_cell('$ex = Example("foo", 0)')
         assert cells_run - {cell_id} == {2, 3, 4, 5, 6}
+
+
+    def test_blocked_reactive_attr_store():
+        assert run_cell(
+            """
+            from dataclasses import dataclass
+            
+            @dataclass
+            class Example:
+                foo: str
+                bar: int
+            
+            ex = Example('hi', 42)
+            """
+        )[1] == {1}
+        assert run_cell('logging.info($ex)')[1] == {2}
+        assert run_cell('logging.info(ex.$foo)')[1] == {3}
+        assert run_cell('logging.info(ex.$bar)')[1] == {4}
+        assert run_cell('logging.info($ex.foo)')[1] == {5}
+        assert run_cell('logging.info($ex.bar)')[1] == {6}
+        cell_id, cells_run = run_cell('ex.$:foo = "hello"')
+        assert cells_run - {cell_id} == set(), 'got %s' % (cells_run - {cell_id})
+        cell_id, cells_run = run_cell('ex.$:bar = 9001')
+        assert cells_run - {cell_id} == set(), 'got %s' % (cells_run - {cell_id})
+        cell_id, cells_run = run_cell('$:ex = Example("foo", 0)')
+        assert cells_run - {cell_id} == set(), 'got %s' % (cells_run - {cell_id})
+
+
+    def test_blocked_reactive_attr_load():
+        assert run_cell(
+            """
+            from dataclasses import dataclass
+            
+            @dataclass
+            class Example:
+                foo: str
+                bar: int
+            
+            ex = Example('hi', 42)
+            """
+        )[1] == {1}
+        assert run_cell('logging.info(ex)')[1] == {2}
+        assert run_cell('logging.info($:ex.foo)')[1] == {3}
+        assert run_cell('logging.info($:ex.bar)')[1] == {4}
+        assert run_cell('logging.info(ex.$:foo)')[1] == {5}
+        assert run_cell('logging.info(ex.$:bar)')[1] == {6}
+        cell_id, cells_run = run_cell('ex.$foo = "hello"')
+        assert cells_run - {cell_id} == {2}, 'got %s' % (cells_run - {cell_id})
+        cell_id, cells_run = run_cell('ex.$bar = 9001')
+        assert cells_run - {cell_id} == {2}
+        cell_id, cells_run = run_cell('$:ex.foo = "wat"')
+        assert cells_run - {cell_id} == set(), 'got %s' % (cells_run - {cell_id})
+        cell_id, cells_run = run_cell('ex = Example("foo", 0)')
+        assert cells_run - {cell_id} == set()
+        cell_id, cells_run = run_cell('$ex = Example("foo", 0)')
+        assert cells_run - {cell_id} == {2, 5, 6}

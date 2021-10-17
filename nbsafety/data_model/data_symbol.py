@@ -342,6 +342,7 @@ class DataSymbol:
             ns._tombstone = True
             ns.obj = None
         self.obj = None
+        nbs().blocked_reactive_timestamps_by_symbol.pop(self, None)
 
     # def update_type(self, new_type):
     #     self.symbol_type = new_type
@@ -638,7 +639,7 @@ class DataSymbol:
         if propagate and (deleted or not equal_to_old):
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents, refresh)
         self._refresh_cached_obj()
-        nbs().updated_symbols.add(self)
+        tracer().this_stmt_updated_symbols.add(self)
         if self.is_class:
             # pop pending class defs and update obj ref
             pending_class_ns = tracer().pending_class_namespaces.pop()

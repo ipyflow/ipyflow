@@ -232,8 +232,11 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             max_used_cell_ctr = -1
             this_cell_pos = self.position
             for sym in live_symbols:
-                if filter_to_reactive and not sym.is_reactive and sym.dsym not in nbs().updated_reactive_symbols:
-                    continue
+                if filter_to_reactive:
+                    if sym.is_blocking:
+                        continue
+                    if not sym.is_reactive and sym.dsym not in nbs().updated_reactive_symbols:
+                        continue
                 for cell_ctr in self._used_cell_counters_by_live_symbol.get(sym.dsym, []):
                     if self.from_timestamp(cell_ctr).position <= this_cell_pos:
                         max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)

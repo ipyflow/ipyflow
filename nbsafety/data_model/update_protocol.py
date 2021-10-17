@@ -3,7 +3,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.singletons import nbs
+from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from typing import Generator, Iterable, Set
@@ -41,7 +41,7 @@ class UpdateProtocol:
         )
         updated_symbols_with_ancestors = set(self.seen)
         logger.warning('all updated symbols for symbol %s: %s', self.updated_sym, updated_symbols_with_ancestors)
-        nbs().updated_symbols |= self.seen
+        tracer().this_stmt_updated_symbols |= self.seen
         if refresh:
             for updated_sym in directly_updated_symbols:
                 if not updated_sym.is_stale and updated_sym is not self.updated_sym:
@@ -141,7 +141,7 @@ class UpdateProtocol:
         if not skip_seen_check and dsym in self.seen:
             return
         self.seen.add(dsym)
-        if dsym not in nbs().updated_symbols:
+        if dsym not in nbs().updated_symbols and dsym not in tracer().this_stmt_updated_symbols:
             if dsym.should_mark_stale(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
                 dsym.fresher_ancestor_timestamps.add(self.updated_sym.timestamp)

@@ -4,7 +4,7 @@ import sys
 import textwrap
 from typing import TYPE_CHECKING
 
-from nbsafety.analysis.symbol_ref import LiveSymbolRef, SymbolRef
+from nbsafety.analysis.symbol_ref import SymbolRef
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts
 from .utils import make_safety_fixture
 

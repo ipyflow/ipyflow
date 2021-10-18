@@ -168,7 +168,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 return alias
         return None
 
-    def cell_counter(self) -> int:
+    @staticmethod
+    def cell_counter() -> int:
         return cells().exec_counter()
 
     def add_dynamic_data_dep(self, child: Timestamp, parent: Timestamp):

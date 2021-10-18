@@ -142,6 +142,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
+        self.min_timestamp = -1
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
@@ -309,19 +310,22 @@ class NotebookSafety(singletons.NotebookSafety):
                 is_fresh = False
                 if self.mut_settings.dynamic_slicing_enabled:
                     for par in cell.dynamic_parents:
-                        if par.cell_ctr > cell.cell_ctr:
+                        if par.cell_ctr > max(cell.cell_ctr, self.min_timestamp):
                             is_fresh = True
                             break
                 if not is_fresh and self.mut_settings.static_slicing_enabled:
                     for par in cell.static_parents:
-                        if par.cell_ctr > cell.cell_ctr:
+                        if par.cell_ctr > max(cell.cell_ctr, self.min_timestamp):
                             is_fresh = True
                             break
             else:
-                is_fresh = is_fresh and cell.get_max_used_live_symbol_cell_counter(checker_result.live) > cell.cell_ctr
+                is_fresh = is_fresh and (
+                    cell.get_max_used_live_symbol_cell_counter(checker_result.live) >
+                    max(cell.cell_ctr, self.min_timestamp)
+                )
             if self.mut_settings.flow_order == FlowOrder.STRICT:
                 for dead_sym in checker_result.dead:
-                    if dead_sym.timestamp.cell_num > cell.cell_ctr:
+                    if dead_sym.timestamp.cell_num > max(cell.cell_ctr, self.min_timestamp):
                         is_fresh = True
             if is_fresh:
                 fresh_cells.add(cell_id)
@@ -330,7 +334,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 if self.mut_settings.exec_mode != ExecutionMode.REACTIVE:
                     if cell.get_max_used_live_symbol_cell_counter(
                         checker_result.live, filter_to_reactive=True
-                    ) > cell.cell_ctr:
+                    ) > max(cell.cell_ctr, self.min_timestamp):
                         forced_reactive_cells.add(cell_id)
             if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
                 break
@@ -606,6 +610,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.set_exec_mode(line)
             elif cmd in ('flow', 'flow_order', 'semantics', 'flow_semantics'):
                 return line_magics.set_flow_order(line)
+            elif cmd == 'clear':
+                self.min_timestamp = self.cell_counter()
+                return None
             elif cmd in line_magic_names:
                 logger.warning('We have a magic for %s, but have not yet registered it', cmd)
                 return None

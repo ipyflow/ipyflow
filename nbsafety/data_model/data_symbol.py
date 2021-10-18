@@ -173,6 +173,10 @@ class DataSymbol:
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
     @property
+    def staleness_timestamp(self) -> int:
+        return max(self._timestamp.cell_num, nbs().min_timestamp)
+
+    @property
     def defined_cell_num(self) -> int:
         return self._defined_cell_num
 
@@ -519,13 +523,19 @@ class DataSymbol:
     def is_stale(self):
         if self.disable_warnings or self._temp_disable_warnings:
             return False
-        return self.timestamp < self.required_timestamp or len(self.namespace_stale_symbols) > 0
+        if self.staleness_timestamp < self.required_timestamp.cell_num:
+            return True
+        elif nbs().min_timestamp == -1:
+            return len(self.namespace_stale_symbols) > 0
+        else:
+            # TODO: guard against infinite recurision
+            return any(sym.is_stale for sym in self.namespace_stale_symbols)
 
     @property
     def is_shallow_stale(self):
         if self.disable_warnings or self._temp_disable_warnings:
             return False
-        return self.timestamp < self.required_timestamp
+        return self.staleness_timestamp < self.required_timestamp.cell_num
 
     def _is_stale_at_position_impl(self, pos: int, deep: bool) -> bool:
         for par, timestamps in self.parents.items():

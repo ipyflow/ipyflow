@@ -4,8 +4,10 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
+from nbsafety.singletons import nbs
+
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Set, Tuple
+    from typing import Dict, List, Optional, Set, Tuple, Union
     from nbsafety.types import CellId
 
 
@@ -17,27 +19,36 @@ class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
         cell_id: Optional[CellId],
-        line_to_stmt_map: Dict[int, ast.stmt],
-        id_map: Dict[int, ast.AST],
-        parent_map: Dict[int, ast.AST],
-        reactive_variable_node_ids: Set[int],
-        reactive_attribute_node_ids: Set[int],
-        blocking_variable_node_ids: Set[int],
-        blocking_attribute_node_ids: Set[int],
         reactive_var_positions: Set[Tuple[int, int]],
         blocking_var_positions: Set[Tuple[int, int]],
     ):
         self._cell_id: Optional[CellId] = cell_id
-        self.line_to_stmt_map = line_to_stmt_map
-        self.id_map = id_map
-        self.parent_map = parent_map
-        self.reactive_variable_node_ids = reactive_variable_node_ids
-        self.reactive_attribute_node_ids = reactive_attribute_node_ids
-        self.blocking_variable_node_ids = blocking_variable_node_ids
-        self.blocking_attribute_node_ids = blocking_attribute_node_ids
+        self.line_to_stmt_map = nbs().statement_cache[nbs().cell_counter()]
+        self.id_map = nbs().ast_node_by_id
+        self.parent_map = nbs().parent_node_by_id
+        self.reactive_node_ids = nbs().reactive_node_ids
+        self.blocking_node_ids = nbs().blocking_node_ids
         self.reactive_var_positions = reactive_var_positions
         self.blocking_var_positions = blocking_var_positions
         self.traversal: List[ast.AST] = []
+
+    @staticmethod
+    def _get_col_offset_for(node: Union[ast.Name, ast.Attribute, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef]):
+        if isinstance(node, ast.Name):
+            return node.col_offset
+        elif isinstance(node, ast.Attribute):
+            return getattr(node.value, 'end_col_offset', -2) + 1
+        elif isinstance(node, ast.FunctionDef):
+            # TODO: can be different if more spaces between 'def' and function name
+            return node.col_offset + 4
+        elif isinstance(node, ast.ClassDef):
+            # TODO: can be different if more spaces between 'class' and class name
+            return node.col_offset + 6
+        elif isinstance(node, ast.AsyncFunctionDef):
+            # TODO: can be different if more spaces between 'async', 'def', and function name
+            return node.col_offset + 10
+        else:
+            raise TypeError('unsupported node type for node %s' % node)
 
     def __call__(self, node: ast.Module) -> Dict[int, ast.AST]:
         # for some bizarre reason we need to visit once to clear empty nodes apparently
@@ -53,17 +64,12 @@ class StatementMapper(ast.NodeVisitor):
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
             self.id_map[id(nc)] = nc
-            if isinstance(nc, ast.Name):
-                if (nc.lineno, nc.col_offset) in self.reactive_var_positions:
-                    self.reactive_variable_node_ids.add(id(nc))
-                elif (nc.lineno, nc.col_offset) in self.blocking_var_positions:
-                    self.blocking_variable_node_ids.add(id(nc))
-            elif isinstance(nc, ast.Attribute):
-                lineno, col_offset = nc.lineno, getattr(nc.value, 'end_col_offset', -2) + 1
-                if (lineno, col_offset) in self.reactive_var_positions:
-                    self.reactive_attribute_node_ids.add(id(nc))
-                elif (lineno, col_offset) in self.blocking_var_positions:
-                    self.blocking_attribute_node_ids.add(id(nc))
+            if isinstance(nc, (ast.Name, ast.Attribute, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                col_offset = self._get_col_offset_for(nc)
+                if (nc.lineno, col_offset) in self.reactive_var_positions:
+                    self.reactive_node_ids.add(id(nc))
+                elif (nc.lineno, col_offset) in self.blocking_var_positions:
+                    self.blocking_node_ids.add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

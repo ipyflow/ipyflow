@@ -39,13 +39,6 @@ class SafetyAstRewriter(ast.NodeTransformer):
         try:
             mapper = StatementMapper(
                 self._cell_id,
-                nbs().statement_cache[cells().exec_counter()],
-                nbs().ast_node_by_id,
-                nbs().parent_node_by_id,
-                nbs().reactive_variable_node_ids,
-                nbs().reactive_attribute_node_ids,
-                nbs().blocking_variable_node_ids,
-                nbs().blocking_attribute_node_ids,
                 self._reacive_var_positions,
                 self._blocking_var_positions,
             )

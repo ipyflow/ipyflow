@@ -163,16 +163,24 @@ class GetSymbolRefs(ast.NodeVisitor):
         self.symbol_chain.reverse()
         return SymbolRef(self.symbol_chain)
 
+    def _append_atom(
+            self,
+            node: Union[ast.Name, ast.Attribute, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef],
+            val: str,
+            **kwargs,
+    ) -> None:
+        self.symbol_chain.append(
+            Atom(
+                val,
+                is_reactive=id(node) in nbs().reactive_node_ids,
+                is_blocking=id(node) in nbs().blocking_node_ids,
+                **kwargs,
+            )
+        )
+
     def visit_Call(self, node):
         if isinstance(node.func, ast.Attribute):
-            self.symbol_chain.append(
-                Atom(
-                    node.func.attr,
-                    is_callpoint=True,
-                    is_reactive=id(node) in nbs().reactive_attribute_node_ids,
-                    is_blocking=id(node) in nbs().blocking_attribute_node_ids,
-                )
-            )
+            self._append_atom(node.func, node.func.attr, is_callpoint=True)
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
             if isinstance(node.func.slice, ast.Constant):
@@ -193,13 +201,7 @@ class GetSymbolRefs(ast.NodeVisitor):
             raise TypeError('invalid type for node.func %s' % node.func)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        self.symbol_chain.append(
-            Atom(
-                node.attr,
-                is_reactive=id(node) in nbs().reactive_attribute_node_ids,
-                is_blocking=id(node) in nbs().blocking_attribute_node_ids,
-            )
-        )
+        self._append_atom(node, node.attr)
         self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:
@@ -213,15 +215,6 @@ class GetSymbolRefs(ast.NodeVisitor):
             else:
                 self.symbol_chain.append(Atom(resolved, is_subscript=True))
         self.visit(node.value)
-
-    def _append_atom(self, node: Union[ast.Name, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef], val: str) -> None:
-        self.symbol_chain.append(
-            Atom(
-                val,
-                is_reactive=id(node) in nbs().reactive_variable_node_ids,
-                is_blocking=id(node) in nbs().blocking_variable_node_ids,
-            )
-        )
 
     def visit_Name(self, node: ast.Name) -> None:
         self._append_atom(node, node.id)

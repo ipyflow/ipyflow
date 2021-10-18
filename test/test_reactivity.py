@@ -102,6 +102,34 @@ def test_simple_blocked_reactive_var_load():
     assert cells_run - {cell_id} == {3}, 'got %s' % cells_run
 
 
+def test_reactive_function_defn():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('def f(): return x')[1] == {2}
+    assert run_cell('logging.info(f())')[1] == {3}
+    assert run_cell('def $f(): return x + 3')[1] == {4, 3}
+
+
+def test_reactive_function_call():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('def f(): return $x')[1] == {2}
+    assert run_cell('logging.info(f())')[1] == {3}
+    assert run_cell('x = 42')[1] == {4, 3}
+
+
+def test_reactive_store_to_global_var_from_function_call():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('def f(): global x; $x = 42')[1] == {2}
+    assert run_cell('logging.info(x)')[1] == {3}
+    assert run_cell('f()')[1] == {4, 3}
+
+
+def test_reactive_store_to_local_var_from_function_call():
+    assert run_cell('x = 0')[1] == {1}
+    assert run_cell('def f(): $x = 42')[1] == {2}
+    assert run_cell('logging.info(x)')[1] == {3}
+    assert run_cell('f()')[1] == {4}
+
+
 if sys.version_info >= (3, 8):
     def test_reactive_attr_load():
         assert run_cell(

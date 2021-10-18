@@ -4,13 +4,17 @@ import textwrap
 from typing import TYPE_CHECKING
 
 from nbsafety.tracing.stmt_mapper import StatementMapper
+from .utils import make_safety_fixture
 
 if TYPE_CHECKING:
     from typing import Dict
 
 
+_safety_fixture, _ = make_safety_fixture()
+
+
 def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:
-    mapper = StatementMapper(0, {}, {}, {}, set(), set(), set(), set(), set(), set())
+    mapper = StatementMapper(0, set(), set())
     mapper(ast.parse(textwrap.dedent(code).strip()))
     return mapper.line_to_stmt_map
 

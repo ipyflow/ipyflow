@@ -163,7 +163,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         if self._in_kill_context:
             self.dead.add(ref)
         elif not self._skip_simple_names and ref not in self.dead:
-            if id(node) in nbs().reactive_variable_node_ids:
+            if id(node) in nbs().reactive_node_ids:
                 ref.chain[0].is_reactive = True
             self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 

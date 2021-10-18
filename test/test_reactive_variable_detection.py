@@ -13,7 +13,7 @@ _safety_fixture, run_cell = make_safety_fixture(enable_reactive_variables=True)
 def _get_all_reactive_var_names() -> Set[str]:
     return {
         nbs().ast_node_by_id[node_id].id
-        for node_id in nbs().reactive_variable_node_ids
+        for node_id in nbs().reactive_node_ids
     }
 
 

@@ -73,26 +73,8 @@ class TraceStatement:
             func_sym.create_symbols_for_call_args()
         return func_sym.call_scope
 
-    def _handle_assign_target_for_deps(
-        self,
-        target: ast.AST,
-        deps: Set[DataSymbol],
-        maybe_fixup_literal_namespace=False,
-    ) -> None:
-        # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
-        try:
-            scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
-        except KeyError:
-            # e.g., slices aren't implemented yet
-            # use suppressed log level to avoid noise to user
-            if nbs().is_develop:
-                logger.exception('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
-            # if nbs().is_test:
-            #     raise ke
-            return
-        upserted = scope.upsert_data_symbol_for_name(
-            name, obj, deps - excluded_deps, self.stmt_node, is_subscript=is_subscript,
-        )
+    @staticmethod
+    def _handle_reactive_store(target: ast.AST) -> None:
         try:
             symbol_ref = SymbolRef(target)
             reactive_seen = False
@@ -114,7 +96,29 @@ class TraceStatement:
                 if blocking_seen and resolved.dsym not in nbs().updated_symbols:
                     nbs().blocked_reactive_timestamps_by_symbol[resolved.dsym] = nbs().cell_counter()
         except TypeError:
-            pass
+            return
+
+    def _handle_assign_target_for_deps(
+        self,
+        target: ast.AST,
+        deps: Set[DataSymbol],
+        maybe_fixup_literal_namespace=False,
+    ) -> None:
+        # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
+        try:
+            scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
+        except KeyError:
+            # e.g., slices aren't implemented yet
+            # use suppressed log level to avoid noise to user
+            if nbs().is_develop:
+                logger.exception('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+            # if nbs().is_test:
+            #     raise ke
+            return
+        upserted = scope.upsert_data_symbol_for_name(
+            name, obj, deps - excluded_deps, self.stmt_node, is_subscript=is_subscript,
+        )
+        self._handle_reactive_store(target)
         logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
@@ -150,6 +154,7 @@ class TraceStatement:
             self.stmt_node,
             is_subscript=is_subscript,
         )
+        self._handle_reactive_store(target.value)
 
     def _handle_store_target_tuple_unpack_from_namespace(
         self, target: Union[ast.List, ast.Tuple], rhs_namespace: Namespace
@@ -252,6 +257,8 @@ class TraceStatement:
                     class_scope=self.class_scope,
                     propagate=not isinstance(self.stmt_node, ast.For)
                 )
+                if isinstance(self.stmt_node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                    self._handle_reactive_store(self.stmt_node)
             except KeyError as ke:
                 # e.g., slices aren't implemented yet
                 # put logging behind flag to avoid noise to user

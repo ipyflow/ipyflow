@@ -143,6 +143,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
+        self._tags: Tuple[str, ...] = ()
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(__package__, self._comm_target)
 
@@ -213,6 +214,9 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def set_active_cell(self, cell_id: CellId) -> None:
         self._active_cell_id = cell_id
+
+    def set_tags(self, tags: Tuple[str, ...]) -> None:
+        self._tags = tags
 
     def reactivity_cleanup(self) -> None:
         for cell in cells().all_cells_most_recently_run_for_each_id():
@@ -520,7 +524,7 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_id, self._active_cell_id = self._active_cell_id, None
             assert cell_id is not None
             cell = cells().create_and_track(
-                cell_id, cell_content, validate_ipython_counter=self.settings.store_history
+                cell_id, cell_content, self._tags, validate_ipython_counter=self.settings.store_history
             )
 
             # Stage 1: Precheck.
@@ -624,6 +628,9 @@ class NotebookSafety(singletons.NotebookSafety):
             # this is to avoid capturing `self` and creating an extra reference to the singleton
             try:
                 cmd, line = line.split(' ', 1)
+                if cmd in ('slice', 'make_slice', 'gather_slice'):
+                    # FIXME: hack to workaround some input transformer
+                    line = re.sub(r"--tag +<class '(\w+)'>", r"--tag $\1", line)
             except ValueError:
                 cmd, line = line, ''
             try:

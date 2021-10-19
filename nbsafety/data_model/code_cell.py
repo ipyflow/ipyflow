@@ -21,7 +21,7 @@ from nbsafety.run_mode import FlowOrder
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Dict, FrozenSet, Generator, List, Optional, Set, Type, Union
+    from typing import Dict, FrozenSet, Generator, List, Optional, Set, Tuple, Type, Union
     from nbsafety.data_model.data_symbol import DataSymbol
     from nbsafety.types import CellId, TimestampOrCounter
 
@@ -50,11 +50,13 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     _cell_by_cell_ctr: Dict[int, ExecutedCodeCell] = {}
     _cell_counter: int = 0
     _position_by_cell_id: Dict[CellId, int] = {}
+    _cells_by_tag: Dict[str, Set[ExecutedCodeCell]] = defaultdict(set)
 
-    def __init__(self, cell_id: CellId, cell_ctr: int, content: str) -> None:
+    def __init__(self, cell_id: CellId, cell_ctr: int, content: str, tags: Tuple[str, ...]) -> None:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
         self.content: str = content
+        self.tags: Tuple[str, ...] = tags
         self._dynamic_parents: Set[CellId] = set()
         self._dynamic_children: Set[CellId] = set()
         self._static_parents: Set[CellId] = set()
@@ -134,16 +136,22 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         return cast('FrozenSet[CellId]', self._static_children)
 
     @classmethod
-    def create_and_track(cls, cell_id: CellId, content: str, validate_ipython_counter: bool = True) -> ExecutedCodeCell:
+    def create_and_track(
+        cls, cell_id: CellId, content: str, tags: Tuple[str, ...], validate_ipython_counter: bool = True
+    ) -> ExecutedCodeCell:
         cls._cell_counter += 1
         cell_ctr = cls._cell_counter
         if validate_ipython_counter:
             assert cell_ctr == ipy_cell_counter()
         prev_cell = cls.from_id(cell_id)
-        cell = cls(cell_id, cell_ctr, content)
+        cell = cls(cell_id, cell_ctr, content, tags)
         if prev_cell is not None:
             cell._dynamic_children = prev_cell._dynamic_children
             cell._static_children = prev_cell._static_children
+            for tag in prev_cell.tags:
+                cls._cells_by_tag[tag].discard(prev_cell)
+        for tag in tags:
+            cls._cells_by_tag[tag].add(cell)
         cls._cell_by_cell_ctr[cell_ctr] = cell
         cur_cell = cls._current_cell_by_cell_id.get(cell_id, None)
         cur_cell_ctr = None if cur_cell is None else cur_cell.cell_ctr
@@ -199,6 +207,10 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     @classmethod
     def from_id(cls, cell_id: CellId) -> Optional[ExecutedCodeCell]:
         return cls._current_cell_by_cell_id.get(cell_id, None)
+
+    @classmethod
+    def from_tag(cls, tag: str) -> Set[ExecutedCodeCell]:
+        return cls._cells_by_tag.get(tag, set())
 
     def sanitized_content(self):
         lines = []

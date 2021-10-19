@@ -98,6 +98,9 @@ def make_tracking_augmented_sym_replacer(
     def _input_transformer(lines: List[str]) -> List[str]:
         transformed_lines = []
         for idx, line in enumerate(lines):
+            if line.startswith('%'):
+                transformed_lines.append(line)
+                continue
             line, positions = get_augmented_syms_and_positions(line, regex=regex, offset=len(symbol_type.marker))
             transformed_lines.append(line)
             for pos in positions:

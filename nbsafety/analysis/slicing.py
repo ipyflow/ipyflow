@@ -9,7 +9,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Set
+    from typing import Dict, List, Set, Type
     from nbsafety.data_model.code_cell import ExecutedCodeCell
     from nbsafety.types import TimestampOrCounter
 
@@ -76,32 +76,41 @@ def _graph_union(
     return graph
 
 
-def _compute_slice_impl(seed_ts: TimestampOrCounter) -> Set[TimestampOrCounter]:
+def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCounter]:
+    assert len(seeds) > 0
     dependencies: Set[TimestampOrCounter] = set()
     timestamp_to_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
     if nbs().mut_settings.dynamic_slicing_enabled:
-        if isinstance(seed_ts, Timestamp):
+        if isinstance(seeds[0], Timestamp):
             timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, nbs().dynamic_data_deps)
         else:
             timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, _coarsen_timestamps(nbs().dynamic_data_deps))
     if nbs().mut_settings.static_slicing_enabled:
-        if isinstance(seed_ts, Timestamp):
+        if isinstance(seeds[0], Timestamp):
             timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, nbs().static_data_deps)
         else:
             timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, _coarsen_timestamps(nbs().static_data_deps))
 
     # ensure we at least get the static deps
-    _get_ts_dependencies(seed_ts, dependencies, timestamp_to_ts_deps)
-    if isinstance(seed_ts, Timestamp):
-        for ts in list(timestamp_to_ts_deps.keys()):
-            if ts.cell_num == seed_ts.cell_num:
-                _get_ts_dependencies(ts, dependencies, timestamp_to_ts_deps)
+    for seed in seeds:
+        _get_ts_dependencies(seed, dependencies, timestamp_to_ts_deps)
+    if isinstance(seeds[0], Timestamp):
+        for seed in seeds:
+            for ts in list(timestamp_to_ts_deps.keys()):
+                if ts.cell_num == seed.cell_num:
+                    _get_ts_dependencies(ts, dependencies, timestamp_to_ts_deps)
     return dependencies
 
 
 class CodeCellSlicingMixin:
     def compute_slice(  # type: ignore
         self: ExecutedCodeCell, stmt_level: bool = False
+    ) -> Dict[int, str]:
+        return self.compute_slice_for_cells({self}, stmt_level=stmt_level)
+
+    @classmethod
+    def compute_slice_for_cells(  # type: ignore
+        cls: Type[ExecutedCodeCell], cells: Set[ExecutedCodeCell], stmt_level: bool = False
     ) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the cell with
@@ -116,33 +125,40 @@ class CodeCellSlicingMixin:
                 representing dependencies
         """
         if stmt_level:
-            stmts_by_cell_num = self.compute_slice_stmts()
-            stmts_by_cell_num.pop(self.cell_ctr, None)
+            stmts_by_cell_num = cls.compute_slice_stmts_for_cells(cells)
+            for cell in cells:
+                stmts_by_cell_num.pop(cell.cell_ctr, None)
             ret = {
                 ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
                 for ctr, stmts in stmts_by_cell_num.items()
             }
-            ret[self.cell_ctr] = self.content
+            for cell in cells:
+                ret[cell.cell_ctr] = cell.content
             return ret
         else:
-            deps: Set[int] = _compute_slice_impl(self.cell_ctr)
-            return {dep: self.from_timestamp(dep).content for dep in deps}
+            deps: Set[int] = _compute_slice_impl([cell.cell_ctr for cell in cells])
+            return {dep: cls.from_timestamp(dep).content for dep in deps}
 
     def compute_slice_stmts(  # type: ignore
         self: ExecutedCodeCell,
     ) -> Dict[int, List[ast.stmt]]:
-        deps_stmt: Set[Timestamp] = _compute_slice_impl(Timestamp(self.cell_ctr, -1))
+        return self.compute_slice_stmts_for_cells({self})
+
+    @classmethod
+    def compute_slice_stmts_for_cells(  # type: ignore
+        cls: Type[ExecutedCodeCell], cells: Set[ExecutedCodeCell],
+    ) -> Dict[int, List[ast.stmt]]:
+        deps_stmt: Set[Timestamp] = _compute_slice_impl([Timestamp(cell.cell_ctr, -1) for cell in cells])
         stmts_by_cell_num = defaultdict(list)
         seen_stmt_ids = set()
         for ts in sorted(deps_stmt):
-            if ts.cell_num > self.cell_ctr:
-                break
-            stmt = self.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
+            stmt = cls.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue
             seen_stmt_ids.add(stmt_id)
             if stmt is not None:
                 stmts_by_cell_num[ts.cell_num].append(stmt)
-        stmts_by_cell_num[self.cell_ctr] = list(self.to_ast().body)
+        for cell in cells:
+            stmts_by_cell_num[cell.cell_ctr] = list(cell.to_ast().body)
         return dict(stmts_by_cell_num)

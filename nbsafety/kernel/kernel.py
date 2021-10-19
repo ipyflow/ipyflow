@@ -27,9 +27,12 @@ class SafeKernel(IPythonKernel):
         Don't actually change the metadata; we just want to get the cell id
         out of the execution request.
         """
-        cell_id = parent.get('metadata', {}).get('cellId', None)
+        metadata = parent.get('metadata', {})
+        cell_id = metadata.get('cellId', None)
         if cell_id is not None:
             nbs().set_active_cell(cell_id)
+        tags = tuple(metadata.get('tags', ()))
+        nbs().set_tags(tags)
         return super().init_metadata(parent)
 
     if inspect.iscoroutinefunction(IPythonKernel.do_execute):

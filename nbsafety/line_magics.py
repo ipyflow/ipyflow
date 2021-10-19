@@ -142,6 +142,7 @@ def set_highlights(cmd: str, rest: str) -> None:
 _SLICE_PARSER = argparse.ArgumentParser('slice')
 _SLICE_PARSER.add_argument('cell_num', nargs='?', type=int, default=None)
 _SLICE_PARSER.add_argument('--stmt', '--stmts', action='store_true')
+_SLICE_PARSER.add_argument('--tag', nargs='?', type=str, default=None)
 
 
 def make_slice(line: str) -> Optional[str]:
@@ -149,15 +150,27 @@ def make_slice(line: str) -> Optional[str]:
         args = _SLICE_PARSER.parse_args(shlex.split(line))
     except:
         return None
+    tag = args.tag
+    slice_cells = None
     cell_num = args.cell_num
     if cell_num is None:
-        cell_num = cells().exec_counter() - 1
-    try:
-        deps = list(cells().from_timestamp(cell_num).compute_slice(stmt_level=args.stmt).items())
+        if tag is None:
+            cell_num = cells().exec_counter() - 1
+    if cell_num is not None:
+        slice_cells = {cells().from_timestamp(cell_num)}
+    elif args.tag is not None:
+        if tag.startswith('$'):
+            tag = tag[1:]
+            # TODO: mark current cell as reactive for this tag
+        slice_cells = cells().from_tag(tag)
+    if slice_cells is None:
+        logger.warning("Cell(s) have not yet been run")
+    elif len(slice_cells) == 0 and tag is not None:
+        logger.warning("No cell(s) for tag: %s", tag)
+    else:
+        deps = list(cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt).items())
         deps.sort()
         return '\n\n'.join(f'# Cell {cell_num}\n' + content for cell_num, content in deps)
-    except KeyError:
-        logger.warning("Cell %d has not yet been run", cell_num)
     return None
 
 

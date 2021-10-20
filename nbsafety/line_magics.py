@@ -161,7 +161,7 @@ def make_slice(line: str) -> Optional[str]:
     elif args.tag is not None:
         if tag.startswith('$'):
             tag = tag[1:]
-            # TODO: mark current cell as reactive for this tag
+            cells().current_cell().mark_as_reactive_for_tag(tag)
         slice_cells = cells().from_tag(tag)
     if slice_cells is None:
         logger.warning("Cell(s) have not yet been run")

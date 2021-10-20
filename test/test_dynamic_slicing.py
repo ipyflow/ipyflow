@@ -447,3 +447,11 @@ def test_list_delete():
     assert deps == {1, 2, 3, 5}, 'got %s' % deps
     slice_size = num_stmts_in_slice(5)
     assert slice_size == len(deps), 'got %d' % slice_size
+
+
+def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
+    run_cell('y = 3')
+    run_cell('def f(): return y + 5')
+    run_cell('f()')
+    run_cell('sink = f()')
+    assert num_stmts_in_slice(4) == 3

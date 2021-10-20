@@ -13,7 +13,7 @@ if TYPE_CHECKING:
         Pattern = Any
 
 
-class AugmentedSymbol(Enum):
+class AugmentedAtom(Enum):
     reactive = '$'
     blocking = '$:'
 
@@ -26,7 +26,7 @@ class AugmentedSymbol(Enum):
         return re.escape(self.marker)
 
 
-AUGMENTED_SYM_REGEX_TEMPLATE = "".join(
+AUGMENTED_ATOM_REGEX_TEMPLATE = "".join(
     r"^(?:"
     r"   (?:"
     r"      (?!')"
@@ -49,26 +49,26 @@ AUGMENTED_SYM_REGEX_TEMPLATE = "".join(
 )
 
 
-REACTIVE_VAR_REGEX = re.compile(AUGMENTED_SYM_REGEX_TEMPLATE.format(marker=AugmentedSymbol.reactive.escaped_marker))
+REACTIVE_ATOM_REGEX = re.compile(AUGMENTED_ATOM_REGEX_TEMPLATE.format(marker=AugmentedAtom.reactive.escaped_marker))
 
 
-def extract_reactive_vars(s: str) -> List[str]:
-    reactive_vars = []
+def extract_reactive_atoms(s: str) -> List[str]:
+    reactive_atoms = []
     while True:
-        m = REACTIVE_VAR_REGEX.match(s)
+        m = REACTIVE_ATOM_REGEX.match(s)
         if m is None:
             break
-        reactive_vars.append(m.group(1))
+        reactive_atoms.append(m.group(1))
         s = s[m.span()[1]:]
-    return reactive_vars
+    return reactive_atoms
 
 
-def get_augmented_syms_and_positions(
+def get_augmented_atoms_and_positions(
     s: str, regex: Optional[Pattern] = None, offset: int = 1
 ) -> Tuple[str, List[int]]:
     portions = []
     positions = []
-    regex = regex or REACTIVE_VAR_REGEX
+    regex = regex or REACTIVE_ATOM_REGEX
     while True:
         m = regex.match(s)
         if m is None:
@@ -82,26 +82,23 @@ def get_augmented_syms_and_positions(
     return "".join(portions), positions
 
 
-def replace_reactive_vars(s: str) -> str:
-    return get_augmented_syms_and_positions(s)[0]
+def replace_reactive_atoms(s: str) -> str:
+    return get_augmented_atoms_and_positions(s)[0]
 
 
-def replace_reactive_vars_lines(lines: List[str]) -> List[str]:
-    return [replace_reactive_vars(line) for line in lines]
+def replace_reactive_atoms_lines(lines: List[str]) -> List[str]:
+    return [replace_reactive_atoms(line) for line in lines]
 
 
-def make_tracking_augmented_sym_replacer(
-    rewriter: SafetyAstRewriter, symbol_type: AugmentedSymbol
+def make_tracking_augmented_atom_replacer(
+    rewriter: SafetyAstRewriter, symbol_type: AugmentedAtom
 ) -> Callable[[List[str]], List[str]]:
-    regex = re.compile(AUGMENTED_SYM_REGEX_TEMPLATE.format(marker=symbol_type.escaped_marker))
+    regex = re.compile(AUGMENTED_ATOM_REGEX_TEMPLATE.format(marker=symbol_type.escaped_marker))
 
     def _input_transformer(lines: List[str]) -> List[str]:
         transformed_lines = []
         for idx, line in enumerate(lines):
-            if line.startswith('%'):
-                transformed_lines.append(line)
-                continue
-            line, positions = get_augmented_syms_and_positions(line, regex=regex, offset=len(symbol_type.marker))
+            line, positions = get_augmented_atoms_and_positions(line, regex=regex, offset=len(symbol_type.marker))
             transformed_lines.append(line)
             for pos in positions:
                 rewriter.register_reactive_var_position(symbol_type, idx + 1, pos)

@@ -250,6 +250,8 @@ class Namespace(Scope):
                 inner_obj = nbs().retrieve_namespace_attr_or_sub(new_ns.obj, dsym.name, is_subscript=False)
             except AttributeError:
                 inner_obj = None
+            except TypeError:
+                break
             dsym.update_obj_ref(inner_obj)
             logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
             self._data_symbol_by_name.pop(dsym.name, None)
@@ -260,6 +262,8 @@ class Namespace(Scope):
                 inner_obj = nbs().retrieve_namespace_attr_or_sub(new_ns.obj, dsym.name, is_subscript=True)
             except (IndexError, KeyError):
                 inner_obj = None
+            except TypeError:
+                break
             dsym.update_obj_ref(inner_obj)
             logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
             self._subscript_data_symbol_by_name.pop(dsym.name, None)

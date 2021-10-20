@@ -51,12 +51,14 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     _cell_counter: int = 0
     _position_by_cell_id: Dict[CellId, int] = {}
     _cells_by_tag: Dict[str, Set[ExecutedCodeCell]] = defaultdict(set)
+    _reactive_cells_by_tag: Dict[str, Set[CellId]] = defaultdict(set)
 
     def __init__(self, cell_id: CellId, cell_ctr: int, content: str, tags: Tuple[str, ...]) -> None:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
         self.content: str = content
         self.tags: Tuple[str, ...] = tags
+        self.reactive_tags: Set[str] = set()
         self._dynamic_parents: Set[CellId] = set()
         self._dynamic_children: Set[CellId] = set()
         self._static_parents: Set[CellId] = set()
@@ -65,6 +67,15 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self._cached_ast: Optional[ast.Module] = None
         self._cached_typecheck_result: Optional[bool] = None if nbs().settings.mark_typecheck_failures_unsafe else True
         self._fresh: bool = False
+
+    @classmethod
+    def clear(cls):
+        cls._current_cell_by_cell_id = {}
+        cls._cell_by_cell_ctr = {}
+        cls._cell_counter = 0
+        cls._position_by_cell_id = {}
+        cls._cells_by_tag.clear()
+        cls._reactive_cells_by_tag.clear()
 
     def __str__(self):
         return self.content
@@ -83,6 +94,14 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         old_fresh = self._fresh
         self._fresh = new_fresh
         return old_fresh
+
+    def mark_as_reactive_for_tag(self, tag: str) -> None:
+        self.reactive_tags.add(tag)
+        self._reactive_cells_by_tag[tag].add(self.cell_id)
+
+    @classmethod
+    def get_reactive_ids_for_tag(cls, tag: str) -> Set[CellId]:
+        return cls._reactive_cells_by_tag.get(tag, set())
 
     def add_dynamic_parent(self, parent: Union[ExecutedCodeCell, CellId]) -> None:
         pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
@@ -150,6 +169,8 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             cell._static_children = prev_cell._static_children
             for tag in prev_cell.tags:
                 cls._cells_by_tag[tag].discard(prev_cell)
+            for tag in prev_cell.reactive_tags:
+                cls._reactive_cells_by_tag[tag].discard(prev_cell.cell_id)
         for tag in tags:
             cls._cells_by_tag[tag].add(cell)
         cls._cell_by_cell_ctr[cell_ctr] = cell
@@ -158,13 +179,6 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         if cur_cell_ctr is None or cell_ctr > cur_cell_ctr:
             cls._current_cell_by_cell_id[cell_id] = cell
         return cell
-
-    @classmethod
-    def clear(cls):
-        cls._current_cell_by_cell_id = {}
-        cls._cell_by_cell_ctr = {}
-        cls._cell_counter = 0
-        cls._position_by_cell_id = {}
 
     @classmethod
     def set_cell_positions(cls, order_index_by_cell_id: Dict[CellId, int]):

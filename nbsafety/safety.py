@@ -21,7 +21,7 @@ from nbsafety.ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from nbsafety import line_magics
-from nbsafety.analysis.reactive_vars import AugmentedSymbol, make_tracking_augmented_sym_replacer
+from nbsafety.analysis.reactive_modifiers import AugmentedAtom, make_tracking_augmented_atom_replacer
 from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
@@ -52,7 +52,7 @@ class NotebookSafetySettings(NamedTuple):
     mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool
-    enable_reactive_variables: bool
+    enable_reactive_modifiers: bool
     mode: SafetyRunMode
 
 
@@ -102,7 +102,7 @@ class NotebookSafety(singletons.NotebookSafety):
             mark_stale_symbol_usages_unsafe=kwargs.pop('mark_stale_symbol_usages_unsafe', True),
             mark_typecheck_failures_unsafe=kwargs.pop('mark_typecheck_failures_unsafe', False),
             mark_phantom_cell_usages_unsafe=kwargs.pop('mark_phantom_cell_usages_unsafe', False),
-            enable_reactive_variables=kwargs.pop('enable_reactive_variables', True),
+            enable_reactive_modifiers=kwargs.pop('enable_reactive_modifiers', True),
             mode=SafetyRunMode.get(),
         )
         self.mut_settings: MutableNotebookSafetySettings = MutableNotebookSafetySettings(
@@ -267,10 +267,6 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
-        if last_executed_cell_id is None:
-            last_executed_cell_pos = None
-        else:
-            last_executed_cell_pos = cells().from_id(last_executed_cell_id).position
         stale_cells = set()
         typecheck_error_cells = set()
         fresh_cells = set()
@@ -279,6 +275,15 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
+        if last_executed_cell_id is None:
+            last_executed_cell = None
+            last_executed_cell_pos = None
+        else:
+            last_executed_cell = cells().from_id(last_executed_cell_id)
+            last_executed_cell_pos = last_executed_cell.position
+            for tag in last_executed_cell.tags:
+                for reactive_cell_id in cells().get_reactive_ids_for_tag(tag):
+                    forced_reactive_cells.add(reactive_cell_id)
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
@@ -577,9 +582,9 @@ class NotebookSafety(singletons.NotebookSafety):
             with TraceManager.instance().tracing_context():
                 ast_rewriter = SafetyAstRewriter(cell_id)
                 with input_transformer_context([
-                    make_tracking_augmented_sym_replacer(ast_rewriter, AugmentedSymbol.blocking),
-                    make_tracking_augmented_sym_replacer(ast_rewriter, AugmentedSymbol.reactive),
-                ] if self.settings.enable_reactive_variables else []):
+                    make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.blocking),
+                    make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.reactive),
+                ] if self.settings.enable_reactive_modifiers else []):
                     with ast_transformer_context([ast_rewriter]):
                         yield
         finally:

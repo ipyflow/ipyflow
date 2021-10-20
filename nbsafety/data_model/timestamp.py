@@ -48,5 +48,5 @@ class Timestamp(NamedTuple):
             symbols = [symbols]  # type: ignore
         used_time = cls.current()
         for sym in symbols:  # type: ignore
-            if sym is not None:
+            if sym is not None and not sym.is_anonymous:
                 sym.update_usage_info(used_time=used_time, exclude_ns=exclude_ns)

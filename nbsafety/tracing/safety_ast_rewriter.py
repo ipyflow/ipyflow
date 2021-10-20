@@ -4,7 +4,7 @@ import logging
 import traceback
 from typing import TYPE_CHECKING, cast
 
-from nbsafety.analysis.reactive_vars import AugmentedSymbol
+from nbsafety.analysis.reactive_modifiers import AugmentedAtom
 from nbsafety.singletons import nbs
 from nbsafety.data_model.code_cell import cells
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
@@ -26,10 +26,10 @@ class SafetyAstRewriter(ast.NodeTransformer):
         self._reacive_var_positions: Set[Tuple[int, int]] = set()
         self._blocking_var_positions: Set[Tuple[int, int]] = set()
 
-    def register_reactive_var_position(self, sym_type: AugmentedSymbol, lineno: int, col_offset: int) -> None:
-        if sym_type == AugmentedSymbol.reactive:
+    def register_reactive_var_position(self, sym_type: AugmentedAtom, lineno: int, col_offset: int) -> None:
+        if sym_type == AugmentedAtom.reactive:
             self._reacive_var_positions.add((lineno, col_offset))
-        elif sym_type == AugmentedSymbol.blocking:
+        elif sym_type == AugmentedAtom.blocking:
             self._blocking_var_positions.add((lineno, col_offset))
         else:
             raise ValueError('augmented symbol prefixed with "%s" not handled yet' % sym_type.marker)

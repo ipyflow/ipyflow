@@ -189,3 +189,8 @@ def test_reactive_variable_does_not_break():
     run_cell('x = 0')
     run_cell('y = $x + 1')
     run_cell('print($y)')
+
+
+def test_namespace_change_to_non_container():
+    run_cell('x = 3, 4')
+    run_cell('x = 3')

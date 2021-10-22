@@ -275,6 +275,7 @@ class NotebookSafety(singletons.NotebookSafety):
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
+        checker_results_by_cid = {}
         if last_executed_cell_id is None:
             last_executed_cell = None
             last_executed_cell_pos = None
@@ -298,6 +299,7 @@ class NotebookSafety(singletons.NotebookSafety):
             except SyntaxError:
                 continue
             cell_id = cell.cell_id
+            checker_results_by_cid[cell_id] = checker_result
             if self.mut_settings.flow_order in (FlowOrder.STRICT, FlowOrder.DAG):
                 stale_symbols = set()
             else:
@@ -340,11 +342,6 @@ class NotebookSafety(singletons.NotebookSafety):
                 fresh_cells.add(cell_id)
             if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
                 new_fresh_cells.add(cell_id)
-                if self.mut_settings.exec_mode != ExecutionMode.REACTIVE:
-                    if cell.get_max_used_live_symbol_cell_counter(
-                        checker_result.live, filter_to_reactive=True
-                    ) > max(cell.cell_ctr, self.min_timestamp):
-                        forced_reactive_cells.add(cell_id)
             if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
                 break
         if self.mut_settings.flow_order == FlowOrder.DAG:
@@ -367,6 +364,15 @@ class NotebookSafety(singletons.NotebookSafety):
             new_fresh_cells -= stale_cells
             for cell_id in stale_cells:
                 cells().from_id(cell_id).set_fresh(False)
+        if self.mut_settings.exec_mode != ExecutionMode.REACTIVE:
+            for cell_id in new_fresh_cells:
+                if cell_id not in checker_results_by_cid:
+                    continue
+                cell = cells().from_id(cell_id)
+                if cell.get_max_used_live_symbol_cell_counter(
+                    checker_results_by_cid[cell_id].live, filter_to_reactive=True
+                ) > max(cell.cell_ctr, self.min_timestamp):
+                    forced_reactive_cells.add(cell_id)
         stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
         eligible_refresher_for_dag = fresh_cells | stale_cells

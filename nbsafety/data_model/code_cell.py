@@ -105,17 +105,19 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
 
     def add_dynamic_parent(self, parent: Union[ExecutedCodeCell, CellId]) -> None:
         pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
-        if pid == self.cell_id:
+        if pid == self.cell_id or pid in self._dynamic_children:
             return
         self._dynamic_parents.add(pid)
-        self.from_id(pid)._dynamic_children.add(self.cell_id)
+        parent = self.from_id(pid)
+        parent._dynamic_children.add(self.cell_id)
 
     def add_static_parent(self, parent: Union[ExecutedCodeCell, CellId]) -> None:
         pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
-        if pid == self.cell_id:
+        if pid == self.cell_id or pid in self._static_children:
             return
         self._static_parents.add(pid)
-        self.from_id(pid)._static_children.add(self.cell_id)
+        parent = self.from_id(pid)
+        parent._static_children.add(self.cell_id)
 
     @property
     def dynamic_parents(self) -> Generator[ExecutedCodeCell, None, None]:

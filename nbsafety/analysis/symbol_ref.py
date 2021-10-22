@@ -82,6 +82,9 @@ class SymbolRef(CommonEqualityMixin):
     def __repr__(self):
         return repr(self.chain)
 
+    def __str__(self):
+        return repr(self)
+
     def nonreactive(self) -> SymbolRef:
         return self.__class__([atom.nonreactive() for atom in self.chain])
 
@@ -150,6 +153,9 @@ class LiveSymbolRef(CommonEqualityMixin):
             if blocking_seen and not resolved_sym.is_blocking:
                 resolved_sym.atom = resolved_sym.atom.blocking()
             yield resolved_sym
+
+    def __str__(self):
+        return str(self.ref)
 
 
 class GetSymbolRefs(ast.NodeVisitor):

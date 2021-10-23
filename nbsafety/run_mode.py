@@ -20,8 +20,12 @@ class ExecutionMode(Enum):
     REACTIVE = 'reactive'
 
 
+class ExecutionSchedule(Enum):
+    LIVENESS_BASED = 'liveness_based'
+    DAG_BASED = 'dag_based'
+    STRICT = 'strict'
+
+
 class FlowOrder(Enum):
     ANY_ORDER = 'any_order'
     IN_ORDER = 'in_order'
-    STRICT = 'strict'
-    DAG = 'dag'

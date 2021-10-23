@@ -18,7 +18,7 @@ from nbsafety.data_model.code_cell import ExecutedCodeCell, cells
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.extra_builtins import EMIT_EVENT
-from nbsafety.run_mode import ExecutionMode, FlowOrder
+from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
@@ -400,6 +400,9 @@ class DataSymbol:
         if nbs().mut_settings.exec_mode == ExecutionMode.REACTIVE:
             # always bump timestamps for reactive mode
             return False
+        if nbs().mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
+            # always bump timestamps for dag schedule
+            return False
         if prev_obj is None:
             return False
         if nbs().blocked_reactive_timestamps_by_symbol.get(self, -1) == self.timestamp.cell_num:
@@ -569,7 +572,7 @@ class DataSymbol:
         else:
             if not self.is_shallow_stale:
                 return False
-        if nbs().mut_settings.flow_order in (FlowOrder.ANY_ORDER, FlowOrder.DAG):
+        if nbs().mut_settings.flow_order == FlowOrder.ANY_ORDER:
             return True
         if cells().exec_counter() > self._last_computed_staleness_cache_ts:
             self._is_stale_at_position_cache.clear()

@@ -217,7 +217,7 @@ class GetSymbolRefs(ast.NodeVisitor):
                 # FIXME: hack to make the static checker stop here
                 # In the future, it should try to attempt to resolve
                 # the value of the ast.Name node
-                self.symbol_chain.append(Atom(resolved.id, is_subscript=True))
+                pass
             else:
                 self.symbol_chain.append(Atom(resolved, is_subscript=True))
         self.visit(node.value)

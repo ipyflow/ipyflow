@@ -9,7 +9,7 @@ from typing import cast, TYPE_CHECKING
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.run_mode import FlowOrder, ExecutionMode
+from nbsafety.run_mode import FlowOrder, ExecutionMode, ExecutionSchedule
 from nbsafety.singletons import nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -258,6 +258,23 @@ def set_exec_mode(line_: str) -> None:
     nbs().mut_settings.exec_mode = exec_mode
 
 
+def set_exec_schedule(line_: str) -> None:
+    usage = f'Usage: %safety schedule [{ExecutionSchedule.LIVENESS_BASED}|{ExecutionSchedule.DAG_BASED}|{ExecutionSchedule.STRICT}]'
+    if line_.startswith('liveness'):
+        schedule = ExecutionSchedule.LIVENESS_BASED
+    elif line_.startswith('dag'):
+        schedule = ExecutionSchedule.DAG_BASED
+    elif line_.startswith('strict'):
+        if nbs().mut_settings.flow_order != FlowOrder.IN_ORDER:
+            logger.warning('Strict schedule only applicable for forward data flow; skipping')
+            return
+        schedule = ExecutionSchedule.STRICT
+    else:
+        logger.warning(usage)
+        return
+    nbs().mut_settings.exec_schedule = schedule
+
+
 def set_flow_order(line_: str) -> None:
     line_ = line_.lower().strip()
     usage = f'Usage: %safety flow [{FlowOrder.ANY_ORDER}|{FlowOrder.IN_ORDER}]'
@@ -265,10 +282,6 @@ def set_flow_order(line_: str) -> None:
         flow_order = FlowOrder.ANY_ORDER
     elif line_.startswith('in') or line_ in ('ordered', 'linear'):
         flow_order = FlowOrder.IN_ORDER
-    elif line_.startswith('strict'):
-        flow_order = FlowOrder.STRICT
-    elif line_.startswith('dag'):
-        flow_order = FlowOrder.DAG
     else:
         logger.warning(usage)
         return

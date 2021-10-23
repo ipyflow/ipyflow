@@ -27,7 +27,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.run_mode import ExecutionMode, FlowOrder, SafetyRunMode
+from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.trace_manager import TraceManager
@@ -63,6 +63,7 @@ class MutableNotebookSafetySettings:
     static_slicing_enabled: bool
     dynamic_slicing_enabled: bool
     exec_mode: ExecutionMode
+    exec_schedule: ExecutionSchedule
     flow_order: FlowOrder
 
 
@@ -111,6 +112,7 @@ class NotebookSafety(singletons.NotebookSafety):
             static_slicing_enabled=kwargs.pop('static_slicing_enabled', True),
             dynamic_slicing_enabled=kwargs.pop('dynamic_slicing_enabled', True),
             exec_mode=ExecutionMode(kwargs.pop('exec_mode', ExecutionMode.NORMAL)),
+            exec_schedule=ExecutionSchedule(kwargs.pop('exec_schedule', ExecutionSchedule.LIVENESS_BASED)),
             flow_order=FlowOrder(kwargs.pop('flow_order', FlowOrder.ANY_ORDER)),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
@@ -249,6 +251,7 @@ class NotebookSafety(singletons.NotebookSafety):
             ).to_json()
             response['type'] = 'cell_freshness'
             response['exec_mode'] = self.mut_settings.exec_mode.value
+            response['exec_schedule'] = self.mut_settings.exec_schedule.value
             response['flow_order'] = self.mut_settings.flow_order.value
             response['last_executed_cell_id'] = cell_id
             response['highlights_enabled'] = self.mut_settings.highlights_enabled
@@ -268,6 +271,7 @@ class NotebookSafety(singletons.NotebookSafety):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
         stale_cells = set()
+        unsafe_order_cells: Set[CellId] = set()
         typecheck_error_cells = set()
         fresh_cells = set()
         new_fresh_cells = set()
@@ -289,9 +293,6 @@ class NotebookSafety(singletons.NotebookSafety):
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
         for cell in cells_to_check:
-            if self.mut_settings.flow_order not in (FlowOrder.ANY_ORDER, FlowOrder.DAG):
-                if last_executed_cell_pos is not None and cell.position <= last_executed_cell_pos:
-                    continue
             try:
                 checker_result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=update_liveness_time_versions
@@ -300,10 +301,18 @@ class NotebookSafety(singletons.NotebookSafety):
                 continue
             cell_id = cell.cell_id
             checker_results_by_cid[cell_id] = checker_result
-            if self.mut_settings.flow_order in (FlowOrder.STRICT, FlowOrder.DAG):
-                stale_symbols = set()
-            else:
+            # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
+            #     for live_sym in checker_result.live:
+            #         if cells().from_timestamp(live_sym.timestamp).position > cell.position:
+            #             unsafe_order_cells.add(cell_id)
+            #             break
+            if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
+                if last_executed_cell_pos is not None and cell.position <= last_executed_cell_pos:
+                    continue
+            if self.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
                 stale_symbols = {sym.dsym for sym in checker_result.live if sym.is_stale_at_position(cell.position)}
+            else:
+                stale_symbols = set()
             if len(stale_symbols) > 0:
                 stale_symbols_by_cell_id[cell_id] = stale_symbols
                 stale_cells.add(cell_id)
@@ -317,15 +326,20 @@ class NotebookSafety(singletons.NotebookSafety):
                 phantom_cell_info_for_cell = cell.compute_phantom_cell_info(checker_result.used_cells)
                 if len(phantom_cell_info_for_cell) > 0:
                     phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-            if self.mut_settings.flow_order == FlowOrder.DAG:
+            if self.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
                 is_fresh = False
+                flow_order = self.mut_settings.flow_order
                 if self.mut_settings.dynamic_slicing_enabled:
                     for par in cell.dynamic_parents:
+                        if flow_order == flow_order.IN_ORDER and par.position >= cell.position:
+                            continue
                         if par.cell_ctr > max(cell.cell_ctr, self.min_timestamp):
                             is_fresh = True
                             break
                 if not is_fresh and self.mut_settings.static_slicing_enabled:
                     for par in cell.static_parents:
+                        if flow_order == flow_order.IN_ORDER and par.position >= cell.position:
+                            continue
                         if par.cell_ctr > max(cell.cell_ctr, self.min_timestamp):
                             is_fresh = True
                             break
@@ -334,7 +348,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     cell.get_max_used_live_symbol_cell_counter(checker_result.live) >
                     max(cell.cell_ctr, self.min_timestamp)
                 )
-            if self.mut_settings.flow_order == FlowOrder.STRICT:
+            if self.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
                 for dead_sym in checker_result.dead:
                     if dead_sym.timestamp.cell_num > max(cell.cell_ctr, self.min_timestamp):
                         is_fresh = True
@@ -342,9 +356,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 fresh_cells.add(cell_id)
             if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
                 new_fresh_cells.add(cell_id)
-            if is_fresh and self.mut_settings.flow_order == FlowOrder.STRICT:
+            if is_fresh and self.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
                 break
-        if self.mut_settings.flow_order == FlowOrder.DAG:
+        if self.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
             prev_stale_cells: Set[CellId] = set()
             while True:
                 for cell in cells_to_check:
@@ -378,7 +392,7 @@ class NotebookSafety(singletons.NotebookSafety):
         eligible_refresher_for_dag = fresh_cells | stale_cells
         for stale_cell_id in stale_cells:
             refresher_cell_ids: Set[CellId] = set()
-            if self.mut_settings.flow_order == FlowOrder.DAG:
+            if self.mut_settings.flow_order == ExecutionSchedule.DAG_BASED:
                 if self.mut_settings.dynamic_slicing_enabled:
                     refresher_cell_ids |= cells().from_id(stale_cell_id).dynamic_parent_ids & eligible_refresher_for_dag
                 if self.mut_settings.static_slicing_enabled:
@@ -417,7 +431,7 @@ class NotebookSafety(singletons.NotebookSafety):
         return FrontendCheckerResult(
             # TODO: we should probably have separate fields for stale vs non-typechecking cells,
             #  or at least change the name to a more general "unsafe_cells" or equivalent
-            stale_cells=stale_cells | typecheck_error_cells,
+            stale_cells=stale_cells | typecheck_error_cells | unsafe_order_cells,
             fresh_cells=fresh_cells,
             new_fresh_cells=new_fresh_cells,
             forced_reactive_cells=forced_reactive_cells,
@@ -623,6 +637,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.turn_on_warnings_for(line)
             elif cmd in ('mode', 'exec_mode'):
                 return line_magics.set_exec_mode(line)
+            elif cmd in ('schedule', 'exec_schedule', 'execution_schedule'):
+                return line_magics.set_exec_schedule(line)
             elif cmd in ('flow', 'flow_order', 'semantics', 'flow_semantics'):
                 return line_magics.set_flow_order(line)
             elif cmd == 'clear':

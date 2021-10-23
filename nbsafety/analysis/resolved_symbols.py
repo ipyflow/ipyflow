@@ -38,6 +38,10 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         ))
 
     @property
+    def timestamp(self):
+        return self.dsym.timestamp
+
+    @property
     def is_called(self):
         return self.atom.is_callpoint
 

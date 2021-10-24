@@ -752,7 +752,11 @@ class TraceManager(SliceTraceManager):
         obj_type = None
         obj_id = id(obj)
         if obj_id in nbs().aliases:
-            obj_type = next(iter(nbs().aliases[obj_id])).obj_type
+            aliases = nbs().aliases[obj_id]
+            if len(aliases) > 0:
+                obj_type = next(iter(aliases)).obj_type
+        if obj_type is None:
+            obj_type = type(obj)
         is_excepted_mutation = False
         is_excepted_non_mutation = False
         if isinstance(mutation_event, StandardMutation):

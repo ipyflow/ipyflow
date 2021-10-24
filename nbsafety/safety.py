@@ -118,6 +118,7 @@ class NotebookSafety(singletons.NotebookSafety):
         # Note: explicitly adding the types helps PyCharm intellisense
         self.settrace = settrace or sys.settrace
         self.namespaces: Dict[int, Namespace] = {}
+        # TODO: wrap this in something that clears the dict entry when the set is 0 length
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
         self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)

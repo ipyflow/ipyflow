@@ -5,7 +5,7 @@ import sys
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.analysis.resolved_symbols import ResolvedDataSymbol
-from nbsafety.analysis.symbol_ref import get_attrsub_symbol_chain, LiveSymbolRef, SymbolRef, Atom
+from nbsafety.analysis.symbol_ref import LiveSymbolRef, SymbolRef, Atom
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import FlowOrder
@@ -141,7 +141,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         self, target_node: Union[ast.Attribute, ast.Name, ast.Subscript, ast.Tuple, ast.List, ast.expr]
     ) -> None:
         if isinstance(target_node, (ast.Name, ast.Attribute, ast.Subscript)):
-            self.dead.add(get_attrsub_symbol_chain(target_node))
+            self.dead.add(SymbolRef(target_node))
             if isinstance(target_node, ast.Subscript):
                 with self.live_context():
                     self.visit(target_node.slice)
@@ -196,19 +196,19 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
         if not self._inside_attrsub:
-            self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
+            self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.func)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         if not self._inside_attrsub:
-            self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
+            self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.value)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:
         if not self._inside_attrsub:
-            self._add_attrsub_to_live_if_eligible(get_attrsub_symbol_chain(node))
+            self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.value)
         with self.attrsub_context(inside=False):

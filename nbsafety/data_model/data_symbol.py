@@ -235,7 +235,7 @@ class DataSymbol:
             return self
         else:
             containing_scope = cast('Namespace', self.containing_scope)
-            for alias in nbs().aliases[containing_scope.obj_id]:
+            for alias in nbs().aliases.get(containing_scope.obj_id, []):
                 if alias.is_globally_accessible:
                     return alias.get_top_level()
             return None

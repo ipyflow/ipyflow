@@ -500,10 +500,10 @@ class NotebookSafety(singletons.NotebookSafety):
             for used_time, sym_timestamp_when_used in sym.timestamp_by_used_time.items():
                 if top_level_sym.is_import:
                     cell_num_to_used_imports[used_time.cell_num].add(top_level_sym)
-                else:
+                elif used_time.cell_num != sym_timestamp_when_used.cell_num:
                     cell_num_to_dynamic_cell_parents[used_time.cell_num].add(sym_timestamp_when_used.cell_num)
-                    cell_num_to_dynamic_inputs[used_time.cell_num].add(top_level_sym)
                     cell_num_to_dynamic_cell_children[sym_timestamp_when_used.cell_num].add(used_time.cell_num)
+                    cell_num_to_dynamic_inputs[used_time.cell_num].add(top_level_sym)
                     cell_num_to_dynamic_outputs[sym_timestamp_when_used.cell_num].add(top_level_sym)
             if not top_level_sym.is_import:
                 for updated_time in sym.updated_timestamps:

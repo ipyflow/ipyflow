@@ -651,7 +651,6 @@ class DataSymbol:
                 refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents) and not self._is_simple_assign(new_deps),
                 refresh_namespace_stale=not mutated,
             )
-            tracer().this_stmt_updated_symbols.add(self)
         if propagate and (deleted or not should_preserve_timestamp):
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents, refresh)
         self._refresh_cached_obj()

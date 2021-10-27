@@ -227,6 +227,7 @@ class Scope:
             propagate=propagate,
             refresh=not implicit,
         )
+        tracer().this_stmt_updated_symbols.add(dsym)
         return dsym
 
     def _upsert_data_symbol_for_name_inner(

@@ -316,3 +316,10 @@ History
 0.0.79 (2021-10-06)
 -------------------
 * Improve detection of whether cell is newly fresh;
+
+0.0.80 (2021-10-26)
+-------------------
+* Implement reactive symbols;
+* Separate concept of 'schedule' from flow order;
+* Add experimental dag and strict schedules;
+* Misc bug fixes;

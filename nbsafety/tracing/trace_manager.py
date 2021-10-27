@@ -295,10 +295,10 @@ class TraceManager(SliceTraceManager):
                 self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
                 self.mutation_candidate: Optional[MutationCandidate] = None
 
-            self.lexical_literal_stack: TraceStack = self._make_stack()
-            with self.lexical_literal_stack.register_stack_state():
-                # `None` means use 'cur_frame_original_scope'
-                self.active_literal_scope: Optional[Namespace] = None
+                self.lexical_literal_stack: TraceStack = self._make_stack()
+                with self.lexical_literal_stack.register_stack_state():
+                    # `None` means use 'cur_frame_original_scope'
+                    self.active_literal_scope: Optional[Namespace] = None
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter
@@ -980,6 +980,7 @@ class TraceManager(SliceTraceManager):
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
                 is_anonymous=True,
                 implicit=True,
+                propagate=False,
             )
             self.node_id_to_loaded_symbols[node_id].append(literal_sym)
             return literal

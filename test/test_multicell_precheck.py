@@ -275,7 +275,7 @@ def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UB
     assert response.fresh_cells == {2}
     run_cell('y = ["f"]', 4)
     response = nbs().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
+    assert response.stale_cells == set(), 'got %s' % response.stale_cells
     assert response.fresh_cells == {2, 3}
 
 

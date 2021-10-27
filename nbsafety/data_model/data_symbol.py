@@ -654,7 +654,6 @@ class DataSymbol:
         if propagate and (deleted or not should_preserve_timestamp):
             UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents, refresh)
         self._refresh_cached_obj()
-        tracer().this_stmt_updated_symbols.add(self)
         if self.is_class:
             # pop pending class defs and update obj ref
             pending_class_ns = tracer().pending_class_namespaces.pop()
@@ -680,6 +679,7 @@ class DataSymbol:
     ) -> None:
         self._temp_disable_warnings = False
         if bump_version:
+            tracer().this_stmt_updated_symbols.add(self)
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
             for cell in self.cells_where_live:
                 cell.add_used_cell_counter(self, self._timestamp.cell_num)

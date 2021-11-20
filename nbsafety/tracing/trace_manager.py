@@ -75,7 +75,7 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
-class BaseTraceManager(singletons.TraceManager):
+class SingletonTraceManager(singletons.TraceManager):
 
     _MANAGER_CLASS_REGISTERED = False
     EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
@@ -90,7 +90,10 @@ class BaseTraceManager(singletons.TraceManager):
                 f'class not registered; use the `{register_trace_manager_class.__name__}` decorator on the subclass'
             )
         super().__init__()
-        self._event_handlers = self.EVENT_HANDLERS_BY_CLASS[self.__class__]
+        self._event_handlers = defaultdict(list)
+        for clazz in reversed(self.__class__.mro()):
+            for evt, handlers in self.EVENT_HANDLERS_BY_CLASS.get(clazz, {}).items():
+                self._event_handlers[evt].extend(handlers)
         self.tracing_enabled = False
         self.sys_tracer = self._sys_tracer
         self.existing_tracer = None
@@ -199,7 +202,7 @@ def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
 
     def _inner_registrar(handler):
         for evt in events:
-            BaseTraceManager.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
+            SingletonTraceManager.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
         return handler
     return _inner_registrar
 
@@ -217,7 +220,15 @@ def register_universal_handler(handler):
     return register_handler(tuple(evt for evt in TraceEvent))(handler)
 
 
-class SliceTraceManager(BaseTraceManager):
+def register_trace_manager_class(mgr_cls: Type[SingletonTraceManager]) -> Type[SingletonTraceManager]:
+    mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
+    mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
+    mgr_cls._MANAGER_CLASS_REGISTERED = True
+    return mgr_cls
+
+
+@register_trace_manager_class
+class BaseTraceManager(SingletonTraceManager):
     def __init__(self):
         super().__init__()
         self._saved_slice: Optional[Any] = None
@@ -233,15 +244,8 @@ class SliceTraceManager(BaseTraceManager):
         return ret
 
 
-def register_trace_manager_class(mgr_cls: Type[BaseTraceManager]) -> Type[BaseTraceManager]:
-    mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
-    mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
-    mgr_cls._MANAGER_CLASS_REGISTERED = True
-    return mgr_cls
-
-
 @register_trace_manager_class
-class TraceManager(SliceTraceManager):
+class TraceManager(BaseTraceManager):
     def __init__(self):
         super().__init__()
         self._module_stmt_counter = 0
@@ -636,10 +640,8 @@ class TraceManager(SliceTraceManager):
         node = nbs().ast_node_by_id.get(node_id, None)
         if node is None:
             return
-        slice_node_id = id(cast(ast.Subscript, node).slice)
-        live, _ = compute_live_dead_symbol_refs(
-            nbs().ast_node_by_id[slice_node_id], scope=self.cur_frame_original_scope
-        )
+        slice_node = cast(ast.Subscript, node).slice
+        live, _ = compute_live_dead_symbol_refs(slice_node, scope=self.cur_frame_original_scope)
         subscript_live_refs = []
         for ref in live:
             if len(ref.ref.chain) == 1:
@@ -1203,5 +1205,5 @@ class TraceManager(SliceTraceManager):
         return self.sys_tracer
 
 
-assert not BaseTraceManager._MANAGER_CLASS_REGISTERED
+assert not SingletonTraceManager._MANAGER_CLASS_REGISTERED
 assert TraceManager._MANAGER_CLASS_REGISTERED

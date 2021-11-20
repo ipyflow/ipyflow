@@ -7,11 +7,11 @@ if TYPE_CHECKING:
     from typing import Any, Callable, Dict, List, Set, Tuple
 
     # avoid circular imports
-    from nbsafety.tracing.trace_manager import BaseTraceManager
+    from nbsafety.tracing.trace_manager import SingletonTraceManager
 
 
 class TraceStack:
-    def __init__(self, manager: BaseTraceManager):
+    def __init__(self, manager: SingletonTraceManager):
         self._manager = manager
         self._stack: List[Tuple[Any, ...]] = []
         self._stack_item_initializers: Dict[str, Callable[[], Any]] = {}

@@ -3,6 +3,7 @@ import ast
 import textwrap
 
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
+from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import KeyDict
 
 
@@ -26,5 +27,5 @@ def test_ast_rewrite():
     """
     No asserts; just make sure we don't throw an error.
     """
-    rewriter = AstEavesdropper(KeyDict())
+    rewriter = AstEavesdropper(KeyDict(), frozenset(TraceEvent))
     assert rewriter.visit(ast.parse(PROGRAM)) is not None

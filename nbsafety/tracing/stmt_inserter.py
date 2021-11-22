@@ -53,25 +53,30 @@ class StatementInserter(ast.NodeTransformer):
         self._init_stmt_inserted = False
         self._global_nonlocal_stripper = StripGlobalAndNonlocalDeclarations()
 
-    def _handle_loop_body(self, node: Union[ast.For, ast.While], new_field: List[ast.AST]) -> List[ast.AST]:
+    def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
-        new_field.append(
-            _get_parsed_append_stmt(
-                cast(ast.stmt, loop_node_copy),
-                evt=TraceEvent.after_loop_iter,
-            )
-        )
         looped_once_flag = make_loop_iter_flag_name(loop_node_copy)
         nbs().loop_iter_flag_names.add(looped_once_flag)
         with fast.location_of(loop_node_copy):
-            new_field = [
+            return [
                 fast.If(
                     test=fast.Name(looped_once_flag, ast.Load()),
                     body=loop_node_copy.body,
-                    orelse=self._global_nonlocal_stripper.visit(ast.Module(new_field)).body,
+                    orelse=[
+                        fast.Try(
+                            body=self._global_nonlocal_stripper.visit(ast.Module(orig_body)).body,
+                            handlers=[],
+                            orelse=[],
+                            finalbody=[
+                                _get_parsed_append_stmt(
+                                    cast(ast.stmt, loop_node_copy),
+                                    evt=TraceEvent.after_loop_iter,
+                                ),
+                            ],
+                        ),
+                    ],
                 ),
             ]
-        return new_field
 
     def _handle_function_body(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], new_field: List[ast.AST]

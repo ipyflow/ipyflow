@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_manager import TraceManager
-from .utils import make_safety_fixture
+from .utils import make_safety_fixture, skipif_known_failing
 
 if TYPE_CHECKING:
     from typing import List, Union
@@ -49,7 +49,9 @@ _DIFFER = difflib.Differ()
 
 
 def throw_and_print_diff_if_recorded_not_equal_to(actual: List[TraceEvent]) -> None:
-    assert _RECORDED_EVENTS == actual, '\n'.join(_DIFFER.compare(_RECORDED_EVENTS, actual))
+    assert _RECORDED_EVENTS == actual, '\n'.join(
+        _DIFFER.compare([evt.value for evt in _RECORDED_EVENTS], [evt.value for evt in actual])
+    )
     _RECORDED_EVENTS.clear()
 
 
@@ -353,6 +355,30 @@ def test_while_loop():
         TraceEvent.after_loop_iter,
     # ] * 10 + [
     ] * 1 + [
+        TraceEvent.after_stmt,
+        TraceEvent.after_module_stmt,
+    ])
+
+
+def test_loop_with_continue():
+    assert _RECORDED_EVENTS == []
+    run_cell(
+        """
+        for i in range(10):
+            continue
+            print("hi")
+        """
+    )
+    throw_and_print_diff_if_recorded_not_equal_to([
+        TraceEvent.init_cell,
+        TraceEvent.before_stmt,
+        TraceEvent.before_complex_symbol,
+        TraceEvent.before_call,
+        TraceEvent.argument,
+        TraceEvent.after_call,
+        TraceEvent.after_complex_symbol,
+        TraceEvent.before_stmt,
+        TraceEvent.after_loop_iter,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ])

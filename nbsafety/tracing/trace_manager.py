@@ -246,6 +246,8 @@ class BaseTraceManager(SingletonTraceManager):
 
 @register_trace_manager_class
 class TraceManager(BaseTraceManager):
+    loop_iter_flag_names: Set[str] = set()
+
     def __init__(self):
         super().__init__()
         self._module_stmt_counter = 0
@@ -621,7 +623,7 @@ class TraceManager(BaseTraceManager):
     def init_cell(self, _obj, _node_id, frame: FrameType, _event, cell_id: Union[str, int], **__):
         nbs().set_name_to_cell_num_mapping(frame)
         # needs to happen after stmt inserting has already happened
-        for flag_name in nbs().loop_iter_flag_names:
+        for flag_name in self.loop_iter_flag_names:
             setattr(builtins, flag_name, False)
 
     @register_handler(TraceEvent.after_loop_iter)

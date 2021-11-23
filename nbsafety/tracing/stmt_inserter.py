@@ -4,7 +4,7 @@ import logging
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
-from nbsafety.singletons import nbs  # FIXME: get rid of this
+from nbsafety.singletons import tracer  # FIXME: get rid of this
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
@@ -56,7 +56,7 @@ class StatementInserter(ast.NodeTransformer):
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
         looped_once_flag = make_loop_iter_flag_name(loop_node_copy)
-        nbs().loop_iter_flag_names.add(looped_once_flag)
+        tracer().loop_iter_flag_names.add(looped_once_flag)
         with fast.location_of(loop_node_copy):
             return [
                 fast.If(

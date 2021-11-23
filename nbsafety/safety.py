@@ -131,7 +131,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.reactive_node_ids: Set[int] = set()
         self.blocking_node_ids: Set[int] = set()
-        self.loop_iter_flag_names: Set[str] = set()
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[CellId] = None

@@ -248,3 +248,41 @@ if sys.version_info >= (3, 8):
         assert run_cell('logging.info(x)')[1] == {2}
         assert run_cell('$:x = 42')[1] == {3}
         assert run_cell('$x = 42')[1] == {4, 2}
+
+
+    def test_nested_reactive_references():
+        assert run_cell('x = 42')[1] == {1}
+        assert run_cell(
+            """
+            def assert_nonzero(v):
+                assert v != 0, "Got 0 for v!"
+            """
+        )[1] == {2}
+        assert run_cell('$assert_nonzero($x)')[1] == {3}
+        assert run_cell(
+            """
+            def assert_nonzero(v):
+                assert v != 0, "v can't be 0"
+            """
+        )[1] == {3, 4}
+        rerun = run_cell('x = 43')[1]
+        assert rerun == {3, 6}, 'got %s' % rerun
+
+
+    def test_nested_reactive_references_2():
+        assert run_cell('x = 42')[1] == {1}
+        assert run_cell(
+            """
+            def assert_nonzero(v):
+                assert v != 0, "Got 0 for v!"
+            """
+        )[1] == {2}
+        assert run_cell('assert_nonzero($x)')[1] == {3}
+        assert run_cell(
+            """
+            def $assert_nonzero(v):
+                assert v != 0, "v can't be 0"
+            """
+        )[1] == {3, 4}
+        rerun = run_cell('x = 43')[1]
+        assert rerun == {3, 6}, 'got %s' % rerun

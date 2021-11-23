@@ -43,3 +43,16 @@ def test_simple_names_recovered():
     assert _get_all_reactive_var_names() == {'x', 'y'}
     run_cell('w1 = $z + 2\nw2 = $w1 + 3')
     assert _get_all_reactive_var_names() == {'x', 'y', 'z', 'w1'}
+
+
+def test_nested_names_recovered():
+    run_cell(
+        """
+        def assert_nonzero(v):
+            assert v != 0
+        """
+    )
+    run_cell('x = 42')
+    run_cell('$assert_nonzero($x)')
+    varnames = _get_all_reactive_var_names()
+    assert varnames == {'x', 'assert_nonzero'}, 'got %s' % varnames

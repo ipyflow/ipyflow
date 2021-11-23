@@ -74,11 +74,10 @@ def get_augmented_atoms_and_positions(
         if m is None:
             portions.append(s)
             break
-        start, end = m.span(1)
+        start, _ = m.span(1)
         positions.append(start)
         portions.append(s[:start])
-        portions.append(s[start + offset:end])
-        s = s[end:]
+        s = s[start + offset:]
     return "".join(portions), positions
 
 

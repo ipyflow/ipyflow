@@ -61,6 +61,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
+sys_settrace = sys.settrace
+
+
 ARG_MUTATION_EXCEPTED_MODULES = {
     'alt',
     'altair',
@@ -181,7 +184,7 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
                 self._disable_tracing()
             self._enable_tracing(check_disabled=False, existing_tracer=trace_func)
         else:
-            nbs().settrace(trace_func)
+            sys_settrace(trace_func)
 
     def _enable_tracing(self, check_disabled=True, existing_tracer=None):
         if check_disabled:
@@ -192,7 +195,7 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
             self.sys_tracer = self._sys_tracer
         else:
             self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
-        nbs().settrace(self.sys_tracer)
+        sys_settrace(self.sys_tracer)
         setattr(builtins, TRACING_ENABLED, True)
 
     def _disable_tracing(self, check_enabled=True):
@@ -200,7 +203,7 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
             assert self.tracing_enabled
             assert sys.gettrace() is self.sys_tracer
         self.tracing_enabled = False
-        nbs().settrace(self.existing_tracer)
+        sys_settrace(self.existing_tracer)
         setattr(builtins, TRACING_ENABLED, False)
 
     @contextmanager

@@ -15,9 +15,8 @@ class SafeKernel(IPythonKernel):
     implementation_version = __version__
 
     def __init__(self, **kwargs):
-        original_settrace = sys.settrace
         super().__init__(**kwargs)
-        NotebookSafety.instance(use_comm=True, settrace=original_settrace)
+        NotebookSafety.instance(use_comm=True)
         import nest_asyncio
         # ref: https://github.com/erdewit/nest_asyncio
         nest_asyncio.apply()

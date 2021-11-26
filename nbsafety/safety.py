@@ -116,7 +116,6 @@ class NotebookSafety(singletons.NotebookSafety):
             flow_order=FlowOrder(kwargs.pop('flow_order', FlowOrder.ANY_ORDER)),
         )
         # Note: explicitly adding the types helps PyCharm intellisense
-        self.settrace = settrace or sys.settrace
         self.namespaces: Dict[int, Namespace] = {}
         # TODO: wrap this in something that clears the dict entry when the set is 0 length
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)

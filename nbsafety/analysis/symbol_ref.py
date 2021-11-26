@@ -5,6 +5,7 @@ from typing import cast, Union, TYPE_CHECKING
 
 from nbsafety.analysis.resolved_symbols import ResolvedDataSymbol
 from nbsafety.singletons import tracer
+from nbsafety.utils.ast_utils import subscript_to_slice
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
@@ -21,14 +22,11 @@ def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIn
     """
     Version-independent way to get at the slice data
     """
-    if isinstance(node.slice, ast.Index):
-        slice = node.slice.value  # type: ignore
-    else:
-        slice = node.slice  # type: ignore
+    slc = subscript_to_slice(node)
 
-    if isinstance(slice, ast.Tuple):
+    if isinstance(slc, ast.Tuple):
         elts: Any = []
-        for v in slice.elts:
+        for v in slc.elts:
             if isinstance(v, ast.Num):
                 elts.append(v.n)
             elif isinstance(v, ast.Str):
@@ -40,30 +38,30 @@ def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIn
         return tuple(elts)  # type: ignore
 
     negate = False
-    if isinstance(slice, ast.UnaryOp) and isinstance(slice.op, ast.USub):
+    if isinstance(slc, ast.UnaryOp) and isinstance(slc.op, ast.USub):
         negate = True
-        slice = slice.operand
+        slc = slc.operand
 
-    if isinstance(slice, ast.Name):
-        return slice
+    if isinstance(slc, ast.Name):
+        return slc
 
-    if not isinstance(slice, (ast.Constant, ast.Str, ast.Num)):
+    if not isinstance(slc, (ast.Constant, ast.Str, ast.Num)):
         return None
 
-    if isinstance(slice, ast.Constant):
-        slice = slice.value
-    elif isinstance(slice, ast.Num):  # pragma: no cover
-        slice = slice.n  # type: ignore
-        if not isinstance(slice, int):
+    if isinstance(slc, ast.Constant):
+        slc = slc.value
+    elif isinstance(slc, ast.Num):  # pragma: no cover
+        slc = slc.n  # type: ignore
+        if not isinstance(slc, int):
             return None
-    elif isinstance(slice, ast.Str):  # pragma: no cover
-        slice = slice.s  # type: ignore
+    elif isinstance(slc, ast.Str):  # pragma: no cover
+        slc = slc.s  # type: ignore
     else:
         return None
 
-    if isinstance(slice, int) and negate:
-        slice = -slice  # type: ignore
-    return slice  # type: ignore
+    if isinstance(slc, int) and negate:
+        slc = -slc  # type: ignore
+    return slc  # type: ignore
 
 
 class Atom(CommonEqualityMixin):

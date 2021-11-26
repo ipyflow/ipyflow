@@ -110,6 +110,11 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
         self.tracing_enabled = False
         self.sys_tracer = self._sys_tracer
         self.existing_tracer = None
+
+        # ast-related fields
+        self.ast_node_by_id: Dict[int, ast.AST] = {}
+        self.parent_node_by_id: Dict[int, ast.AST] = {}
+
         self._transient_fields: Set[str] = set()
         self._persistent_fields: Set[str] = set()
         self._manual_persistent_fields: Set[str] = set()
@@ -290,12 +295,10 @@ class TraceManager(BaseTraceManager):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
+            self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
             self.loop_iter_flag_names: Set[str] = set()
             self.reactive_node_ids: Set[int] = set()
             self.blocking_node_ids: Set[int] = set()
-            self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-            self.ast_node_by_id: Dict[int, ast.AST] = {}
-            self.parent_node_by_id: Dict[int, ast.AST] = {}
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self.prev_event: Optional[TraceEvent] = None

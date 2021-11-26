@@ -1,16 +1,17 @@
 # -*- coding: future_annotations -*-
 import ast
 import builtins
-from collections import defaultdict
-from contextlib import contextmanager
 import functools
 import logging
 import symtable
 import sys
+from collections import defaultdict
+from contextlib import contextmanager
 from typing import cast, TYPE_CHECKING
 
 import astunparse
 from IPython import get_ipython
+from traitlets.traitlets import MetaHasTraits
 
 from nbsafety import singletons
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
@@ -42,7 +43,7 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, DefaultDict, Dict, List, Optional, Set, Tuple, Type, Union
+    from typing import Any, Callable, DefaultDict, Dict, Generator, List, Optional, Set, Tuple, Type, Union
     from types import FrameType
     from nbsafety.tracing.mutation_event import MutationEvent
     from nbsafety.types import SupportedIndexType
@@ -75,7 +76,14 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
-class SingletonTraceManager(singletons.TraceManager):
+class MetaHasTraitsAndTransientState(MetaHasTraits):
+    def __call__(cls, *args, **kwargs):
+        obj = MetaHasTraits.__call__(cls, *args, **kwargs)
+        obj._transient_fields_end()
+        return obj
+
+
+class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndTransientState):
 
     _MANAGER_CLASS_REGISTERED = False
     EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
@@ -84,7 +92,9 @@ class SingletonTraceManager(singletons.TraceManager):
     EVENT_LOGGER = logging.getLogger('events')
     EVENT_LOGGER.setLevel(logging.WARNING)
 
-    def __init__(self):
+    def __init__(self, is_reset: bool = False):
+        if is_reset:
+            return
         if not self._MANAGER_CLASS_REGISTERED:
             raise ValueError(
                 f'class not registered; use the `{register_trace_manager_class.__name__}` decorator on the subclass'
@@ -97,6 +107,33 @@ class SingletonTraceManager(singletons.TraceManager):
         self.tracing_enabled = False
         self.sys_tracer = self._sys_tracer
         self.existing_tracer = None
+        self._transient_fields: Set[str] = set()
+        self._persistent_fields: Set[str] = set()
+        self._manual_persistent_fields: Set[str] = set()
+        self._transient_fields_start()
+
+    def _transient_fields_start(self):
+        self._persistent_fields = set(self.__dict__.keys())
+
+    def _transient_fields_end(self):
+        self._transient_fields = set(self.__dict__.keys()) - self._persistent_fields - self._manual_persistent_fields
+
+    @contextmanager
+    def persistent_fields(self) -> Generator[None, None, None]:
+        current_fields = set(self.__dict__.keys())
+        saved_fields = {}
+        for field in self._manual_persistent_fields:
+            if field in current_fields:
+                saved_fields[field] = self.__dict__[field]
+        yield
+        self._manual_persistent_fields = (self.__dict__.keys() - current_fields) | saved_fields.keys()
+        for field, val in saved_fields.items():
+            self.__dict__[field] = val
+
+    def reset(self):
+        for field in self._transient_fields:
+            del self.__dict__[field]
+        self.__init__(is_reset=True)
 
     def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
         try:
@@ -167,7 +204,7 @@ class SingletonTraceManager(singletons.TraceManager):
         setattr(builtins, TRACING_ENABLED, False)
 
     @contextmanager
-    def _patch_sys_settrace(self):
+    def _patch_sys_settrace(self) -> Generator[None, None, None]:
         original_settrace = sys.settrace
         try:
             sys.settrace = self._settrace_patch
@@ -176,7 +213,7 @@ class SingletonTraceManager(singletons.TraceManager):
             sys.settrace = original_settrace
 
     @contextmanager
-    def tracing_context(self):
+    def tracing_context(self) -> Generator[None, None, None]:
         setattr(builtins, EMIT_EVENT, self._emit_event)
         try:
             with self._patch_sys_settrace():
@@ -229,8 +266,8 @@ def register_trace_manager_class(mgr_cls: Type[SingletonTraceManager]) -> Type[S
 
 @register_trace_manager_class
 class BaseTraceManager(SingletonTraceManager):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._saved_slice: Optional[Any] = None
 
     @register_handler(TraceEvent.subscript)
@@ -246,10 +283,13 @@ class BaseTraceManager(SingletonTraceManager):
 
 @register_trace_manager_class
 class TraceManager(BaseTraceManager):
-    loop_iter_flag_names: Set[str] = set()
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        with self.persistent_fields():
+            self.loop_iter_flag_names: Set[str] = set()
+            self.reactive_node_ids: Set[int] = set()
+            self.blocking_node_ids: Set[int] = set()
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self.prev_event: Optional[TraceEvent] = None

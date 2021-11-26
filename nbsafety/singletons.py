@@ -28,5 +28,4 @@ def nbs() -> NotebookSafetyInstance:
 
 
 def tracer() -> TraceManagerInstance:
-    assert TraceManager.initialized()
     return TraceManager.instance()

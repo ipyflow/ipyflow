@@ -9,7 +9,7 @@ from nbsafety.analysis.symbol_ref import LiveSymbolRef, SymbolRef, Atom
 from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import FlowOrder
-from nbsafety.singletons import nbs
+from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from typing import Iterable, List, Optional, Set, Tuple, Union
@@ -163,7 +163,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
         if self._in_kill_context:
             self.dead.add(ref)
         elif not self._skip_simple_names and ref not in self.dead:
-            if id(node) in nbs().reactive_node_ids:
+            if id(node) in tracer().reactive_node_ids:
                 ref.chain[0].is_reactive = True
             self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 

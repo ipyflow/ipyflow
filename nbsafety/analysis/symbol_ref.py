@@ -4,7 +4,7 @@ import logging
 from typing import cast, Union, TYPE_CHECKING
 
 from nbsafety.analysis.resolved_symbols import ResolvedDataSymbol
-from nbsafety.singletons import nbs
+from nbsafety.singletons import tracer
 from nbsafety.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
@@ -132,8 +132,8 @@ class SymbolRefVisitor(ast.NodeVisitor):
         self.symbol_chain.append(
             Atom(
                 val,
-                is_reactive=id(node) in nbs().reactive_node_ids,
-                is_blocking=id(node) in nbs().blocking_node_ids,
+                is_reactive=id(node) in tracer().reactive_node_ids,
+                is_blocking=id(node) in tracer().blocking_node_ids,
                 **kwargs,
             )
         )

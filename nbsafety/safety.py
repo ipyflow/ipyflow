@@ -129,8 +129,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
         self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.ast_node_by_id: Dict[int, ast.AST] = {}
-        self.reactive_node_ids: Set[int] = set()
-        self.blocking_node_ids: Set[int] = set()
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[CellId] = None
@@ -598,17 +596,15 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 
-        try:
-            with TraceManager.instance().tracing_context():
-                ast_rewriter = SafetyAstRewriter(cell_id)
-                with input_transformer_context([
-                    make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.blocking),
-                    make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.reactive),
-                ] if self.settings.enable_reactive_modifiers else []):
-                    with ast_transformer_context([ast_rewriter]):
-                        yield
-        finally:
-            TraceManager.clear_instance()
+        with TraceManager.instance().tracing_context():
+            TraceManager.instance().reset()
+            ast_rewriter = SafetyAstRewriter(cell_id)
+            with input_transformer_context([
+                make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.blocking),
+                make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.reactive),
+            ] if self.settings.enable_reactive_modifiers else []):
+                with ast_transformer_context([ast_rewriter]):
+                    yield
 
     def _make_line_magic(self):
         print_ = print  # to keep the test from failing since this is a legitimate print

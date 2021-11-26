@@ -4,7 +4,7 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.singletons import nbs
+from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
     from typing import Dict, List, Optional, Set, Tuple, Union
@@ -26,8 +26,8 @@ class StatementMapper(ast.NodeVisitor):
         self.line_to_stmt_map = nbs().statement_cache[nbs().cell_counter()]
         self.id_map = nbs().ast_node_by_id
         self.parent_map = nbs().parent_node_by_id
-        self.reactive_node_ids = nbs().reactive_node_ids
-        self.blocking_node_ids = nbs().blocking_node_ids
+        self.reactive_node_ids = tracer().reactive_node_ids
+        self.blocking_node_ids = tracer().blocking_node_ids
         self.reactive_var_positions = reactive_var_positions
         self.blocking_var_positions = blocking_var_positions
         self.traversal: List[ast.AST] = []

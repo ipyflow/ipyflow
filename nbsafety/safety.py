@@ -126,9 +126,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_reactive_symbols: Set[DataSymbol] = set()
         self.updated_deep_reactive_symbols: Set[DataSymbol] = set()
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
-        self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-        self.ast_node_by_id: Dict[int, ast.AST] = {}
-        self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[CellId] = None
         self.safety_issue_detected = False

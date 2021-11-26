@@ -293,6 +293,9 @@ class TraceManager(BaseTraceManager):
             self.loop_iter_flag_names: Set[str] = set()
             self.reactive_node_ids: Set[int] = set()
             self.blocking_node_ids: Set[int] = set()
+            self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+            self.ast_node_by_id: Dict[int, ast.AST] = {}
+            self.parent_node_by_id: Dict[int, ast.AST] = {}
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self.prev_event: Optional[TraceEvent] = None
@@ -437,13 +440,13 @@ class TraceManager(BaseTraceManager):
                             )
                         if dsym_to_attach is not None:
                             return_to_node_id = self.call_stack.get_field('prev_node_id_in_cur_frame')
-                            # logger.error("prev seen: %s", ast.dump(nbs().ast_node_by_id[return_to_node_id]))
+                            # logger.error("prev seen: %s", ast.dump(self.ast_node_by_id[return_to_node_id]))
                             try:
                                 call_node_id = self.call_stack.get_field(
                                     'lexical_call_stack'
                                 ).get_field('prev_node_id_in_cur_frame_lexical')
-                                call_node = cast(ast.Call, nbs().ast_node_by_id[call_node_id])
-                                # logger.error("prev seen outer: %s", ast.dump(nbs().ast_node_by_id[call_node_id]))
+                                call_node = cast(ast.Call, self.ast_node_by_id[call_node_id])
+                                # logger.error("prev seen outer: %s", ast.dump(self.ast_node_by_id[call_node_id]))
                                 total_args = len(call_node.args) + len(call_node.keywords)
                                 num_args_seen = self.call_stack.get_field('num_args_seen')
                                 logger.warning("num args seen: %d", num_args_seen)
@@ -457,7 +460,7 @@ class TraceManager(BaseTraceManager):
                                         return_to_node_id = id(call_node.keywords[num_args_seen - len(call_node.args)].value)
                             except IndexError:
                                 pass
-                            # logger.error("use node %s", ast.dump(nbs().ast_node_by_id[return_to_node_id]))
+                            # logger.error("use node %s", ast.dump(self.ast_node_by_id[return_to_node_id]))
                             self.node_id_to_loaded_symbols[return_to_node_id].append(dsym_to_attach)
         finally:
             if self.tracing_enabled:
@@ -682,7 +685,7 @@ class TraceManager(BaseTraceManager):
     @register_handler(TraceEvent.subscript_slice)
     @skip_when_tracing_disabled
     def subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
-        node = nbs().ast_node_by_id.get(node_id, None)
+        node = self.ast_node_by_id.get(node_id, None)
         if node is None:
             return
         slice_node = cast(ast.Subscript, node).slice
@@ -712,7 +715,7 @@ class TraceManager(BaseTraceManager):
         obj_name: Optional[str] = None,
         **__
     ):
-        if isinstance(nbs().ast_node_by_id[node_id], ast.Call):
+        if isinstance(self.ast_node_by_id[node_id], ast.Call):
             # clear the callpoint dependency
             self.node_id_to_loaded_symbols.pop(node_id, None)
         if obj is None or obj is get_ipython():
@@ -758,7 +761,7 @@ class TraceManager(BaseTraceManager):
                 self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
                 return
             elif ctx == 'Del':
-                # logger.error("save del data for node %s", ast.dump(nbs().ast_node_by_id[top_level_node_id]))
+                # logger.error("save del data for node %s", ast.dump(self.ast_node_by_id[top_level_node_id]))
                 logger.warning("save del data for node id %d", top_level_node_id)
                 self.node_id_to_saved_del_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
                 return
@@ -880,7 +883,7 @@ class TraceManager(BaseTraceManager):
     @skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1
-        arg_node = nbs().ast_node_by_id.get(arg_node_id, None)
+        arg_node = self.ast_node_by_id.get(arg_node_id, None)
         try:
             mut_cand = self.lexical_call_stack.get_field('mutation_candidate')
         except IndexError:
@@ -984,7 +987,7 @@ class TraceManager(BaseTraceManager):
             starred_namespace = None
             outer_deps = set()
             for (i, inner_obj), (inner_key_node, inner_val_node) in match_container_obj_or_namespace_with_literal_nodes(
-                literal, nbs().ast_node_by_id[node_id]  # type: ignore
+                literal, self.ast_node_by_id[node_id]  # type: ignore
             ):
                 # TODO: memoize symbol resolution; otherwise this will be quadratic for deeply nested literals
                 if isinstance(inner_val_node, ast.Starred):
@@ -1069,7 +1072,7 @@ class TraceManager(BaseTraceManager):
     @skip_when_tracing_disabled
     def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
         sym_deps = []
-        node = nbs().ast_node_by_id[lambda_node_id]
+        node = self.ast_node_by_id[lambda_node_id]
         for kw_default in node.args.defaults:  # type: ignore
             sym_deps.extend(self.resolve_loaded_symbols(kw_default))
         sym = self.active_scope.upsert_data_symbol_for_name(
@@ -1091,7 +1094,7 @@ class TraceManager(BaseTraceManager):
         if stmt_id in self.seen_stmts:
             return ret_expr
         self._saved_stmt_ret_expr = ret_expr
-        stmt = nbs().ast_node_by_id.get(stmt_id, None)
+        stmt = self.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
             self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
         return ret_expr
@@ -1118,7 +1121,7 @@ class TraceManager(BaseTraceManager):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(frame, cast(ast.stmt, nbs().ast_node_by_id[stmt_id]))
+            trace_stmt = TraceStatement(frame, cast(ast.stmt, self.ast_node_by_id[stmt_id]))
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
         if not self.tracing_enabled and self._should_attempt_to_reenable_tracing(frame):
@@ -1195,14 +1198,14 @@ class TraceManager(BaseTraceManager):
         elif event == TraceEvent.return_ and self.next_stmt_node_id is not None:
             # this branch necessary for python < 3.8 where the frame
             # position maps to the calling location instead of the return
-            stmt_node = cast(ast.stmt, nbs().ast_node_by_id[self.next_stmt_node_id])
+            stmt_node = cast(ast.stmt, self.ast_node_by_id[self.next_stmt_node_id])
         else:
             try:
-                stmt_node = nbs().statement_cache[cell_num][lineno]
+                stmt_node = self.statement_cache[cell_num][lineno]
                 if event == TraceEvent.call and not isinstance(stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)):
                     # TODO: this is bad and I should feel bad. Need a better way to figure out which
                     #  stmt is executing than by using line numbers.
-                    parent_node = nbs().parent_node_by_id.get(id(stmt_node), None)
+                    parent_node = self.parent_node_by_id.get(id(stmt_node), None)
                     if nbs().is_develop:
                         logger.info(
                             "node %s parent %s",

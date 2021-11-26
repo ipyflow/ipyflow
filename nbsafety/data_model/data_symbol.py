@@ -501,7 +501,7 @@ class DataSymbol:
         if len(lexical_call_stack) == 0:
             return None
         prev_node_id_in_cur_frame_lexical = lexical_call_stack.get_field('prev_node_id_in_cur_frame_lexical')
-        caller_ast_node = nbs().ast_node_by_id.get(prev_node_id_in_cur_frame_lexical, None)
+        caller_ast_node = tracer().ast_node_by_id.get(prev_node_id_in_cur_frame_lexical, None)
         if caller_ast_node is None or not isinstance(caller_ast_node, ast.Call):
             return None
         return caller_ast_node

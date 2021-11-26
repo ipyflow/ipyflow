@@ -1,7 +1,7 @@
 # -*- coding: future_annotations -*-
 from typing import TYPE_CHECKING
 from nbsafety.analysis.reactive_modifiers import REACTIVE_ATOM_REGEX, extract_reactive_atoms, replace_reactive_atoms
-from nbsafety.singletons import nbs, tracer
+from nbsafety.singletons import tracer
 from .utils import make_safety_fixture
 
 if TYPE_CHECKING:
@@ -12,7 +12,7 @@ _safety_fixture, run_cell = make_safety_fixture(enable_reactive_modifiers=True)
 
 def _get_all_reactive_var_names() -> Set[str]:
     return {
-        nbs().ast_node_by_id[node_id].id
+        tracer().ast_node_by_id[node_id].id
         for node_id in tracer().reactive_node_ids
     }
 

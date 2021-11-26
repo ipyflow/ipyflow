@@ -23,9 +23,9 @@ class StatementMapper(ast.NodeVisitor):
         blocking_var_positions: Set[Tuple[int, int]],
     ):
         self._cell_id: Optional[CellId] = cell_id
-        self.line_to_stmt_map = nbs().statement_cache[nbs().cell_counter()]
-        self.id_map = nbs().ast_node_by_id
-        self.parent_map = nbs().parent_node_by_id
+        self.line_to_stmt_map = tracer().statement_cache[nbs().cell_counter()]
+        self.id_map = tracer().ast_node_by_id
+        self.parent_map = tracer().parent_node_by_id
         self.reactive_node_ids = tracer().reactive_node_ids
         self.blocking_node_ids = tracer().blocking_node_ids
         self.reactive_var_positions = reactive_var_positions

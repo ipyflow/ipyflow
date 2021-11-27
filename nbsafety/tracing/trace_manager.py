@@ -115,6 +115,8 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
 
+        self.loop_guards: Set[str] = set()
+
         self._transient_fields: Set[str] = set()
         self._persistent_fields: Set[str] = set()
         self._manual_persistent_fields: Set[str] = set()
@@ -142,6 +144,14 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
         for field in self._transient_fields:
             del self.__dict__[field]
         self.__init__(is_reset=True)
+
+    def activate_loop_guard(self, loop_guard: str) -> None:
+        assert loop_guard in self.loop_guards
+        setattr(builtins, loop_guard, True)
+
+    def deactivate_loop_guard(self, loop_guard: str) -> None:
+        assert loop_guard in self.loop_guards
+        setattr(builtins, loop_guard, False)
 
     def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
         try:
@@ -223,6 +233,8 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
     @contextmanager
     def tracing_context(self) -> Generator[None, None, None]:
         setattr(builtins, EMIT_EVENT, self._emit_event)
+        for loop_guard in self.loop_guards:
+            self.deactivate_loop_guard(loop_guard)
         try:
             with self._patch_sys_settrace():
                 self._enable_tracing()
@@ -231,6 +243,8 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
             self._disable_tracing(check_enabled=False)
             delattr(builtins, EMIT_EVENT)
             delattr(builtins, TRACING_ENABLED)
+            for loop_guard in self.loop_guards:
+                delattr(builtins, loop_guard)
 
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented
@@ -291,12 +305,10 @@ class BaseTraceManager(SingletonTraceManager):
 
 @register_trace_manager_class
 class TraceManager(BaseTraceManager):
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
             self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-            self.loop_guards: Set[str] = set()
             self.reactive_node_ids: Set[int] = set()
             self.blocking_node_ids: Set[int] = set()
         self._module_stmt_counter = 0
@@ -668,18 +680,15 @@ class TraceManager(BaseTraceManager):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
 
-    @register_handler(TraceEvent.init_cell)
-    def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, cell_id: Union[str, int], **__):
+    @register_handler(TraceEvent.init_module)
+    def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
-        # needs to happen after stmt inserting has already happened
-        for loop_guard in self.loop_guards:
-            setattr(builtins, loop_guard, False)
 
     @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
     def after_loop_iter(
         self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
     ):
-        setattr(builtins, loop_guard, True)
+        self.activate_loop_guard(loop_guard)
 
     @register_handler(TraceEvent.after_assign_rhs)
     @skip_when_tracing_disabled

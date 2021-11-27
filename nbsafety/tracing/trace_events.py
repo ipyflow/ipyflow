@@ -5,7 +5,7 @@ from nbsafety.utils import fast
 
 
 class TraceEvent(Enum):
-    init_cell = 'init_cell'
+    init_module = 'init_module'
 
     before_stmt = 'before_stmt'
     after_stmt = 'after_stmt'

@@ -12,8 +12,7 @@ from nbsafety.tracing.stmt_inserter import StatementInserter
 from nbsafety.tracing.stmt_mapper import StatementMapper
 
 if TYPE_CHECKING:
-    from typing import Dict, Optional, Set, Tuple
-    from nbsafety.types import CellId
+    from typing import Dict, Set, Tuple
 
 
 logger = logging.getLogger(__name__)
@@ -21,8 +20,7 @@ logger.setLevel(logging.WARNING)
 
 
 class SafetyAstRewriter(ast.NodeTransformer):
-    def __init__(self, cell_id: Optional[CellId]):
-        self._cell_id: Optional[CellId] = cell_id
+    def __init__(self):
         self._reacive_var_positions: Set[Tuple[int, int]] = set()
         self._blocking_var_positions: Set[Tuple[int, int]] = set()
 
@@ -38,7 +36,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
         assert isinstance(node, ast.Module)
         try:
             mapper = StatementMapper(
-                self._cell_id,
+                tracer().statement_cache[nbs().cell_counter()],
                 self._reacive_var_positions,
                 self._blocking_var_positions,
             )
@@ -48,7 +46,7 @@ class SafetyAstRewriter(ast.NodeTransformer):
             # modifies existing ones), since StatementInserter relies on being able to map these
             events_with_handlers = frozenset(tracer().EVENT_HANDLERS_BY_CLASS[tracer().__class__].keys())
             node = AstEavesdropper(orig_to_copy_mapping, events_with_handlers).visit(node)
-            node = StatementInserter(self._cell_id, orig_to_copy_mapping, events_with_handlers).visit(node)
+            node = StatementInserter(orig_to_copy_mapping, events_with_handlers).visit(node)
         except Exception as e:
             nbs().set_exception_raised_during_execution(e)
             traceback.print_exc()

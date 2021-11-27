@@ -1,5 +1,4 @@
 # -*- coding: future_annotations -*-
-import ast
 import asyncio
 from collections import defaultdict
 from contextlib import contextmanager
@@ -8,7 +7,6 @@ import inspect
 import json
 import logging
 import re
-import sys
 from typing import cast, TYPE_CHECKING, NamedTuple
 
 from IPython import get_ipython
@@ -264,6 +262,7 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
+        TraceManager.instance()  # force initialization here in case not already inited
         stale_cells = set()
         unsafe_order_cells: Set[CellId] = set()
         typecheck_error_cells = set()
@@ -551,7 +550,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
-                with self._tracing_context(cell_id):
+                with self._tracing_context():
                     if is_async:
                         ret = await run_cell_func(cell_content)  # pragma: no cover
                     else:
@@ -587,14 +586,14 @@ class NotebookSafety(singletons.NotebookSafety):
         return register_cell_magic(_dependency_safety)
 
     @contextmanager
-    def _tracing_context(self, cell_id: CellId):
+    def _tracing_context(self):
         self.updated_symbols.clear()
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 
         with TraceManager.instance().tracing_context():
             TraceManager.instance().reset()
-            ast_rewriter = SafetyAstRewriter(cell_id)
+            ast_rewriter = SafetyAstRewriter()
             with input_transformer_context([
                 make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.blocking),
                 make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.reactive),

@@ -68,7 +68,7 @@ def test_recorded_events_simple():
     assert _RECORDED_EVENTS == []
     run_cell('logging.info("foo")')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -86,7 +86,7 @@ def test_recorded_events_two_stmts():
     run_cell('x = [1, 2, 3]')
     run_cell('logging.info(x)')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.before_list_literal,
@@ -96,7 +96,7 @@ def test_recorded_events_two_stmts():
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
 
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -113,7 +113,7 @@ def test_nested_chains_no_call():
     assert _RECORDED_EVENTS == []
     run_cell('logging.info("foo is %s", logging.info("foo"))')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -140,7 +140,7 @@ def test_list_nested_in_dict():
     assert _RECORDED_EVENTS == []
     run_cell('x = {1: [2, 3, 4]}')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.before_dict_literal,
@@ -167,14 +167,14 @@ def test_function_call():
         """
     )
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
     ])
     run_cell('foo([42])')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.before_call,
@@ -201,7 +201,7 @@ def test_lambda_in_tuple():
     assert _RECORDED_EVENTS == []
     run_cell('x = (lambda: 42,)')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.before_tuple_literal,
@@ -228,7 +228,7 @@ def test_fancy_slices():
         """
     )
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.after_stmt,
         TraceEvent.after_module_stmt,
@@ -281,7 +281,7 @@ def test_fancy_slices():
 
     run_cell('logging.info(arr[foo.x:foo.x+1,...])')
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.attribute,
@@ -314,7 +314,7 @@ def test_for_loop():
         """
     )
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.before_call,
@@ -342,7 +342,7 @@ def test_while_loop():
         """
     )
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.after_assign_rhs,
@@ -370,7 +370,7 @@ def test_loop_with_continue():
         """
     )
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_complex_symbol,
         TraceEvent.before_call,
@@ -395,7 +395,7 @@ def test_for_loop_nested_in_while_loop():
         """
     )
     throw_and_print_diff_if_recorded_not_equal_to([
-        TraceEvent.init_cell,
+        TraceEvent.init_module,
         TraceEvent.before_stmt,
         TraceEvent.before_assign_rhs,
         TraceEvent.after_assign_rhs,

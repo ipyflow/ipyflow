@@ -37,6 +37,10 @@ def _get_parsed_append_stmt(
     return ret
 
 
+def _make_test(var_name: str) -> ast.expr:
+    return fast.parse(f'getattr(builtins, "{var_name}", False)').body[0].value  # type: ignore
+
+
 class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
     def visit_Global(self, node: ast.Global) -> ast.Pass:
         with fast.location_of(node):
@@ -50,11 +54,9 @@ class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
 class StatementInserter(ast.NodeTransformer):
     def __init__(
         self,
-        cell_id: Optional[CellId],
         orig_to_copy_mapping: Dict[int, ast.AST],
         events_with_handlers: FrozenSet[TraceEvent]
     ):
-        self._cell_id: Optional[CellId] = cell_id
         self._orig_to_copy_mapping: Dict[int, ast.AST] = orig_to_copy_mapping
         self._events_with_handlers: FrozenSet[TraceEvent] = events_with_handlers
         self._init_stmt_inserted: bool = False
@@ -69,7 +71,7 @@ class StatementInserter(ast.NodeTransformer):
             new_body = self._global_nonlocal_stripper.visit(ast.Module(orig_body)).body
             return [
                 fast.If(
-                    test=fast.Name(loop_guard, ast.Load()),
+                    test=_make_test(loop_guard),
                     body=loop_node_copy.body,
                     orelse=[
                         fast.Try(
@@ -95,7 +97,7 @@ class StatementInserter(ast.NodeTransformer):
         with fast.location_of(fundef_copy):
             return [
                 fast.If(
-                    test=fast.parse(f'getattr(builtins, "{TRACING_ENABLED}", False)').body[0].value,  # type: ignore
+                    test=_make_test(TRACING_ENABLED),
                     body=orig_body,
                     orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,
                 ),
@@ -110,13 +112,13 @@ class StatementInserter(ast.NodeTransformer):
                 for inner_node in field:
                     if isinstance(inner_node, ast.stmt):
                         stmt_copy = cast(ast.stmt, self._orig_to_copy_mapping[id(inner_node)])
-                        if TraceEvent.init_cell in self._events_with_handlers:
+                        if TraceEvent.init_module in self._events_with_handlers:
                             if not self._init_stmt_inserted:
                                 assert isinstance(node, ast.Module)
                                 self._init_stmt_inserted = True
                                 with fast.location_of(stmt_copy):
                                     new_field.extend(fast.parse(
-                                        f'import builtins; {EMIT_EVENT}("{TraceEvent.init_cell.value}", None, cell_id="{self._cell_id}")'
+                                        f'import builtins; {EMIT_EVENT}("{TraceEvent.init_module.value}", None)'
                                     ).body)
                         if TraceEvent.before_stmt in self._events_with_handlers:
                             new_field.append(_get_parsed_insert_stmt(stmt_copy, TraceEvent.before_stmt))

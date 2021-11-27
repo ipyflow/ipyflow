@@ -4,11 +4,10 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.singletons import nbs, tracer
+from nbsafety.singletons import tracer
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Set, Tuple, Union
-    from nbsafety.types import CellId
+    from typing import Dict, List, Set, Tuple, Union
 
 
 logger = logging.getLogger(__name__)
@@ -18,12 +17,11 @@ logger.setLevel(logging.WARNING)
 class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
-        cell_id: Optional[CellId],
+        line_to_stmt_map: Dict[int, ast.stmt],
         reactive_var_positions: Set[Tuple[int, int]],
         blocking_var_positions: Set[Tuple[int, int]],
     ):
-        self._cell_id: Optional[CellId] = cell_id
-        self.line_to_stmt_map = tracer().statement_cache[nbs().cell_counter()]
+        self.line_to_stmt_map: Dict[int, ast.stmt] = line_to_stmt_map
         self.id_map = tracer().ast_node_by_id
         self.parent_map = tracer().parent_node_by_id
         self.reactive_node_ids = tracer().reactive_node_ids

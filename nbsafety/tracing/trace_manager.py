@@ -15,6 +15,7 @@ from traitlets.traitlets import MetaHasTraits
 
 from nbsafety import singletons
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
+from nbsafety.analysis.reactive_modifiers import AugmentedAtom
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
@@ -114,6 +115,7 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
         # ast-related fields
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
+        self.augmented_node_ids_by_type: Dict[str, Set[int]] = defaultdict(set)
 
         self.loop_guards: Set[str] = set()
 
@@ -309,8 +311,8 @@ class TraceManager(BaseTraceManager):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
             self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-            self.reactive_node_ids: Set[int] = set()
-            self.blocking_node_ids: Set[int] = set()
+            self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.reactive.marker]
+            self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.blocking.marker]
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self.prev_event: Optional[TraceEvent] = None

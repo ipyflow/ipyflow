@@ -100,6 +100,6 @@ def make_tracking_augmented_atom_replacer(
             line, positions = get_augmented_atoms_and_positions(line, regex=regex, offset=len(symbol_type.marker))
             transformed_lines.append(line)
             for pos in positions:
-                rewriter.register_reactive_var_position(symbol_type, idx + 1, pos)
+                rewriter.register_augmented_position(symbol_type.marker, idx + 1, pos)
         return transformed_lines
     return _input_transformer

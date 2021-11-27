@@ -593,7 +593,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
         with TraceManager.instance().tracing_context():
             TraceManager.instance().reset()
-            ast_rewriter = SafetyAstRewriter()
+            ast_rewriter = SafetyAstRewriter(module_id=self.cell_counter())
             with input_transformer_context([
                 make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.blocking),
                 make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.reactive),

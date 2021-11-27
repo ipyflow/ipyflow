@@ -18,16 +18,13 @@ class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
         line_to_stmt_map: Dict[int, ast.stmt],
-        reactive_var_positions: Set[Tuple[int, int]],
-        blocking_var_positions: Set[Tuple[int, int]],
+        augmented_positions_by_type: Dict[str, Set[Tuple[int, int]]],
     ):
         self.line_to_stmt_map: Dict[int, ast.stmt] = line_to_stmt_map
         self.id_map = tracer().ast_node_by_id
         self.parent_map = tracer().parent_node_by_id
-        self.reactive_node_ids = tracer().reactive_node_ids
-        self.blocking_node_ids = tracer().blocking_node_ids
-        self.reactive_var_positions = reactive_var_positions
-        self.blocking_var_positions = blocking_var_positions
+        self.augmented_node_ids_by_type = tracer().augmented_node_ids_by_type
+        self.augmented_positions_by_type = augmented_positions_by_type
         self.traversal: List[ast.AST] = []
 
     @staticmethod
@@ -64,10 +61,9 @@ class StatementMapper(ast.NodeVisitor):
             self.id_map[id(nc)] = nc
             if isinstance(nc, (ast.Name, ast.Attribute, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
                 col_offset = self._get_col_offset_for(nc)
-                if (nc.lineno, col_offset) in self.reactive_var_positions:
-                    self.reactive_node_ids.add(id(nc))
-                elif (nc.lineno, col_offset) in self.blocking_var_positions:
-                    self.blocking_node_ids.add(id(nc))
+                for mod_type, mod_positions in self.augmented_positions_by_type.items():
+                    if (nc.lineno, col_offset) in mod_positions:
+                        self.augmented_node_ids_by_type[mod_type].add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

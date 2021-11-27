@@ -20,7 +20,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
+from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import (
@@ -296,7 +296,7 @@ class TraceManager(BaseTraceManager):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
             self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-            self.loop_iter_flag_names: Set[str] = set()
+            self.loop_guards: Set[str] = set()
             self.reactive_node_ids: Set[int] = set()
             self.blocking_node_ids: Set[int] = set()
         self._module_stmt_counter = 0
@@ -669,16 +669,17 @@ class TraceManager(BaseTraceManager):
         self.prev_node_id_in_cur_frame_lexical = node_id
 
     @register_handler(TraceEvent.init_cell)
-    def init_cell(self, _obj, _node_id, frame: FrameType, _event, cell_id: Union[str, int], **__):
+    def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, cell_id: Union[str, int], **__):
         nbs().set_name_to_cell_num_mapping(frame)
         # needs to happen after stmt inserting has already happened
-        for flag_name in self.loop_iter_flag_names:
-            setattr(builtins, flag_name, False)
+        for loop_guard in self.loop_guards:
+            setattr(builtins, loop_guard, False)
 
-    @register_handler(TraceEvent.after_loop_iter)
-    def after_loop_iter(self, _obj, loop_node_id: NodeId, *_, **__):
-        looped_once_flag_name = make_loop_iter_flag_name(loop_node_id)
-        setattr(builtins, looped_once_flag_name, True)
+    @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
+    def after_loop_iter(
+        self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
+    ):
+        setattr(builtins, loop_guard, True)
 
     @register_handler(TraceEvent.after_assign_rhs)
     @skip_when_tracing_disabled

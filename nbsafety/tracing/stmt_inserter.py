@@ -3,7 +3,7 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_iter_flag_name
+from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_guard_name
 from nbsafety.singletons import tracer  # FIXME: get rid of this
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
@@ -25,13 +25,14 @@ def _get_parsed_insert_stmt(stmt: ast.stmt, evt: TraceEvent) -> ast.stmt:
 
 
 def _get_parsed_append_stmt(
-    stmt: ast.stmt, ret_expr: ast.expr = None, evt: TraceEvent = TraceEvent.after_stmt
+    stmt: ast.stmt, ret_expr: ast.expr = None, evt: TraceEvent = TraceEvent.after_stmt, **kwargs
 ) -> ast.stmt:
     with fast.location_of(stmt):
         ret = cast(ast.Expr, _get_parsed_insert_stmt(stmt, evt))
         if ret_expr is not None:
-            ret_value = cast(ast.Call, ret.value)
-            ret_value.keywords = fast.kwargs(ret=ret_expr)
+            kwargs['ret'] = ret_expr
+        ret_value = cast(ast.Call, ret.value)
+        ret_value.keywords = fast.kwargs(**kwargs)
     ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
     return ret
 
@@ -55,12 +56,12 @@ class StatementInserter(ast.NodeTransformer):
 
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
-        looped_once_flag = make_loop_iter_flag_name(loop_node_copy)
-        tracer().loop_iter_flag_names.add(looped_once_flag)
+        loop_guard = make_loop_guard_name(loop_node_copy)
+        tracer().loop_guards.add(loop_guard)
         with fast.location_of(loop_node_copy):
             return [
                 fast.If(
-                    test=fast.Name(looped_once_flag, ast.Load()),
+                    test=fast.Name(loop_guard, ast.Load()),
                     body=loop_node_copy.body,
                     orelse=[
                         fast.Try(
@@ -70,7 +71,11 @@ class StatementInserter(ast.NodeTransformer):
                             finalbody=[
                                 _get_parsed_append_stmt(
                                     cast(ast.stmt, loop_node_copy),
-                                    evt=TraceEvent.after_loop_iter,
+                                    evt=(
+                                        TraceEvent.after_for_loop_iter if isinstance(node, ast.For)
+                                        else TraceEvent.after_while_loop_iter
+                                    ),
+                                    loop_guard=fast.Str(loop_guard),
                                 ),
                             ],
                         ),
@@ -79,18 +84,17 @@ class StatementInserter(ast.NodeTransformer):
             ]
 
     def _handle_function_body(
-        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], new_field: List[ast.AST]
+        self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], orig_body: List[ast.AST]
     ) -> List[ast.AST]:
         fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self._orig_to_copy_mapping[id(node)])
         with fast.location_of(fundef_copy):
-            new_field = [
+            return [
                 fast.If(
                     test=fast.parse(f'getattr(builtins, "{TRACING_ENABLED}", False)').body[0].value,  # type: ignore
-                    body=new_field,
+                    body=orig_body,
                     orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,
                 ),
             ]
-        return new_field
 
     def generic_visit(self, node):
         for name, field in ast.iter_fields(node):
@@ -102,6 +106,7 @@ class StatementInserter(ast.NodeTransformer):
                     if isinstance(inner_node, ast.stmt):
                         stmt_copy = cast(ast.stmt, self._orig_to_copy_mapping[id(inner_node)])
                         if not self._init_stmt_inserted:
+                            assert isinstance(node, ast.Module)
                             self._init_stmt_inserted = True
                             with fast.location_of(stmt_copy):
                                 new_field.extend(fast.parse(

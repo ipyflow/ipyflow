@@ -9,7 +9,7 @@ from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Optional, Set, Union
+    from typing import Dict, FrozenSet, List, Optional, Set, Union
     from nbsafety.types import CellId
 
 
@@ -48,17 +48,25 @@ class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
 
 
 class StatementInserter(ast.NodeTransformer):
-    def __init__(self, cell_id: Optional[CellId], orig_to_copy_mapping: Dict[int, ast.AST]):
+    def __init__(
+        self,
+        cell_id: Optional[CellId],
+        orig_to_copy_mapping: Dict[int, ast.AST],
+        events_with_handlers: FrozenSet[TraceEvent]
+    ):
         self._cell_id: Optional[CellId] = cell_id
-        self._orig_to_copy_mapping = orig_to_copy_mapping
-        self._init_stmt_inserted = False
-        self._global_nonlocal_stripper = StripGlobalAndNonlocalDeclarations()
+        self._orig_to_copy_mapping: Dict[int, ast.AST] = orig_to_copy_mapping
+        self._events_with_handlers: FrozenSet[TraceEvent] = events_with_handlers
+        self._init_stmt_inserted: bool = False
+        self._global_nonlocal_stripper: StripGlobalAndNonlocalDeclarations = StripGlobalAndNonlocalDeclarations()
 
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
         loop_guard = make_loop_guard_name(loop_node_copy)
         tracer().loop_guards.add(loop_guard)
         with fast.location_of(loop_node_copy):
+            loop_evt = TraceEvent.after_for_loop_iter if isinstance(node, ast.For) else TraceEvent.after_while_loop_iter
+            new_body = self._global_nonlocal_stripper.visit(ast.Module(orig_body)).body
             return [
                 fast.If(
                     test=fast.Name(loop_guard, ast.Load()),
@@ -71,15 +79,12 @@ class StatementInserter(ast.NodeTransformer):
                             finalbody=[
                                 _get_parsed_append_stmt(
                                     cast(ast.stmt, loop_node_copy),
-                                    evt=(
-                                        TraceEvent.after_for_loop_iter if isinstance(node, ast.For)
-                                        else TraceEvent.after_while_loop_iter
-                                    ),
+                                    evt=loop_evt,
                                     loop_guard=fast.Str(loop_guard),
                                 ),
                             ],
                         ),
-                    ],
+                    ] if loop_evt in self._events_with_handlers else new_body,
                 ),
             ]
 
@@ -105,26 +110,32 @@ class StatementInserter(ast.NodeTransformer):
                 for inner_node in field:
                     if isinstance(inner_node, ast.stmt):
                         stmt_copy = cast(ast.stmt, self._orig_to_copy_mapping[id(inner_node)])
-                        if not self._init_stmt_inserted:
-                            assert isinstance(node, ast.Module)
-                            self._init_stmt_inserted = True
-                            with fast.location_of(stmt_copy):
-                                new_field.extend(fast.parse(
-                                    f'import builtins; {EMIT_EVENT}("{TraceEvent.init_cell.value}", None, cell_id="{self._cell_id}")'
-                                ).body)
-                        new_field.append(_get_parsed_insert_stmt(stmt_copy, TraceEvent.before_stmt))
-                        if isinstance(inner_node, ast.Expr) and isinstance(node, ast.Module) and name == 'body':
-                            val = inner_node.value
-                            while isinstance(val, ast.Expr):
-                                val = val.value
-                            new_field.append(_get_parsed_append_stmt(stmt_copy, ret_expr=val))
+                        if TraceEvent.init_cell in self._events_with_handlers:
+                            if not self._init_stmt_inserted:
+                                assert isinstance(node, ast.Module)
+                                self._init_stmt_inserted = True
+                                with fast.location_of(stmt_copy):
+                                    new_field.extend(fast.parse(
+                                        f'import builtins; {EMIT_EVENT}("{TraceEvent.init_cell.value}", None, cell_id="{self._cell_id}")'
+                                    ).body)
+                        if TraceEvent.before_stmt in self._events_with_handlers:
+                            new_field.append(_get_parsed_insert_stmt(stmt_copy, TraceEvent.before_stmt))
+                        if TraceEvent.after_stmt in self._events_with_handlers:
+                            if isinstance(inner_node, ast.Expr) and isinstance(node, ast.Module) and name == 'body':
+                                val = inner_node.value
+                                while isinstance(val, ast.Expr):
+                                    val = val.value
+                                new_field.append(_get_parsed_append_stmt(stmt_copy, ret_expr=val))
+                            else:
+                                new_field.append(self.visit(inner_node))
+                                if not isinstance(inner_node, ast.Return):
+                                    new_field.append(_get_parsed_append_stmt(stmt_copy))
                         else:
                             new_field.append(self.visit(inner_node))
-                            if not isinstance(inner_node, ast.Return):
-                                new_field.append(_get_parsed_append_stmt(stmt_copy))
-                        if isinstance(node, ast.Module) and name == 'body':
-                            assert not isinstance(inner_node, ast.Return)
-                            new_field.append(_get_parsed_append_stmt(stmt_copy, evt=TraceEvent.after_module_stmt))
+                        if TraceEvent.after_module_stmt in self._events_with_handlers:
+                            if isinstance(node, ast.Module) and name == 'body':
+                                assert not isinstance(inner_node, ast.Return)
+                                new_field.append(_get_parsed_append_stmt(stmt_copy, evt=TraceEvent.after_module_stmt))
                     elif isinstance(inner_node, ast.AST):
                         new_field.append(self.visit(inner_node))
                     else:

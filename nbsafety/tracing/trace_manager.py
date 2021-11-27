@@ -44,7 +44,7 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, DefaultDict, Dict, Generator, List, Optional, Set, Tuple, Type, Union
+    from typing import Any, Callable, DefaultDict, Dict, FrozenSet, Generator, List, Optional, Set, Tuple, Type, Union
     from types import FrameType
     from nbsafety.tracing.mutation_event import MutationEvent
     from nbsafety.types import SupportedIndexType
@@ -123,6 +123,10 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
         self._persistent_fields: Set[str] = set()
         self._manual_persistent_fields: Set[str] = set()
         self._transient_fields_start()
+
+    @property
+    def events_with_registered_handlers(self) -> FrozenSet[TraceEvent]:
+        return frozenset(self.EVENT_HANDLERS_BY_CLASS[self.__class__].keys())
 
     def _transient_fields_start(self):
         self._persistent_fields = set(self.__dict__.keys())

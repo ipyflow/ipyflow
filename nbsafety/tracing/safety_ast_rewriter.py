@@ -5,7 +5,6 @@ import traceback
 from collections import defaultdict
 from typing import TYPE_CHECKING, cast
 
-from nbsafety.analysis.reactive_modifiers import AugmentedAtom
 from nbsafety.singletons import nbs, tracer
 from nbsafety.data_model.code_cell import cells
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
@@ -38,9 +37,9 @@ class AstRewriter(ast.NodeTransformer):
         cells().current_cell().to_ast(override=cast(ast.Module, orig_to_copy_mapping[id(node)]))
         # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
         # modifies existing ones), since StatementInserter relies on being able to map these
-        events_with_handlers = frozenset(tracer().EVENT_HANDLERS_BY_CLASS[tracer().__class__].keys())
+        events_with_handlers = tracer().events_with_registered_handlers
         node = AstEavesdropper(orig_to_copy_mapping, events_with_handlers).visit(node)
-        node = StatementInserter(orig_to_copy_mapping, events_with_handlers).visit(node)
+        node = StatementInserter(orig_to_copy_mapping, events_with_handlers, tracer().loop_guards).visit(node)
         return node
 
 

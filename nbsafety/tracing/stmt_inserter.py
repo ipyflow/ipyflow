@@ -4,13 +4,11 @@ import logging
 from typing import cast, TYPE_CHECKING
 
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_guard_name
-from nbsafety.singletons import tracer  # FIXME: get rid of this
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, FrozenSet, List, Optional, Set, Union
-    from nbsafety.types import CellId
+    from typing import Dict, FrozenSet, List, Set, Union
 
 
 logger = logging.getLogger(__name__)
@@ -55,17 +53,19 @@ class StatementInserter(ast.NodeTransformer):
     def __init__(
         self,
         orig_to_copy_mapping: Dict[int, ast.AST],
-        events_with_handlers: FrozenSet[TraceEvent]
+        events_with_handlers: FrozenSet[TraceEvent],
+        loop_guards: Set[str],
     ):
         self._orig_to_copy_mapping: Dict[int, ast.AST] = orig_to_copy_mapping
         self._events_with_handlers: FrozenSet[TraceEvent] = events_with_handlers
+        self._loop_guards = loop_guards
         self._init_stmt_inserted: bool = False
         self._global_nonlocal_stripper: StripGlobalAndNonlocalDeclarations = StripGlobalAndNonlocalDeclarations()
 
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
         loop_guard = make_loop_guard_name(loop_node_copy)
-        tracer().loop_guards.add(loop_guard)
+        self._loop_guards.add(loop_guard)
         with fast.location_of(loop_node_copy):
             loop_evt = TraceEvent.after_for_loop_iter if isinstance(node, ast.For) else TraceEvent.after_while_loop_iter
             new_body = self._global_nonlocal_stripper.visit(ast.Module(orig_body)).body

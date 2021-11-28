@@ -63,7 +63,7 @@ _DIFFER = difflib.Differ()
 def patch_events_with_registered_handlers_to_subset(testfunc):
 
     @functools.wraps(testfunc)
-    @settings(max_examples=20)
+    @settings(max_examples=20, deadline=None)
     @example(events=set(_ALL_EVENTS_WITH_HANDLERS))
     def wrapped_testfunc(events):
         if TraceEvent.before_call in events:

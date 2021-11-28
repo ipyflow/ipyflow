@@ -102,7 +102,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                     test=fast.Call(
                         func=self.emitter_ast(),
                         args=[TraceEvent.before_function_body.to_ast(), self.get_copy_id_ast(node)],
-                        keywords=fast.kwargs(ret=fast.Constant(True)),
+                        keywords=fast.kwargs(ret=fast.NameConstant(True)),
                     ),
                     body=orig_body,
                     orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,

@@ -111,7 +111,12 @@ class ResolvedDataSymbol(CommonEqualityMixin):
             return True
         if isinstance(self.dsym.obj, dict) and self.next_atom.value not in self.dsym.obj:
             return True
-        if not isinstance(self.dsym.obj, (dict, list, tuple)) and isinstance(self.next_atom.value, str) and not hasattr(self.dsym.obj, self.next_atom.value):
+        if not isinstance(self.dsym.obj, (dict, list, tuple)) and isinstance(self.next_atom.value, str) and (
+            # the first check guards against properties; hasattr actually executes code for those if called
+            # on the actual object, which we want to avoid
+            not hasattr(self.dsym.obj.__class__, self.next_atom.value) and
+            not hasattr(self.dsym.obj, self.next_atom.value)
+        ):
             # TODO: fix this once we can distinguish between attrs and subscripts in the chain
             return True
         return False

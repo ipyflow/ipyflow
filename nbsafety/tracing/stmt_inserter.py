@@ -3,8 +3,9 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_guard_name
+from nbsafety.extra_builtins import EMIT_EVENT, make_loop_guard_name
 from nbsafety.tracing.trace_events import TraceEvent
+from nbsafety.utils.ast_utils import EmitterMixin
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
@@ -49,15 +50,14 @@ class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
             return fast.Pass()
 
 
-class StatementInserter(ast.NodeTransformer):
+class StatementInserter(ast.NodeTransformer, EmitterMixin):
     def __init__(
         self,
         orig_to_copy_mapping: Dict[int, ast.AST],
         events_with_handlers: FrozenSet[TraceEvent],
         loop_guards: Set[str],
     ):
-        self._orig_to_copy_mapping: Dict[int, ast.AST] = orig_to_copy_mapping
-        self._events_with_handlers: FrozenSet[TraceEvent] = events_with_handlers
+        EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers)
         self._loop_guards = loop_guards
         self._init_stmt_inserted: bool = False
         self._global_nonlocal_stripper: StripGlobalAndNonlocalDeclarations = StripGlobalAndNonlocalDeclarations()
@@ -93,11 +93,17 @@ class StatementInserter(ast.NodeTransformer):
     def _handle_function_body(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], orig_body: List[ast.AST]
     ) -> List[ast.AST]:
+        if TraceEvent.before_function_body not in self._events_with_handlers:
+            return orig_body
         fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self._orig_to_copy_mapping[id(node)])
         with fast.location_of(fundef_copy):
             return [
                 fast.If(
-                    test=_make_test(TRACING_ENABLED),
+                    test=fast.Call(
+                        func=self.emitter_ast(),
+                        args=[TraceEvent.before_function_body.to_ast(), self.get_copy_id_ast(node)],
+                        keywords=fast.kwargs(ret=fast.Constant(True)),
+                    ),
                     body=orig_body,
                     orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,
                 ),

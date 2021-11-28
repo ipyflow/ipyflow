@@ -97,6 +97,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.seen_stmts: Set[NodeId] = set()
+        self.seen_functions: Set[NodeId] = set()
         self.call_depth = 0
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = defaultdict(list)
@@ -166,6 +167,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         self.saved_assign_rhs_obj = None
         nbs().updated_symbols |= self.this_stmt_updated_symbols
         self.this_stmt_updated_symbols.clear()
+        self.seen_functions.clear()
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -738,6 +740,13 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         with self.lexical_call_stack.push():
             pass
         self.active_scope = self.cur_frame_original_scope
+
+    @register_handler(TraceEvent.before_function_body)
+    def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
+        ret = self.tracing_enabled and function_id not in self.seen_functions
+        if ret:
+            self.seen_functions.add(function_id)
+        return ret
 
     @register_handler(TraceEvent.after_call)
     def after_call(self, retval: Any, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):

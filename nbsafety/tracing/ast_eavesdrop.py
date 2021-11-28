@@ -5,9 +5,8 @@ import logging
 from typing import cast, TYPE_CHECKING
 import sys
 
-from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.utils.ast_utils import subscript_to_slice
+from nbsafety.utils.ast_utils import subscript_to_slice, EmitterMixin
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
@@ -18,39 +17,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class AstEavesdropper(ast.NodeTransformer):
+class AstEavesdropper(ast.NodeTransformer, EmitterMixin):
     def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST], events_with_handlers: FrozenSet[TraceEvent]):
-        self._orig_to_copy_mapping = orig_to_copy_mapping
-        self._events_with_handlers = events_with_handlers
+        EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers)
         self._top_level_node_for_symbol: Optional[ast.AST] = None
-
-    def _emitter_ast(self):
-        return fast.Name(EMIT_EVENT, ast.Load())
-
-    def _get_copy_id_ast(self, orig_node_id: Union[int, ast.AST]):
-        if not isinstance(orig_node_id, int):
-            orig_node_id = id(orig_node_id)
-        return fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))
-
-    def _make_tuple_event_for(self, node: ast.AST, event: TraceEvent, orig_node_id=None, **kwargs):
-        if event not in self._events_with_handlers:
-            return node
-        with fast.location_of(node):
-            tuple_node = fast.Tuple(
-                [
-                    fast.Call(
-                        func=self._emitter_ast(),
-                        args=[event.to_ast(), self._get_copy_id_ast(orig_node_id or node)],
-                        keywords=[] if len(kwargs) == 0 else fast.kwargs(**kwargs),
-                    ),
-                    node,
-                ],
-                ast.Load()
-            )
-            slc: Union[ast.Constant, ast.Num, ast.Index] = fast.Num(1)
-            if sys.version_info < (3, 9):
-                slc = fast.Index(slc)
-            return fast.Subscript(tuple_node, slc, ast.Load())
 
     def visit(self, node: ast.AST):
         ret = super().visit(node)
@@ -104,19 +74,19 @@ class AstEavesdropper(ast.NodeTransformer):
                     slc = fast.Tuple(elts, ast.Load())
                 if TraceEvent.subscript_slice in self._events_with_handlers:
                     slc = fast.Call(
-                        func=self._emitter_ast(),
+                        func=self.emitter_ast(),
                         args=[
                             TraceEvent.subscript_slice.to_ast(),
-                            self._get_copy_id_ast(node),
+                            self.get_copy_id_ast(node),
                         ],
                         keywords=fast.kwargs(ret=cast(ast.expr, slc)),
                     )
                 if TraceEvent.subscript in self._events_with_handlers:
                     replacement_slice: ast.expr = fast.Call(
-                        func=self._emitter_ast(),
+                        func=self.emitter_ast(),
                         args=[
                             TraceEvent._load_saved_slice.to_ast(),
-                            self._get_copy_id_ast(node.slice),
+                            self.get_copy_id_ast(node.slice),
                         ],
                         keywords=[],
                     )
@@ -150,12 +120,12 @@ class AstEavesdropper(ast.NodeTransformer):
             end_kwargs['ctx'] = fast.Str(ctx.__class__.__name__)
             end_kwargs['call_context'] = fast.NameConstant(call_context)
             if TraceEvent.before_complex_symbol in self._events_with_handlers:
-                node = self._make_tuple_event_for(node, TraceEvent.before_complex_symbol, orig_node_id=orig_node_id)
+                node = self.make_tuple_event_for(node, TraceEvent.before_complex_symbol, orig_node_id=orig_node_id)
             end_kwargs['ret'] = node
             if TraceEvent.after_complex_symbol in self._events_with_handlers:
                 node = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.after_complex_symbol.to_ast(), self._get_copy_id_ast(orig_node_id)],
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.after_complex_symbol.to_ast(), self.get_copy_id_ast(orig_node_id)],
                     keywords=fast.kwargs(**end_kwargs),
                 )
             if not is_load:
@@ -206,14 +176,14 @@ class AstEavesdropper(ast.NodeTransformer):
                 node.value = self.visit(node.value)
                 if should_emit_evt:
                     node.value = fast.Call(
-                        func=self._emitter_ast(),
-                        args=[evt_to_use.to_ast(), self._get_copy_id_ast(orig_node_value)],
+                        func=self.emitter_ast(),
+                        args=[evt_to_use.to_ast(), self.get_copy_id_ast(orig_node_value)],
                         keywords=fast.kwargs(
                             ret=node.value,
                             attr_or_subscript=attr_or_sub,
                             ctx=fast.Str(node.ctx.__class__.__name__),
                             call_context=fast.NameConstant(call_context),
-                            top_level_node_id=self._get_copy_id_ast(self._top_level_node_for_symbol),
+                            top_level_node_id=self.get_copy_id_ast(self._top_level_node_for_symbol),
                             subscript_name=(
                                 fast.NameConstant(None) if subscript_name is None else fast.Str(subscript_name)
                             ),
@@ -238,8 +208,8 @@ class AstEavesdropper(ast.NodeTransformer):
                 if TraceEvent.argument in self._events_with_handlers:
                     with self.attrsub_context(None):
                         new_arg_value = cast(ast.expr, fast.Call(
-                            func=self._emitter_ast(),
-                            args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
+                            func=self.emitter_ast(),
+                            args=[TraceEvent.argument.to_ast(), self.get_copy_id_ast(maybe_kwarg)],
                             keywords=fast.kwargs(
                                 ret=new_arg_value,
                                 is_starred=fast.NameConstant(is_starred),
@@ -283,11 +253,11 @@ class AstEavesdropper(ast.NodeTransformer):
         if TraceEvent.before_call in self._events_with_handlers:
             with fast.location_of(node.func):
                 node.func = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.before_call.to_ast(), self._get_copy_id_ast(orig_node_id)],
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.before_call.to_ast(), self.get_copy_id_ast(orig_node_id)],
                     keywords=fast.kwargs(
                         ret=node.func,
-                        call_node_id=self._get_copy_id_ast(orig_node_id),
+                        call_node_id=self.get_copy_id_ast(orig_node_id),
                     ),
                 )
 
@@ -295,11 +265,11 @@ class AstEavesdropper(ast.NodeTransformer):
         if TraceEvent.after_call in self._events_with_handlers:
             with fast.location_of(node):
                 node = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.after_call.to_ast(), self._get_copy_id_ast(orig_node_id)],
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.after_call.to_ast(), self.get_copy_id_ast(orig_node_id)],
                     keywords=fast.kwargs(
                         ret=node,
-                        call_node_id=self._get_copy_id_ast(orig_node_id),
+                        call_node_id=self.get_copy_id_ast(orig_node_id),
                     ),
                 )
 
@@ -314,13 +284,13 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node.value):
             node.value = self.visit(node.value)
             if TraceEvent.before_assign_rhs in self._events_with_handlers:
-                node.value = self._make_tuple_event_for(
+                node.value = self.make_tuple_event_for(
                     node.value, TraceEvent.before_assign_rhs, orig_node_id=orig_value_id
                 )
             if TraceEvent.after_assign_rhs in self._events_with_handlers:
                 node.value = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.after_assign_rhs.to_ast(), self._get_copy_id_ast(orig_value_id)],
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.after_assign_rhs.to_ast(), self.get_copy_id_ast(orig_value_id)],
                     keywords=fast.kwargs(ret=node.value),
                 )
         return node
@@ -330,13 +300,13 @@ class AstEavesdropper(ast.NodeTransformer):
         ret_node: ast.expr = cast(ast.expr, self.generic_visit(node))
         with fast.location_of(node):
             if TraceEvent.before_lambda in self._events_with_handlers:
-                ret_node = self._make_tuple_event_for(
+                ret_node = self.make_tuple_event_for(
                     ret_node, TraceEvent.before_lambda, orig_node_id=id(node)
                 )
             if TraceEvent.after_lambda in self._events_with_handlers:
                 ret_node = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.after_lambda.to_ast(), self._get_copy_id_ast(node)],
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.after_lambda.to_ast(), self.get_copy_id_ast(node)],
                     keywords=fast.kwargs(ret=ret_node),
                 )
         return ret_node
@@ -365,12 +335,12 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node):
             lit_before_evt = self._ast_container_to_literal_trace_evt(node, before=True)
             if lit_before_evt in self._events_with_handlers:
-                ret_node = self._make_tuple_event_for(ret_node, lit_before_evt, orig_node_id=id(node))
+                ret_node = self.make_tuple_event_for(ret_node, lit_before_evt, orig_node_id=id(node))
             lit_after_evt = self._ast_container_to_literal_trace_evt(node, before=False)
             if lit_after_evt in self._events_with_handlers:
                 ret_node = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[lit_after_evt.to_ast(), self._get_copy_id_ast(node)],
+                    func=self.emitter_ast(),
+                    args=[lit_after_evt.to_ast(), self.get_copy_id_ast(node)],
                     keywords=fast.kwargs(ret=ret_node),
                 )
         return ret_node
@@ -411,12 +381,12 @@ class AstEavesdropper(ast.NodeTransformer):
                 continue
             with fast.location_of(elt):
                 traced_elts.append(fast.Call(
-                    func=self._emitter_ast(),
-                    args=[elt_trace_evt.to_ast(), self._get_copy_id_ast(elt)],
+                    func=self.emitter_ast(),
+                    args=[elt_trace_evt.to_ast(), self.get_copy_id_ast(elt)],
                     keywords=fast.kwargs(
                         ret=self.visit(elt),
                         index=fast.NameConstant(None) if saw_starred else fast.Num(i),
-                        container_node_id=self._get_copy_id_ast(node),
+                        container_node_id=self.get_copy_id_ast(node),
                     )
                 ))
         node.elts = traced_elts
@@ -434,12 +404,12 @@ class AstEavesdropper(ast.NodeTransformer):
                     traced_key = self.visit(k)
                     if TraceEvent.dict_key in self._events_with_handlers:
                         traced_key = fast.Call(
-                            func=self._emitter_ast(),
-                            args=[TraceEvent.dict_key.to_ast(), self._get_copy_id_ast(k)],
+                            func=self.emitter_ast(),
+                            args=[TraceEvent.dict_key.to_ast(), self.get_copy_id_ast(k)],
                             keywords=fast.kwargs(
                                 ret=traced_key,
-                                value_node_id=self._get_copy_id_ast(v),
-                                dict_node_id=self._get_copy_id_ast(node),
+                                value_node_id=self.get_copy_id_ast(v),
+                                dict_node_id=self.get_copy_id_ast(node),
                             )
                         )
                     traced_keys.append(traced_key)
@@ -447,16 +417,16 @@ class AstEavesdropper(ast.NodeTransformer):
                 if is_dict_unpack:
                     key_node_id_ast = fast.NameConstant(None)
                 else:
-                    key_node_id_ast = self._get_copy_id_ast(k)
+                    key_node_id_ast = self.get_copy_id_ast(k)
                 traced_value = self.visit(v)
                 if TraceEvent.dict_value in self._events_with_handlers:
                     traced_value = fast.Call(
-                        func=self._emitter_ast(),
-                        args=[TraceEvent.dict_value.to_ast(), self._get_copy_id_ast(v)],
+                        func=self.emitter_ast(),
+                        args=[TraceEvent.dict_value.to_ast(), self.get_copy_id_ast(v)],
                         keywords=fast.kwargs(
                             ret=traced_value,
                             key_node_id=key_node_id_ast,
-                            dict_node_id=self._get_copy_id_ast(node),
+                            dict_node_id=self.get_copy_id_ast(node),
                         )
                     )
                 traced_values.append(traced_value)
@@ -471,13 +441,13 @@ class AstEavesdropper(ast.NodeTransformer):
         with fast.location_of(node):
             node.value = self.visit(node.value)
             if TraceEvent.before_return in self._events_with_handlers:
-                node.value = self._make_tuple_event_for(
+                node.value = self.make_tuple_event_for(
                     node.value, TraceEvent.before_return, orig_node_id=id(orig_node_value)
                 )
             if TraceEvent.after_return in self._events_with_handlers:
                 node.value = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[TraceEvent.after_return.to_ast(), self._get_copy_id_ast(orig_node_value)],
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.after_return.to_ast(), self.get_copy_id_ast(orig_node_value)],
                     keywords=fast.kwargs(ret=node.value),
                 )
         return node

@@ -2,6 +2,7 @@
 import logging
 import sys
 
+from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.singletons import nbs
 from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
@@ -2338,11 +2339,13 @@ def test_tuple_return_obj():
 
 def test_property_in_function_arg():
     run_cell(
-        """
+        f"""
         z = 42
         class Foo:
             @property
             def bar(self):
+                # ensures that this is not called during static analysis
+                assert hasattr(builtins, "{EMIT_EVENT}")
                 return z
 
         def f(x, y):

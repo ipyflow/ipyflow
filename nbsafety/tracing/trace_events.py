@@ -49,6 +49,8 @@ class TraceEvent(Enum):
     before_assign_rhs = 'before_assign_rhs'
     after_assign_rhs = 'after_assign_rhs'
 
+    before_function_body = 'before_function_body'
+
     line = 'line'
     call = 'call'
     return_ = 'return'

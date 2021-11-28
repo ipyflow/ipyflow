@@ -137,7 +137,7 @@ def subsets(draw, elements):
     }
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_recorded_events_simple(events):
     assert _RECORDED_EVENTS == []
@@ -158,7 +158,7 @@ def test_recorded_events_simple(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_recorded_events_two_stmts(events):
     assert _RECORDED_EVENTS == []
@@ -190,7 +190,7 @@ def test_recorded_events_two_stmts(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_nested_chains_no_call(events):
     assert _RECORDED_EVENTS == []
@@ -221,7 +221,7 @@ def test_nested_chains_no_call(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_list_nested_in_dict(events):
     assert _RECORDED_EVENTS == []
@@ -247,7 +247,7 @@ def test_list_nested_in_dict(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_function_call(events):
     assert _RECORDED_EVENTS == []
@@ -292,7 +292,7 @@ def test_function_call(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_lambda_in_tuple(events):
     assert _RECORDED_EVENTS == []
@@ -314,7 +314,7 @@ def test_lambda_in_tuple(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_fancy_slices(events):
     assert _RECORDED_EVENTS == []
@@ -410,7 +410,7 @@ def test_fancy_slices(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_for_loop(events):
     assert _RECORDED_EVENTS == []
@@ -441,7 +441,7 @@ def test_for_loop(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_while_loop(events):
     assert _RECORDED_EVENTS == []
@@ -473,7 +473,7 @@ def test_while_loop(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_loop_with_continue(events):
     assert _RECORDED_EVENTS == []
@@ -501,7 +501,7 @@ def test_loop_with_continue(events):
     )
 
 
-@given(events=subsets(list(_ALL_EVENTS_WITH_HANDLERS)))
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
 @patch_events_with_registered_handlers_to_subset
 def test_for_loop_nested_in_while_loop(events):
     assert _RECORDED_EVENTS == []

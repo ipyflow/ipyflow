@@ -1,5 +1,6 @@
 coverage
 flake8
+hypothesis
 ipytest==0.9.1
 numpy
 pandas

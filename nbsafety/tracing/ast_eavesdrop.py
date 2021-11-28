@@ -111,14 +111,17 @@ class AstEavesdropper(ast.NodeTransformer):
                         ],
                         keywords=fast.kwargs(ret=cast(ast.expr, slc)),
                     )
-                replacement_slice = fast.Call(
-                    func=self._emitter_ast(),
-                    args=[
-                        TraceEvent._load_saved_slice.to_ast(),
-                        self._get_copy_id_ast(node.slice),
-                    ],
-                    keywords=[],
-                )
+                if TraceEvent.subscript in self._events_with_handlers:
+                    replacement_slice: ast.expr = fast.Call(
+                        func=self._emitter_ast(),
+                        args=[
+                            TraceEvent._load_saved_slice.to_ast(),
+                            self._get_copy_id_ast(node.slice),
+                        ],
+                        keywords=[],
+                    )
+                else:
+                    replacement_slice = slc
                 if sys.version_info >= (3, 9):
                     node.slice = replacement_slice
                 else:
@@ -132,36 +135,29 @@ class AstEavesdropper(ast.NodeTransformer):
             return node
         orig_node = node
         orig_node_id = orig_node_id or id(orig_node)
-        begin_kwargs = begin_kwargs or {}
         end_kwargs = end_kwargs or {}
 
         ctx = getattr(orig_node, 'ctx', ast.Load())
         is_load = isinstance(ctx, ast.Load)
 
         with fast.location_of(node):
-            begin_kwargs['ret'] = self._get_copy_id_ast(orig_node_id)
             if is_load:
-                end_ret = orig_node
+                node = orig_node
             elif isinstance(orig_node, (ast.Attribute, ast.Subscript)):
-                end_ret = orig_node.value
+                node = orig_node.value
             else:
                 raise TypeError('Unsupported node type for before / after symbol tracing: %s', type(orig_node))
-            end_kwargs['ret'] = end_ret
             end_kwargs['ctx'] = fast.Str(ctx.__class__.__name__)
             end_kwargs['call_context'] = fast.NameConstant(call_context)
-            node = fast.Call(
-                func=self._emitter_ast(),
-                args=[
-                    TraceEvent.after_complex_symbol.to_ast(),
-                    fast.Call(
-                        # this will return the node id
-                        func=self._emitter_ast(),
-                        args=[TraceEvent.before_complex_symbol.to_ast(), self._get_copy_id_ast(orig_node_id)],
-                        keywords=fast.kwargs(**begin_kwargs),
-                    )
-                ],
-                keywords=fast.kwargs(**end_kwargs),
-            )
+            if TraceEvent.before_complex_symbol in self._events_with_handlers:
+                node = self._make_tuple_event_for(node, TraceEvent.before_complex_symbol, orig_node_id=orig_node_id)
+            end_kwargs['ret'] = node
+            if TraceEvent.after_complex_symbol in self._events_with_handlers:
+                node = fast.Call(
+                    func=self._emitter_ast(),
+                    args=[TraceEvent.after_complex_symbol.to_ast(), self._get_copy_id_ast(orig_node_id)],
+                    keywords=fast.kwargs(**end_kwargs),
+                )
             if not is_load:
                 if isinstance(orig_node, ast.Attribute):
                     node = fast.Attribute(
@@ -203,7 +199,7 @@ class AstEavesdropper(ast.NodeTransformer):
             evt_to_use = TraceEvent.subscript if isinstance(node, ast.Subscript) else TraceEvent.attribute
             should_emit_evt = evt_to_use in self._events_with_handlers
             should_emit_evt = should_emit_evt or (
-                evt_to_use == TraceEvent.subscript and TraceEvent.subscript_slice in self._events_with_handlers
+                evt_to_use == TraceEvent.subscript and TraceEvent._load_saved_slice in self._events_with_handlers
             )
             orig_node_value = node.value
             with self.attrsub_context(node):
@@ -238,22 +234,22 @@ class AstEavesdropper(ast.NodeTransformer):
                 maybe_kwarg = arg
             with fast.location_of(maybe_kwarg):
                 with self.attrsub_context(None):
-                    visited_maybe_kwarg = self.visit(maybe_kwarg)
+                    new_arg_value = self.visit(maybe_kwarg)
                 if TraceEvent.argument in self._events_with_handlers:
                     with self.attrsub_context(None):
                         new_arg_value = cast(ast.expr, fast.Call(
                             func=self._emitter_ast(),
                             args=[TraceEvent.argument.to_ast(), self._get_copy_id_ast(maybe_kwarg)],
                             keywords=fast.kwargs(
-                                ret=visited_maybe_kwarg,
+                                ret=new_arg_value,
                                 is_starred=fast.NameConstant(is_starred),
                                 is_kwstarred=fast.NameConstant(is_kwstarred)
                             ),
                         ))
-                        if keywords or is_starred:
-                            setattr(arg, 'value', new_arg_value)
-                        else:
-                            arg = new_arg_value
+                if keywords or is_starred:
+                    setattr(arg, 'value', new_arg_value)
+                else:
+                    arg = new_arg_value
             replacement_args.append(arg)
         return replacement_args
 
@@ -478,11 +474,12 @@ class AstEavesdropper(ast.NodeTransformer):
                 node.value = self._make_tuple_event_for(
                     node.value, TraceEvent.before_return, orig_node_id=id(orig_node_value)
                 )
-            node.value = fast.Call(
-                func=self._emitter_ast(),
-                args=[TraceEvent.after_return.to_ast(), self._get_copy_id_ast(orig_node_value)],
-                keywords=fast.kwargs(ret=node.value),
-            )
+            if TraceEvent.after_return in self._events_with_handlers:
+                node.value = fast.Call(
+                    func=self._emitter_ast(),
+                    args=[TraceEvent.after_return.to_ast(), self._get_copy_id_ast(orig_node_value)],
+                    keywords=fast.kwargs(ret=node.value),
+                )
         return node
 
     def visit_Delete(self, node: ast.Delete):

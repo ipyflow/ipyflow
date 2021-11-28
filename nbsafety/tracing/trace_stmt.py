@@ -111,7 +111,7 @@ class TraceStatement:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
             if nbs().is_develop:
-                logger.exception('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+                logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
             # if nbs().is_test:
             #     raise ke
             return

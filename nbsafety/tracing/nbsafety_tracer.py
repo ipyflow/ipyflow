@@ -81,8 +81,8 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 class SafetyTracerStateMachine(BaseTracerStateMachine):
     ast_rewriter_cls = SafetyAstRewriter
 
-    def file_passes_filter(self, filename: str) -> bool:
-        return nbs().is_cell_file(filename)
+    def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
+        return evt != 'line' and nbs().is_cell_file(filename)
 
     def should_propagate_handler_exception(self, evt: TraceEvent, exc: Exception) -> bool:
         return SafetyRunMode.get() == SafetyRunMode.DEVELOP

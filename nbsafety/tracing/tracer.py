@@ -209,11 +209,11 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented
 
-    def file_passes_filter(self, filename: str) -> bool:
+    def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
         return True
 
     def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
-        if not self.file_passes_filter(frame.f_code.co_filename):
+        if not self.file_passes_filter_for_event(evt, frame.f_code.co_filename):
             return None
 
         return self._emit_event(evt, 0, _frame=frame, ret=arg)

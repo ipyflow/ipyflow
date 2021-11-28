@@ -35,15 +35,14 @@ def patched_emit_event_fixture():
 
     def _patched_emit_event(self, evt: Union[TraceEvent, str], *args, **kwargs):
         event = TraceEvent(evt) if isinstance(evt, str) else evt
-        if event in _ALL_EVENTS_WITH_HANDLERS:
-            frame: FrameType = kwargs.get('_frame', sys._getframe().f_back)
-            kwargs['_frame'] = frame
-            if frame.f_code.co_filename.startswith('<ipython-input'):
-                if not (
-                    (event == TraceEvent.call and self.call_depth == 0) or
-                    (event == TraceEvent.return_ and self.call_depth == 1)
-                ):
-                    _RECORDED_EVENTS.append(event)
+        frame: FrameType = kwargs.get('_frame', sys._getframe().f_back)
+        kwargs['_frame'] = frame
+        if frame.f_code.co_filename.startswith('<ipython-input'):
+            if not (
+                (event == TraceEvent.call and self.call_depth == 0) or
+                (event == TraceEvent.return_ and self.call_depth == 1)
+            ):
+                _RECORDED_EVENTS.append(event)
         return original_emit_event(self, evt, *args, **kwargs)
     SafetyTracerStateMachine._emit_event = _patched_emit_event
     yield

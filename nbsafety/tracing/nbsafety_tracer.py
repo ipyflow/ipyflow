@@ -443,7 +443,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         return data_sym
 
     @register_handler(
-        # all the AST-related events
+        # non-tuple AST-related events
         tuple(set(TraceEvent) - {
             TraceEvent.line,
             TraceEvent.call,
@@ -456,7 +456,9 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             TraceEvent.before_stmt,
             TraceEvent.after_stmt,
             TraceEvent.after_module_stmt,
-        })
+        } - {
+            evt for evt in TraceEvent if evt.value.startswith('before')
+        } | {TraceEvent.before_call})
     )
     def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
@@ -468,7 +470,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
 
     @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
     def after_loop_iter(
-            self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
+        self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
     ):
         self.activate_loop_guard(loop_guard)
 

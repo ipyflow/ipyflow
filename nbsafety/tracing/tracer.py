@@ -12,8 +12,6 @@ from traitlets.traitlets import MetaHasTraits
 
 from nbsafety import singletons
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED
-from nbsafety.run_mode import SafetyRunMode
-from nbsafety.singletons import nbs
 from nbsafety.tracing.ast_rewriter import AstRewriter
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
@@ -30,21 +28,6 @@ logger.setLevel(logging.ERROR)
 sys_settrace = sys.settrace
 
 
-ARG_MUTATION_EXCEPTED_MODULES = {
-    'alt',
-    'altair',
-    'display',
-    'logging',
-    'matplotlib',
-    'pyplot',
-    'plot',
-    'plt',
-    'seaborn',
-    'sns',
-    'widget',
-}
-
-
 class MetaHasTraitsAndTransientState(MetaHasTraits):
     def __call__(cls, *args, **kwargs):
         obj = MetaHasTraits.__call__(cls, *args, **kwargs)
@@ -52,11 +35,11 @@ class MetaHasTraitsAndTransientState(MetaHasTraits):
         return obj
 
 
-class SingletonTraceStateMachine(singletons.TraceManager, metaclass=MetaHasTraitsAndTransientState):
+class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTraitsAndTransientState):
 
     _MANAGER_CLASS_REGISTERED = False
     EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
-    EVENT_HANDLERS_BY_CLASS: Dict[Type[BaseTraceStateMachine], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
+    EVENT_HANDLERS_BY_CLASS: Dict[Type[BaseTracerStateMachine], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
 
     EVENT_LOGGER = logging.getLogger('events')
     EVENT_LOGGER.setLevel(logging.WARNING)
@@ -91,7 +74,10 @@ class SingletonTraceStateMachine(singletons.TraceManager, metaclass=MetaHasTrait
 
     @property
     def events_with_registered_handlers(self) -> FrozenSet[TraceEvent]:
-        return frozenset(self.EVENT_HANDLERS_BY_CLASS[self.__class__].keys())
+        return frozenset(
+            evt for evt, handlers in self.EVENT_HANDLERS_BY_CLASS[self.__class__].items()
+            if len(handlers) > 0
+        )
 
     def _transient_fields_start(self):
         self._persistent_fields = set(self.__dict__.keys())
@@ -124,6 +110,9 @@ class SingletonTraceStateMachine(singletons.TraceManager, metaclass=MetaHasTrait
         assert loop_guard in self.loop_guards
         setattr(builtins, loop_guard, False)
 
+    def should_propagate_handler_exception(self, evt: TraceEvent, exc: Exception) -> bool:
+        return False
+
     def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
         try:
             event = TraceEvent(evt) if isinstance(evt, str) else evt
@@ -133,7 +122,7 @@ class SingletonTraceStateMachine(singletons.TraceManager, metaclass=MetaHasTrait
                 try:
                     new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
                 except Exception as exc:
-                    if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
+                    if self.should_propagate_handler_exception(event, exc):
                         raise exc
                     else:
                         logger.exception('An exception while handling evt %s', evt)
@@ -220,8 +209,11 @@ class SingletonTraceStateMachine(singletons.TraceManager, metaclass=MetaHasTrait
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented
 
+    def file_passes_filter(self, filename: str) -> bool:
+        return True
+
     def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
-        if evt == 'line' or not nbs().is_cell_file(frame.f_code.co_filename):
+        if not self.file_passes_filter(frame.f_code.co_filename):
             return None
 
         return self._emit_event(evt, 0, _frame=frame, ret=arg)
@@ -232,7 +224,7 @@ def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
 
     def _inner_registrar(handler):
         for evt in events:
-            SingletonTraceStateMachine.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
+            SingletonTracerStateMachine.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
         return handler
     return _inner_registrar
 
@@ -250,7 +242,7 @@ def register_universal_handler(handler):
     return register_handler(tuple(evt for evt in TraceEvent))(handler)
 
 
-def register_trace_manager_class(mgr_cls: Type[SingletonTraceStateMachine]) -> Type[SingletonTraceStateMachine]:
+def register_trace_manager_class(mgr_cls: Type[SingletonTracerStateMachine]) -> Type[SingletonTracerStateMachine]:
     mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
     mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
     mgr_cls._MANAGER_CLASS_REGISTERED = True
@@ -258,7 +250,7 @@ def register_trace_manager_class(mgr_cls: Type[SingletonTraceStateMachine]) -> T
 
 
 @register_trace_manager_class
-class BaseTraceStateMachine(SingletonTraceStateMachine):
+class BaseTracerStateMachine(SingletonTracerStateMachine):
     ast_rewriter_cls = AstRewriter
 
     def __init__(self, *args, **kwargs):
@@ -279,5 +271,5 @@ class BaseTraceStateMachine(SingletonTraceStateMachine):
         return self.ast_rewriter_cls(self, module_id=module_id)
 
 
-assert not SingletonTraceStateMachine._MANAGER_CLASS_REGISTERED
-assert BaseTraceStateMachine._MANAGER_CLASS_REGISTERED
+assert not SingletonTracerStateMachine._MANAGER_CLASS_REGISTERED
+assert BaseTracerStateMachine._MANAGER_CLASS_REGISTERED

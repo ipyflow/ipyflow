@@ -11,7 +11,7 @@ from nbsafety.data_model.code_cell import cells
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.safety import NotebookSafety
 from nbsafety.singletons import nbs
-from nbsafety.tracing.nbsafety_tracer import SafetyTraceStateMachine
+from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine
 
 if TYPE_CHECKING:
     from typing import Any, Tuple
@@ -70,8 +70,8 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
             test_context=test_context,
             **kwargs
         )
-        SafetyTraceStateMachine.clear_instance()
-        SafetyTraceStateMachine.instance()
+        SafetyTracerStateMachine.clear_instance()
+        SafetyTracerStateMachine.instance()
         # run all at once to prevent exec counter
         # from getting too far ahead
         run_cell('\n'.join(setup_cells))

@@ -15,6 +15,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
+from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import (
     ArgMutate,
@@ -35,7 +36,7 @@ from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.tracer import (
-    BaseTraceStateMachine,
+    BaseTracerStateMachine,
     register_trace_manager_class,
     register_handler,
     skip_when_tracing_disabled,
@@ -77,8 +78,14 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 
 
 @register_trace_manager_class
-class SafetyTraceStateMachine(BaseTraceStateMachine):
+class SafetyTracerStateMachine(BaseTracerStateMachine):
     ast_rewriter_cls = SafetyAstRewriter
+
+    def file_passes_filter(self, filename: str) -> bool:
+        return nbs().is_cell_file(filename)
+
+    def should_propagate_handler_exception(self, evt: TraceEvent, exc: Exception) -> bool:
+        return SafetyRunMode.get() == SafetyRunMode.DEVELOP
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -258,10 +265,10 @@ class SafetyTraceStateMachine(BaseTraceStateMachine):
                 assert self.call_depth == 1
 
     def state_transition_hook(
-            self,
-            event: TraceEvent,
-            trace_stmt: TraceStatement,
-            ret: Any,
+        self,
+        event: TraceEvent,
+        trace_stmt: TraceStatement,
+        ret: Any,
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
@@ -343,7 +350,7 @@ class SafetyTraceStateMachine(BaseTraceStateMachine):
         )
 
     def resolve_del_data_for_target(
-            self, target: Union[str, int, ast.AST]
+        self, target: Union[str, int, ast.AST]
     ) -> Tuple[Scope, Optional[Any], AttrSubVal, bool]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
@@ -438,6 +445,7 @@ class SafetyTraceStateMachine(BaseTraceStateMachine):
     @register_handler(
         # all the AST-related events
         tuple(set(TraceEvent) - {
+            TraceEvent.line,
             TraceEvent.call,
             TraceEvent.return_,
             TraceEvent.exception,
@@ -1040,4 +1048,4 @@ class SafetyTraceStateMachine(BaseTraceStateMachine):
         return self.sys_tracer
 
 
-assert SafetyTraceStateMachine._MANAGER_CLASS_REGISTERED
+assert SafetyTracerStateMachine._MANAGER_CLASS_REGISTERED

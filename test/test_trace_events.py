@@ -4,8 +4,9 @@ import logging
 import sys
 from typing import TYPE_CHECKING
 
+from nbsafety.singletons import tracer
 from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.tracing.nbsafety_tracer import SafetyTraceStateMachine
+from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine
 from .utils import make_safety_fixture, skipif_known_failing
 
 if TYPE_CHECKING:
@@ -20,22 +21,24 @@ _RECORDED_EVENTS = []
 
 def patched_emit_event_fixture():
     _RECORDED_EVENTS.clear()
-    original_emit_event = SafetyTraceStateMachine._emit_event
+    original_emit_event = SafetyTracerStateMachine._emit_event
+    events_with_handlers = tracer().events_with_registered_handlers
 
     def _patched_emit_event(self, evt: Union[TraceEvent, str], *args, **kwargs):
         event = TraceEvent(evt) if isinstance(evt, str) else evt
-        frame: FrameType = kwargs.get('_frame', sys._getframe().f_back)
-        kwargs['_frame'] = frame
-        if frame.f_code.co_filename.startswith('<ipython-input'):
-            if not (
-                (event == TraceEvent.call and self.call_depth == 0) or
-                (event == TraceEvent.return_ and self.call_depth == 1)
-            ):
-                _RECORDED_EVENTS.append(event)
+        if event in events_with_handlers:
+            frame: FrameType = kwargs.get('_frame', sys._getframe().f_back)
+            kwargs['_frame'] = frame
+            if frame.f_code.co_filename.startswith('<ipython-input'):
+                if not (
+                    (event == TraceEvent.call and self.call_depth == 0) or
+                    (event == TraceEvent.return_ and self.call_depth == 1)
+                ):
+                    _RECORDED_EVENTS.append(event)
         return original_emit_event(self, evt, *args, **kwargs)
-    SafetyTraceStateMachine._emit_event = _patched_emit_event
+    SafetyTracerStateMachine._emit_event = _patched_emit_event
     yield
-    SafetyTraceStateMachine._emit_event = original_emit_event
+    SafetyTracerStateMachine._emit_event = original_emit_event
 
 
 # Reset dependency graph before each test

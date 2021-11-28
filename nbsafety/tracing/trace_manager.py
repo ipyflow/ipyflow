@@ -37,6 +37,7 @@ from nbsafety.tracing.mutation_special_cases import (
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
 )
+from nbsafety.tracing.safety_ast_rewriter import AstRewriter, SafetyAstRewriter
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
@@ -116,7 +117,7 @@ class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndT
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.augmented_node_ids_by_type: Dict[str, Set[int]] = defaultdict(set)
-
+        self.line_to_stmt_by_module_id: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.loop_guards: Set[str] = set()
 
         self._transient_fields: Set[str] = set()
@@ -294,6 +295,8 @@ def register_trace_manager_class(mgr_cls: Type[SingletonTraceManager]) -> Type[S
 
 @register_trace_manager_class
 class BaseTraceManager(SingletonTraceManager):
+    ast_rewriter_cls = AstRewriter
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._saved_slice: Optional[Any] = None
@@ -308,13 +311,17 @@ class BaseTraceManager(SingletonTraceManager):
         self._saved_slice = None
         return ret
 
+    def make_ast_rewriter(self, module_id: Optional[int] = None):
+        return self.ast_rewriter_cls(self, module_id=module_id)
+
 
 @register_trace_manager_class
 class TraceManager(BaseTraceManager):
+    ast_rewriter_cls = SafetyAstRewriter
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
-            self.statement_cache: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
             self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.reactive.marker]
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.blocking.marker]
         self._module_stmt_counter = 0
@@ -1220,7 +1227,7 @@ class TraceManager(BaseTraceManager):
             stmt_node = cast(ast.stmt, self.ast_node_by_id[self.next_stmt_node_id])
         else:
             try:
-                stmt_node = self.statement_cache[cell_num][lineno]
+                stmt_node = self.line_to_stmt_by_module_id[cell_num][lineno]
                 if event == TraceEvent.call and not isinstance(stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)):
                     # TODO: this is bad and I should feel bad. Need a better way to figure out which
                     #  stmt is executing than by using line numbers.

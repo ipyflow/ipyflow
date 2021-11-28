@@ -4,10 +4,9 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
-from nbsafety.singletons import tracer
-
 if TYPE_CHECKING:
     from typing import Dict, List, Set, Tuple, Union
+    from nbsafety.tracing.trace_manager import BaseTraceManager
 
 
 logger = logging.getLogger(__name__)
@@ -18,12 +17,11 @@ class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
         line_to_stmt_map: Dict[int, ast.stmt],
+        tracer: BaseTraceManager,
         augmented_positions_by_type: Dict[str, Set[Tuple[int, int]]],
     ):
         self.line_to_stmt_map: Dict[int, ast.stmt] = line_to_stmt_map
-        self.id_map = tracer().ast_node_by_id
-        self.parent_map = tracer().parent_node_by_id
-        self.augmented_node_ids_by_type = tracer().augmented_node_ids_by_type
+        self._tracer: BaseTraceManager = tracer
         self.augmented_positions_by_type = augmented_positions_by_type
         self.traversal: List[ast.AST] = []
 
@@ -58,12 +56,12 @@ class StatementMapper(ast.NodeVisitor):
         orig_to_copy_mapping = {}
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
-            self.id_map[id(nc)] = nc
+            self._tracer.ast_node_by_id[id(nc)] = nc
             if isinstance(nc, (ast.Name, ast.Attribute, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
                 col_offset = self._get_col_offset_for(nc)
                 for mod_type, mod_positions in self.augmented_positions_by_type.items():
                     if (nc.lineno, col_offset) in mod_positions:
-                        self.augmented_node_ids_by_type[mod_type].add(id(nc))
+                        self._tracer.augmented_node_ids_by_type[mod_type].add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem
@@ -74,16 +72,16 @@ class StatementMapper(ast.NodeVisitor):
                 try:
                     for child in nc_body:
                         if isinstance(child, ast.AST):
-                            self.parent_map[id(child)] = nc
+                            self._tracer.parent_node_by_id[id(child)] = nc
                 except TypeError:
-                    self.parent_map[id(nc_body)] = nc
+                    self._tracer.parent_node_by_id[id(nc_body)] = nc
                 for name, field in ast.iter_fields(nc):
                     if name == 'body':
                         continue
                     if isinstance(field, list):
                         for child in field:
                             if isinstance(child, ast.AST):
-                                self.parent_map[id(child)] = nc
+                                self._tracer.parent_node_by_id[id(child)] = nc
         return orig_to_copy_mapping
 
     def visit(self, node):

@@ -5,7 +5,7 @@ from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety as NotebookSafetyInstance
-    from nbsafety.tracing.trace_manager import TraceManager as TraceManagerInstance
+    from nbsafety.tracing.nbsafety_tracer import SafetyTraceStateMachine as TraceManagerInstance
 
 
 class NotebookSafety(SingletonConfigurable):

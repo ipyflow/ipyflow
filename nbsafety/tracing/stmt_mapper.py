@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Dict, List, Set, Tuple, Union
-    from nbsafety.tracing.trace_manager import BaseTraceManager
+    from nbsafety.tracing.tracer import BaseTraceStateMachine
 
 
 logger = logging.getLogger(__name__)
@@ -17,11 +17,11 @@ class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
         line_to_stmt_map: Dict[int, ast.stmt],
-        tracer: BaseTraceManager,
+        tracer: BaseTraceStateMachine,
         augmented_positions_by_type: Dict[str, Set[Tuple[int, int]]],
     ):
         self.line_to_stmt_map: Dict[int, ast.stmt] = line_to_stmt_map
-        self._tracer: BaseTraceManager = tracer
+        self._tracer: BaseTraceStateMachine = tracer
         self.augmented_positions_by_type = augmented_positions_by_type
         self.traversal: List[ast.AST] = []
 

@@ -1,19 +1,13 @@
 # -*- coding: future_annotations -*-
 import ast
-import builtins
-import functools
 import logging
 import symtable
-import sys
 from collections import defaultdict
-from contextlib import contextmanager
 from typing import cast, TYPE_CHECKING
 
 import astunparse
 from IPython import get_ipython
-from traitlets.traitlets import MetaHasTraits
 
-from nbsafety import singletons
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
 from nbsafety.analysis.reactive_modifiers import AugmentedAtom
 from nbsafety.data_model.code_cell import cells
@@ -21,8 +15,6 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED
-from nbsafety.run_mode import SafetyRunMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import (
     ArgMutate,
@@ -37,15 +29,21 @@ from nbsafety.tracing.mutation_special_cases import (
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
 )
-from nbsafety.tracing.safety_ast_rewriter import AstRewriter, SafetyAstRewriter
+from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
+from nbsafety.tracing.tracer import (
+    BaseTraceStateMachine,
+    register_trace_manager_class,
+    register_handler,
+    skip_when_tracing_disabled,
+)
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
 if TYPE_CHECKING:
-    from typing import Any, Callable, DefaultDict, Dict, FrozenSet, Generator, List, Optional, Set, Tuple, Type, Union
+    from typing import Any, Dict, List, Optional, Set, Tuple, Union
     from types import FrameType
     from nbsafety.tracing.mutation_event import MutationEvent
     from nbsafety.types import SupportedIndexType
@@ -63,9 +61,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
-sys_settrace = sys.settrace
-
-
 ARG_MUTATION_EXCEPTED_MODULES = {
     'alt',
     'altair',
@@ -81,242 +76,8 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
-class MetaHasTraitsAndTransientState(MetaHasTraits):
-    def __call__(cls, *args, **kwargs):
-        obj = MetaHasTraits.__call__(cls, *args, **kwargs)
-        obj._transient_fields_end()
-        return obj
-
-
-class SingletonTraceManager(singletons.TraceManager, metaclass=MetaHasTraitsAndTransientState):
-
-    _MANAGER_CLASS_REGISTERED = False
-    EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
-    EVENT_HANDLERS_BY_CLASS: Dict[Type[BaseTraceManager], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
-
-    EVENT_LOGGER = logging.getLogger('events')
-    EVENT_LOGGER.setLevel(logging.WARNING)
-
-    def __init__(self, is_reset: bool = False):
-        if is_reset:
-            return
-        if not self._MANAGER_CLASS_REGISTERED:
-            raise ValueError(
-                f'class not registered; use the `{register_trace_manager_class.__name__}` decorator on the subclass'
-            )
-        super().__init__()
-        self._event_handlers = defaultdict(list)
-        for clazz in reversed(self.__class__.mro()):
-            for evt, handlers in self.EVENT_HANDLERS_BY_CLASS.get(clazz, {}).items():
-                self._event_handlers[evt].extend(handlers)
-        self.tracing_enabled = False
-        self.sys_tracer = self._sys_tracer
-        self.existing_tracer = None
-
-        # ast-related fields
-        self.ast_node_by_id: Dict[int, ast.AST] = {}
-        self.parent_node_by_id: Dict[int, ast.AST] = {}
-        self.augmented_node_ids_by_type: Dict[str, Set[int]] = defaultdict(set)
-        self.line_to_stmt_by_module_id: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-        self.loop_guards: Set[str] = set()
-
-        self._transient_fields: Set[str] = set()
-        self._persistent_fields: Set[str] = set()
-        self._manual_persistent_fields: Set[str] = set()
-        self._transient_fields_start()
-
-    @property
-    def events_with_registered_handlers(self) -> FrozenSet[TraceEvent]:
-        return frozenset(self.EVENT_HANDLERS_BY_CLASS[self.__class__].keys())
-
-    def _transient_fields_start(self):
-        self._persistent_fields = set(self.__dict__.keys())
-
-    def _transient_fields_end(self):
-        self._transient_fields = set(self.__dict__.keys()) - self._persistent_fields - self._manual_persistent_fields
-
-    @contextmanager
-    def persistent_fields(self) -> Generator[None, None, None]:
-        current_fields = set(self.__dict__.keys())
-        saved_fields = {}
-        for field in self._manual_persistent_fields:
-            if field in current_fields:
-                saved_fields[field] = self.__dict__[field]
-        yield
-        self._manual_persistent_fields = (self.__dict__.keys() - current_fields) | saved_fields.keys()
-        for field, val in saved_fields.items():
-            self.__dict__[field] = val
-
-    def reset(self):
-        for field in self._transient_fields:
-            del self.__dict__[field]
-        self.__init__(is_reset=True)
-
-    def activate_loop_guard(self, loop_guard: str) -> None:
-        assert loop_guard in self.loop_guards
-        setattr(builtins, loop_guard, True)
-
-    def deactivate_loop_guard(self, loop_guard: str) -> None:
-        assert loop_guard in self.loop_guards
-        setattr(builtins, loop_guard, False)
-
-    def _emit_event(self, evt: Union[TraceEvent, str], node_id: int, **kwargs: Any):
-        try:
-            event = TraceEvent(evt) if isinstance(evt, str) else evt
-            frame = kwargs.get('_frame', sys._getframe().f_back)
-            kwargs['_frame'] = frame
-            for handler in self._event_handlers[event]:
-                try:
-                    new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
-                except Exception as exc:
-                    if SafetyRunMode.get() == SafetyRunMode.DEVELOP:
-                        raise exc
-                    else:
-                        logger.exception('An exception while handling evt %s', evt)
-                    new_ret = None
-                if new_ret is not None:
-                    kwargs['ret'] = new_ret
-            return kwargs.get('ret', None)
-        except KeyboardInterrupt as ki:
-            self._disable_tracing(check_enabled=False)
-            raise ki.with_traceback(None)
-
-    def _make_stack(self):
-        return TraceStack(self)
-
-    def _make_composed_tracer(self, existing_tracer):  # pragma: no cover
-
-        @functools.wraps(self._sys_tracer)
-        def _composed_tracer(frame: FrameType, evt: str, arg: Any, **kwargs):
-            existing_ret = existing_tracer(frame, evt, arg, **kwargs)
-            if not self.tracing_enabled:
-                return existing_ret
-            my_ret = self._sys_tracer(frame, evt, arg, **kwargs)
-            if my_ret is None and evt == 'call':
-                return existing_ret
-            else:
-                return my_ret
-        return _composed_tracer
-
-    def _settrace_patch(self, trace_func):  # pragma: no cover
-        # called by third-party tracers
-        self.existing_tracer = trace_func
-        if self.tracing_enabled:
-            if trace_func is None:
-                self._disable_tracing()
-            self._enable_tracing(check_disabled=False, existing_tracer=trace_func)
-        else:
-            sys_settrace(trace_func)
-
-    def _enable_tracing(self, check_disabled=True, existing_tracer=None):
-        if check_disabled:
-            assert not self.tracing_enabled
-        self.tracing_enabled = True
-        self.existing_tracer = existing_tracer or sys.gettrace()
-        if self.existing_tracer is None:
-            self.sys_tracer = self._sys_tracer
-        else:
-            self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
-        sys_settrace(self.sys_tracer)
-        setattr(builtins, TRACING_ENABLED, True)
-
-    def _disable_tracing(self, check_enabled=True):
-        if check_enabled:
-            assert self.tracing_enabled
-            assert sys.gettrace() is self.sys_tracer
-        self.tracing_enabled = False
-        sys_settrace(self.existing_tracer)
-        setattr(builtins, TRACING_ENABLED, False)
-
-    @contextmanager
-    def _patch_sys_settrace(self) -> Generator[None, None, None]:
-        original_settrace = sys.settrace
-        try:
-            sys.settrace = self._settrace_patch
-            yield
-        finally:
-            sys.settrace = original_settrace
-
-    @contextmanager
-    def tracing_context(self) -> Generator[None, None, None]:
-        setattr(builtins, EMIT_EVENT, self._emit_event)
-        for loop_guard in self.loop_guards:
-            self.deactivate_loop_guard(loop_guard)
-        try:
-            with self._patch_sys_settrace():
-                self._enable_tracing()
-                yield
-        finally:
-            self._disable_tracing(check_enabled=False)
-            delattr(builtins, EMIT_EVENT)
-            delattr(builtins, TRACING_ENABLED)
-            for loop_guard in self.loop_guards:
-                delattr(builtins, loop_guard)
-
-    def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
-        return NotImplemented
-
-    def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
-        if evt == 'line' or not nbs().is_cell_file(frame.f_code.co_filename):
-            return None
-
-        return self._emit_event(evt, 0, _frame=frame, ret=arg)
-
-
-def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
-    events = event if isinstance(event, tuple) else (event,)
-
-    def _inner_registrar(handler):
-        for evt in events:
-            SingletonTraceManager.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
-        return handler
-    return _inner_registrar
-
-
-def skip_when_tracing_disabled(handler):
-    @functools.wraps(handler)
-    def skipping_handler(self, *args, **kwargs):
-        if not self.tracing_enabled:
-            return
-        return handler(self, *args, **kwargs)
-    return skipping_handler
-
-
-def register_universal_handler(handler):
-    return register_handler(tuple(evt for evt in TraceEvent))(handler)
-
-
-def register_trace_manager_class(mgr_cls: Type[SingletonTraceManager]) -> Type[SingletonTraceManager]:
-    mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
-    mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
-    mgr_cls._MANAGER_CLASS_REGISTERED = True
-    return mgr_cls
-
-
 @register_trace_manager_class
-class BaseTraceManager(SingletonTraceManager):
-    ast_rewriter_cls = AstRewriter
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._saved_slice: Optional[Any] = None
-
-    @register_handler(TraceEvent.subscript)
-    def _save_slice_for_later(self, *_, attr_or_subscript: Any, **__):
-        self._saved_slice = attr_or_subscript
-
-    @register_handler(TraceEvent._load_saved_slice)
-    def _load_saved_slice(self, *_, **__):
-        ret = self._saved_slice
-        self._saved_slice = None
-        return ret
-
-    def make_ast_rewriter(self, module_id: Optional[int] = None):
-        return self.ast_rewriter_cls(self, module_id=module_id)
-
-
-@register_trace_manager_class
-class TraceManager(BaseTraceManager):
+class SafetyTraceStateMachine(BaseTraceStateMachine):
     ast_rewriter_cls = SafetyAstRewriter
 
     def __init__(self, *args, **kwargs):
@@ -497,10 +258,10 @@ class TraceManager(BaseTraceManager):
                 assert self.call_depth == 1
 
     def state_transition_hook(
-        self,
-        event: TraceEvent,
-        trace_stmt: TraceStatement,
-        ret: Any,
+            self,
+            event: TraceEvent,
+            trace_stmt: TraceStatement,
+            ret: Any,
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
@@ -551,7 +312,7 @@ class TraceManager(BaseTraceManager):
         return scope, target, obj, False, set()
 
     def resolve_store_data_for_target(
-        self, target: Union[str, int, ast.AST], frame: FrameType
+            self, target: Union[str, int, ast.AST], frame: FrameType
     ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[DataSymbol]]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
@@ -582,7 +343,7 @@ class TraceManager(BaseTraceManager):
         )
 
     def resolve_del_data_for_target(
-        self, target: Union[str, int, ast.AST]
+            self, target: Union[str, int, ast.AST]
     ) -> Tuple[Scope, Optional[Any], AttrSubVal, bool]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
@@ -637,8 +398,8 @@ class TraceManager(BaseTraceManager):
         # FIXME: brittle strategy for determining parent scope of obj
         if ns.parent_scope is None:
             if (
-                obj_name is not None and
-                obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
+                    obj_name is not None and
+                    obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
             ):
                 parent_scope = nbs().global_scope
             else:
@@ -699,7 +460,7 @@ class TraceManager(BaseTraceManager):
 
     @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
     def after_loop_iter(
-        self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
+            self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
     ):
         self.activate_loop_guard(loop_guard)
 
@@ -748,7 +509,7 @@ class TraceManager(BaseTraceManager):
             return
         logger.warning('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
         sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
-        
+
         # Resolve symbol if necessary
         if sym_for_obj is None and obj_name is not None:
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
@@ -805,7 +566,7 @@ class TraceManager(BaseTraceManager):
                             is_anonymous=obj_name is None,
                             propagate=False,
                             implicit=True,
-                        )
+                            )
                     if sym_for_obj is not None:
                         assert self.top_level_node_id_for_chain is not None
                         self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(sym_for_obj)
@@ -1057,7 +818,7 @@ class TraceManager(BaseTraceManager):
                 is_anonymous=True,
                 implicit=True,
                 propagate=False,
-            )
+                )
             self.node_id_to_loaded_symbols[node_id].append(literal_sym)
             return literal
         finally:
@@ -1085,7 +846,7 @@ class TraceManager(BaseTraceManager):
     @register_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
     @skip_when_tracing_disabled
     def list_or_tuple_elt(
-        self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
+            self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
     ):
         scope = self.node_id_to_loaded_literal_scope.pop(elt_node_id, None)
         if scope is None:
@@ -1108,7 +869,7 @@ class TraceManager(BaseTraceManager):
             self.prev_trace_stmt_in_cur_frame.stmt_node,
             is_function_def=True,
             propagate=False,
-        )
+            )
         # FIXME: this is super brittle. We're passing in a stmt node to update the mapping from
         #  stmt_node to function symbol, but simultaneously forcing the lambda symbol to hold
         #  a reference to the lambda in order to help with symbol resolution later
@@ -1238,9 +999,9 @@ class TraceManager(BaseTraceManager):
                             ast.dump(stmt_node), None if parent_node is None else ast.dump(parent_node),
                         )
                     if (
-                        parent_node is not None
-                        and getattr(parent_node, 'lineno', None) == lineno
-                        and isinstance(parent_node, (ast.AsyncFunctionDef, ast.FunctionDef))
+                            parent_node is not None
+                            and getattr(parent_node, 'lineno', None) == lineno
+                            and isinstance(parent_node, (ast.AsyncFunctionDef, ast.FunctionDef))
                     ):
                         stmt_node = parent_node
             except KeyError as e:
@@ -1279,5 +1040,4 @@ class TraceManager(BaseTraceManager):
         return self.sys_tracer
 
 
-assert not SingletonTraceManager._MANAGER_CLASS_REGISTERED
-assert TraceManager._MANAGER_CLASS_REGISTERED
+assert SafetyTraceStateMachine._MANAGER_CLASS_REGISTERED

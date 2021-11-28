@@ -5,7 +5,7 @@ import sys
 from typing import TYPE_CHECKING
 
 from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.tracing.trace_manager import TraceManager
+from nbsafety.tracing.nbsafety_tracer import SafetyTraceStateMachine
 from .utils import make_safety_fixture, skipif_known_failing
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ _RECORDED_EVENTS = []
 
 def patched_emit_event_fixture():
     _RECORDED_EVENTS.clear()
-    original_emit_event = TraceManager._emit_event
+    original_emit_event = SafetyTraceStateMachine._emit_event
 
     def _patched_emit_event(self, evt: Union[TraceEvent, str], *args, **kwargs):
         event = TraceEvent(evt) if isinstance(evt, str) else evt
@@ -33,9 +33,9 @@ def patched_emit_event_fixture():
             ):
                 _RECORDED_EVENTS.append(event)
         return original_emit_event(self, evt, *args, **kwargs)
-    TraceManager._emit_event = _patched_emit_event
+    SafetyTraceStateMachine._emit_event = _patched_emit_event
     yield
-    TraceManager._emit_event = original_emit_event
+    SafetyTraceStateMachine._emit_event = original_emit_event
 
 
 # Reset dependency graph before each test

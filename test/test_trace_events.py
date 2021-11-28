@@ -6,7 +6,7 @@ import sys
 from typing import TYPE_CHECKING
 
 import hypothesis.strategies as st
-from hypothesis import example, given
+from hypothesis import example, given, settings
 
 from nbsafety.safety import NotebookSafety
 from nbsafety.tracing.trace_events import TraceEvent
@@ -63,6 +63,7 @@ _DIFFER = difflib.Differ()
 def patch_events_with_registered_handlers_to_subset(testfunc):
 
     @functools.wraps(testfunc)
+    @settings(max_examples=20)
     @example(events=set(_ALL_EVENTS_WITH_HANDLERS))
     def wrapped_testfunc(events):
         if TraceEvent.before_call in events:

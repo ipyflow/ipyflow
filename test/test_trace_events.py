@@ -432,6 +432,7 @@ def test_for_loop(events):
             TraceEvent.after_call,
             TraceEvent.after_complex_symbol,
         ] + [
+            TraceEvent.before_for_loop_body,
             TraceEvent.before_stmt,
             TraceEvent.after_stmt,
             TraceEvent.after_for_loop_iter,
@@ -464,6 +465,7 @@ def test_while_loop(events):
             TraceEvent.after_module_stmt,
             TraceEvent.before_stmt,
         ] + [
+            TraceEvent.before_while_loop_body,
             TraceEvent.before_stmt,
             TraceEvent.after_stmt,
             TraceEvent.after_while_loop_iter,
@@ -495,6 +497,7 @@ def test_loop_with_continue(events):
             TraceEvent.argument,
             TraceEvent.after_call,
             TraceEvent.after_complex_symbol,
+            TraceEvent.before_for_loop_body,
             TraceEvent.before_stmt,
             TraceEvent.after_for_loop_iter,
             TraceEvent.after_stmt,
@@ -525,6 +528,7 @@ def test_for_loop_nested_in_while_loop(events):
             TraceEvent.after_module_stmt,
             TraceEvent.before_stmt,
         ] + [
+            TraceEvent.before_while_loop_body,
             TraceEvent.before_stmt,
             TraceEvent.before_complex_symbol,
             TraceEvent.before_call,
@@ -532,6 +536,7 @@ def test_for_loop_nested_in_while_loop(events):
             TraceEvent.after_call,
             TraceEvent.after_complex_symbol,
 
+            TraceEvent.before_for_loop_body,
             TraceEvent.before_stmt,
             TraceEvent.after_stmt,
             TraceEvent.after_for_loop_iter,

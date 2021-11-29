@@ -3,13 +3,13 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.extra_builtins import EMIT_EVENT, make_loop_guard_name
+from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_guard_name
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils.ast_utils import EmitterMixin
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, FrozenSet, List, Set, Union
+    from typing import Dict, FrozenSet, List, Optional, Set, Union
 
 
 logger = logging.getLogger(__name__)
@@ -36,8 +36,19 @@ def _get_parsed_append_stmt(
     return ret
 
 
-def _make_test(var_name: str) -> ast.expr:
-    return fast.parse(f'getattr(builtins, "{var_name}", False)').body[0].value  # type: ignore
+def _make_test(var_name: str, negate: bool = False) -> ast.expr:
+    ret = fast.parse(f'getattr(builtins, "{var_name}", False)').body[0].value  # type: ignore
+    if negate:
+        ret = fast.UnaryOp(operand=ret, op=fast.Not())
+    return ret
+
+
+def _make_composite_condition(nullable_conditions: List[Optional[ast.expr]], op: Optional[ast.AST] = None):
+    conditions = [cond for cond in nullable_conditions if cond is not None]
+    if len(conditions) == 1:
+        return conditions[0]
+    op = op or fast.And()  # type: ignore
+    return fast.BoolOp(op=op, values=conditions)
 
 
 class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
@@ -58,35 +69,50 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
         loop_guards: Set[str],
     ):
         EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers)
-        self._loop_guards = loop_guards
+        self._loop_guards: Set[str] = loop_guards
         self._init_stmt_inserted: bool = False
         self._global_nonlocal_stripper: StripGlobalAndNonlocalDeclarations = StripGlobalAndNonlocalDeclarations()
 
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
+        loop_node_copy = self._global_nonlocal_stripper.visit(loop_node_copy)
         loop_guard = make_loop_guard_name(loop_node_copy)
         self._loop_guards.add(loop_guard)
         with fast.location_of(loop_node_copy):
-            loop_evt = TraceEvent.after_for_loop_iter if isinstance(node, ast.For) else TraceEvent.after_while_loop_iter
-            new_body = self._global_nonlocal_stripper.visit(ast.Module(orig_body)).body
+            if isinstance(node, ast.For):
+                before_loop_evt = TraceEvent.before_for_loop_body
+                after_loop_evt = TraceEvent.after_for_loop_iter
+            else:
+                before_loop_evt = TraceEvent.before_while_loop_body
+                after_loop_evt = TraceEvent.after_while_loop_iter
             return [
                 fast.If(
-                    test=_make_test(loop_guard),
-                    body=loop_node_copy.body,
-                    orelse=[
+                    test=_make_composite_condition(
+                        [
+                            _make_test(TRACING_ENABLED),
+                            _make_test(loop_guard, negate=True),
+                            fast.Call(
+                                func=self.emitter_ast(),
+                                args=[before_loop_evt.to_ast(), self.get_copy_id_ast(node)],
+                                keywords=fast.kwargs(ret=fast.NameConstant(True)),
+                            ) if before_loop_evt in self._events_with_handlers else None,
+                        ]
+                    ),
+                    body=[
                         fast.Try(
-                            body=self._global_nonlocal_stripper.visit(ast.Module(orig_body)).body,
+                            body=orig_body,
                             handlers=[],
                             orelse=[],
                             finalbody=[
                                 _get_parsed_append_stmt(
                                     cast(ast.stmt, loop_node_copy),
-                                    evt=loop_evt,
+                                    evt=after_loop_evt,
                                     loop_guard=fast.Str(loop_guard),
                                 ),
                             ],
                         ),
-                    ] if loop_evt in self._events_with_handlers else new_body,
+                    ] if after_loop_evt in self._events_with_handlers else orig_body,
+                    orelse=loop_node_copy.body,
                 ),
             ]
 
@@ -96,16 +122,22 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
         if TraceEvent.before_function_body not in self._events_with_handlers:
             return orig_body
         fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self._orig_to_copy_mapping[id(node)])
+        fundef_copy = self._global_nonlocal_stripper.visit(fundef_copy)
         with fast.location_of(fundef_copy):
             return [
                 fast.If(
-                    test=fast.Call(
-                        func=self.emitter_ast(),
-                        args=[TraceEvent.before_function_body.to_ast(), self.get_copy_id_ast(node)],
-                        keywords=fast.kwargs(ret=fast.NameConstant(True)),
+                    test=_make_composite_condition(
+                        [
+                            _make_test(TRACING_ENABLED),
+                            fast.Call(
+                                func=self.emitter_ast(),
+                                args=[TraceEvent.before_function_body.to_ast(), self.get_copy_id_ast(node)],
+                                keywords=fast.kwargs(ret=fast.NameConstant(True)),
+                            ) if TraceEvent.before_function_body in self._events_with_handlers else None,
+                        ]
                     ),
                     body=orig_body,
-                    orelse=self._global_nonlocal_stripper.visit(fundef_copy).body,
+                    orelse=fundef_copy.body,
                 ),
             ]
 

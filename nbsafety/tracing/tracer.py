@@ -204,7 +204,8 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             delattr(builtins, EMIT_EVENT)
             delattr(builtins, TRACING_ENABLED)
             for loop_guard in self.loop_guards:
-                delattr(builtins, loop_guard)
+                if hasattr(builtins, loop_guard):
+                    delattr(builtins, loop_guard)
 
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented

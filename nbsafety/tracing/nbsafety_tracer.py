@@ -94,10 +94,11 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.blocking.marker]
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
+        self._seen_loop_ids: Set[NodeId] = set()
+        self._seen_functions_ids: Set[NodeId] = set()
         self.prev_event: Optional[TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.seen_stmts: Set[NodeId] = set()
-        self.seen_functions: Set[NodeId] = set()
         self.call_depth = 0
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = defaultdict(list)
@@ -167,7 +168,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         self.saved_assign_rhs_obj = None
         nbs().updated_symbols |= self.this_stmt_updated_symbols
         self.this_stmt_updated_symbols.clear()
-        self.seen_functions.clear()
+        self._seen_functions_ids.clear()
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -470,10 +471,15 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
 
+    @register_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
+    def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
+        ret = self.tracing_enabled and loop_id not in self._seen_loop_ids
+        if ret:
+            self._seen_loop_ids.add(loop_id)
+        return ret
+
     @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
-    def after_loop_iter(
-        self, _obj, _loop_node_id: NodeId, *_, loop_guard: str, **__
-    ):
+    def after_loop_iter(self, _obj: Any, _loop_id: NodeId, *_, loop_guard: str, **__):
         self.activate_loop_guard(loop_guard)
 
     @register_handler(TraceEvent.after_assign_rhs)
@@ -743,9 +749,9 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
 
     @register_handler(TraceEvent.before_function_body)
     def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
-        ret = self.tracing_enabled and function_id not in self.seen_functions
+        ret = self.tracing_enabled and function_id not in self._seen_functions_ids
         if ret:
-            self.seen_functions.add(function_id)
+            self._seen_functions_ids.add(function_id)
         return ret
 
     @register_handler(TraceEvent.after_call)

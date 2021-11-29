@@ -2,7 +2,7 @@
 import ast
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from nbsafety.tracing.ast_eavesdrop import AstEavesdropper
 from nbsafety.tracing.stmt_inserter import StatementInserter

@@ -119,8 +119,6 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
     def _handle_function_body(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], orig_body: List[ast.AST]
     ) -> List[ast.AST]:
-        if TraceEvent.before_function_body not in self._events_with_handlers:
-            return orig_body
         fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self._orig_to_copy_mapping[id(node)])
         fundef_copy = self._global_nonlocal_stripper.visit(fundef_copy)
         with fast.location_of(fundef_copy):
@@ -136,7 +134,19 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                             ) if TraceEvent.before_function_body in self._events_with_handlers else None,
                         ]
                     ),
-                    body=orig_body,
+                    body=[
+                        fast.Try(
+                            body=orig_body,
+                            handlers=[],
+                            orelse=[],
+                            finalbody=[
+                                _get_parsed_append_stmt(
+                                    cast(ast.stmt, fundef_copy),
+                                    evt=TraceEvent.after_function_execution,
+                                ),
+                            ],
+                        ),
+                    ] if TraceEvent.after_function_execution in self._events_with_handlers else orig_body,
                     orelse=fundef_copy.body,
                 ),
             ]

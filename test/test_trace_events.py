@@ -284,6 +284,7 @@ def test_function_call(events):
             TraceEvent.list_elt,
             TraceEvent.after_list_literal,
             TraceEvent.after_return,
+            TraceEvent.after_function_execution,
             TraceEvent.return_,
             TraceEvent.after_call,
             TraceEvent.after_complex_symbol,
@@ -331,11 +332,13 @@ def test_fancy_slices(events):
     )
     throw_and_print_diff_if_recorded_not_equal_to(
         filter_events_to_subset([
+            # import numpy as np
             TraceEvent.init_module,
             TraceEvent.before_stmt,
             TraceEvent.after_stmt,
             TraceEvent.after_module_stmt,
 
+            # class Foo: ...
             TraceEvent.before_stmt,
             TraceEvent.call,
             TraceEvent.before_stmt,
@@ -344,6 +347,7 @@ def test_fancy_slices(events):
             TraceEvent.after_stmt,
             TraceEvent.after_module_stmt,
 
+            # foo = Foo(1)
             TraceEvent.before_stmt,
             TraceEvent.before_assign_rhs,
             TraceEvent.before_complex_symbol,
@@ -358,6 +362,7 @@ def test_fancy_slices(events):
             TraceEvent.attribute,
             TraceEvent.after_complex_symbol,
             TraceEvent.after_stmt,
+            TraceEvent.after_function_execution,
             TraceEvent.return_,
             TraceEvent.after_call,
             TraceEvent.after_complex_symbol,
@@ -365,6 +370,7 @@ def test_fancy_slices(events):
             TraceEvent.after_stmt,
             TraceEvent.after_module_stmt,
 
+            # arr = np.zeros((3, 3, 3))
             TraceEvent.before_stmt,
             TraceEvent.before_assign_rhs,
             TraceEvent.before_complex_symbol,

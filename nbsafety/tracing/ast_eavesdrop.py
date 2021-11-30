@@ -5,8 +5,9 @@ import logging
 from typing import cast, TYPE_CHECKING
 import sys
 
+from nbsafety.extra_builtins import TRACING_ENABLED
 from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.utils.ast_utils import subscript_to_slice, EmitterMixin
+from nbsafety.utils.ast_utils import EmitterMixin, make_test, make_composite_condition, subscript_to_slice
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
@@ -297,14 +298,27 @@ class AstEavesdropper(ast.NodeTransformer, EmitterMixin):
 
     def visit_Lambda(self, node: ast.Lambda):
         assert isinstance(getattr(node, 'ctx', ast.Load()), ast.Load)
-        ret_node: ast.expr = cast(ast.expr, self.generic_visit(node))
+        untraced_lam = cast(ast.Lambda, self._orig_to_copy_mapping[id(node)])
+        ret_node: ast.Lambda = cast(ast.Lambda, self.generic_visit(node))
         with fast.location_of(node):
+            ret_node.body = fast.IfExp(
+                test=make_composite_condition([
+                    make_test(TRACING_ENABLED),
+                    fast.Call(
+                        func=self.emitter_ast(),
+                        args=[TraceEvent.before_lambda_body.to_ast(), self.get_copy_id_ast(node)],
+                        keywords=fast.kwargs(ret=fast.NameConstant(True)),
+                    ) if TraceEvent.before_lambda_body in self._events_with_handlers else None,
+                ]),
+                body=ret_node.body,
+                orelse=untraced_lam.body,
+            )
             if TraceEvent.before_lambda in self._events_with_handlers:
                 ret_node = self.make_tuple_event_for(
                     ret_node, TraceEvent.before_lambda, orig_node_id=id(node)
                 )
             if TraceEvent.after_lambda in self._events_with_handlers:
-                ret_node = fast.Call(
+                ret_node = fast.Call(  # type: ignore
                     func=self.emitter_ast(),
                     args=[TraceEvent.after_lambda.to_ast(), self.get_copy_id_ast(node)],
                     keywords=fast.kwargs(ret=ret_node),

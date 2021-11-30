@@ -5,7 +5,7 @@ from typing import cast, TYPE_CHECKING
 
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_guard_name
 from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.utils.ast_utils import EmitterMixin
+from nbsafety.utils.ast_utils import EmitterMixin, make_test, make_composite_condition
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
@@ -34,21 +34,6 @@ def _get_parsed_append_stmt(
         ret_value.keywords = fast.kwargs(**kwargs)
     ret.lineno = getattr(stmt, 'end_lineno', ret.lineno)
     return ret
-
-
-def _make_test(var_name: str, negate: bool = False) -> ast.expr:
-    ret = fast.parse(f'getattr(builtins, "{var_name}", False)').body[0].value  # type: ignore
-    if negate:
-        ret = fast.UnaryOp(operand=ret, op=fast.Not())
-    return ret
-
-
-def _make_composite_condition(nullable_conditions: List[Optional[ast.expr]], op: Optional[ast.AST] = None):
-    conditions = [cond for cond in nullable_conditions if cond is not None]
-    if len(conditions) == 1:
-        return conditions[0]
-    op = op or fast.And()  # type: ignore
-    return fast.BoolOp(op=op, values=conditions)
 
 
 class StripGlobalAndNonlocalDeclarations(ast.NodeTransformer):
@@ -87,10 +72,10 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                 after_loop_evt = TraceEvent.after_while_loop_iter
             return [
                 fast.If(
-                    test=_make_composite_condition(
+                    test=make_composite_condition(
                         [
-                            _make_test(TRACING_ENABLED),
-                            _make_test(loop_guard, negate=True),
+                            make_test(TRACING_ENABLED),
+                            make_test(loop_guard, negate=True),
                             fast.Call(
                                 func=self.emitter_ast(),
                                 args=[before_loop_evt.to_ast(), self.get_copy_id_ast(node)],
@@ -124,9 +109,9 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
         with fast.location_of(fundef_copy):
             return [
                 fast.If(
-                    test=_make_composite_condition(
+                    test=make_composite_condition(
                         [
-                            _make_test(TRACING_ENABLED),
+                            make_test(TRACING_ENABLED),
                             fast.Call(
                                 func=self.emitter_ast(),
                                 args=[TraceEvent.before_function_body.to_ast(), self.get_copy_id_ast(node)],

@@ -215,7 +215,21 @@ def test_lambda_scope():
     assert_not_detected('`z` independent of updated `x`')
     run_cell('y = 43')
     run_cell('logging.info(z)')
-    assert_detected('`z` depends on old value of `y`')
+
+
+def test_lambda_wrapping_call():
+    run_cell('z = 42')
+    run_cell(
+        """
+        def f():
+            return z
+        """
+    )
+    run_cell('lam = lambda: f()')
+    run_cell('x = lam()')
+    run_cell('z = 43')
+    run_cell('logging.info(x)')
+    assert_detected('`x` depends on old value of `z`')
 
 
 def test_lambda_with_kwarg_scope():

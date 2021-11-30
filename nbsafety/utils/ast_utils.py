@@ -8,7 +8,22 @@ from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, FrozenSet, Union
+    from typing import Dict, FrozenSet, List, Optional, Union
+
+
+def make_test(var_name: str, negate: bool = False) -> ast.expr:
+    ret = fast.parse(f'getattr(builtins, "{var_name}", False)').body[0].value  # type: ignore
+    if negate:
+        ret = fast.UnaryOp(operand=ret, op=fast.Not())
+    return ret
+
+
+def make_composite_condition(nullable_conditions: List[Optional[ast.expr]], op: Optional[ast.AST] = None):
+    conditions = [cond for cond in nullable_conditions if cond is not None]
+    if len(conditions) == 1:
+        return conditions[0]
+    op = op or fast.And()  # type: ignore
+    return fast.BoolOp(op=op, values=conditions)
 
 
 class EmitterMixin:

@@ -558,3 +558,66 @@ def test_for_loop_nested_in_while_loop(events):
             TraceEvent.after_module_stmt,
         ], events)
     )
+
+
+@given(events=subsets(_ALL_EVENTS_WITH_HANDLERS))
+@patch_events_with_registered_handlers_to_subset
+def test_lambda_wrapping_call(events):
+    assert _RECORDED_EVENTS == []
+    run_cell(
+        """
+        z = 42
+        def f():
+            return z
+        lam = lambda: f()
+        x = lam()
+        """
+    )
+    throw_and_print_diff_if_recorded_not_equal_to(
+        filter_events_to_subset([
+            TraceEvent.init_module,
+
+            # z = 42
+            TraceEvent.before_stmt,
+            TraceEvent.after_assign_rhs,
+            TraceEvent.after_stmt,
+            TraceEvent.after_module_stmt,
+
+            # def f(): ...
+            TraceEvent.before_stmt,
+            TraceEvent.after_stmt,
+            TraceEvent.after_module_stmt,
+
+            # lam = lambda: f()
+            TraceEvent.before_stmt,
+            TraceEvent.before_lambda,
+            TraceEvent.after_lambda,
+            TraceEvent.after_assign_rhs,
+            TraceEvent.after_stmt,
+            TraceEvent.after_module_stmt,
+
+            # x = lam()
+            TraceEvent.before_stmt,
+            TraceEvent.before_complex_symbol,
+            TraceEvent.before_call,
+            TraceEvent.call,
+            TraceEvent.before_lambda_body,
+            TraceEvent.before_complex_symbol,
+            TraceEvent.before_call,
+            TraceEvent.call,
+            TraceEvent.before_function_body,
+            TraceEvent.before_stmt,
+            TraceEvent.before_return,
+            TraceEvent.after_return,
+            TraceEvent.after_function_execution,
+            TraceEvent.return_,
+            TraceEvent.after_call,
+            TraceEvent.after_complex_symbol,
+            TraceEvent.return_,
+            TraceEvent.after_call,
+            TraceEvent.after_complex_symbol,
+            TraceEvent.after_assign_rhs,
+            TraceEvent.after_stmt,
+            TraceEvent.after_module_stmt,
+        ], events)
+    )

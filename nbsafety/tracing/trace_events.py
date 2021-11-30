@@ -54,6 +54,8 @@ class TraceEvent(Enum):
     before_function_body = 'before_function_body'
     after_function_execution = 'after_function_execution'
 
+    before_lambda_body = 'before_lambda_body'
+
     line = 'line'
     call = 'call'
     return_ = 'return'

@@ -747,7 +747,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             pass
         self.active_scope = self.cur_frame_original_scope
 
-    @register_handler(TraceEvent.before_function_body)
+    @register_handler((TraceEvent.before_function_body, TraceEvent.before_lambda_body))
     def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
         ret = self.tracing_enabled and function_id not in self._seen_functions_ids
         if ret:

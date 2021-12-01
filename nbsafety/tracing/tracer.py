@@ -74,10 +74,27 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
 
     @property
     def events_with_registered_handlers(self) -> FrozenSet[TraceEvent]:
-        return frozenset(
-            evt for evt, handlers in self.EVENT_HANDLERS_BY_CLASS[self.__class__].items()
-            if len(handlers) > 0
-        )
+        ret = set()
+        for clazz in self.__class__.mro():
+            if issubclass(BaseTracerStateMachine, clazz):
+                continue
+            ret |= {
+                evt for evt, handlers in self.EVENT_HANDLERS_BY_CLASS[clazz].items()
+                if len(handlers) > 0
+            }
+        return frozenset(ret)
+
+    @property
+    def has_sys_trace_events(self):
+        return any(evt in self.events_with_registered_handlers for evt in (
+            TraceEvent.line,
+            TraceEvent.call,
+            TraceEvent.return_,
+            TraceEvent.exception,
+            TraceEvent.c_call,
+            TraceEvent.c_return,
+            TraceEvent.c_exception,
+        ))
 
     def _transient_fields_start(self):
         self._persistent_fields = set(self.__dict__.keys())
@@ -165,20 +182,23 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         if check_disabled:
             assert not self.tracing_enabled
         self.tracing_enabled = True
-        self.existing_tracer = existing_tracer or sys.gettrace()
-        if self.existing_tracer is None:
-            self.sys_tracer = self._sys_tracer
-        else:
-            self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
-        sys_settrace(self.sys_tracer)
+        if self.has_sys_trace_events:
+            self.existing_tracer = existing_tracer or sys.gettrace()
+            if self.existing_tracer is None:
+                self.sys_tracer = self._sys_tracer
+            else:
+                self.sys_tracer = self._make_composed_tracer(self.existing_tracer)
+            sys_settrace(self.sys_tracer)
         setattr(builtins, TRACING_ENABLED, True)
 
     def _disable_tracing(self, check_enabled=True):
+        has_sys_trace_events = self.has_sys_trace_events
         if check_enabled:
             assert self.tracing_enabled
-            assert sys.gettrace() is self.sys_tracer
+            assert not has_sys_trace_events or sys.gettrace() is self.sys_tracer
         self.tracing_enabled = False
-        sys_settrace(self.existing_tracer)
+        if has_sys_trace_events:
+            sys_settrace(self.existing_tracer)
         setattr(builtins, TRACING_ENABLED, False)
 
     @contextmanager

@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class AstEavesdropper(ast.NodeTransformer, EmitterMixin):
+class ExprRewriter(ast.NodeTransformer, EmitterMixin):
     def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST], events_with_handlers: FrozenSet[TraceEvent]):
         EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers)
         self._top_level_node_for_symbol: Optional[ast.AST] = None

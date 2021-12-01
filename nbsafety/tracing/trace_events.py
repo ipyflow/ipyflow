@@ -11,6 +11,8 @@ class TraceEvent(Enum):
     after_stmt = 'after_stmt'
     after_module_stmt = 'after_module_stmt'
 
+    load_name = 'load_name'
+
     before_for_loop_body = 'before_for_loop_body'
     after_for_loop_iter = 'after_for_loop_iter'
     before_while_loop_body = 'before_while_loop_body'

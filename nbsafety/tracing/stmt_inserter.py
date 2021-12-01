@@ -9,7 +9,7 @@ from nbsafety.utils.ast_utils import EmitterMixin, make_test, make_composite_con
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, FrozenSet, List, Optional, Set, Union
+    from typing import Dict, FrozenSet, List, Set, Union
 
 
 logger = logging.getLogger(__name__)

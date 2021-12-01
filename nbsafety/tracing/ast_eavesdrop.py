@@ -1,11 +1,11 @@
 # -*- coding: future_annotations -*-
 import ast
-from contextlib import contextmanager
 import logging
-from typing import cast, TYPE_CHECKING
 import sys
+from contextlib import contextmanager
+from typing import cast, TYPE_CHECKING
 
-from nbsafety.extra_builtins import TRACING_ENABLED
+from nbsafety.extra_builtins import TRACING_ENABLED, make_loop_guard_name
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils.ast_utils import EmitterMixin, make_test, make_composite_condition, subscript_to_slice
 from nbsafety.utils import fast
@@ -29,6 +29,20 @@ class AstEavesdropper(ast.NodeTransformer, EmitterMixin):
             # we haven't inserted statements yet, and StatementInserter needs the previous ids to be identical
             assert ret is node
         return ret
+
+    def visit_Name(self, node: ast.Name):
+        if isinstance(node.ctx, ast.Load) and TraceEvent.load_name in self._events_with_handlers:
+            with fast.location_of(node):
+                return fast.Call(
+                    func=self.emitter_ast(),
+                    args=[
+                        TraceEvent.load_name.to_ast(),
+                        self.get_copy_id_ast(node),
+                    ],
+                    keywords=fast.kwargs(ret=node),
+                )
+        else:
+            return node
 
     @contextmanager
     def attrsub_context(self, top_level_node: Optional[ast.AST]):
@@ -324,6 +338,26 @@ class AstEavesdropper(ast.NodeTransformer, EmitterMixin):
                     keywords=fast.kwargs(ret=ret_node),
                 )
         return ret_node
+
+    def visit_While(self, node: ast.While):
+        for name, field in ast.iter_fields(node):
+            if name == 'test':
+                loop_node_copy = cast(ast.While, self._orig_to_copy_mapping[id(node)])
+                loop_guard = make_loop_guard_name(loop_node_copy)
+                with fast.location_of(node):
+                    node.test = fast.IfExp(
+                        test=make_composite_condition([
+                            make_test(TRACING_ENABLED),
+                            make_test(loop_guard, negate=True),
+                        ]),
+                        body=self.visit(field),
+                        orelse=loop_node_copy.test,
+                    )
+            elif isinstance(field, list):
+                setattr(node, name, [self.visit(elt) for elt in field])
+            else:
+                setattr(node, name, self.visit(field))
+        return node
 
     @staticmethod
     def _ast_container_to_literal_trace_evt(

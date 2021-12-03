@@ -10,7 +10,7 @@ from nbsafety.tracing.stmt_mapper import StatementMapper
 
 if TYPE_CHECKING:
     from typing import Dict, Optional, Set, Tuple
-    from nbsafety.tracing.tracer import BaseTracerStateMachine
+    from nbsafety.tracing.tracer import SingletonTracerStateMachine
 
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ logger.setLevel(logging.WARNING)
 
 
 class AstRewriter(ast.NodeTransformer):
-    def __init__(self, tracer: BaseTracerStateMachine, module_id: Optional[int] = None):
+    def __init__(self, tracer: SingletonTracerStateMachine, module_id: Optional[int] = None):
         self._tracer = tracer
         self._module_id: Optional[int] = module_id
         self._augmented_positions_by_type: Dict[str, Set[Tuple[int, int]]] = defaultdict(set)

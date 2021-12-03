@@ -6,6 +6,7 @@ import logging
 import sys
 from collections import defaultdict
 from contextlib import contextmanager
+from importlib.machinery import PathFinder, SourceFileLoader
 from typing import TYPE_CHECKING
 
 from traitlets.traitlets import MetaHasTraits
@@ -36,6 +37,7 @@ class MetaHasTraitsAndTransientState(MetaHasTraits):
 
 
 class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTraitsAndTransientState):
+    ast_rewriter_cls = AstRewriter
 
     _MANAGER_CLASS_REGISTERED = False
     EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
@@ -210,15 +212,89 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         finally:
             sys.settrace = original_settrace
 
+    def should_trace_source_path(self, path) -> bool:
+        return True
+
+    def make_ast_rewriter(self, module_id: Optional[int] = None):
+        return self.ast_rewriter_cls(self, module_id=module_id)
+
+    def _make_finder(self):
+        tracer_self = self
+        ast_rewriter = self.make_ast_rewriter()
+
+        class TraceLoader(SourceFileLoader):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self._ignore_bytecode_cache: bool = False
+
+            def path_stats(self, path):
+                if self._ignore_bytecode_cache:
+                    raise OSError()
+                else:
+                    return super().path_stats(path)
+
+            def _cache_bytecode(self, source_path, bytecode_path, data):
+                # don't cache bytecode
+                pass
+
+            @contextmanager
+            def _invalidate_bytecode_cache(self, should_invalidate: bool) -> Generator[None, None, None]:
+                orig_ignore_bytecode_cache = self._ignore_bytecode_cache
+                try:
+                    self._ignore_bytecode_cache = should_invalidate
+                    yield
+                finally:
+                    self._ignore_bytecode_cache = orig_ignore_bytecode_cache
+
+            def get_code(self, fullname):
+                source_path = self.get_filename(fullname)
+                with self._invalidate_bytecode_cache(tracer_self.should_trace_source_path(source_path)):
+                    return super().get_code(fullname)
+
+            def source_to_code(self, data, path, *, _optimize=-1):
+                ret = None
+                try:
+                    if tracer_self.should_trace_source_path(path):
+                        tree = ast.parse(data)
+                        tree = ast_rewriter.visit(tree)
+                        ret = compile(tree, path, 'exec', dont_inherit=True, optimize=_optimize)
+                except Exception:
+                    pass
+                finally:
+                    if ret is None:
+                        ret = super().source_to_code(data, path, _optimize=_optimize)
+                return ret
+
+        class TraceFinder(PathFinder):
+            @classmethod
+            def find_spec(cls, fullname, path=None, target=None):
+                spec = super().find_spec(fullname, path, target)
+                if spec is None:
+                    return None
+
+                spec.loader = TraceLoader(spec.loader.name, spec.loader.path)
+                return spec
+
+        return TraceFinder
+
+    @contextmanager
+    def _patch_meta_path(self) -> Generator[None, None, None]:
+        try:
+            sys.meta_path.insert(0, self._make_finder())
+            yield
+        finally:
+            del sys.meta_path[0]
+
     @contextmanager
     def tracing_context(self) -> Generator[None, None, None]:
         setattr(builtins, EMIT_EVENT, self._emit_event)
         for loop_guard in self.loop_guards:
             self.deactivate_loop_guard(loop_guard)
         try:
-            with self._patch_sys_settrace():
-                self._enable_tracing()
-                yield
+            with self._patch_meta_path():
+                with self._patch_sys_settrace():
+                    self._enable_tracing()
+                    yield
         finally:
             self._disable_tracing(check_enabled=False)
             delattr(builtins, EMIT_EVENT)
@@ -272,7 +348,6 @@ def register_trace_manager_class(mgr_cls: Type[SingletonTracerStateMachine]) -> 
 
 @register_trace_manager_class
 class BaseTracerStateMachine(SingletonTracerStateMachine):
-    ast_rewriter_cls = AstRewriter
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -287,9 +362,6 @@ class BaseTracerStateMachine(SingletonTracerStateMachine):
         ret = self._saved_slice
         self._saved_slice = None
         return ret
-
-    def make_ast_rewriter(self, module_id: Optional[int] = None):
-        return self.ast_rewriter_cls(self, module_id=module_id)
 
 
 assert not SingletonTracerStateMachine._MANAGER_CLASS_REGISTERED

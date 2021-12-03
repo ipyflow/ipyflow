@@ -84,6 +84,9 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
         return evt != 'line' and nbs().is_cell_file(filename)
 
+    def should_trace_source_path(self, path) -> bool:
+        return False
+
     def should_propagate_handler_exception(self, evt: TraceEvent, exc: Exception) -> bool:
         return SafetyRunMode.get() == SafetyRunMode.DEVELOP
 

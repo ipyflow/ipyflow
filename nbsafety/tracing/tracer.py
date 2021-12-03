@@ -3,6 +3,7 @@ import ast
 import builtins
 import functools
 import logging
+import os
 import sys
 from collections import defaultdict
 from contextlib import contextmanager
@@ -27,6 +28,7 @@ logger.setLevel(logging.ERROR)
 
 
 sys_settrace = sys.settrace
+internal_directories = (os.path.dirname(os.path.dirname((lambda: 0).__code__.co_filename)),)
 
 
 class MetaHasTraitsAndTransientState(MetaHasTraits):
@@ -207,7 +209,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             sys.settrace = original_settrace
 
     def should_trace_source_path(self, path) -> bool:
-        return True
+        return not path.startswith(internal_directories)
 
     def make_ast_rewriter(self, module_id: Optional[int] = None):
         return self.ast_rewriter_cls(self, module_id=module_id)
@@ -301,7 +303,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         return NotImplemented
 
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
-        return True
+        return self.should_trace_source_path(filename)
 
     def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
         if not self.file_passes_filter_for_event(evt, frame.f_code.co_filename):

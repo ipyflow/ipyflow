@@ -9,6 +9,7 @@ import hypothesis.strategies as st
 from hypothesis import example, given, settings
 
 from nbsafety.safety import NotebookSafety
+from nbsafety.singletons import tracer
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine
 from .utils import make_safety_fixture, skipif_known_failing
@@ -85,18 +86,14 @@ def patch_events_with_registered_handlers_to_subset(testfunc):
             events.add(TraceEvent.after_tuple_literal)
         if TraceEvent.after_tuple_literal in events:
             events.add(TraceEvent.before_tuple_literal)
-        original_events_with_registered_handlers = SafetyTracerStateMachine.events_with_registered_handlers
 
-        @property
-        def patched_events_with_registered_handlers(self):
-            return frozenset(events)
-
+        orig_handlers = tracer().events_with_registered_handlers
         try:
-            SafetyTracerStateMachine.events_with_registered_handlers = patched_events_with_registered_handlers
+            tracer().events_with_registered_handlers = frozenset(events)
             _RECORDED_EVENTS.clear()
             testfunc(events)
         finally:
-            SafetyTracerStateMachine.events_with_registered_handlers = original_events_with_registered_handlers
+            tracer().events_with_registered_handlers = orig_handlers
 
     return wrapped_testfunc
 

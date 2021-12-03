@@ -62,6 +62,7 @@ class TraceEvent(Enum):
     call = 'call'
     return_ = 'return'
     exception = 'exception'
+    opcode = 'opcode'
 
     # these are included for completeness but will probably not be used
     c_call = 'c_call'

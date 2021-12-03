@@ -55,9 +55,13 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             )
         super().__init__()
         self._event_handlers = defaultdict(list)
+        events_with_registered_handlers = set()
         for clazz in reversed(self.__class__.mro()):
             for evt, handlers in self.EVENT_HANDLERS_BY_CLASS.get(clazz, {}).items():
                 self._event_handlers[evt].extend(handlers)
+                if not issubclass(BaseTracerStateMachine, clazz) and len(handlers) > 0:
+                    events_with_registered_handlers.add(evt)
+        self.events_with_registered_handlers: FrozenSet[TraceEvent] = frozenset(events_with_registered_handlers)
         self.tracing_enabled = False
         self.sys_tracer = self._sys_tracer
         self.existing_tracer = None
@@ -75,24 +79,13 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         self._transient_fields_start()
 
     @property
-    def events_with_registered_handlers(self) -> FrozenSet[TraceEvent]:
-        ret = set()
-        for clazz in self.__class__.mro():
-            if issubclass(BaseTracerStateMachine, clazz):
-                continue
-            ret |= {
-                evt for evt, handlers in self.EVENT_HANDLERS_BY_CLASS[clazz].items()
-                if len(handlers) > 0
-            }
-        return frozenset(ret)
-
-    @property
     def has_sys_trace_events(self):
         return any(evt in self.events_with_registered_handlers for evt in (
             TraceEvent.line,
             TraceEvent.call,
             TraceEvent.return_,
             TraceEvent.exception,
+            TraceEvent.opcode,
             TraceEvent.c_call,
             TraceEvent.c_return,
             TraceEvent.c_exception,
@@ -312,6 +305,12 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
     def _sys_tracer(self, frame: FrameType, evt: str, arg: Any, **__):
         if not self.file_passes_filter_for_event(evt, frame.f_code.co_filename):
             return None
+
+        if evt == "call":
+            if TraceEvent.line not in self.events_with_registered_handlers:
+                frame.f_trace_lines = False
+            if TraceEvent.opcode in self.events_with_registered_handlers:
+                frame.f_trace_opcodes = True
 
         return self._emit_event(evt, 0, _frame=frame, ret=arg)
 

@@ -453,6 +453,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         tuple(set(TraceEvent) - {
             TraceEvent.line,
             TraceEvent.call,
+            TraceEvent.opcode,
             TraceEvent.return_,
             TraceEvent.exception,
             TraceEvent.c_call,

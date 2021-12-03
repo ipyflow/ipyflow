@@ -54,6 +54,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
                 f'class not registered; use the `{register_trace_manager_class.__name__}` decorator on the subclass'
             )
         super().__init__()
+        self._has_fancy_sys_tracing = (sys.version_info >= (3, 7))
         self._event_handlers = defaultdict(list)
         events_with_registered_handlers = set()
         for clazz in reversed(self.__class__.mro()):
@@ -306,17 +307,20 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         if not self.file_passes_filter_for_event(evt, frame.f_code.co_filename):
             return None
 
-        if evt == "call":
+        if self._has_fancy_sys_tracing and evt == "call":
             if TraceEvent.line not in self.events_with_registered_handlers:
-                frame.f_trace_lines = False
+                frame.f_trace_lines = False  # type: ignore
             if TraceEvent.opcode in self.events_with_registered_handlers:
-                frame.f_trace_opcodes = True
+                frame.f_trace_opcodes = True  # type: ignore
 
         return self._emit_event(evt, 0, _frame=frame, ret=arg)
 
 
 def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
     events = event if isinstance(event, tuple) else (event,)
+
+    if TraceEvent.opcode in events and sys.version_info < (3, 7):
+        raise ValueError("can't trace opcodes on Python < 3.7")
 
     def _inner_registrar(handler):
         for evt in events:

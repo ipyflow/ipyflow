@@ -1,4 +1,5 @@
 # -*- coding: future_annotations -*-
+import sys
 from enum import Enum
 
 from nbsafety.utils import fast

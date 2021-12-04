@@ -1,13 +1,47 @@
 # -*- coding: future_annotations -*-
+import re
 from typing import TYPE_CHECKING
-from nbsafety.analysis.reactive_modifiers import REACTIVE_ATOM_REGEX, extract_reactive_atoms, replace_reactive_atoms
+from nbsafety.tracing.nbsafety_tracer import reactive_spec
+from nbsafety.tracing.syntax_augmentation import (
+    AugmentationType,
+    AugmentationSpec,
+    AUGMENTED_SYNTAX_REGEX_TEMPLATE,
+    replace_tokens_and_get_augmented_positions,
+)
 from nbsafety.singletons import tracer
 from .utils import make_safety_fixture
 
 if TYPE_CHECKING:
-    from typing import Set
+    from typing import List, Set
 
 _safety_fixture, run_cell = make_safety_fixture(enable_reactive_modifiers=True)
+
+
+REACTIVE_ATOM_REGEX = re.compile(AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=reactive_spec.escaped_token))
+
+
+def extract_reactive_atoms(s: str) -> List[str]:
+    reactive_atoms = []
+    while True:
+        m = REACTIVE_ATOM_REGEX.match(s)
+        if m is None:
+            break
+        reactive_atoms.append(m.group(1))
+        s = s[m.span()[1]:]
+    return reactive_atoms
+
+
+def replace_reactive_atoms(s: str) -> str:
+    return replace_tokens_and_get_augmented_positions(s, reactive_spec, REACTIVE_ATOM_REGEX)[0]
+
+
+def _get_reactive_positions(s: str) -> List[int]:
+    return replace_tokens_and_get_augmented_positions(s, reactive_spec, REACTIVE_ATOM_REGEX)[1]
+
+
+def _get_augmented_positions(s: str, spec: AugmentationSpec) -> List[int]:
+    regex = re.compile(AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=spec.escaped_token))
+    return replace_tokens_and_get_augmented_positions(s, spec, regex)[1]
 
 
 def _get_all_reactive_var_names() -> Set[str]:
@@ -56,3 +90,24 @@ def test_nested_names_recovered():
     run_cell('$assert_nonzero($x)')
     varnames = _get_all_reactive_var_names()
     assert varnames == {'x', 'assert_nonzero'}, 'got %s' % varnames
+
+
+def test_reactive_positions():
+    assert _get_reactive_positions("foo") == []
+    assert _get_reactive_positions("$foo") == [0]
+    assert _get_reactive_positions("foo $bar") == [4]
+    assert _get_reactive_positions("$foo $bar") == [0, 4]
+    assert _get_reactive_positions("$foo $bar $baz") == [0, 4, 8]
+    assert _get_reactive_positions("foo $bar $baz") == [4, 8]
+    assert _get_reactive_positions("$foo bar $baz") == [0, 8]
+
+
+def test_positions_with_offset_from_replacement():
+    spec = AugmentationSpec(AugmentationType.prefix, "$$", "$")
+    assert _get_augmented_positions("foo", spec) == []
+    assert _get_augmented_positions("$$foo", spec) == [0]
+    assert _get_augmented_positions("foo $$bar", spec) == [4]
+    assert _get_augmented_positions("$$foo $$bar", spec) == [0, 5]
+    assert _get_augmented_positions("$$foo $$bar $$baz", spec) == [0, 5, 10]
+    assert _get_augmented_positions("foo $$bar $$baz", spec) == [4, 9]
+    assert _get_augmented_positions("$$foo bar $$baz", spec) == [0, 9]

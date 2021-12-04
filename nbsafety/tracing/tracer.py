@@ -15,6 +15,7 @@ from traitlets.traitlets import MetaHasTraits
 from nbsafety import singletons
 from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED
 from nbsafety.tracing.ast_rewriter import AstRewriter
+from nbsafety.tracing.syntax_augmentation import AugmentationSpec, make_syntax_augmenter
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
 
@@ -72,7 +73,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         # ast-related fields
         self.ast_node_by_id: Dict[int, ast.AST] = {}
         self.parent_node_by_id: Dict[int, ast.AST] = {}
-        self.augmented_node_ids_by_type: Dict[str, Set[int]] = defaultdict(set)
+        self.augmented_node_ids_by_spec: Dict[AugmentationSpec, Set[int]] = defaultdict(set)
         self.line_to_stmt_by_module_id: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
         self.loop_guards: Set[str] = set()
 
@@ -93,6 +94,10 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             TraceEvent.c_return,
             TraceEvent.c_exception,
         ))
+
+    @property
+    def syntax_augmentation_specs(self) -> List[AugmentationSpec]:
+        return []
 
     def _transient_fields_start(self):
         self._persistent_fields = set(self.__dict__.keys())
@@ -211,12 +216,16 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
     def should_trace_source_path(self, path) -> bool:
         return not path.startswith(internal_directories)
 
-    def make_ast_rewriter(self, module_id: Optional[int] = None):
+    def make_ast_rewriter(self, module_id: Optional[int] = None) -> AstRewriter:
         return self.ast_rewriter_cls(self, module_id=module_id)
+
+    def make_syntax_augmenters(self, ast_rewriter: AstRewriter) -> List[Callable]:
+        return [make_syntax_augmenter(ast_rewriter, spec) for spec in self.syntax_augmentation_specs]
 
     def _make_finder(self):
         tracer_self = self
         ast_rewriter = self.make_ast_rewriter()
+        syntax_augmenters = self.make_syntax_augmenters(ast_rewriter)
 
         class TraceLoader(SourceFileLoader):
             def __init__(self, *args, **kwargs):
@@ -251,6 +260,11 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
                 ret = None
                 try:
                     if tracer_self.should_trace_source_path(path):
+                        # FIXME: can we avoid re-encoding / decoding the source bytes?
+                        data = str(data, encoding='utf-8')
+                        for syntax_augmenter in syntax_augmenters:
+                            data = syntax_augmenter(data)
+                        data = bytes(data, encoding='utf-8')
                         tree = ast.parse(data)
                         tree = ast_rewriter.visit(tree)
                         ret = compile(tree, path, 'exec', dont_inherit=True, optimize=_optimize)

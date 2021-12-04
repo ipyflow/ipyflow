@@ -9,7 +9,6 @@ import astunparse
 from IPython import get_ipython
 
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
-from nbsafety.analysis.reactive_modifiers import AugmentedAtom
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
@@ -32,6 +31,7 @@ from nbsafety.tracing.mutation_special_cases import (
 )
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
+from nbsafety.tracing.syntax_augmentation import AugmentationSpec, AugmentationType
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
@@ -77,6 +77,10 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
+reactive_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$', replacement='')
+blocking_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$:', replacement='')
+
+
 @register_trace_manager_class
 class SafetyTracerStateMachine(BaseTracerStateMachine):
     ast_rewriter_cls = SafetyAstRewriter
@@ -93,8 +97,8 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
-            self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.reactive.marker]
-            self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_type[AugmentedAtom.blocking.marker]
+            self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_spec[reactive_spec]
+            self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_spec[blocking_spec]
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self._seen_loop_ids: Set[NodeId] = set()
@@ -152,6 +156,10 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
                 with self.lexical_literal_stack.register_stack_state():
                     # `None` means use 'cur_frame_original_scope'
                     self.active_literal_scope: Optional[Namespace] = None
+
+    @property
+    def syntax_augmentation_specs(self) -> List[AugmentationSpec]:
+        return [blocking_spec, reactive_spec]
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter
@@ -513,7 +521,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def attrsub_tracer(
         self,
         obj: Any,
-        node_id: NodeId,
+        attrsub_node_id: NodeId,
         _frame_: FrameType,
         event: TraceEvent,
         *_,
@@ -524,6 +532,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         obj_name: Optional[str] = None,
         **__
     ):
+        node_id = id(self.ast_node_by_id[attrsub_node_id].value)  # type: ignore
         if isinstance(self.ast_node_by_id[node_id], ast.Call):
             # clear the callpoint dependency
             self.node_id_to_loaded_symbols.pop(node_id, None)

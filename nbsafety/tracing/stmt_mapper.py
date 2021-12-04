@@ -4,8 +4,10 @@ import copy
 import logging
 from typing import TYPE_CHECKING
 
+from nbsafety.tracing.syntax_augmentation import AugmentationSpec, AugmentationType
+
 if TYPE_CHECKING:
-    from typing import Dict, List, Set, Tuple, Union
+    from typing import Dict, List, Optional, Set, Tuple
     from nbsafety.tracing.tracer import SingletonTracerStateMachine
 
 
@@ -18,15 +20,15 @@ class StatementMapper(ast.NodeVisitor):
         self,
         line_to_stmt_map: Dict[int, ast.stmt],
         tracer: SingletonTracerStateMachine,
-        augmented_positions_by_type: Dict[str, Set[Tuple[int, int]]],
+        augmented_positions_by_spec: Dict[AugmentationSpec, Set[Tuple[int, int]]],
     ):
         self.line_to_stmt_map: Dict[int, ast.stmt] = line_to_stmt_map
         self._tracer: SingletonTracerStateMachine = tracer
-        self.augmented_positions_by_type = augmented_positions_by_type
+        self.augmented_positions_by_spec = augmented_positions_by_spec
         self.traversal: List[ast.AST] = []
 
     @staticmethod
-    def _get_col_offset_for(node: ast.AST) -> int:
+    def _get_prefix_col_offset_for(node: ast.AST) -> Optional[int]:
         if isinstance(node, ast.Name):
             return node.col_offset
         elif isinstance(node, ast.Attribute):
@@ -41,7 +43,44 @@ class StatementMapper(ast.NodeVisitor):
             # TODO: can be different if more spaces between 'async', 'def', and function name
             return node.col_offset + 10
         else:
-            raise TypeError('unsupported node type for node %s' % node)
+            return None
+
+    @staticmethod
+    def _get_suffix_col_offset_for(node: ast.AST) -> Optional[int]:
+        if isinstance(node, ast.Name):
+            return node.col_offset + len(node.id)
+        elif isinstance(node, ast.Attribute):
+            return getattr(node.value, 'end_col_offset', -1)
+        elif isinstance(node, ast.FunctionDef):
+            # TODO: can be different if more spaces between 'def' and function name
+            return node.col_offset + 4 + len(node.name)
+        elif isinstance(node, ast.ClassDef):
+            # TODO: can be different if more spaces between 'class' and class name
+            return node.col_offset + 6 + len(node.name)
+        elif isinstance(node, ast.AsyncFunctionDef):
+            # TODO: can be different if more spaces between 'async', 'def', and function name
+            return node.col_offset + 10 + len(node.name)
+        else:
+            return None
+
+    @staticmethod
+    def _get_dot_col_offset_for(node: ast.AST) -> Optional[int]:
+        if isinstance(node, ast.Attribute):
+            return getattr(node.value, 'end_col_offset', -1)
+        else:
+            return None
+
+    def _get_col_offset_for(self, aug_type: AugmentationType, node: ast.AST) -> Optional[int]:
+        if aug_type == AugmentationType.prefix:
+            return self._get_prefix_col_offset_for(node)
+        elif aug_type == AugmentationType.suffix:
+            return self._get_suffix_col_offset_for(node)
+        elif aug_type == AugmentationType.dot:
+            return self._get_dot_col_offset_for(node)
+        elif aug_type == AugmentationType.operator:
+            raise NotImplementedError()
+        else:
+            raise NotImplementedError()
 
     def __call__(self, node: ast.Module) -> Dict[int, ast.AST]:
         # for some bizarre reason we need to visit once to clear empty nodes apparently
@@ -57,13 +96,12 @@ class StatementMapper(ast.NodeVisitor):
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
             self._tracer.ast_node_by_id[id(nc)] = nc
-            try:
-                col_offset = self._get_col_offset_for(nc)
-                for mod_type, mod_positions in self.augmented_positions_by_type.items():
-                    if (nc.lineno, col_offset) in mod_positions:
-                        self._tracer.augmented_node_ids_by_type[mod_type].add(id(nc))
-            except TypeError:
-                pass
+            for spec, mod_positions in self.augmented_positions_by_spec.items():
+                col_offset = self._get_col_offset_for(spec.aug_type, nc)
+                if col_offset is None:
+                    continue
+                if (nc.lineno, col_offset) in mod_positions:
+                    self._tracer.augmented_node_ids_by_spec[spec].add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

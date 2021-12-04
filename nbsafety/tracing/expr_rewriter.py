@@ -186,13 +186,12 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
             should_emit_evt = should_emit_evt or (
                 evt_to_use == TraceEvent.subscript and TraceEvent._load_saved_slice in self._events_with_handlers
             )
-            orig_node_value = node.value
             with self.attrsub_context(node):
                 node.value = self.visit(node.value)
                 if should_emit_evt:
                     node.value = fast.Call(
                         func=self.emitter_ast(),
-                        args=[evt_to_use.to_ast(), self.get_copy_id_ast(orig_node_value)],
+                        args=[evt_to_use.to_ast(), self.get_copy_id_ast(orig_node_id)],
                         keywords=fast.kwargs(
                             ret=node.value,
                             attr_or_subscript=attr_or_sub,

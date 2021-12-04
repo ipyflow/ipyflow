@@ -19,7 +19,6 @@ from nbsafety.ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from nbsafety import line_magics
-from nbsafety.analysis.reactive_modifiers import AugmentedAtom, make_tracking_augmented_atom_replacer
 from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
@@ -593,10 +592,10 @@ class NotebookSafety(singletons.NotebookSafety):
         with SafetyTracerStateMachine.instance().tracing_context():
             SafetyTracerStateMachine.instance().reset()
             ast_rewriter = SafetyTracerStateMachine.instance().make_ast_rewriter(module_id=self.cell_counter())
-            with input_transformer_context([
-                make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.blocking),
-                make_tracking_augmented_atom_replacer(ast_rewriter, AugmentedAtom.reactive),
-            ] if self.settings.enable_reactive_modifiers else []):
+            with input_transformer_context(
+                SafetyTracerStateMachine.instance().make_syntax_augmenters(ast_rewriter)
+                if self.settings.enable_reactive_modifiers else []
+            ):
                 with ast_transformer_context([ast_rewriter]):
                     yield
 

@@ -26,7 +26,7 @@ class StatementMapper(ast.NodeVisitor):
         self.traversal: List[ast.AST] = []
 
     @staticmethod
-    def _get_col_offset_for(node: Union[ast.Name, ast.Attribute, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef]):
+    def _get_col_offset_for(node: ast.AST) -> int:
         if isinstance(node, ast.Name):
             return node.col_offset
         elif isinstance(node, ast.Attribute):
@@ -57,11 +57,13 @@ class StatementMapper(ast.NodeVisitor):
         for no, nc in zip(orig_traversal, copy_traversal):
             orig_to_copy_mapping[id(no)] = nc
             self._tracer.ast_node_by_id[id(nc)] = nc
-            if isinstance(nc, (ast.Name, ast.Attribute, ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+            try:
                 col_offset = self._get_col_offset_for(nc)
                 for mod_type, mod_positions in self.augmented_positions_by_type.items():
                     if (nc.lineno, col_offset) in mod_positions:
                         self._tracer.augmented_node_ids_by_type[mod_type].add(id(nc))
+            except TypeError:
+                pass
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
                 # workaround for python >= 3.8 wherein function calls seem

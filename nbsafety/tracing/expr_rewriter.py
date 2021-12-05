@@ -528,14 +528,37 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
         elif isinstance(op, ast.BitXor):
             evt = TraceEvent.bit_xor
         else:
-            return self.generic_visit(node)
+            evt = None
+
+        for attr, operand_evt in [('left', TraceEvent.left_binop_arg), ('right', TraceEvent.right_binop_arg)]:
+            operand_node = getattr(node, attr)
+            if operand_evt in self._events_with_handlers:
+                with fast.location_of(operand_node):
+                    setattr(node, attr, fast.Call(
+                        func=self.emitter_ast(),
+                        args=[operand_evt.to_ast(), self.get_copy_id_ast(operand_node)],
+                        kewords=fast.kwargs(ret=self.visit(operand_node)),
+                    ))
+            else:
+                setattr(node, attr, self.visit(operand_node))
 
         if evt in self._events_with_handlers:
             with fast.location_of(node):
                 return fast.Call(
                     func=self.emitter_ast(),
                     args=[evt.to_ast(), self.get_copy_id_ast(node)],
-                    keywords=fast.kwargs(left=self.visit(node.left), right=self.visit(node.right)),
+                    keywords=fast.kwargs(left=node.left, right=node.right),
                 )
         else:
-            return self.generic_visit(node)
+            return node
+
+    def visit_Ellipsis(self, node: ast.Ellipsis):
+        if TraceEvent.ellipses in self._events_with_handlers:
+            with fast.location_of(node):
+                return fast.Call(
+                    func=self.emitter_ast(),
+                    args=[TraceEvent.ellipses.to_ast(), self.get_copy_id_ast(node)],
+                    keywords=fast.kwargs(ret=node),
+                )
+        else:
+            return node

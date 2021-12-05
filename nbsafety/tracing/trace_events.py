@@ -59,6 +59,8 @@ class TraceEvent(Enum):
 
     before_lambda_body = 'before_lambda_body'
 
+    left_binop_arg = 'left_binop_arg'
+    right_binop_arg = 'right_binop_arg'
     add = 'add'
     sub = 'sub'
     mult = 'mult'
@@ -69,6 +71,8 @@ class TraceEvent(Enum):
     bit_and = 'bit_and'
     bit_or = 'bit_or'
     bit_xor = 'bit_xor'
+
+    ellipses = 'ellipses'
 
     line = 'line'
     call = 'call'

@@ -7,8 +7,9 @@ import os
 import sys
 from collections import defaultdict
 from contextlib import contextmanager
-from importlib.machinery import PathFinder, SourceFileLoader
-from typing import TYPE_CHECKING
+from importlib.machinery import SourceFileLoader
+from importlib.util import spec_from_loader
+from typing import TYPE_CHECKING, cast
 
 from traitlets.traitlets import MetaHasTraits
 
@@ -279,14 +280,45 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
                         ret = super().source_to_code(data, path, _optimize=_optimize)
                 return ret
 
-        class TraceFinder(PathFinder):
+        class TraceFinder:
+            @classmethod
+            def _find_plain_spec(cls, fullname, path, target):
+                """Try to find the original module using all the
+                remaining meta_path finders."""
+                spec = None
+                for finder in sys.meta_path:
+                    # when testing with pytest, it installs a finder that for
+                    # some yet unknown reasons makes birdseye
+                    # fail. For now it will just avoid using it and pass to
+                    # the next one
+                    if finder is cls or 'pytest' in finder.__module__:
+                        continue
+                    if hasattr(finder, 'find_spec'):
+                        spec = finder.find_spec(fullname, path, target=target)
+                    elif hasattr(finder, 'load_module'):
+                        spec = spec_from_loader(fullname, finder)
+
+                    if spec is not None and spec.origin != 'builtin':
+                        return spec
+
             @classmethod
             def find_spec(cls, fullname, path=None, target=None):
-                spec = super().find_spec(fullname, path, target)
-                if spec is None:
+                spec = cls._find_plain_spec(fullname, path, target)
+                if spec is None or not (hasattr(spec.loader, 'get_source') and
+                                        callable(spec.loader.get_source)):  # noqa: E128
+                    if fullname != 'org':
+                        # stdlib pickle.py at line 94 contains a ``from
+                        # org.python.core for Jython which is always failing,
+                        # of course
+                        logging.debug('Failed finding spec for %s', fullname)
                     return None
 
-                spec.loader = TraceLoader(spec.loader.name, spec.loader.path)
+                loader = cast(SourceFileLoader, spec.loader)
+                source_path = loader.get_filename(fullname)
+                if not tracer_self.should_trace_source_path(source_path):
+                    return None
+
+                spec.loader = TraceLoader(loader.name, loader.path)
                 return spec
 
         return TraceFinder

@@ -18,7 +18,7 @@ class AugmentationType(Enum):
     prefix = 'prefix'
     suffix = 'suffix'
     dot = 'dot'
-    operator = 'operator'
+    binop = 'binop'
 
 
 class AugmentationSpec(NamedTuple):
@@ -45,8 +45,7 @@ AUGMENTED_SYNTAX_REGEX_TEMPLATE = "".join(
     r"   |  '''(?:(?!'''){any})*'''"
     r"   |  {tq}(?:(?!{tq}){any})*{tq}"
     r" )*?"
-    r" ({{token}}(?:(?!\d)\w)\w*"
-    r" )".format(
+    r" ({{token}})".format(
         q='"',                                 # quote
         tq='"""',                              # triple quote
         any=r"[\S\s]",                         # match anything (more general than '.') -- space or non-space

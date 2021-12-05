@@ -20,18 +20,7 @@ _safety_fixture, run_cell = make_safety_fixture(enable_reactive_modifiers=True)
 REACTIVE_ATOM_REGEX = re.compile(AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=reactive_spec.escaped_token))
 
 
-def extract_reactive_atoms(s: str) -> List[str]:
-    reactive_atoms = []
-    while True:
-        m = REACTIVE_ATOM_REGEX.match(s)
-        if m is None:
-            break
-        reactive_atoms.append(m.group(1))
-        s = s[m.span()[1]:]
-    return reactive_atoms
-
-
-def replace_reactive_atoms(s: str) -> str:
+def _replace_reactive_atoms(s: str) -> str:
     return replace_tokens_and_get_augmented_positions(s, reactive_spec, REACTIVE_ATOM_REGEX)[0]
 
 
@@ -55,18 +44,9 @@ def test_simple():
     assert REACTIVE_ATOM_REGEX.match("") is None
     assert REACTIVE_ATOM_REGEX.match("foo") is None
     assert REACTIVE_ATOM_REGEX.match("foo bar") is None
-    assert REACTIVE_ATOM_REGEX.match("$foo").group(1) == "$foo"
-    assert REACTIVE_ATOM_REGEX.match("$foo bar").group(1) == "$foo"
-    assert REACTIVE_ATOM_REGEX.match("foo $bar").group(1) == "$bar"
-    assert REACTIVE_ATOM_REGEX.match("\nfoo $bar").group(1) == "$bar"
-    assert REACTIVE_ATOM_REGEX.match("\n$foo bar").group(1) == "$foo"
-    assert REACTIVE_ATOM_REGEX.match("\n'$foo' $bar").group(1) == "$bar"
-    assert extract_reactive_atoms("$foo $bar") == ["$foo", "$bar"]
-    assert replace_reactive_atoms("$foo $bar") == "foo bar"
-    assert extract_reactive_atoms("$foo bar $baz42") == ["$foo", "$baz42"]
-    assert replace_reactive_atoms("$foo bar $baz42") == "foo bar baz42"
-    assert extract_reactive_atoms("$foo $42bar $_baz42") == ["$foo", "$_baz42"]
-    assert replace_reactive_atoms("$foo $42bar $_baz42") == "foo $42bar _baz42"
+    assert _replace_reactive_atoms("$foo $bar") == "foo bar"
+    assert _replace_reactive_atoms("$foo bar $baz42") == "foo bar baz42"
+    assert _replace_reactive_atoms("$foo $42bar $_baz42") == "foo 42bar _baz42"
 
 
 def test_simple_names_recovered():

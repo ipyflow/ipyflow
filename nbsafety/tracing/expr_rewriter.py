@@ -504,3 +504,38 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
         for target in ret.targets:
             target.ctx = ast.Del()  # type: ignore
         return ret
+
+    def visit_BinOp(self, node: ast.BinOp):
+        op = node.op
+        if isinstance(op, ast.Add):
+            evt = TraceEvent.add
+        elif isinstance(op, ast.Sub):
+            evt = TraceEvent.sub
+        elif isinstance(op, ast.Mult):
+            evt = TraceEvent.mult
+        elif isinstance(op, ast.MatMult):
+            evt = TraceEvent.mat_mult
+        elif isinstance(op, ast.Div):
+            evt = TraceEvent.div
+        elif isinstance(op, ast.FloorDiv):
+            evt = TraceEvent.floor_div
+        elif isinstance(op, ast.Pow):
+            evt = TraceEvent.power
+        elif isinstance(op, ast.BitAnd):
+            evt = TraceEvent.bit_and
+        elif isinstance(op, ast.BitOr):
+            evt = TraceEvent.bit_or
+        elif isinstance(op, ast.BitXor):
+            evt = TraceEvent.bit_xor
+        else:
+            return self.generic_visit(node)
+
+        if evt in self._events_with_handlers:
+            with fast.location_of(node):
+                return fast.Call(
+                    func=self.emitter_ast(),
+                    args=[evt.to_ast(), self.get_copy_id_ast(node)],
+                    keywords=fast.kwargs(left=self.visit(node.left), right=self.visit(node.right)),
+                )
+        else:
+            return self.generic_visit(node)

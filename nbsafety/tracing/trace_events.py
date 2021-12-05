@@ -59,6 +59,17 @@ class TraceEvent(Enum):
 
     before_lambda_body = 'before_lambda_body'
 
+    add = 'add'
+    sub = 'sub'
+    mult = 'mult'
+    mat_mult = 'mat_mult'
+    div = 'div'
+    floor_div = 'floor_div'
+    power = 'power'
+    bit_and = 'bit_and'
+    bit_or = 'bit_or'
+    bit_xor = 'bit_xor'
+
     line = 'line'
     call = 'call'
     return_ = 'return'

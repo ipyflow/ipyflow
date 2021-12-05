@@ -99,6 +99,10 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
     def syntax_augmentation_specs(self) -> List[AugmentationSpec]:
         return []
 
+    @property
+    def should_patch_meta_path(self) -> bool:
+        return True
+
     def _transient_fields_start(self):
         self._persistent_fields = set(self.__dict__.keys())
 
@@ -289,11 +293,14 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
 
     @contextmanager
     def _patch_meta_path(self) -> Generator[None, None, None]:
-        try:
-            sys.meta_path.insert(0, self._make_finder())
+        if self.should_patch_meta_path:
+            try:
+                sys.meta_path.insert(0, self._make_finder())
+                yield
+            finally:
+                del sys.meta_path[0]
+        else:
             yield
-        finally:
-            del sys.meta_path[0]
 
     @contextmanager
     def tracing_context(self) -> Generator[None, None, None]:

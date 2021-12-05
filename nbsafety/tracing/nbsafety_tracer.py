@@ -161,6 +161,10 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def syntax_augmentation_specs(self) -> List[AugmentationSpec]:
         return [blocking_spec, reactive_spec]
 
+    @property
+    def should_patch_meta_path(self) -> bool:
+        return False
+
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter
 
@@ -456,25 +460,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    @register_handler(
-        # non-tuple AST-related events
-        tuple(set(TraceEvent) - {
-            TraceEvent.line,
-            TraceEvent.call,
-            TraceEvent.opcode,
-            TraceEvent.return_,
-            TraceEvent.exception,
-            TraceEvent.c_call,
-            TraceEvent.c_return,
-            TraceEvent.c_exception,
-            TraceEvent.argument,
-            TraceEvent.before_stmt,
-            TraceEvent.after_stmt,
-            TraceEvent.after_module_stmt,
-        } - {
-            evt for evt in TraceEvent if evt.value.startswith('before')
-        } | {TraceEvent.before_call})
-    )
+    @register_handler((TraceEvent.before_call, TraceEvent.attribute, TraceEvent.subscript))
     def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
@@ -521,7 +507,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def attrsub_tracer(
         self,
         obj: Any,
-        attrsub_node_id: NodeId,
+        node_id: NodeId,
         _frame_: FrameType,
         event: TraceEvent,
         *_,
@@ -532,10 +518,10 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         obj_name: Optional[str] = None,
         **__
     ):
-        node_id = id(self.ast_node_by_id[attrsub_node_id].value)  # type: ignore
-        if isinstance(self.ast_node_by_id[node_id], ast.Call):
+        value_node_id = id(self.ast_node_by_id[node_id].value)  # type: ignore
+        if isinstance(self.ast_node_by_id[value_node_id], ast.Call):
             # clear the callpoint dependency
-            self.node_id_to_loaded_symbols.pop(node_id, None)
+            self.node_id_to_loaded_symbols.pop(value_node_id, None)
         if obj is None or obj is get_ipython():
             return
         logger.warning('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)

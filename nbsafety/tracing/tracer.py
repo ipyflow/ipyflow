@@ -313,12 +313,13 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
                         logging.debug('Failed finding spec for %s', fullname)
                     return None
 
-                loader = cast(SourceFileLoader, spec.loader)
-                source_path = loader.get_filename(fullname)
+                if not isinstance(spec.loader, SourceFileLoader):
+                    return None
+                source_path = spec.loader.get_filename(fullname)
                 if not tracer_self.should_trace_source_path(source_path):
                     return None
 
-                spec.loader = TraceLoader(loader.name, loader.path)
+                spec.loader = TraceLoader(spec.loader.name, spec.loader.path)
                 return spec
 
         return TraceFinder

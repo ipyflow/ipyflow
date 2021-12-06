@@ -469,16 +469,20 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
 
-    @register_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
-    def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
-        ret = self.tracing_enabled and loop_id not in self._seen_loop_ids
-        if ret:
-            self._seen_loop_ids.add(loop_id)
-        return ret
+    # @register_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
+    # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
+    #     ret = self.tracing_enabled and loop_id not in self._seen_loop_ids
+    #     if ret:
+    #         self._seen_loop_ids.add(loop_id)
+    #     return ret
 
     @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
-    def after_loop_iter(self, _obj: Any, _loop_id: NodeId, *_, loop_guard: str, **__):
-        self.activate_loop_guard(loop_guard)
+    def after_loop_iter(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
+        self.activate_guard(guard)
+
+    # @register_handler(TraceEvent.after_function_execution)
+    # def after_function_exec(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
+    #     self.activate_guard(guard)
 
     @register_handler(TraceEvent.after_assign_rhs)
     @skip_when_tracing_disabled

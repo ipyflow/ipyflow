@@ -1,5 +1,6 @@
 # -*- coding: future_annotations -*-
 import ast
+import builtins
 import sys
 from typing import TYPE_CHECKING
 
@@ -8,11 +9,11 @@ from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils import fast
 
 if TYPE_CHECKING:
-    from typing import Dict, FrozenSet, List, Optional, Union
+    from typing import Dict, FrozenSet, List, Optional, Set, Union
 
 
 def make_test(var_name: str, negate: bool = False) -> ast.expr:
-    ret = fast.parse(f'getattr(builtins, "{var_name}", False)').body[0].value  # type: ignore
+    ret = fast.parse(f'getattr(builtins, "{var_name}")').body[0].value  # type: ignore
     if negate:
         ret = fast.UnaryOp(operand=ret, op=fast.Not())
     return ret
@@ -27,9 +28,16 @@ def make_composite_condition(nullable_conditions: List[Optional[ast.expr]], op: 
 
 
 class EmitterMixin:
-    def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST], events_with_handlers: FrozenSet[TraceEvent]):
+    def __init__(
+        self, orig_to_copy_mapping: Dict[int, ast.AST], events_with_handlers: FrozenSet[TraceEvent], guards: Set[str]
+    ):
         self.orig_to_copy_mapping = orig_to_copy_mapping
         self.events_with_handlers = events_with_handlers
+        self.guards: Set[str] = guards
+
+    def register_guard(self, guard: str) -> None:
+        self.guards.add(guard)
+        setattr(builtins, guard, True)
 
     def emitter_ast(self):
         return fast.Name(EMIT_EVENT, ast.Load())

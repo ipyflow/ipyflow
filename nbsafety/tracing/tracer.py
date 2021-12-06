@@ -9,7 +9,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from importlib.machinery import SourceFileLoader
 from importlib.util import spec_from_loader
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from traitlets.traitlets import MetaHasTraits
 
@@ -76,7 +76,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.augmented_node_ids_by_spec: Dict[AugmentationSpec, Set[int]] = defaultdict(set)
         self.line_to_stmt_by_module_id: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
-        self.loop_guards: Set[str] = set()
+        self.guards: Set[str] = set()
 
         self._transient_fields: Set[str] = set()
         self._persistent_fields: Set[str] = set()
@@ -127,13 +127,13 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             del self.__dict__[field]
         self.__init__(is_reset=True)
 
-    def activate_loop_guard(self, loop_guard: str) -> None:
-        assert loop_guard in self.loop_guards
-        setattr(builtins, loop_guard, True)
+    def activate_guard(self, guard: str) -> None:
+        assert guard in self.guards
+        setattr(builtins, guard, False)
 
-    def deactivate_loop_guard(self, loop_guard: str) -> None:
-        assert loop_guard in self.loop_guards
-        setattr(builtins, loop_guard, False)
+    def deactivate_guard(self, guard: str) -> None:
+        assert guard in self.guards
+        setattr(builtins, guard, True)
 
     def should_propagate_handler_exception(self, evt: TraceEvent, exc: Exception) -> bool:
         return False
@@ -338,8 +338,8 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
     @contextmanager
     def tracing_context(self) -> Generator[None, None, None]:
         setattr(builtins, EMIT_EVENT, self._emit_event)
-        for loop_guard in self.loop_guards:
-            self.deactivate_loop_guard(loop_guard)
+        for guard in self.guards:
+            self.deactivate_guard(guard)
         try:
             with self._patch_meta_path():
                 with self._patch_sys_settrace():
@@ -349,9 +349,9 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             self._disable_tracing(check_enabled=False)
             delattr(builtins, EMIT_EVENT)
             delattr(builtins, TRACING_ENABLED)
-            for loop_guard in self.loop_guards:
-                if hasattr(builtins, loop_guard):
-                    delattr(builtins, loop_guard)
+            for guard in self.guards:
+                if hasattr(builtins, guard):
+                    delattr(builtins, guard)
 
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         return NotImplemented

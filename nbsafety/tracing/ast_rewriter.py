@@ -40,6 +40,6 @@ class AstRewriter(ast.NodeTransformer):
         # very important that the eavesdropper does not create new ast nodes for ast.stmt (but just
         # modifies existing ones), since StatementInserter relies on being able to map these
         events_with_handlers = self._tracer.events_with_registered_handlers
-        node = ExprRewriter(orig_to_copy_mapping, events_with_handlers).visit(node)
-        node = StatementInserter(orig_to_copy_mapping, events_with_handlers, self._tracer.loop_guards).visit(node)
+        node = ExprRewriter(orig_to_copy_mapping, events_with_handlers, self._tracer.guards).visit(node)
+        node = StatementInserter(orig_to_copy_mapping, events_with_handlers, self._tracer.guards).visit(node)
         return node

@@ -5,7 +5,7 @@ import sys
 from contextlib import contextmanager
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.extra_builtins import TRACING_ENABLED, make_loop_guard_name
+from nbsafety.extra_builtins import TRACING_ENABLED, make_guard_name
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils.ast_utils import EmitterMixin, make_test, make_composite_condition, subscript_to_slice
 from nbsafety.utils import fast
@@ -19,8 +19,14 @@ logger.setLevel(logging.WARNING)
 
 
 class ExprRewriter(ast.NodeTransformer, EmitterMixin):
-    def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST], events_with_handlers: FrozenSet[TraceEvent]):
-        EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers)
+    def __init__(
+        self,
+        orig_to_copy_mapping:
+        Dict[int, ast.AST],
+        events_with_handlers: FrozenSet[TraceEvent],
+        guards: Set[str],
+    ):
+        EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers, guards)
         self._top_level_node_for_symbol: Optional[ast.AST] = None
 
     def visit(self, node: ast.AST):
@@ -294,12 +300,13 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
         for name, field in ast.iter_fields(node):
             if name == 'test':
                 loop_node_copy = cast(ast.While, self.orig_to_copy_mapping[id(node)])
-                loop_guard = make_loop_guard_name(loop_node_copy)
+                loop_guard = make_guard_name(loop_node_copy)
+                self.register_guard(loop_guard)
                 with fast.location_of(node):
                     node.test = fast.IfExp(
                         test=make_composite_condition([
                             make_test(TRACING_ENABLED),
-                            make_test(loop_guard, negate=True),
+                            make_test(loop_guard),
                         ]),
                         body=self.visit(field),
                         orelse=loop_node_copy.test,

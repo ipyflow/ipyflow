@@ -3,7 +3,7 @@ import ast
 import logging
 from typing import cast, TYPE_CHECKING
 
-from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_loop_guard_name
+from nbsafety.extra_builtins import EMIT_EVENT, TRACING_ENABLED, make_guard_name
 from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.utils.ast_utils import EmitterMixin, make_test, make_composite_condition
 from nbsafety.utils import fast
@@ -51,18 +51,17 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
         self,
         orig_to_copy_mapping: Dict[int, ast.AST],
         events_with_handlers: FrozenSet[TraceEvent],
-        loop_guards: Set[str],
+        guards: Set[str],
     ):
-        EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers)
-        self._loop_guards: Set[str] = loop_guards
+        EmitterMixin.__init__(self, orig_to_copy_mapping, events_with_handlers, guards)
         self._init_stmt_inserted: bool = False
         self._global_nonlocal_stripper: StripGlobalAndNonlocalDeclarations = StripGlobalAndNonlocalDeclarations()
 
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
         loop_node_copy = cast('Union[ast.For, ast.While]', self.orig_to_copy_mapping[id(node)])
         loop_node_copy = self._global_nonlocal_stripper.visit(loop_node_copy)
-        loop_guard = make_loop_guard_name(loop_node_copy)
-        self._loop_guards.add(loop_guard)
+        loop_guard = make_guard_name(loop_node_copy)
+        self.register_guard(loop_guard)
         with fast.location_of(loop_node_copy):
             if isinstance(node, ast.For):
                 before_loop_evt = TraceEvent.before_for_loop_body
@@ -75,7 +74,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                     test=make_composite_condition(
                         [
                             make_test(TRACING_ENABLED),
-                            make_test(loop_guard, negate=True),
+                            make_test(loop_guard),
                             self.emit(
                                 before_loop_evt, node, ret=fast.NameConstant(True)
                             ) if before_loop_evt in self.events_with_handlers else None,
@@ -90,7 +89,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                                 _get_parsed_append_stmt(
                                     cast(ast.stmt, loop_node_copy),
                                     evt=after_loop_evt,
-                                    loop_guard=fast.Str(loop_guard),
+                                    guard=fast.Str(loop_guard),
                                 ),
                             ],
                         ),
@@ -104,12 +103,15 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
     ) -> List[ast.AST]:
         fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self.orig_to_copy_mapping[id(node)])
         fundef_copy = self._global_nonlocal_stripper.visit(fundef_copy)
+        function_guard = make_guard_name(fundef_copy)
+        self.register_guard(function_guard)
         with fast.location_of(fundef_copy):
             return [
                 fast.If(
                     test=make_composite_condition(
                         [
                             make_test(TRACING_ENABLED),
+                            make_test(function_guard),
                             self.emit(
                                 TraceEvent.before_function_body, node, ret=fast.NameConstant(True)
                             ) if TraceEvent.before_function_body in self.events_with_handlers else None,
@@ -124,6 +126,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                                 _get_parsed_append_stmt(
                                     cast(ast.stmt, fundef_copy),
                                     evt=TraceEvent.after_function_execution,
+                                    guard=fast.Str(function_guard),
                                 ),
                             ],
                         ),

@@ -161,9 +161,9 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     def syntax_augmentation_specs(self) -> List[AugmentationSpec]:
         return [blocking_spec, reactive_spec]
 
-    # @property
-    # def should_patch_meta_path(self) -> bool:
-    #     return False
+    @property
+    def should_patch_meta_path(self) -> bool:
+        return False
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter

@@ -59,7 +59,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
         self._global_nonlocal_stripper: StripGlobalAndNonlocalDeclarations = StripGlobalAndNonlocalDeclarations()
 
     def _handle_loop_body(self, node: Union[ast.For, ast.While], orig_body: List[ast.AST]) -> List[ast.AST]:
-        loop_node_copy = cast('Union[ast.For, ast.While]', self._orig_to_copy_mapping[id(node)])
+        loop_node_copy = cast('Union[ast.For, ast.While]', self.orig_to_copy_mapping[id(node)])
         loop_node_copy = self._global_nonlocal_stripper.visit(loop_node_copy)
         loop_guard = make_loop_guard_name(loop_node_copy)
         self._loop_guards.add(loop_guard)
@@ -76,11 +76,9 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                         [
                             make_test(TRACING_ENABLED),
                             make_test(loop_guard, negate=True),
-                            fast.Call(
-                                func=self.emitter_ast(),
-                                args=[before_loop_evt.to_ast(), self.get_copy_id_ast(node)],
-                                keywords=fast.kwargs(ret=fast.NameConstant(True)),
-                            ) if before_loop_evt in self._events_with_handlers else None,
+                            self.emit(
+                                before_loop_evt, node, ret=fast.NameConstant(True)
+                            ) if before_loop_evt in self.events_with_handlers else None,
                         ]
                     ),
                     body=[
@@ -96,7 +94,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                                 ),
                             ],
                         ),
-                    ] if after_loop_evt in self._events_with_handlers else orig_body,
+                    ] if after_loop_evt in self.events_with_handlers else orig_body,
                     orelse=loop_node_copy.body,
                 ),
             ]
@@ -104,7 +102,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
     def _handle_function_body(
         self, node: Union[ast.FunctionDef, ast.AsyncFunctionDef], orig_body: List[ast.AST]
     ) -> List[ast.AST]:
-        fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self._orig_to_copy_mapping[id(node)])
+        fundef_copy = cast('Union[ast.FunctionDef, ast.AsyncFunctionDef]', self.orig_to_copy_mapping[id(node)])
         fundef_copy = self._global_nonlocal_stripper.visit(fundef_copy)
         with fast.location_of(fundef_copy):
             return [
@@ -112,11 +110,9 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                     test=make_composite_condition(
                         [
                             make_test(TRACING_ENABLED),
-                            fast.Call(
-                                func=self.emitter_ast(),
-                                args=[TraceEvent.before_function_body.to_ast(), self.get_copy_id_ast(node)],
-                                keywords=fast.kwargs(ret=fast.NameConstant(True)),
-                            ) if TraceEvent.before_function_body in self._events_with_handlers else None,
+                            self.emit(
+                                TraceEvent.before_function_body, node, ret=fast.NameConstant(True)
+                            ) if TraceEvent.before_function_body in self.events_with_handlers else None,
                         ]
                     ),
                     body=[
@@ -131,7 +127,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                                 ),
                             ],
                         ),
-                    ] if TraceEvent.after_function_execution in self._events_with_handlers else orig_body,
+                    ] if TraceEvent.after_function_execution in self.events_with_handlers else orig_body,
                     orelse=fundef_copy.body,
                 ),
             ]
@@ -144,8 +140,8 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                 new_field = []
                 for inner_node in field:
                     if isinstance(inner_node, ast.stmt):
-                        stmt_copy = cast(ast.stmt, self._orig_to_copy_mapping[id(inner_node)])
-                        if TraceEvent.init_module in self._events_with_handlers:
+                        stmt_copy = cast(ast.stmt, self.orig_to_copy_mapping[id(inner_node)])
+                        if TraceEvent.init_module in self.events_with_handlers:
                             if not self._init_stmt_inserted:
                                 assert isinstance(node, ast.Module)
                                 self._init_stmt_inserted = True
@@ -153,9 +149,9 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                                     new_field.extend(fast.parse(
                                         f'import builtins; {EMIT_EVENT}("{TraceEvent.init_module.value}", None)'
                                     ).body)
-                        if TraceEvent.before_stmt in self._events_with_handlers:
+                        if TraceEvent.before_stmt in self.events_with_handlers:
                             new_field.append(_get_parsed_insert_stmt(stmt_copy, TraceEvent.before_stmt))
-                        if TraceEvent.after_stmt in self._events_with_handlers:
+                        if TraceEvent.after_stmt in self.events_with_handlers:
                             if isinstance(inner_node, ast.Expr) and isinstance(node, ast.Module) and name == 'body':
                                 val = inner_node.value
                                 while isinstance(val, ast.Expr):
@@ -167,7 +163,7 @@ class StatementInserter(ast.NodeTransformer, EmitterMixin):
                                     new_field.append(_get_parsed_append_stmt(stmt_copy))
                         else:
                             new_field.append(self.visit(inner_node))
-                        if TraceEvent.after_module_stmt in self._events_with_handlers:
+                        if TraceEvent.after_module_stmt in self.events_with_handlers:
                             if isinstance(node, ast.Module) and name == 'body':
                                 assert not isinstance(inner_node, ast.Return)
                                 new_field.append(_get_parsed_append_stmt(stmt_copy, evt=TraceEvent.after_module_stmt))

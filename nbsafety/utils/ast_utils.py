@@ -28,8 +28,8 @@ def make_composite_condition(nullable_conditions: List[Optional[ast.expr]], op: 
 
 class EmitterMixin:
     def __init__(self, orig_to_copy_mapping: Dict[int, ast.AST], events_with_handlers: FrozenSet[TraceEvent]):
-        self._orig_to_copy_mapping = orig_to_copy_mapping
-        self._events_with_handlers = events_with_handlers
+        self.orig_to_copy_mapping = orig_to_copy_mapping
+        self.events_with_handlers = events_with_handlers
 
     def emitter_ast(self):
         return fast.Name(EMIT_EVENT, ast.Load())
@@ -37,21 +37,22 @@ class EmitterMixin:
     def get_copy_id_ast(self, orig_node_id: Union[int, ast.AST]):
         if not isinstance(orig_node_id, int):
             orig_node_id = id(orig_node_id)
-        return fast.Num(id(self._orig_to_copy_mapping[orig_node_id]))
+        return fast.Num(id(self.orig_to_copy_mapping[orig_node_id]))
+
+    def emit(self, evt: TraceEvent, node_or_id: Union[int, ast.AST], args=None, **kwargs):
+        args = args or []
+        return fast.Call(
+            func=self.emitter_ast(),
+            args=[evt.to_ast(), self.get_copy_id_ast(node_or_id)] + args,
+            keywords=fast.kwargs(**kwargs),
+        )
 
     def make_tuple_event_for(self, node: ast.AST, event: TraceEvent, orig_node_id=None, **kwargs):
-        if event not in self._events_with_handlers:
+        if event not in self.events_with_handlers:
             return node
         with fast.location_of(node):
             tuple_node = fast.Tuple(
-                [
-                    fast.Call(
-                        func=self.emitter_ast(),
-                        args=[event.to_ast(), self.get_copy_id_ast(orig_node_id or node)],
-                        keywords=fast.kwargs(**kwargs),
-                    ),
-                    node,
-                ],
+                [self.emit(event, orig_node_id or node, **kwargs), node],
                 ast.Load()
             )
             slc: Union[ast.Constant, ast.Num, ast.Index] = fast.Num(1)

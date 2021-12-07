@@ -8,7 +8,7 @@ import sys
 from collections import defaultdict
 from contextlib import contextmanager
 from importlib.machinery import SourceFileLoader
-from importlib.util import spec_from_loader
+from importlib.util import spec_from_loader, decode_source
 from typing import TYPE_CHECKING
 
 from traitlets.traitlets import MetaHasTraits
@@ -235,44 +235,58 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         class TraceLoader(SourceFileLoader):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
-                self._ignore_bytecode_cache: bool = False
-
-            def path_stats(self, path):
-                if self._ignore_bytecode_cache:
-                    raise OSError()
-                else:
-                    return super().path_stats(path)
-
-            def _cache_bytecode(self, source_path, bytecode_path, data):
-                # don't cache bytecode
-                pass
+                self._augmentation_context: bool = False
 
             @contextmanager
-            def _invalidate_bytecode_cache(self, should_invalidate: bool) -> Generator[None, None, None]:
-                orig_ignore_bytecode_cache = self._ignore_bytecode_cache
+            def syntax_augmentation_context(self):
+                orig_aug_context = self._augmentation_context
                 try:
-                    self._ignore_bytecode_cache = should_invalidate
+                    self._augmentation_context = True
                     yield
                 finally:
-                    self._ignore_bytecode_cache = orig_ignore_bytecode_cache
+                    self._augmentation_context = orig_aug_context
+
+            def get_data(self, path) -> bytes:
+                if self._augmentation_context or not tracer_self.should_trace_source_path(path):
+                    return super().get_data(path)
+                with self.syntax_augmentation_context():
+                    source = self.get_augmented_source(path)
+                    return bytes(source, encoding='utf-8')
 
             def get_code(self, fullname):
                 source_path = self.get_filename(fullname)
-                with self._invalidate_bytecode_cache(tracer_self.should_trace_source_path(source_path)):
+                if not tracer_self.should_trace_source_path(source_path):
                     return super().get_code(fullname)
+                source_bytes = self.get_data(source_path)
+                return self.source_to_code(source_bytes, source_path)
+
+            def get_augmented_source(self, source_path) -> str:
+                source_bytes = super().get_data(source_path)
+                still_needs_decode = True
+                try:
+                    source = decode_source(source_bytes)
+                    still_needs_decode = False
+                except SyntaxError:
+                    # this allows us to handle esoteric encodings that require parsing, such as future_annotations
+                    # in this case, just guess that it's utf-8 encoded
+
+                    # this is a bit unfortunate in that it involves multiple round-trips of decoding / encoding,
+                    # but it's the only way I can think of to ensure that source transformations happen in the
+                    # correct order
+                    source = str(source_bytes, encoding='utf-8')
+                for augmenter in syntax_augmenters:
+                    source = augmenter(source)
+                if still_needs_decode:
+                    source = decode_source(bytes(source, encoding='utf-8'))
+                return source
 
             def source_to_code(self, data, path, *, _optimize=-1):
                 ret = None
                 try:
                     if tracer_self.should_trace_source_path(path):
-                        # FIXME: can we avoid re-encoding / decoding the source bytes?
-                        data = str(data, encoding='utf-8')
-                        for syntax_augmenter in syntax_augmenters:
-                            data = syntax_augmenter(data)
-                        data = bytes(data, encoding='utf-8')
-                        tree = ast.parse(data)
-                        tree = ast_rewriter.visit(tree)
-                        ret = compile(tree, path, 'exec', dont_inherit=True, optimize=_optimize)
+                        ret = compile(
+                            ast_rewriter.visit(ast.parse(data)), path, 'exec', dont_inherit=True, optimize=_optimize
+                        )
                 except Exception:
                     pass
                 finally:
@@ -280,6 +294,8 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
                         ret = super().source_to_code(data, path, _optimize=_optimize)
                 return ret
 
+        # this is based on the birdseye finder (which uses import hooks based on MacroPy's):
+        # https://github.com/alexmojaki/birdseye/blob/9974af715b1801f9dd99fef93ff133d0ab5223af/birdseye/import_hook.py
         class TraceFinder:
             @classmethod
             def _find_plain_spec(cls, fullname, path, target):

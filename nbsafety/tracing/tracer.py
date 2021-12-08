@@ -75,6 +75,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         self.parent_node_by_id: Dict[int, ast.AST] = {}
         self.augmented_node_ids_by_spec: Dict[AugmentationSpec, Set[int]] = defaultdict(set)
         self.line_to_stmt_by_module_id: Dict[int, Dict[int, ast.stmt]] = defaultdict(dict)
+        self.node_id_to_containing_stmt: Dict[int, ast.stmt] = {}
         self.guards: Set[str] = set()
 
         self._transient_fields: Set[str] = set()

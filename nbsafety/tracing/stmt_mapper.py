@@ -15,6 +15,16 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+class ContainingStatementMapper(ast.NodeVisitor):
+    def __init__(self, node_id_to_stmt_map: Dict[int, ast.stmt], containing_stmt: ast.stmt):
+        self.node_id_to_stmt_map: Dict[int, ast.stmt] = node_id_to_stmt_map
+        self.containing_stmt: ast.stmt = containing_stmt
+
+    def generic_visit(self, node: ast.AST):
+        self.node_id_to_stmt_map[id(node)] = self.containing_stmt
+        super().generic_visit(node)
+
+
 class StatementMapper(ast.NodeVisitor):
     def __init__(
         self,
@@ -111,6 +121,7 @@ class StatementMapper(ast.NodeVisitor):
                     self._tracer.augmented_node_ids_by_spec[spec].add(id(nc))
             if isinstance(nc, ast.stmt):
                 self.line_to_stmt_map[nc.lineno] = nc
+                ContainingStatementMapper(self._tracer.node_id_to_containing_stmt, nc).visit(nc)
                 # workaround for python >= 3.8 wherein function calls seem
                 # to yield trace frames that use the lineno of the first decorator
                 for decorator in getattr(nc, 'decorator_list', []):

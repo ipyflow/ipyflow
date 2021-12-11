@@ -32,14 +32,24 @@ sys_settrace = sys.settrace
 internal_directories = (os.path.dirname(os.path.dirname((lambda: 0).__code__.co_filename)),)
 
 
-class MetaHasTraitsAndTransientState(MetaHasTraits):
+def register_tracer_state_machine(tracer_cls: Type[SingletonTracerStateMachine]) -> None:
+    tracer_cls.EVENT_HANDLERS_BY_CLASS[tracer_cls] = defaultdict(list, tracer_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
+    tracer_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
+    tracer_cls._MANAGER_CLASS_REGISTERED = True
+
+
+class MetaTracerStateMachine(MetaHasTraits):
+    def __init__(cls, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        register_tracer_state_machine(cls)
+
     def __call__(cls, *args, **kwargs):
         obj = MetaHasTraits.__call__(cls, *args, **kwargs)
-        obj._transient_fields_end()
+        obj._post_init_hook_end()
         return obj
 
 
-class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTraitsAndTransientState):
+class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaTracerStateMachine):
     ast_rewriter_cls = AstRewriter
 
     _MANAGER_CLASS_REGISTERED = False
@@ -54,7 +64,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
             return
         if not self._MANAGER_CLASS_REGISTERED:
             raise ValueError(
-                f'class not registered; use the `{register_trace_manager_class.__name__}` decorator on the subclass'
+                f'class not registered; use the `{register_tracer_state_machine.__name__}` decorator on the subclass'
             )
         super().__init__()
         self._has_fancy_sys_tracing = (sys.version_info >= (3, 7))
@@ -81,7 +91,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
         self._transient_fields: Set[str] = set()
         self._persistent_fields: Set[str] = set()
         self._manual_persistent_fields: Set[str] = set()
-        self._transient_fields_start()
+        self._post_init_hook_start()
 
     @property
     def has_sys_trace_events(self):
@@ -104,10 +114,10 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaHasTrai
     def should_patch_meta_path(self) -> bool:
         return True
 
-    def _transient_fields_start(self):
+    def _post_init_hook_start(self):
         self._persistent_fields = set(self.__dict__.keys())
 
-    def _transient_fields_end(self):
+    def _post_init_hook_end(self):
         self._transient_fields = set(self.__dict__.keys()) - self._persistent_fields - self._manual_persistent_fields
 
     @contextmanager
@@ -301,14 +311,6 @@ def register_universal_handler(handler):
     return register_handler(tuple(evt for evt in TraceEvent))(handler)
 
 
-def register_trace_manager_class(mgr_cls: Type[SingletonTracerStateMachine]) -> Type[SingletonTracerStateMachine]:
-    mgr_cls.EVENT_HANDLERS_BY_CLASS[mgr_cls] = defaultdict(list, mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION)
-    mgr_cls.EVENT_HANDLERS_PENDING_REGISTRATION.clear()
-    mgr_cls._MANAGER_CLASS_REGISTERED = True
-    return mgr_cls
-
-
-@register_trace_manager_class
 class BaseTracerStateMachine(SingletonTracerStateMachine):
 
     def __init__(self, *args, **kwargs):
@@ -328,7 +330,3 @@ class BaseTracerStateMachine(SingletonTracerStateMachine):
         ret = self._saved_slice
         self._saved_slice = None
         return ret
-
-
-assert not SingletonTracerStateMachine._MANAGER_CLASS_REGISTERED
-assert BaseTracerStateMachine._MANAGER_CLASS_REGISTERED

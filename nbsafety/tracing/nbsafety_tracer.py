@@ -37,7 +37,6 @@ from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.tracer import (
     BaseTracerStateMachine,
-    register_trace_manager_class,
     register_handler,
     skip_when_tracing_disabled,
 )
@@ -81,7 +80,6 @@ reactive_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$', re
 blocking_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$:', replacement='')
 
 
-@register_trace_manager_class
 class SafetyTracerStateMachine(BaseTracerStateMachine):
     ast_rewriter_cls = SafetyAstRewriter
 
@@ -1081,6 +1079,3 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
         self.state_transition_hook(event, trace_stmt, ret_obj)
         return self.sys_tracer
-
-
-assert SafetyTracerStateMachine._MANAGER_CLASS_REGISTERED

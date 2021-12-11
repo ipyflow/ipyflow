@@ -315,7 +315,11 @@ class BaseTracerStateMachine(SingletonTracerStateMachine):
         super().__init__(*args, **kwargs)
         self._saved_slice: Optional[Any] = None
 
-    @register_handler(TraceEvent.subscript)
+    @register_handler((
+        TraceEvent.before_subscript_load,
+        TraceEvent.before_subscript_store,
+        TraceEvent.before_subscript_del,
+    ))
     def _save_slice_for_later(self, *_, attr_or_subscript: Any, **__):
         self._saved_slice = attr_or_subscript
 

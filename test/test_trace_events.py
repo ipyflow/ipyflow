@@ -70,10 +70,14 @@ def patch_events_with_registered_handlers_to_subset(testfunc):
             events.add(TraceEvent.after_call)
         if TraceEvent.after_call in events:
             events.add(TraceEvent.before_call)
-        if TraceEvent.subscript in events:
+        if events & {
+            TraceEvent.before_subscript_load, TraceEvent.before_subscript_store, TraceEvent.before_subscript_del
+        }:
             events.add(TraceEvent._load_saved_slice)
         if TraceEvent._load_saved_slice in events:
-            events.add(TraceEvent.subscript)
+            events.add(TraceEvent.before_subscript_load)
+            events.add(TraceEvent.before_subscript_store)
+            events.add(TraceEvent.before_subscript_del)
         if TraceEvent.before_list_literal in events:
             events.add(TraceEvent.after_list_literal)
         if TraceEvent.after_list_literal in events:
@@ -145,7 +149,7 @@ def test_recorded_events_simple(events):
             TraceEvent.before_stmt,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.before_call,
             TraceEvent.argument,
             TraceEvent.after_call,
@@ -178,7 +182,7 @@ def test_recorded_events_two_stmts(events):
             TraceEvent.before_stmt,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.before_call,
             TraceEvent.load_name,
             TraceEvent.argument,
@@ -201,14 +205,14 @@ def test_nested_chains_no_call(events):
             TraceEvent.before_stmt,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.before_call,
             TraceEvent.argument,
 
             # next events correspond to `logging.info("foo")`
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.before_call,
             TraceEvent.argument,
             TraceEvent.after_call,
@@ -366,7 +370,7 @@ def test_fancy_slices(events):
             TraceEvent.after_assign_rhs,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_store,
             TraceEvent.after_complex_symbol,
             TraceEvent.after_stmt,
             TraceEvent.after_function_execution,
@@ -382,7 +386,7 @@ def test_fancy_slices(events):
             TraceEvent.before_assign_rhs,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.before_call,
             TraceEvent.before_tuple_literal,
             TraceEvent.tuple_elt,
@@ -405,20 +409,20 @@ def test_fancy_slices(events):
             TraceEvent.before_stmt,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.before_call,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.after_complex_symbol,
             TraceEvent.before_complex_symbol,
             TraceEvent.load_name,
-            TraceEvent.attribute,
+            TraceEvent.before_attribute_load,
             TraceEvent.after_complex_symbol,
             TraceEvent.subscript_slice,
-            TraceEvent.subscript,
+            TraceEvent.before_subscript_load,
             TraceEvent._load_saved_slice,
             TraceEvent.after_complex_symbol,
             TraceEvent.argument,

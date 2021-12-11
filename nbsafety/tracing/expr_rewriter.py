@@ -88,7 +88,7 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                     slc = fast.Tuple(elts, ast.Load())
                 if TraceEvent.subscript_slice in self.events_with_handlers:
                     slc = self.emit(TraceEvent.subscript_slice, node, ret=slc)
-                if TraceEvent.subscript in self.events_with_handlers:
+                if TraceEvent.before_subscript_load in self.events_with_handlers:
                     replacement_slice: ast.expr = self.emit(TraceEvent._load_saved_slice, node.slice)
                 else:
                     replacement_slice = slc
@@ -162,10 +162,24 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                     # TODO: this should be more general than just simple ast.Name subscripts
                     subscript_name = slice_val.id
 
-            evt_to_use = TraceEvent.subscript if isinstance(node, ast.Subscript) else TraceEvent.attribute
+            is_subscript = isinstance(node, ast.Subscript)
+            if isinstance(node.ctx, ast.Load):
+                evt_to_use = (
+                    TraceEvent.before_subscript_load if is_subscript else TraceEvent.before_attribute_load
+                )
+            elif isinstance(node.ctx, ast.Store) or True:
+                evt_to_use = (
+                    TraceEvent.before_subscript_store if is_subscript else TraceEvent.before_attribute_store
+                )
+            elif isinstance(node.ctx, ast.Del):
+                evt_to_use = (
+                    TraceEvent.before_subscript_del if is_subscript else TraceEvent.before_attribute_del
+                )
+            else:
+                raise ValueError("unknown context: %s", node.ctx)
             should_emit_evt = evt_to_use in self.events_with_handlers
             should_emit_evt = should_emit_evt or (
-                evt_to_use == TraceEvent.subscript and TraceEvent._load_saved_slice in self.events_with_handlers
+                    evt_to_use == TraceEvent.before_subscript_load and TraceEvent._load_saved_slice in self.events_with_handlers
             )
             with self.attrsub_context(node):
                 node.value = self.visit(node.value)
@@ -184,6 +198,15 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                         **extra_keywords,
                     )
         # end fast.location_of(node.value)
+        if 'load' in evt_to_use.value:
+            after_evt = TraceEvent.after_subscript_load if is_subscript else TraceEvent.after_attribute_load
+            if after_evt in self.events_with_handlers:
+                with fast.location_of(node):
+                    node = self.emit(
+                        after_evt,
+                        orig_node_id,
+                        ret=node,
+                    )
 
         return self._maybe_wrap_symbol_in_before_after_tracing(node, orig_node_id=orig_node_id)
 

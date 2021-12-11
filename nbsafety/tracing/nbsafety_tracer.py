@@ -460,7 +460,15 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    @register_handler((TraceEvent.before_call, TraceEvent.attribute, TraceEvent.subscript))
+    @register_handler((
+        TraceEvent.before_call,
+        TraceEvent.before_attribute_load,
+        TraceEvent.before_attribute_store,
+        TraceEvent.before_attribute_del,
+        TraceEvent.before_subscript_load,
+        TraceEvent.before_subscript_store,
+        TraceEvent.before_subscript_del,
+    ))
     def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
@@ -506,7 +514,14 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
         )
 
-    @register_handler((TraceEvent.attribute, TraceEvent.subscript))
+    @register_handler((
+        TraceEvent.before_attribute_load,
+        TraceEvent.before_attribute_store,
+        TraceEvent.before_attribute_del,
+        TraceEvent.before_subscript_load,
+        TraceEvent.before_subscript_store,
+        TraceEvent.before_subscript_del,
+    ))
     @skip_when_tracing_disabled
     def attrsub_tracer(
         self,
@@ -536,7 +551,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(obj_name)
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
-        is_subscript = (event == TraceEvent.subscript)
+        is_subscript = ('subscript' in event.value)
         if sym_for_obj is not None:
             try:
                 data_sym = scope.lookup_data_symbol_by_name_this_indentation(

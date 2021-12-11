@@ -19,8 +19,15 @@ class TraceEvent(Enum):
     before_while_loop_body = 'before_while_loop_body'
     after_while_loop_iter = 'after_while_loop_iter'
 
-    attribute = 'attribute'
-    subscript = 'subscript'
+    before_attribute_load = 'before_attribute_load'
+    before_attribute_store = 'before_attribute_store'
+    before_attribute_del = 'before_attribute_del'
+    after_attribute_load = 'after_attribute_load'
+    before_subscript_load = 'before_subscript_load'
+    before_subscript_store = 'before_subscript_store'
+    before_subscript_del = 'before_subscript_del'
+    after_subscript_load = 'after_subscript_load'
+
     subscript_slice = 'subscript_slice'
     _load_saved_slice = '_load_saved_slice'
 

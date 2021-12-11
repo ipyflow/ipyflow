@@ -198,7 +198,7 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                         **extra_keywords,
                     )
         # end fast.location_of(node.value)
-        if 'load' in evt_to_use.value:
+        if isinstance(node.ctx, ast.Load):
             after_evt = TraceEvent.after_subscript_load if is_subscript else TraceEvent.after_attribute_load
             if after_evt in self.events_with_handlers:
                 with fast.location_of(node):
@@ -206,6 +206,7 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                         after_evt,
                         orig_node_id,
                         ret=node,
+                        call_context=fast.NameConstant(call_context),
                     )
 
         return self._maybe_wrap_symbol_in_before_after_tracing(node, orig_node_id=orig_node_id)

@@ -37,7 +37,7 @@ from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
 from nbsafety.tracing.tracer import (
     BaseTracerStateMachine,
-    register_handler,
+    register_raw_handler,
     skip_when_tracing_disabled,
 )
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
@@ -458,7 +458,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    @register_handler((
+    @register_raw_handler((
         TraceEvent.before_call,
         TraceEvent.before_attribute_load,
         TraceEvent.before_attribute_store,
@@ -471,31 +471,31 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
 
-    @register_handler(TraceEvent.init_module)
+    @register_raw_handler(TraceEvent.init_module)
     def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
 
-    # @register_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
+    # @register_raw_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
     # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
     #     ret = self.tracing_enabled and loop_id not in self._seen_loop_ids
     #     if ret:
     #         self._seen_loop_ids.add(loop_id)
     #     return ret
 
-    @register_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
+    @register_raw_handler((TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter))
     def after_loop_iter(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
         self.activate_guard(guard)
 
-    # @register_handler(TraceEvent.after_function_execution)
+    # @register_raw_handler(TraceEvent.after_function_execution)
     # def after_function_exec(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
     #     self.activate_guard(guard)
 
-    @register_handler(TraceEvent.after_assign_rhs)
+    @register_raw_handler(TraceEvent.after_assign_rhs)
     @skip_when_tracing_disabled
     def after_assign_rhs(self, obj: Any, *_, **__):
         self.saved_assign_rhs_obj = obj
 
-    @register_handler(TraceEvent.subscript_slice)
+    @register_raw_handler(TraceEvent.subscript_slice)
     @skip_when_tracing_disabled
     def subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
         node = self.ast_node_by_id.get(node_id, None)
@@ -512,7 +512,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.cur_frame_original_scope.lookup_data_symbol_by_name(ref) for ref in subscript_live_refs
         )
 
-    @register_handler((
+    @register_raw_handler((
         TraceEvent.before_attribute_load,
         TraceEvent.before_attribute_store,
         TraceEvent.before_attribute_del,
@@ -680,7 +680,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
                 pass
         self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
-    @register_handler(TraceEvent.after_complex_symbol)
+    @register_raw_handler(TraceEvent.after_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):
         try:
             if not self.tracing_enabled:
@@ -700,7 +700,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.top_level_node_id_for_chain = None
             self.active_scope = self.cur_frame_original_scope
 
-    @register_handler(TraceEvent.argument)
+    @register_raw_handler(TraceEvent.argument)
     @skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1
@@ -741,7 +741,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             mutation_event = StandardMutation()
         self.mutation_candidate = ((obj, obj_name, method_name), mutation_event, [], [])
 
-    @register_handler(TraceEvent.before_call)
+    @register_raw_handler(TraceEvent.before_call)
     @skip_when_tracing_disabled
     def before_call(self, function_or_method, *_, **__):
         if self.saved_complex_symbol_load_data is None:
@@ -763,14 +763,14 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             pass
         self.active_scope = self.cur_frame_original_scope
 
-    @register_handler((TraceEvent.before_function_body, TraceEvent.before_lambda_body))
+    @register_raw_handler((TraceEvent.before_function_body, TraceEvent.before_lambda_body))
     def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
         ret = self.tracing_enabled and function_id not in self._seen_functions_ids
         if ret:
             self._seen_functions_ids.add(function_id)
         return ret
 
-    @register_handler(TraceEvent.after_call)
+    @register_raw_handler(TraceEvent.after_call)
     def after_call(self, retval: Any, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):
         tracing_will_be_enabled_by_end = self.tracing_enabled
         if not self.tracing_enabled:
@@ -798,14 +798,14 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self._enable_tracing()
 
     # Note: we don't trace set literals
-    @register_handler((TraceEvent.before_dict_literal, TraceEvent.before_list_literal, TraceEvent.before_tuple_literal))
+    @register_raw_handler((TraceEvent.before_dict_literal, TraceEvent.before_list_literal, TraceEvent.before_tuple_literal))
     @skip_when_tracing_disabled
     def before_literal(self, *_, **__):
         parent_scope = self.active_literal_scope or self.cur_frame_original_scope
         with self.lexical_literal_stack.push():
             self.active_literal_scope = Namespace(None, Namespace.ANONYMOUS, parent_scope)
 
-    @register_handler((TraceEvent.after_dict_literal, TraceEvent.after_list_literal, TraceEvent.after_tuple_literal))
+    @register_raw_handler((TraceEvent.after_dict_literal, TraceEvent.after_list_literal, TraceEvent.after_tuple_literal))
     @skip_when_tracing_disabled
     def after_literal(self, literal: Union[dict, list, tuple], node_id: NodeId, *_, **__):
         try:
@@ -865,13 +865,13 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         finally:
             self.lexical_literal_stack.pop()
 
-    @register_handler(TraceEvent.dict_key)
+    @register_raw_handler(TraceEvent.dict_key)
     @skip_when_tracing_disabled
     def dict_key(self, obj: Any, key_node_id: NodeId, *_, **__):
         self.node_id_to_saved_dict_key[key_node_id] = obj
         return obj
 
-    @register_handler(TraceEvent.dict_value)
+    @register_raw_handler(TraceEvent.dict_value)
     @skip_when_tracing_disabled
     def dict_value(self, obj: Any, value_node_id: NodeId, *_, key_node_id: NodeId, dict_node_id: NodeId, **__):
         scope = self.node_id_to_loaded_literal_scope.pop(value_node_id, None)
@@ -884,7 +884,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             scope.scope_name = str(key_obj)
         return obj
 
-    @register_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
+    @register_raw_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
     @skip_when_tracing_disabled
     def list_or_tuple_elt(
             self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
@@ -896,7 +896,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             scope.scope_name = str(index)
         return obj
 
-    @register_handler(TraceEvent.after_lambda)
+    @register_raw_handler(TraceEvent.after_lambda)
     @skip_when_tracing_disabled
     def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
         sym_deps = []
@@ -917,7 +917,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         sym.stmt_node = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
-    @register_handler(TraceEvent.after_stmt)
+    @register_raw_handler(TraceEvent.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:
             return ret_expr
@@ -927,7 +927,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.handle_sys_events(None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt))
         return ret_expr
 
-    @register_handler(TraceEvent.after_module_stmt)
+    @register_raw_handler(TraceEvent.after_module_stmt)
     def after_module_stmt(self, *_, **__):
         if self.tracing_enabled:
             assert self.cur_frame_original_scope.is_global
@@ -936,7 +936,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         self._module_stmt_counter += 1
         return ret
 
-    @register_handler(TraceEvent.before_stmt)
+    @register_raw_handler(TraceEvent.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
         self.next_stmt_node_id = stmt_id
         if stmt_id in self.seen_stmts:
@@ -988,7 +988,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.EVENT_LOGGER.warning('reenable tracing >>>')
         return True
 
-    @register_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
+    @register_raw_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
     def handle_sys_events(
         self,
         ret_obj: Any,

@@ -53,8 +53,15 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaTracerS
     ast_rewriter_cls = AstRewriter
 
     _MANAGER_CLASS_REGISTERED = False
-    EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[TraceEvent, List[Callable[..., Any]]] = defaultdict(list)
-    EVENT_HANDLERS_BY_CLASS: Dict[Type[BaseTracerStateMachine], DefaultDict[TraceEvent, List[Callable[..., Any]]]] = {}
+    EVENT_HANDLERS_PENDING_REGISTRATION: DefaultDict[
+        TraceEvent, List[Tuple[Callable[..., Any], bool]]
+    ] = defaultdict(list)
+    EVENT_HANDLERS_BY_CLASS: Dict[
+        Type[BaseTracerStateMachine],
+        DefaultDict[
+            TraceEvent, List[Tuple[Callable[..., Any], bool]]
+        ],
+    ] = {}
 
     EVENT_LOGGER = logging.getLogger('events')
     EVENT_LOGGER.setLevel(logging.WARNING)
@@ -153,9 +160,10 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaTracerS
             event = TraceEvent(evt) if isinstance(evt, str) else evt
             frame = kwargs.get('_frame', sys._getframe().f_back)
             kwargs['_frame'] = frame
-            for handler in self._event_handlers[event]:
+            for handler, use_raw_node_id in self._event_handlers[event]:
                 try:
-                    new_ret = handler(self, kwargs.get('ret', None), node_id, frame, event, **kwargs)
+                    node_id_or_node = node_id if use_raw_node_id else self.ast_node_by_id[node_id]
+                    new_ret = handler(self, kwargs.get('ret', None), node_id_or_node, frame, event, **kwargs)
                 except Exception as exc:
                     if self.should_propagate_handler_exception(event, exc):
                         raise exc
@@ -285,7 +293,7 @@ class SingletonTracerStateMachine(singletons.TraceManager, metaclass=MetaTracerS
         return self._emit_event(evt, 0, _frame=frame, ret=arg)
 
 
-def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
+def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]], use_raw_node_id: bool = False):
     events = event if isinstance(event, tuple) else (event,)
 
     if TraceEvent.opcode in events and sys.version_info < (3, 7):
@@ -293,9 +301,13 @@ def register_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
 
     def _inner_registrar(handler):
         for evt in events:
-            SingletonTracerStateMachine.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append(handler)
+            SingletonTracerStateMachine.EVENT_HANDLERS_PENDING_REGISTRATION[evt].append((handler, use_raw_node_id))
         return handler
     return _inner_registrar
+
+
+def register_raw_handler(event: Union[TraceEvent, Tuple[TraceEvent, ...]]):
+    return register_handler(event, use_raw_node_id=True)
 
 
 def skip_when_tracing_disabled(handler):
@@ -317,7 +329,7 @@ class BaseTracerStateMachine(SingletonTracerStateMachine):
         super().__init__(*args, **kwargs)
         self._saved_slice: Optional[Any] = None
 
-    @register_handler((
+    @register_raw_handler((
         TraceEvent.before_subscript_load,
         TraceEvent.before_subscript_store,
         TraceEvent.before_subscript_del,
@@ -325,7 +337,7 @@ class BaseTracerStateMachine(SingletonTracerStateMachine):
     def _save_slice_for_later(self, *_, attr_or_subscript: Any, **__):
         self._saved_slice = attr_or_subscript
 
-    @register_handler(TraceEvent._load_saved_slice)
+    @register_raw_handler(TraceEvent._load_saved_slice)
     def _load_saved_slice(self, *_, **__):
         ret = self._saved_slice
         self._saved_slice = None

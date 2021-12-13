@@ -31,8 +31,8 @@ class TraceEvent(Enum):
     subscript_slice = 'subscript_slice'
     _load_saved_slice = '_load_saved_slice'
 
-    before_complex_symbol = 'before_complex_symbol'
-    after_complex_symbol = 'after_complex_symbol'
+    before_load_complex_symbol = 'before_complex_symbol'
+    after_load_complex_symbol = 'after_complex_symbol'
 
     before_lambda = 'before_lambda'
     after_lambda = 'after_lambda'

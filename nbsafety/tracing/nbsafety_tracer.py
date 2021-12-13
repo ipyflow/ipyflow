@@ -529,7 +529,6 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         event: TraceEvent,
         *_,
         attr_or_subscript: AttrSubVal,
-        ctx: str,
         call_context: bool,
         top_level_node_id: NodeId,
         obj_name: Optional[str] = None,
@@ -541,7 +540,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
             self.node_id_to_loaded_symbols.pop(value_node_id, None)
         if obj is None or obj is get_ipython():
             return
-        logger.warning('%s attrsub %s of obj %s', ctx, attr_or_subscript, obj)
+        logger.warning('%s %s of obj %s', event, attr_or_subscript, obj)
         sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
 
         # Resolve symbol if necessary
@@ -574,14 +573,14 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
                     return
             elif not isinstance(attr_or_subscript, (str, int)):
                 return
-            if ctx in ('Store', 'AugStore'):
+            if 'store' in event.value:
                 logger.warning(
                     "save store data for node id %d: %s, %s, %s, %s",
                     top_level_node_id, scope, obj, attr_or_subscript, is_subscript
                 )
                 self.node_id_to_saved_store_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
                 return
-            elif ctx == 'Del':
+            elif 'del' in event.value:
                 # logger.error("save del data for node %s", ast.dump(self.ast_node_by_id[top_level_node_id]))
                 logger.warning("save del data for node id %d", top_level_node_id)
                 self.node_id_to_saved_del_data[top_level_node_id] = (scope, obj, attr_or_subscript, is_subscript)
@@ -680,15 +679,12 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
                 pass
         self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
-    @register_raw_handler(TraceEvent.after_complex_symbol)
-    def after_complex_symbol(self, obj: Any, *_, call_context: bool, ctx: str, **__):
+    @register_raw_handler(TraceEvent.after_load_complex_symbol)
+    def after_complex_symbol(self, obj: Any, *_, **__):
         try:
             if not self.tracing_enabled:
                 return
             if self.first_obj_id_in_chain is None:
-                return
-            if ctx != 'Load':
-                # don't trace after non-load events
                 return
             assert self.top_level_node_id_for_chain is not None
             loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)

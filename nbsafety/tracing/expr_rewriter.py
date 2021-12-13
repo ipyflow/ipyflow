@@ -109,37 +109,18 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
 
         ctx = getattr(orig_node, 'ctx', ast.Load())
         is_load = isinstance(ctx, ast.Load)
+        if not is_load:
+            return node
 
         with fast.location_of(node):
-            if is_load:
-                node = orig_node
-            elif isinstance(orig_node, (ast.Attribute, ast.Subscript)):
-                node = orig_node.value
-            else:
-                raise TypeError('Unsupported node type for before / after symbol tracing: %s', type(orig_node))
-            end_kwargs['ctx'] = fast.Str(ctx.__class__.__name__)
             end_kwargs['call_context'] = fast.NameConstant(call_context)
-            if TraceEvent.before_complex_symbol in self.events_with_handlers:
-                node = self.make_tuple_event_for(node, TraceEvent.before_complex_symbol, orig_node_id=orig_node_id)
-            end_kwargs['ret'] = node
-            if TraceEvent.after_complex_symbol in self.events_with_handlers:
-                node = self.emit(TraceEvent.after_complex_symbol, orig_node_id, **end_kwargs)
-            if not is_load:
-                if isinstance(orig_node, ast.Attribute):
-                    node = fast.Attribute(
-                        value=node,
-                        attr=orig_node.attr,
-                    )
-                elif isinstance(orig_node, ast.Subscript):
-                    node = fast.Subscript(
-                        value=node,
-                        slice=orig_node.slice,
-                    )
-                else:
-                    raise TypeError(
-                        'Symbol tracing stores unsupported for node %s with type %s' %(orig_node, type(orig_node))
-                    )
-                node.ctx = ast.Store()
+            if TraceEvent.before_load_complex_symbol in self.events_with_handlers:
+                node = self.make_tuple_event_for(
+                    node, TraceEvent.before_load_complex_symbol, orig_node_id=orig_node_id, **(begin_kwargs or {})
+                )
+            if TraceEvent.after_load_complex_symbol in self.events_with_handlers:
+                end_kwargs['ret'] = node
+                node = self.emit(TraceEvent.after_load_complex_symbol, orig_node_id, **end_kwargs)
         # end location_of(node)
         return node
 
@@ -167,7 +148,7 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                 evt_to_use = (
                     TraceEvent.before_subscript_load if is_subscript else TraceEvent.before_attribute_load
                 )
-            elif isinstance(node.ctx, ast.Store) or True:
+            elif isinstance(node.ctx, ast.Store):
                 evt_to_use = (
                     TraceEvent.before_subscript_store if is_subscript else TraceEvent.before_attribute_store
                 )
@@ -189,7 +170,6 @@ class ExprRewriter(ast.NodeTransformer, EmitterMixin):
                         orig_node_id,
                         ret=node.value,
                         attr_or_subscript=attr_or_sub,
-                        ctx=fast.Str(node.ctx.__class__.__name__),
                         call_context=fast.NameConstant(call_context),
                         top_level_node_id=self.get_copy_id_ast(self._top_level_node_for_symbol),
                         subscript_name=(

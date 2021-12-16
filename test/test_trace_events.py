@@ -10,8 +10,8 @@ from hypothesis import example, given, settings
 
 from nbsafety.safety import NotebookSafety
 from nbsafety.singletons import tracer
-from nbsafety.tracing.trace_events import TraceEvent
 from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine
+from pyccolo import TraceEvent
 from .utils import make_safety_fixture, skipif_known_failing
 
 if TYPE_CHECKING:

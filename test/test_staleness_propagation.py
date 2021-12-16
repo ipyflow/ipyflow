@@ -2,8 +2,8 @@
 import logging
 import sys
 
-from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.singletons import nbs
+from pyccolo import EMIT_EVENT
 from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
@@ -1801,7 +1801,7 @@ def test_line_magic():
 
 def test_exception_stack_unwind():
     def assert_stack_size(size):
-        len_call_stack = 'len(TraceManager.instance().call_stack)'
+        len_call_stack = 'len(tracer().call_stack)'
         return ', '.join([
             f'assert {len_call_stack} == {size}',
             f'"%d vs {size}" % {len_call_stack}',
@@ -1809,7 +1809,7 @@ def test_exception_stack_unwind():
     run_cell(
         f"""
         import numpy as np
-        from nbsafety.singletons import TraceManager
+        from nbsafety.singletons import tracer
         {assert_stack_size(0)}
         def f():
             {assert_stack_size(1)}

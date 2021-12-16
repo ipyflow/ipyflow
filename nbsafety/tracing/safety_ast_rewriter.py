@@ -6,7 +6,7 @@ from typing import cast
 
 from nbsafety.singletons import nbs
 from nbsafety.data_model.code_cell import cells
-from nbsafety.tracing.ast_rewriter import AstRewriter
+from pyccolo import AstRewriter
 
 
 logger = logging.getLogger(__name__)

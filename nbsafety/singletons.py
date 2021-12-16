@@ -1,11 +1,12 @@
 # -*- coding: future_annotations -*-
 from typing import TYPE_CHECKING
 
+from pyccolo import BaseTracerStateMachine
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety as NotebookSafetyInstance
-    from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine as TraceManagerInstance
+    from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine as TracerInstance
 
 
 class NotebookSafety(SingletonConfigurable):
@@ -18,15 +19,11 @@ class NotebookSafety(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
-class TraceManager(SingletonConfigurable):
-    pass
-
-
 def nbs() -> NotebookSafetyInstance:
     assert NotebookSafety.initialized()
     return NotebookSafety.instance()
 
 
-def tracer() -> TraceManagerInstance:
-    assert TraceManager.initialized()
-    return TraceManager.instance()
+def tracer() -> TracerInstance:
+    assert BaseTracerStateMachine.initialized()
+    return BaseTracerStateMachine.instance()

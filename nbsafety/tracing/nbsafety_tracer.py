@@ -31,12 +31,13 @@ from nbsafety.tracing.mutation_special_cases import (
 )
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
-from nbsafety.tracing.syntax_augmentation import AugmentationSpec, AugmentationType
-from nbsafety.tracing.trace_events import TraceEvent
-from nbsafety.tracing.trace_stack import TraceStack
 from nbsafety.tracing.trace_stmt import TraceStatement
-from nbsafety.tracing.tracer import (
+from pyccolo import (
+    AugmentationSpec,
+    AugmentationType,
     BaseTracerStateMachine,
+    TraceEvent,
+    TraceStack,
     register_raw_handler,
     skip_when_tracing_disabled,
 )

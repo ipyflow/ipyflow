@@ -1,7 +1,7 @@
 # -*- coding: future_annotations -*-
 from typing import TYPE_CHECKING
 
-from pyccolo import BaseTracerStateMachine
+import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
@@ -19,11 +19,15 @@ class NotebookSafety(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
+class BaseTracer(pyc.BaseTracerStateMachine):
+    pass
+
+
 def nbs() -> NotebookSafetyInstance:
     assert NotebookSafety.initialized()
     return NotebookSafety.instance()
 
 
 def tracer() -> TracerInstance:
-    assert BaseTracerStateMachine.initialized()
-    return BaseTracerStateMachine.instance()
+    assert BaseTracer.initialized()
+    return BaseTracer.instance()

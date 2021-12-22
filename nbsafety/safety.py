@@ -12,6 +12,8 @@ from typing import cast, TYPE_CHECKING, NamedTuple
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
+import pyccolo as pyc
+
 from nbsafety.ipython_utils import (
     ast_transformer_context,
     input_transformer_context,
@@ -700,14 +702,15 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def retrieve_namespace_attr_or_sub(self, obj: Any, attr_or_sub: SupportedIndexType, is_subscript: bool):
         try:
-            if is_subscript:
-                # TODO: more complete list of things that are checkable
-                #  or could cause side effects upon subscripting
-                return obj[attr_or_sub]
-            else:
-                if self.is_develop:
-                    assert isinstance(attr_or_sub, str)
-                return getattr(obj, cast(str, attr_or_sub))
+            with pyc.allow_reentrant_event_handling():
+                if is_subscript:
+                    # TODO: more complete list of things that are checkable
+                    #  or could cause side effects upon subscripting
+                    return obj[attr_or_sub]
+                else:
+                    if self.is_develop:
+                        assert isinstance(attr_or_sub, str)
+                    return getattr(obj, cast(str, attr_or_sub))
         except (AttributeError, IndexError, KeyError):
             raise
         except Exception as e:

@@ -15,7 +15,7 @@ _safety_fixture, _ = make_safety_fixture()
 
 
 def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:
-    mapper = StatementMapper({}, tracer(), {})
+    mapper = StatementMapper({}, [tracer()], {})
     mapper(ast.parse(textwrap.dedent(code).strip()))
     return mapper.line_to_stmt_map
 

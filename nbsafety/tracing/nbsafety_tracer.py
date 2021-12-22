@@ -15,7 +15,7 @@ from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.singletons import nbs
+from nbsafety.singletons import nbs, BaseTracer
 from nbsafety.tracing.mutation_event import (
     ArgMutate,
     ListInsert,
@@ -81,7 +81,7 @@ reactive_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$', re
 blocking_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$:', replacement='')
 
 
-class SafetyTracerStateMachine(BaseTracerStateMachine):
+class SafetyTracerStateMachine(BaseTracer):
     ast_rewriter_cls = SafetyAstRewriter
 
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
@@ -422,8 +422,8 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
         # FIXME: brittle strategy for determining parent scope of obj
         if ns.parent_scope is None:
             if (
-                    obj_name is not None and
-                    obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
+                obj_name is not None and
+                obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
             ):
                 parent_scope = nbs().global_scope
             else:
@@ -884,7 +884,7 @@ class SafetyTracerStateMachine(BaseTracerStateMachine):
     @register_raw_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
     @skip_when_tracing_disabled
     def list_or_tuple_elt(
-            self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
+        self, obj: Any, elt_node_id: NodeId, *_, index: Optional[int], container_node_id: NodeId, **__
     ):
         scope = self.node_id_to_loaded_literal_scope.pop(elt_node_id, None)
         if scope is None:

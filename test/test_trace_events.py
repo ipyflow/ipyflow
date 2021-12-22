@@ -34,17 +34,15 @@ def patched_emit_event_fixture():
     _RECORDED_EVENTS.clear()
     original_emit_event = SafetyTracerStateMachine._emit_event
 
-    def _patched_emit_event(self, evt: Union[TraceEvent, str], *args, **kwargs):
-        event = TraceEvent(evt) if isinstance(evt, str) else evt
-        frame: FrameType = kwargs.get('_frame', sys._getframe().f_back)
-        kwargs['_frame'] = frame
+    def _patched_emit_event(self, evt: Union[str, TraceEvent], node_id: int, frame: FrameType, **kwargs):
+        event = evt if isinstance(evt, TraceEvent) else TraceEvent(evt)
         if frame.f_code.co_filename.startswith('<ipython-input'):
             if not (
                 (event == TraceEvent.call and self.call_depth == 0) or
                 (event == TraceEvent.return_ and self.call_depth == 1)
             ):
                 _RECORDED_EVENTS.append(event)
-        return original_emit_event(self, evt, *args, **kwargs)
+        return original_emit_event(self, event, node_id, frame, **kwargs)
     SafetyTracerStateMachine._emit_event = _patched_emit_event
     yield
     SafetyTracerStateMachine._emit_event = original_emit_event
@@ -66,30 +64,44 @@ def patch_events_with_registered_handlers_to_subset(testfunc):
     @settings(max_examples=20, deadline=None)
     @example(events=set(_ALL_EVENTS_WITH_HANDLERS))
     def wrapped_testfunc(events):
-        if TraceEvent.before_call in events:
-            events.add(TraceEvent.after_call)
-        if TraceEvent.after_call in events:
-            events.add(TraceEvent.before_call)
-        if events & {
-            TraceEvent.before_subscript_load, TraceEvent.before_subscript_store, TraceEvent.before_subscript_del
-        }:
-            events.add(TraceEvent._load_saved_slice)
-        if TraceEvent._load_saved_slice in events:
-            events.add(TraceEvent.before_subscript_load)
-            events.add(TraceEvent.before_subscript_store)
-            events.add(TraceEvent.before_subscript_del)
-        if TraceEvent.before_list_literal in events:
-            events.add(TraceEvent.after_list_literal)
-        if TraceEvent.after_list_literal in events:
-            events.add(TraceEvent.before_list_literal)
-        if TraceEvent.before_dict_literal in events:
-            events.add(TraceEvent.after_dict_literal)
-        if TraceEvent.after_dict_literal in events:
-            events.add(TraceEvent.before_dict_literal)
-        if TraceEvent.before_tuple_literal in events:
-            events.add(TraceEvent.after_tuple_literal)
-        if TraceEvent.after_tuple_literal in events:
-            events.add(TraceEvent.before_tuple_literal)
+        events |= {
+            TraceEvent.before_subscript_load,
+            TraceEvent.after_subscript_load,
+            TraceEvent.before_subscript_store,
+            TraceEvent.before_subscript_del,
+            TraceEvent._load_saved_slice,
+            TraceEvent.before_load_complex_symbol,
+            TraceEvent.after_load_complex_symbol,
+            TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
+            TraceEvent.before_attribute_store,
+            TraceEvent.before_attribute_del,
+            TraceEvent.before_call,
+            TraceEvent.after_call,
+            TraceEvent.argument,
+            TraceEvent.before_return,
+            TraceEvent.after_return,
+            TraceEvent.call,
+            TraceEvent.return_,
+            TraceEvent.exception,
+            TraceEvent.before_stmt,
+            TraceEvent.after_stmt,
+            TraceEvent.after_assign_rhs,
+        }
+        list_literal_related = {TraceEvent.before_list_literal, TraceEvent.after_list_literal, TraceEvent.list_elt}
+        if events & list_literal_related:
+            events |= list_literal_related
+        set_literal_related = {TraceEvent.before_set_literal, TraceEvent.after_set_literal, TraceEvent.set_elt}
+        if events & set_literal_related:
+            events |= set_literal_related
+        tuple_literal_related = {TraceEvent.before_tuple_literal, TraceEvent.after_tuple_literal, TraceEvent.tuple_elt}
+        if events & tuple_literal_related:
+            events |= tuple_literal_related
+        dict_literal_related = {
+            TraceEvent.before_dict_literal, TraceEvent.after_dict_literal, TraceEvent.dict_key, TraceEvent.dict_value
+        }
+        if events & dict_literal_related:
+            events |= dict_literal_related
 
         orig_handlers = tracer().events_with_registered_handlers
         try:
@@ -150,6 +162,7 @@ def test_recorded_events_simple(events):
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.before_call,
             TraceEvent.argument,
             TraceEvent.after_call,
@@ -183,6 +196,7 @@ def test_recorded_events_two_stmts(events):
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.before_call,
             TraceEvent.load_name,
             TraceEvent.argument,
@@ -206,6 +220,7 @@ def test_nested_chains_no_call(events):
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.before_call,
             TraceEvent.argument,
 
@@ -213,6 +228,7 @@ def test_nested_chains_no_call(events):
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.before_call,
             TraceEvent.argument,
             TraceEvent.after_call,
@@ -385,6 +401,7 @@ def test_fancy_slices(events):
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.before_call,
             TraceEvent.before_tuple_literal,
             TraceEvent.tuple_elt,
@@ -408,20 +425,24 @@ def test_fancy_slices(events):
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.before_call,
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.after_load_complex_symbol,
             TraceEvent.before_load_complex_symbol,
             TraceEvent.load_name,
             TraceEvent.before_attribute_load,
+            TraceEvent.after_attribute_load,
             TraceEvent.after_load_complex_symbol,
             TraceEvent.subscript_slice,
             TraceEvent.before_subscript_load,
             TraceEvent._load_saved_slice,
+            TraceEvent.after_subscript_load,
             TraceEvent.after_load_complex_symbol,
             TraceEvent.argument,
             TraceEvent.after_call,

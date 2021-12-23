@@ -15,7 +15,7 @@ from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import SafetyRunMode
-from nbsafety.singletons import nbs, BaseTracer
+from nbsafety.singletons import nbs, SingletonBaseTracer
 from nbsafety.tracing.mutation_event import (
     ArgMutate,
     ListInsert,
@@ -35,7 +35,6 @@ from nbsafety.tracing.trace_stmt import TraceStatement
 from pyccolo import (
     AugmentationSpec,
     AugmentationType,
-    BaseTracerStateMachine,
     TraceEvent,
     TraceStack,
     register_raw_handler,
@@ -81,7 +80,7 @@ reactive_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$', re
 blocking_spec = AugmentationSpec(aug_type=AugmentationType.prefix, token='$:', replacement='')
 
 
-class SafetyTracerStateMachine(BaseTracer):
+class SafetyTracer(SingletonBaseTracer):
     ast_rewriter_cls = SafetyAstRewriter
 
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
@@ -202,7 +201,7 @@ class SafetyTracerStateMachine(BaseTracer):
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _check_prev_stmt_done_executing_hook(self, event: TraceEvent, trace_stmt: TraceStatement):
-        if event == TraceEvent.after_stmt and self.tracing_enabled:
+        if event == TraceEvent.after_stmt and self.is_tracing_enabled:
             trace_stmt.finished_execution_hook()
         elif event == TraceEvent.return_ and self.prev_event not in (TraceEvent.call, TraceEvent.exception):
             # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
@@ -276,7 +275,7 @@ class SafetyTracerStateMachine(BaseTracer):
                             # logger.error("use node %s", ast.dump(self.ast_node_by_id[return_to_node_id]))
                             self.node_id_to_loaded_symbols[return_to_node_id].append(dsym_to_attach)
         finally:
-            if self.tracing_enabled:
+            if self.is_tracing_enabled:
                 self.call_stack.pop()
             if nbs().is_develop and len(self.call_stack) == 0:
                 assert self.call_depth == 1
@@ -478,7 +477,7 @@ class SafetyTracerStateMachine(BaseTracer):
 
     # @register_raw_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
     # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
-    #     ret = self.tracing_enabled and loop_id not in self._seen_loop_ids
+    #     ret = self.is_tracing_enabled and loop_id not in self._seen_loop_ids
     #     if ret:
     #         self._seen_loop_ids.add(loop_id)
     #     return ret
@@ -683,7 +682,7 @@ class SafetyTracerStateMachine(BaseTracer):
     @register_raw_handler(TraceEvent.after_load_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, **__):
         try:
-            if not self.tracing_enabled:
+            if not self.is_tracing_enabled:
                 return
             if self.first_obj_id_in_chain is None:
                 return
@@ -762,15 +761,15 @@ class SafetyTracerStateMachine(BaseTracer):
 
     @register_raw_handler((TraceEvent.before_function_body, TraceEvent.before_lambda_body))
     def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
-        ret = self.tracing_enabled and function_id not in self._seen_functions_ids
+        ret = self.is_tracing_enabled and function_id not in self._seen_functions_ids
         if ret:
             self._seen_functions_ids.add(function_id)
         return ret
 
     @register_raw_handler(TraceEvent.after_call)
     def after_call(self, retval: Any, _node_id: NodeId, frame: FrameType, *_, call_node_id: NodeId, **__):
-        tracing_will_be_enabled_by_end = self.tracing_enabled
-        if not self.tracing_enabled:
+        tracing_will_be_enabled_by_end = self.is_tracing_enabled
+        if not self.is_tracing_enabled:
             tracing_will_be_enabled_by_end = self._should_attempt_to_reenable_tracing(frame)
             if tracing_will_be_enabled_by_end:
                 # if tracing gets reenabled here instead of at the 'before_stmt' handler, then we're still
@@ -791,7 +790,7 @@ class SafetyTracerStateMachine(BaseTracer):
         self.prev_node_id_in_cur_frame_lexical = None
         self._process_possible_mutation(retval)
 
-        if not self.tracing_enabled:
+        if not self.is_tracing_enabled:
             self._enable_tracing()
 
     # Note: we don't trace set literals
@@ -926,7 +925,7 @@ class SafetyTracerStateMachine(BaseTracer):
 
     @register_raw_handler(TraceEvent.after_module_stmt)
     def after_module_stmt(self, *_, **__):
-        if self.tracing_enabled:
+        if self.is_tracing_enabled:
             assert self.cur_frame_original_scope.is_global
         ret = self._saved_stmt_ret_expr
         self._saved_stmt_ret_expr = None
@@ -949,7 +948,7 @@ class SafetyTracerStateMachine(BaseTracer):
             trace_stmt = TraceStatement(frame, cast(ast.stmt, self.ast_node_by_id[stmt_id]))
             self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
-        if not self.tracing_enabled and self._should_attempt_to_reenable_tracing(frame):
+        if not self.is_tracing_enabled and self._should_attempt_to_reenable_tracing(frame):
             # At this point, we can be sure we're at the top level
             # because tracing was enabled in a top-level handler.
             # We also need to clear the stack, as we won't catch
@@ -963,7 +962,7 @@ class SafetyTracerStateMachine(BaseTracer):
 
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
         if nbs().is_develop:
-            assert not self.tracing_enabled
+            assert not self.is_tracing_enabled
             assert self.call_depth > 0, 'expected managed call depth > 0, got %d' % self.call_depth
         call_depth = 0
         while frame is not None:
@@ -989,7 +988,7 @@ class SafetyTracerStateMachine(BaseTracer):
     def handle_sys_events(
         self,
         ret_obj: Any,
-        _node_id: int,
+        _node_id: None,
         frame: FrameType,
         event: TraceEvent,
         *_,
@@ -998,7 +997,7 @@ class SafetyTracerStateMachine(BaseTracer):
     ):
         # right now, this should only be enabled for notebook code
         assert nbs().is_cell_file(frame.f_code.co_filename), 'got %s' % frame.f_code.co_filename
-        assert self.tracing_enabled or event == TraceEvent.after_stmt
+        assert self.is_tracing_enabled or event == TraceEvent.after_stmt
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these

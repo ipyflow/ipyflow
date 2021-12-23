@@ -28,7 +28,7 @@ from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
-from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine
+from nbsafety.tracing.nbsafety_tracer import SafetyTracer
 
 if TYPE_CHECKING:
     from typing import Any, Dict, Iterable, List, Set, Optional, Tuple, Union
@@ -262,7 +262,7 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
-        SafetyTracerStateMachine.instance()  # force initialization here in case not already inited
+        SafetyTracer.instance()  # force initialization here in case not already inited
         stale_cells = set()
         unsafe_order_cells: Set[CellId] = set()
         typecheck_error_cells = set()
@@ -591,11 +591,11 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 
-        with SafetyTracerStateMachine.instance().tracing_context():
-            SafetyTracerStateMachine.instance().reset()
-            ast_rewriter = SafetyTracerStateMachine.instance().make_ast_rewriter(module_id=self.cell_counter())
+        with SafetyTracer.instance().tracing_context():
+            SafetyTracer.instance().reset()
+            ast_rewriter = SafetyTracer.instance().make_ast_rewriter(module_id=self.cell_counter())
             with input_transformer_context(
-                SafetyTracerStateMachine.instance().make_syntax_augmenters(ast_rewriter)
+                SafetyTracer.instance().make_syntax_augmenters(ast_rewriter)
                 if self.settings.enable_reactive_modifiers else []
             ):
                 with ast_transformer_context([ast_rewriter]):

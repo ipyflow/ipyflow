@@ -6,7 +6,7 @@ from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety as NotebookSafetyInstance
-    from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine as TracerInstance
+    from nbsafety.tracing.nbsafety_tracer import SafetyTracer as TracerInstance
 
 
 class NotebookSafety(SingletonConfigurable):
@@ -19,7 +19,7 @@ class NotebookSafety(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
-class BaseTracer(pyc.BaseTracerStateMachine):
+class SingletonBaseTracer(pyc.BaseTracer):
     pass
 
 
@@ -29,5 +29,5 @@ def nbs() -> NotebookSafetyInstance:
 
 
 def tracer() -> TracerInstance:
-    assert BaseTracer.initialized()
-    return BaseTracer.instance()
+    assert SingletonBaseTracer.initialized()
+    return SingletonBaseTracer.instance()

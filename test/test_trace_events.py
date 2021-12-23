@@ -10,7 +10,7 @@ from hypothesis import example, given, settings
 
 from nbsafety.safety import NotebookSafety
 from nbsafety.singletons import tracer
-from nbsafety.tracing.nbsafety_tracer import SafetyTracerStateMachine
+from nbsafety.tracing.nbsafety_tracer import SafetyTracer
 from pyccolo import TraceEvent
 from .utils import make_safety_fixture, skipif_known_failing
 
@@ -22,7 +22,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 NotebookSafety.instance()
-_ALL_EVENTS_WITH_HANDLERS = SafetyTracerStateMachine.instance().events_with_registered_handlers
+_ALL_EVENTS_WITH_HANDLERS = SafetyTracer.instance().events_with_registered_handlers
 _RECORDED_EVENTS = []
 
 
@@ -32,7 +32,7 @@ def subsets(draw, elements):
 
 def patched_emit_event_fixture():
     _RECORDED_EVENTS.clear()
-    original_emit_event = SafetyTracerStateMachine._emit_event
+    original_emit_event = SafetyTracer._emit_event
 
     def _patched_emit_event(self, evt: Union[str, TraceEvent], node_id: int, frame: FrameType, **kwargs):
         event = evt if isinstance(evt, TraceEvent) else TraceEvent(evt)
@@ -43,9 +43,9 @@ def patched_emit_event_fixture():
             ):
                 _RECORDED_EVENTS.append(event)
         return original_emit_event(self, event, node_id, frame, **kwargs)
-    SafetyTracerStateMachine._emit_event = _patched_emit_event
+    SafetyTracer._emit_event = _patched_emit_event
     yield
-    SafetyTracerStateMachine._emit_event = original_emit_event
+    SafetyTracer._emit_event = original_emit_event
 
 
 # Reset dependency graph before each test

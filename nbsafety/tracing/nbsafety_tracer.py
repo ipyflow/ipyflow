@@ -84,10 +84,10 @@ class SafetyTracer(SingletonBaseTracer):
     ast_rewriter_cls = SafetyAstRewriter
 
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
-        return evt != 'line' and nbs().is_cell_file(filename)
-
-    def should_trace_source_path(self, path) -> bool:
-        return False
+        return evt == TraceEvent.init_module.value or (
+            evt != TraceEvent.line.value
+            and nbs().is_cell_file(filename)
+        )
 
     def should_propagate_handler_exception(self, evt: TraceEvent, exc: Exception) -> bool:
         return SafetyRunMode.get() == SafetyRunMode.DEVELOP

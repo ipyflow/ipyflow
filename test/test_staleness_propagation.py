@@ -2354,6 +2354,7 @@ def test_tuple_return_obj():
 def test_property_in_function_arg():
     run_cell(
         f"""
+        import builtins
         z = 42
         class Foo:
             @property

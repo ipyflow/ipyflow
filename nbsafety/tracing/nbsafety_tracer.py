@@ -124,7 +124,7 @@ class SafetyTracer(SingletonBaseTracer):
                 '', f'<cell-{cells().exec_counter()}>', 'exec'
             )
 
-        self.call_stack: TraceStack = self._make_stack()
+        self.call_stack: TraceStack = self.make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
@@ -141,7 +141,7 @@ class SafetyTracer(SingletonBaseTracer):
                 self.active_scope: Scope = nbs().global_scope
                 self.inside_anonymous_call = False
 
-            self.lexical_call_stack: TraceStack = self._make_stack()
+            self.lexical_call_stack: TraceStack = self.make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.num_args_seen = 0
                 self.first_obj_id_in_chain: Optional[ObjId] = None
@@ -150,7 +150,7 @@ class SafetyTracer(SingletonBaseTracer):
                 self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
                 self.mutation_candidate: Optional[MutationCandidate] = None
 
-                self.lexical_literal_stack: TraceStack = self._make_stack()
+                self.lexical_literal_stack: TraceStack = self.make_stack()
                 with self.lexical_literal_stack.register_stack_state():
                     # `None` means use 'cur_frame_original_scope'
                     self.active_literal_scope: Optional[Namespace] = None
@@ -906,7 +906,7 @@ class SafetyTracer(SingletonBaseTracer):
             self.prev_trace_stmt_in_cur_frame.stmt_node,
             is_function_def=True,
             propagate=False,
-            )
+        )
         # FIXME: this is super brittle. We're passing in a stmt node to update the mapping from
         #  stmt_node to function symbol, but simultaneously forcing the lambda symbol to hold
         #  a reference to the lambda in order to help with symbol resolution later
@@ -1036,9 +1036,9 @@ class SafetyTracer(SingletonBaseTracer):
                             ast.dump(stmt_node), None if parent_node is None else ast.dump(parent_node),
                         )
                     if (
-                            parent_node is not None
-                            and getattr(parent_node, 'lineno', None) == lineno
-                            and isinstance(parent_node, (ast.AsyncFunctionDef, ast.FunctionDef))
+                        parent_node is not None
+                        and getattr(parent_node, 'lineno', None) == lineno
+                        and isinstance(parent_node, (ast.AsyncFunctionDef, ast.FunctionDef))
                     ):
                         stmt_node = parent_node
             except KeyError as e:

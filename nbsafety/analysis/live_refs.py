@@ -188,6 +188,7 @@ class ComputeLiveSymbolRefs(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitL
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.generic_visit(node.bases)
         self.generic_visit(node.decorator_list)
+        self.generic_visit(node.body)
         self.dead.add(SymbolRef(node))
 
     def visit_Call(self, node: ast.Call) -> None:

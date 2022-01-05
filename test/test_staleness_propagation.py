@@ -1900,16 +1900,13 @@ def test_class_assignment():
 def test_no_class_false_positives():
     run_cell('x = 7')
     run_cell('y = x + 1')
-    run_cell('x = 42')
     run_cell(
         """
-        try:
-            class Foo:
-                logging.info(y)
-        except:
-            pass
+        class Foo:
+            x = 42
         """
     )
+    run_cell('logging.info(y)')
     assert_not_detected('x inside class scope is different')
 
 
@@ -2477,6 +2474,14 @@ def test_reimport_does_not_propagate():
     run_cell('import numpy as np')
     run_cell('arr = np.zeros(3)')
     run_cell('import numpy as np')
+    assert_not_detected()
+
+
+def test_pyccolo_exec():
+    run_cell("x = 0")
+    run_cell("y = x + 1")
+    run_cell("import pyccolo as pyc; _ = pyc.exec('x = 42')")
+    run_cell("logging.info(y)")
     assert_not_detected()
 
 

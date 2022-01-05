@@ -533,6 +533,32 @@ class NotebookSafety(singletons.NotebookSafety):
             }
         return cell_metadata
 
+    @contextmanager
+    def _patch_pyccolo_exec(self):
+        """
+        The purpose of this context manager is to disable this project's
+        tracer inside pyccolo's "exec()" functions, since it probably
+        will not work properly inside of these.
+        """
+        orig_exec = pyc.exec
+        orig_tracer_exec = pyc.BaseTracer.exec
+
+        def _patched_exec(*args, **kwargs):
+            with SafetyTracer.instance().tracing_disabled():
+                return orig_exec(*args, **kwargs)
+
+        def _patched_tracer_exec(*args, **kwargs):
+            with SafetyTracer.instance().tracing_disabled():
+                return orig_tracer_exec(*args, **kwargs)
+
+        try:
+            pyc.exec = _patched_exec
+            pyc.BaseTracer.exec = orig_tracer_exec
+            yield
+        finally:
+            pyc.exec = orig_exec
+            pyc.BaseTracer.exec = orig_tracer_exec
+
     async def safe_execute(self, cell_content: str, is_async: bool, run_cell_func):
         if self._saved_debug_message is not None:  # pragma: no cover
             logger.error(self._saved_debug_message)
@@ -599,7 +625,8 @@ class NotebookSafety(singletons.NotebookSafety):
                 if self.settings.enable_reactive_modifiers else []
             ):
                 with ast_transformer_context([ast_rewriter]):
-                    yield
+                    with self._patch_pyccolo_exec():
+                        yield
 
     def _make_line_magic(self):
         print_ = print  # to keep the test from failing since this is a legitimate print

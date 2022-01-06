@@ -3,7 +3,7 @@ import logging
 import sys
 
 from nbsafety.singletons import nbs
-from pyccolo import EMIT_EVENT
+from pyccolo.extra_builtins import EMIT_EVENT
 from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)

@@ -2,7 +2,7 @@
 import re
 from typing import TYPE_CHECKING
 from nbsafety.tracing.nbsafety_tracer import reactive_spec
-from pyccolo import (
+from pyccolo.syntax_augmentation import (
     AugmentationType,
     AugmentationSpec,
     AUGMENTED_SYNTAX_REGEX_TEMPLATE,

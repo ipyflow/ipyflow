@@ -2,7 +2,8 @@
 import ast
 import textwrap
 
-from pyccolo import ExprRewriter, TraceEvent
+from pyccolo.expr_rewriter import ExprRewriter
+from pyccolo.trace_events import TraceEvent
 from nbsafety.utils import KeyDict
 
 

@@ -4,7 +4,7 @@ import textwrap
 from typing import TYPE_CHECKING
 
 from nbsafety.singletons import tracer
-from pyccolo import StatementMapper
+from pyccolo.stmt_mapper import StatementMapper
 from .utils import make_safety_fixture
 
 if TYPE_CHECKING:

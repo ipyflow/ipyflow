@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean build deploy check check_no_typing test tests deps devdeps dev typecheck checkall testall uitest version bump markdown kernel nbext
+.PHONY: clean black blackcheck build deploy check check_no_typing test tests deps devdeps dev typecheck checkall testall uitest version bump markdown kernel nbext
 
 clean:
 	rm -rf build/ dist/ nbsafety.egg-info/ nbsafety/resources/nbextension nbsafety/resources/labextension
@@ -21,6 +21,12 @@ markdown:
 deploy: version build
 	./scripts/deploy.sh
 
+black:
+	./scripts/blacken.sh
+
+blackcheck:
+	./scripts/blacken.sh --check
+
 typecheck:
 	mypy nbsafety
 
@@ -38,7 +44,7 @@ coverage:
 xmlcov: coverage
 	coverage xml
 
-check: typecheck check_no_typing
+check: blackcheck typecheck check_no_typing
 
 uicheck:
 	./scripts/runtests.sh ui

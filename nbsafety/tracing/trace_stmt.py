@@ -1,7 +1,8 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import TYPE_CHECKING
+from types import FrameType
+from typing import List, Optional, Set, Union
 
 import nbsafety.tracing.mutation_event as me
 from nbsafety.analysis.symbol_edges import get_symbol_edges
@@ -14,9 +15,6 @@ from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
-if TYPE_CHECKING:
-    from types import FrameType
-    from typing import List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -63,7 +61,10 @@ class TraceStatement:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
         if not func_sym.is_function:
-            msg = 'got non-function symbol %s for name %s' % (func_sym.full_path, func_name)
+            msg = "got non-function symbol %s for name %s" % (
+                func_sym.full_path,
+                func_name,
+            )
             if nbs().is_develop:
                 raise TypeError(msg)
             else:
@@ -94,7 +95,9 @@ class TraceStatement:
                 if reactive_seen and not blocking_seen:
                     nbs().updated_reactive_symbols.add(resolved.dsym)
                 if blocking_seen and resolved.dsym not in nbs().updated_symbols:
-                    nbs().blocked_reactive_timestamps_by_symbol[resolved.dsym] = nbs().cell_counter()
+                    nbs().blocked_reactive_timestamps_by_symbol[
+                        resolved.dsym
+                    ] = nbs().cell_counter()
         except TypeError:
             return
 
@@ -106,36 +109,60 @@ class TraceStatement:
     ) -> None:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
-            scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
+            (
+                scope,
+                name,
+                obj,
+                is_subscript,
+                excluded_deps,
+            ) = tracer().resolve_store_data_for_target(target, self.frame)
         except KeyError:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
             if nbs().is_develop:
-                logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+                logger.warning(
+                    "keyerror for %s",
+                    ast.dump(target) if isinstance(target, ast.AST) else target,
+                )
             # if nbs().is_test:
             #     raise ke
             return
         upserted = scope.upsert_data_symbol_for_name(
-            name, obj, deps - excluded_deps, self.stmt_node, is_subscript=is_subscript,
+            name,
+            obj,
+            deps - excluded_deps,
+            self.stmt_node,
+            is_subscript=is_subscript,
         )
         self._handle_reactive_store(target)
-        logger.info("sym %s upserted to scope %s has parents %s", upserted, scope, upserted.parents)
+        logger.info(
+            "sym %s upserted to scope %s has parents %s",
+            upserted,
+            scope,
+            upserted.parents,
+        )
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
             if namespace_for_upsert is not None and namespace_for_upsert.is_anonymous:
                 namespace_for_upsert.scope_name = str(name)
                 namespace_for_upsert.parent_scope = scope
 
-    def _handle_store_target_tuple_unpack_from_deps(self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]):
+    def _handle_store_target_tuple_unpack_from_deps(
+        self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]
+    ):
         for inner_target in target.elts:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
                 self._handle_store_target_tuple_unpack_from_deps(inner_target, deps)
             else:
                 self._handle_assign_target_for_deps(inner_target, deps)
 
-    def _handle_starred_store_target(self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]):
+    def _handle_starred_store_target(
+        self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]
+    ):
         try:
-            scope, name, obj, is_subscript, _ = tracer().resolve_store_data_for_target(target, self.frame)
+            scope, name, obj, is_subscript, _ = tracer().resolve_store_data_for_target(
+                target, self.frame
+            )
         except KeyError as e:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
@@ -146,7 +173,9 @@ class TraceStatement:
             ns = Namespace(obj, str(name), scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
-            ns.upsert_data_symbol_for_name(i, inner_dep.obj, deps, self.stmt_node, is_subscript=True)
+            ns.upsert_data_symbol_for_name(
+                i, inner_dep.obj, deps, self.stmt_node, is_subscript=True
+            )
         scope.upsert_data_symbol_for_name(
             name,
             obj,
@@ -161,7 +190,10 @@ class TraceStatement:
     ):
         saved_starred_node: Optional[ast.Starred] = None
         saved_starred_deps = []
-        for (i, inner_dep), (_, inner_target) in match_container_obj_or_namespace_with_literal_nodes(rhs_namespace, target):
+        for (i, inner_dep), (
+            _,
+            inner_target,
+        ) in match_container_obj_or_namespace_with_literal_nodes(rhs_namespace, target):
             if isinstance(inner_target, ast.Starred):
                 saved_starred_node = inner_target
                 saved_starred_deps.append(inner_dep)
@@ -173,9 +205,13 @@ class TraceStatement:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
                 inner_namespace = nbs().namespaces.get(inner_dep.obj_id, None)
                 if inner_namespace is None:
-                    self._handle_store_target_tuple_unpack_from_deps(inner_target, inner_deps)
+                    self._handle_store_target_tuple_unpack_from_deps(
+                        inner_target, inner_deps
+                    )
                 else:
-                    self._handle_store_target_tuple_unpack_from_namespace(inner_target, inner_namespace)
+                    self._handle_store_target_tuple_unpack_from_namespace(
+                        inner_target, inner_namespace
+                    )
             else:
                 self._handle_assign_target_for_deps(
                     inner_target,
@@ -185,18 +221,25 @@ class TraceStatement:
         if saved_starred_node is not None:
             self._handle_starred_store_target(saved_starred_node, saved_starred_deps)
 
-    def _handle_store_target(self, target: ast.AST, value: ast.AST, skip_namespace_check: bool = False):
+    def _handle_store_target(
+        self, target: ast.AST, value: ast.AST, skip_namespace_check: bool = False
+    ):
         if isinstance(target, (ast.List, ast.Tuple)):
             rhs_namespace = (
-                None if skip_namespace_check
+                None
+                if skip_namespace_check
                 # next branch will always return None if skip_namespace_check is true,
                 # but we skip it anyway just for the sake of explicitness
                 else nbs().namespaces.get(id(tracer().saved_assign_rhs_obj), None)
             )
             if rhs_namespace is None:
-                self._handle_store_target_tuple_unpack_from_deps(target, resolve_rval_symbols(value))
+                self._handle_store_target_tuple_unpack_from_deps(
+                    target, resolve_rval_symbols(value)
+                )
             else:
-                self._handle_store_target_tuple_unpack_from_namespace(target, rhs_namespace)
+                self._handle_store_target_tuple_unpack_from_namespace(
+                    target, rhs_namespace
+                )
         else:
             self._handle_assign_target_for_deps(
                 target, resolve_rval_symbols(value), maybe_fixup_literal_namespace=True
@@ -209,18 +252,20 @@ class TraceStatement:
         elif isinstance(node, ast.For):
             self._handle_store_target(node.target, node.iter, skip_namespace_check=True)
         else:  # pragma: no cover
-            raise TypeError('node type not supported for node: %s' % ast.dump(node))
+            raise TypeError("node type not supported for node: %s" % ast.dump(node))
 
     def _handle_delete(self):
         assert isinstance(self.stmt_node, ast.Delete)
         for target in self.stmt_node.targets:
             try:
-                scope, obj, name, is_subscript = tracer().resolve_del_data_for_target(target)
+                scope, obj, name, is_subscript = tracer().resolve_del_data_for_target(
+                    target
+                )
                 scope.delete_data_symbol_for_name(name, is_subscript=is_subscript)
             except KeyError as e:
                 # this will happen if, e.g., a __delitem__ triggered a call
                 # logger.info("got key error while trying to handle %s: %s", ast.dump(self.stmt_node), e)
-                logger.info('got key error: %s', e)
+                logger.info("got key error: %s", e)
 
     def _make_lval_data_symbols(self):
         if isinstance(self.stmt_node, (ast.Assign, ast.For)):
@@ -231,7 +276,9 @@ class TraceStatement:
     def _make_lval_data_symbols_old(self):
         symbol_edges = get_symbol_edges(self.stmt_node)
         should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
-        is_function_def = isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        is_function_def = isinstance(
+            self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)
+        )
         is_class_def = isinstance(self.stmt_node, ast.ClassDef)
         is_import = isinstance(self.stmt_node, (ast.Import, ast.ImportFrom))
         if is_function_def or is_class_def:
@@ -240,34 +287,49 @@ class TraceStatement:
 
         for target, dep_node in symbol_edges:
             rval_deps = resolve_rval_symbols(dep_node)
-            logger.info('create edges from %s to %s', rval_deps, target)
+            logger.info("create edges from %s to %s", rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[self.stmt_node.name]
                 self.class_scope.obj = class_ref
                 nbs().namespaces[id(class_ref)] = self.class_scope
             try:
-                scope, name, obj, is_subscript, excluded_deps = tracer().resolve_store_data_for_target(target, self.frame)
+                (
+                    scope,
+                    name,
+                    obj,
+                    is_subscript,
+                    excluded_deps,
+                ) = tracer().resolve_store_data_for_target(target, self.frame)
                 scope.upsert_data_symbol_for_name(
-                    name, obj, rval_deps - excluded_deps, self.stmt_node,
+                    name,
+                    obj,
+                    rval_deps - excluded_deps,
+                    self.stmt_node,
                     overwrite=should_overwrite,
                     is_subscript=is_subscript,
                     is_function_def=is_function_def,
                     is_import=is_import,
                     class_scope=self.class_scope,
-                    propagate=not isinstance(self.stmt_node, ast.For)
+                    propagate=not isinstance(self.stmt_node, ast.For),
                 )
-                if isinstance(self.stmt_node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
+                if isinstance(
+                    self.stmt_node,
+                    (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef),
+                ):
                     self._handle_reactive_store(self.stmt_node)
             except KeyError as ke:
                 # e.g., slices aren't implemented yet
                 # put logging behind flag to avoid noise to user
                 if nbs().is_develop:
-                    logger.warning('keyerror for %s', ast.dump(target) if isinstance(target, ast.AST) else target)
+                    logger.warning(
+                        "keyerror for %s",
+                        ast.dump(target) if isinstance(target, ast.AST) else target,
+                    )
                 # if nbs().is_test:
                 #     raise ke
             except Exception as e:
-                logger.warning('exception while handling store: %s', e)
+                logger.warning("exception while handling store: %s", e)
                 if nbs().is_test:
                     raise e
 
@@ -285,17 +347,22 @@ class TraceStatement:
         mutated_obj = mutated_sym.obj
         if isinstance(mutation_event, (me.ListAppend, me.ListExtend)):
             for upsert_pos in range(
-                mutation_event.orig_len if isinstance(mutation_event, me.ListExtend) else len(mutated_obj) - 1,
-                len(mutated_obj)
+                mutation_event.orig_len
+                if isinstance(mutation_event, me.ListExtend)
+                else len(mutated_obj) - 1,
+                len(mutated_obj),
             ):
                 if namespace_scope is None:
                     namespace_scope = Namespace(
                         mutated_obj,
                         mutated_sym.name,
-                        parent_scope=mutated_sym.containing_scope
+                        parent_scope=mutated_sym.containing_scope,
                     )
                 logger.info(
-                    "upsert %s to %s with deps %s", len(mutated_obj) - 1, namespace_scope, mutation_upsert_deps
+                    "upsert %s to %s with deps %s",
+                    len(mutated_obj) - 1,
+                    namespace_scope,
+                    mutation_upsert_deps,
                 )
                 namespace_scope.upsert_data_symbol_for_name(
                     upsert_pos,
@@ -318,23 +385,42 @@ class TraceStatement:
                 is_subscript=True,
                 propagate=True,
             )
-        elif isinstance(mutation_event, (me.ListPop, me.ListRemove)) and mutation_event.pos is not None:
+        elif (
+            isinstance(mutation_event, (me.ListPop, me.ListRemove))
+            and mutation_event.pos is not None
+        ):
             assert mutated_obj is namespace_scope.obj
-            namespace_scope.delete_data_symbol_for_name(mutation_event.pos, is_subscript=True)
+            namespace_scope.delete_data_symbol_for_name(
+                mutation_event.pos, is_subscript=True
+            )
         elif isinstance(mutation_event, me.NamespaceClear):
             for name in sorted(
                 (
-                    dsym.name for dsym in
-                    namespace_scope.all_data_symbols_this_indentation(exclude_class=True, is_subscript=True)
-                ), reverse=True
+                    dsym.name
+                    for dsym in namespace_scope.all_data_symbols_this_indentation(
+                        exclude_class=True, is_subscript=True
+                    )
+                ),
+                reverse=True,
             ):
                 namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
 
     def handle_dependencies(self):
         if not nbs().dependency_tracking_enabled:
             return
-        for mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs in tracer().mutations:
-            logger.info("mutation %s %s %s %s", mutated_obj_id, mutation_event, mutation_arg_dsyms, mutation_arg_objs)
+        for (
+            mutated_obj_id,
+            mutation_event,
+            mutation_arg_dsyms,
+            mutation_arg_objs,
+        ) in tracer().mutations:
+            logger.info(
+                "mutation %s %s %s %s",
+                mutated_obj_id,
+                mutation_event,
+                mutation_arg_dsyms,
+                mutation_arg_objs,
+            )
             Timestamp.update_usage_info(mutation_arg_dsyms)
             if isinstance(mutation_event, me.ArgMutate):
                 for mutated_sym in mutation_arg_dsyms:
@@ -349,12 +435,20 @@ class TraceStatement:
             # of the mutated symbol. This helps to avoid propagating through to dependency children that are
             # themselves namespace children.
             should_propagate = True
-            if not isinstance(mutation_event, (me.MutatingMethodEventNotYetImplemented, me.StandardMutation)):
+            if not isinstance(
+                mutation_event,
+                (me.MutatingMethodEventNotYetImplemented, me.StandardMutation),
+            ):
                 should_propagate = False
                 mutation_upsert_deps: Set[DataSymbol] = set()
                 if isinstance(mutation_event, (me.ListAppend, me.ListInsert)):
-                    mutation_arg_dsyms, mutation_upsert_deps = mutation_upsert_deps, mutation_arg_dsyms
-                self._handle_specific_mutation_type(mutation_event, mutated_obj_id, mutation_upsert_deps)
+                    mutation_arg_dsyms, mutation_upsert_deps = (
+                        mutation_upsert_deps,
+                        mutation_arg_dsyms,
+                    )
+                self._handle_specific_mutation_type(
+                    mutation_event, mutated_obj_id, mutation_upsert_deps
+                )
             Timestamp.update_usage_info(nbs().aliases[mutated_obj_id])
             for mutated_sym in nbs().aliases[mutated_obj_id]:
                 mutated_sym.update_deps(

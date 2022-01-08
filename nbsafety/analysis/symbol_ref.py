@@ -1,24 +1,36 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import cast, Union, TYPE_CHECKING
+from typing import (
+    cast,
+    TYPE_CHECKING,
+    Any,
+    Generator,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 from nbsafety.analysis.resolved_symbols import ResolvedDataSymbol
 from nbsafety.singletons import tracer
 from nbsafety.utils.ast_utils import subscript_to_slice
 from nbsafety.utils import CommonEqualityMixin
+from nbsafety.types import SupportedIndexType
 
 if TYPE_CHECKING:
-    from typing import Any, Generator, Iterable, List, Optional, Sequence, Tuple, Union
     from nbsafety.data_model.data_symbol import DataSymbol, Scope
-    from nbsafety.types import SupportedIndexType
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-def resolve_slice_to_constant(node: ast.Subscript) -> Optional[Union[SupportedIndexType, ast.Name]]:
+def resolve_slice_to_constant(
+    node: ast.Subscript,
+) -> Optional[Union[SupportedIndexType, ast.Name]]:
     """
     Version-independent way to get at the slice data
     """
@@ -79,17 +91,23 @@ class Atom(CommonEqualityMixin):
         self.is_reactive = is_reactive
         self.is_blocking = is_blocking
 
-    def nonreactive(self) -> Atom:
+    def nonreactive(self) -> "Atom":
         return self.__class__(
-            self.value, is_callpoint=self.is_callpoint, is_subscript=self.is_subscript, is_reactive=False
+            self.value,
+            is_callpoint=self.is_callpoint,
+            is_subscript=self.is_subscript,
+            is_reactive=False,
         )
 
-    def reactive(self) -> Atom:
+    def reactive(self) -> "Atom":
         return self.__class__(
-            self.value, is_callpoint=self.is_callpoint, is_subscript=self.is_subscript, is_reactive=True
+            self.value,
+            is_callpoint=self.is_callpoint,
+            is_subscript=self.is_subscript,
+            is_reactive=True,
         )
 
-    def blocking(self) -> Atom:
+    def blocking(self) -> "Atom":
         return self.__class__(
             self.value,
             is_callpoint=self.is_callpoint,
@@ -99,22 +117,39 @@ class Atom(CommonEqualityMixin):
         )
 
     def __hash__(self):
-        return hash((self.value, self.is_callpoint, self.is_subscript, self.is_reactive, self.is_blocking))
+        return hash(
+            (
+                self.value,
+                self.is_callpoint,
+                self.is_subscript,
+                self.is_reactive,
+                self.is_blocking,
+            )
+        )
 
     def __repr__(self):
         return repr(str(self))
 
     def __str__(self):
-        return self.value + ('(...)' if self.is_callpoint else '')
+        return self.value + ("(...)" if self.is_callpoint else "")
 
 
 class SymbolRefVisitor(ast.NodeVisitor):
     def __init__(self):
         self.symbol_chain: List[Atom] = []
 
-    def __call__(self, node: Union[
-        ast.Attribute, ast.Subscript, ast.Call, ast.Name, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef
-    ]) -> SymbolRef:
+    def __call__(
+        self,
+        node: Union[
+            ast.Attribute,
+            ast.Subscript,
+            ast.Call,
+            ast.Name,
+            ast.ClassDef,
+            ast.FunctionDef,
+            ast.AsyncFunctionDef,
+        ],
+    ) -> "SymbolRef":
         self.visit(node)
         self.symbol_chain.reverse()
         ret = SymbolRef(self.symbol_chain)
@@ -123,7 +158,9 @@ class SymbolRefVisitor(ast.NodeVisitor):
 
     def _append_atom(
         self,
-        node: Union[ast.Name, ast.Attribute, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef],
+        node: Union[
+            ast.Name, ast.Attribute, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef
+        ],
         val: str,
         **kwargs,
     ) -> None:
@@ -142,12 +179,28 @@ class SymbolRefVisitor(ast.NodeVisitor):
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
             if isinstance(node.func.slice, ast.Constant):
-                self.symbol_chain.append(Atom(str(node.func.slice.value), is_callpoint=True))
-            elif isinstance(node.func.slice, ast.Index) and isinstance(node.func.slice.value, (ast.Str, ast.Num)):
+                self.symbol_chain.append(
+                    Atom(str(node.func.slice.value), is_callpoint=True)
+                )
+            elif isinstance(node.func.slice, ast.Index) and isinstance(
+                node.func.slice.value, (ast.Str, ast.Num)
+            ):
                 if isinstance(node.func.slice.value, ast.Str):
-                    self.symbol_chain.append(Atom(node.func.slice.value.s, is_callpoint=True, is_subscript=True))
+                    self.symbol_chain.append(
+                        Atom(
+                            node.func.slice.value.s,
+                            is_callpoint=True,
+                            is_subscript=True,
+                        )
+                    )
                 else:
-                    self.symbol_chain.append(Atom(str(node.func.slice.value.n), is_callpoint=True, is_subscript=True))
+                    self.symbol_chain.append(
+                        Atom(
+                            str(node.func.slice.value.n),
+                            is_callpoint=True,
+                            is_subscript=True,
+                        )
+                    )
                 self.visit(node.func.value)
         elif isinstance(node.func, ast.Name):
             self.visit(node.func)
@@ -156,7 +209,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
             # TODO: handle this case too, e.g. f.g()().h
             pass
         else:
-            raise TypeError('invalid type for node.func %s' % node.func)
+            raise TypeError("invalid type for node.func %s" % node.func)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         self._append_atom(node, node.attr)
@@ -198,12 +251,21 @@ class SymbolRef(CommonEqualityMixin):
     def __init__(self, symbols: Union[ast.AST, Atom, Sequence[Atom]]):
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
-        if isinstance(symbols, (
-            ast.Name, ast.Attribute, ast.Subscript, ast.Call, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef
-        )):
+        if isinstance(
+            symbols,
+            (
+                ast.Name,
+                ast.Attribute,
+                ast.Subscript,
+                ast.Call,
+                ast.ClassDef,
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+            ),
+        ):
             symbols = self._cached_symbol_ref_visitor(symbols).chain
         elif isinstance(symbols, ast.AST):  # pragma: no cover
-            raise TypeError('unexpected type for %s' % symbols)
+            raise TypeError("unexpected type for %s" % symbols)
         elif isinstance(symbols, Atom):
             symbols = [symbols]
         self.chain: Tuple[Atom, ...] = tuple(symbols)
@@ -217,12 +279,12 @@ class SymbolRef(CommonEqualityMixin):
     def __str__(self):
         return repr(self)
 
-    def nonreactive(self) -> SymbolRef:
+    def nonreactive(self) -> "SymbolRef":
         return self.__class__([atom.nonreactive() for atom in self.chain])
 
     def gen_resolved_symbols(
         self,
-        scope: Scope,
+        scope: "Scope",
         only_yield_final_symbol: bool,
         yield_all_intermediate_symbols: bool = False,
         inherit_reactivity: bool = True,
@@ -234,7 +296,7 @@ class SymbolRef(CommonEqualityMixin):
         reactive_seen = False
         blocking_seen = False
         if yield_in_reverse:
-            gen: Iterable[Tuple[DataSymbol, Atom, Atom]] = [
+            gen: Iterable[Tuple["DataSymbol", Atom, Atom]] = [
                 (resolved.dsym, resolved.atom, resolved.next_atom)
                 for resolved in self.gen_resolved_symbols(
                     scope,
@@ -249,7 +311,9 @@ class SymbolRef(CommonEqualityMixin):
             gen = scope.gen_data_symbols_for_attrsub_chain(self)
         for dsym, atom, next_atom in gen:
             reactive_seen = reactive_seen or atom.is_reactive
-            yield_all_intermediate_symbols = yield_all_intermediate_symbols or reactive_seen
+            yield_all_intermediate_symbols = (
+                yield_all_intermediate_symbols or reactive_seen
+            )
             if inherit_reactivity:
                 if reactive_seen and not blocking_seen and not atom.is_reactive:
                     atom = atom.reactive()
@@ -274,11 +338,16 @@ class LiveSymbolRef(CommonEqualityMixin):
         return hash((self.ref, self.timestamp))
 
     def gen_resolved_symbols(
-            self, scope: Scope, only_yield_final_symbol: bool, yield_all_intermediate_symbols: bool = False
+        self,
+        scope: "Scope",
+        only_yield_final_symbol: bool,
+        yield_all_intermediate_symbols: bool = False,
     ):
         blocking_seen = False
         for resolved_sym in self.ref.gen_resolved_symbols(
-            scope, only_yield_final_symbol, yield_all_intermediate_symbols=yield_all_intermediate_symbols
+            scope,
+            only_yield_final_symbol,
+            yield_all_intermediate_symbols=yield_all_intermediate_symbols,
         ):
             resolved_sym.liveness_timestamp = self.timestamp
             blocking_seen = blocking_seen or resolved_sym.is_blocking

@@ -1,12 +1,9 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import Callable, List, Optional
 
 from IPython import get_ipython
-
-if TYPE_CHECKING:
-    from typing import Callable, List, Optional
 
 
 def _ipython():
@@ -31,7 +28,9 @@ class _IpythonState:
         _ipython().ast_transformers = old
 
     @contextmanager
-    def input_transformer_context(self, transformers: List[Callable[[List[str]], List[str]]]):
+    def input_transformer_context(
+        self, transformers: List[Callable[[List[str]], List[str]]]
+    ):
         old = _ipython().input_transformers_post
         _ipython().input_transformers_post = old + transformers
         yield
@@ -55,11 +54,13 @@ def input_transformer_context(transformers):
 
 def cell_counter() -> int:
     if _IPY.cell_counter is None:
-        raise ValueError('should be inside context manager here')
+        raise ValueError("should be inside context manager here")
     return _IPY.cell_counter
 
 
 def run_cell(cell, **kwargs):
     return _ipython().run_cell(
-        cell, store_history=kwargs.pop('store_history', True), silent=kwargs.pop('silent', False)
+        cell,
+        store_history=kwargs.pop("store_history", True),
+        silent=kwargs.pop("silent", False),
     )

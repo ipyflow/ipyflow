@@ -1,4 +1,4 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import logging
 
 from .utils import make_safety_fixture, skipif_known_failing
@@ -60,42 +60,42 @@ def test_starred_args():
             return foo + bar
         """
     )
-    run_cell('args = [1, 2]')
-    run_cell('f(*args)')
+    run_cell("args = [1, 2]")
+    run_cell("f(*args)")
 
 
 def test_starred_assignment():
-    run_cell('x = 0')
-    run_cell('y = 1')
-    run_cell('z = 2')
+    run_cell("x = 0")
+    run_cell("y = 1")
+    run_cell("z = 2")
     run_cell('lst = ["foo", "bar"]')
     # just to make sure the tracer can handle a starred expr in list literal
-    run_cell('s, *t = [x + 1, y + 2, z + 3, *lst]')
-    run_cell('z = 42')
-    run_cell('logging.info(s)')
-    run_cell('logging.info(t[0])')
-    run_cell('logging.info(t[1])')
-    run_cell('x = 99')
-    run_cell('logging.info(s)')
-    run_cell('logging.info(t[0])')
+    run_cell("s, *t = [x + 1, y + 2, z + 3, *lst]")
+    run_cell("z = 42")
+    run_cell("logging.info(s)")
+    run_cell("logging.info(t[0])")
+    run_cell("logging.info(t[1])")
+    run_cell("x = 99")
+    run_cell("logging.info(s)")
+    run_cell("logging.info(t[0])")
 
 
 def test_slices():
-    run_cell('lst = list(range(10))')
-    run_cell('foo = lst[3:7]')
-    run_cell('lst[1:2] = foo')
+    run_cell("lst = list(range(10))")
+    run_cell("foo = lst[3:7]")
+    run_cell("lst[1:2] = foo")
 
 
 def test_partial_slices():
     run_cell('s = "Hello, world!"')
-    run_cell('logging.info(str(s[:7]))')
-    run_cell('logging.info(str(s[7:]))')
+    run_cell("logging.info(str(s[:7]))")
+    run_cell("logging.info(str(s[7:]))")
 
 
 def test_delete():
-    run_cell('lst = list(range(10))')
-    run_cell('del lst[0]')
-    run_cell('del lst[-1]')
+    run_cell("lst = list(range(10))")
+    run_cell("del lst[0]")
+    run_cell("del lst[-1]")
 
 
 def test_delitem():
@@ -112,13 +112,13 @@ def test_delitem():
                 del self.lst[i]
         """
     )
-    run_cell('foo = Foo()')
-    run_cell('foo.lst.append(0)')
-    run_cell('foo.lst.append(1)')
-    run_cell('foo.lst.append(2)')
-    run_cell('logging.info(foo[0])')
-    run_cell('foo[1] = 2')
-    run_cell('del foo[-1]')
+    run_cell("foo = Foo()")
+    run_cell("foo.lst.append(0)")
+    run_cell("foo.lst.append(1)")
+    run_cell("foo.lst.append(2)")
+    run_cell("logging.info(foo[0])")
+    run_cell("foo[1] = 2")
+    run_cell("del foo[-1]")
 
 
 def test_empty_return():
@@ -128,7 +128,7 @@ def test_empty_return():
             return
         """
     )
-    run_cell('x = foo()')
+    run_cell("x = foo()")
 
 
 def test_fancy_slices():
@@ -139,58 +139,58 @@ def test_fancy_slices():
                 self.x = x
         """
     )
-    run_cell('foo = Foo(1)')
-    run_cell('import numpy as np')
-    run_cell('x = np.zeros((3, 3, 3))')
-    run_cell('logging.info(x[:,:,:])')
-    run_cell('logging.info(x[:,...])')
-    run_cell('logging.info(x[1:,...])')
-    run_cell('logging.info(x[foo.x])')
-    run_cell('logging.info(x[foo.x:,...])')
-    run_cell('logging.info(x[foo.x:foo.x+1,:,...])')
+    run_cell("foo = Foo(1)")
+    run_cell("import numpy as np")
+    run_cell("x = np.zeros((3, 3, 3))")
+    run_cell("logging.info(x[:,:,:])")
+    run_cell("logging.info(x[:,...])")
+    run_cell("logging.info(x[1:,...])")
+    run_cell("logging.info(x[foo.x])")
+    run_cell("logging.info(x[foo.x:,...])")
+    run_cell("logging.info(x[foo.x:foo.x+1,:,...])")
 
 
 def test_fancy_slice_assign_augassign():
-    run_cell('%safety trace_messages enable')
-    run_cell('import numpy as np')
-    run_cell('x = np.zeros((3, 3, 3))')
-    run_cell('x[:, 1 ,...] = 1.')
-    run_cell('x[:, 1 ,...] /= 5.')
+    run_cell("%safety trace_messages enable")
+    run_cell("import numpy as np")
+    run_cell("x = np.zeros((3, 3, 3))")
+    run_cell("x[:, 1 ,...] = 1.")
+    run_cell("x[:, 1 ,...] /= 5.")
 
 
 def test_pass():
-    run_cell('if True: pass')
+    run_cell("if True: pass")
 
 
 def test_none_key():
-    run_cell('d = {}')
-    run_cell('d[None] = None')
-    run_cell('d.clear()')
+    run_cell("d = {}")
+    run_cell("d[None] = None")
+    run_cell("d.clear()")
 
 
 def test_global_var():
-    run_cell('x = 0')
-    run_cell('def f(): global x; x = 42')
-    run_cell('f()')
-    run_cell('assert x == 42')
+    run_cell("x = 0")
+    run_cell("def f(): global x; x = 42")
+    run_cell("f()")
+    run_cell("assert x == 42")
 
 
 def test_syntax_error_does_not_completely_mess_up_kernel():
     # first run a cell w/ syntax error, then one w/out
     # the second cell should be fine
     try:
-        run_cell('x ++= 5')
+        run_cell("x ++= 5")
     except SyntaxError:
         pass
-    run_cell('x = 5')
+    run_cell("x = 5")
 
 
 def test_reactive_variable_does_not_break():
-    run_cell('x = 0')
-    run_cell('y = $x + 1')
-    run_cell('print($y)')
+    run_cell("x = 0")
+    run_cell("y = $x + 1")
+    run_cell("print($y)")
 
 
 def test_namespace_change_to_non_container():
-    run_cell('x = 3, 4')
-    run_cell('x = 3')
+    run_cell("x = 3, 4")
+    run_cell("x = 3")

@@ -1,4 +1,4 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import logging
 import traceback
@@ -17,7 +17,9 @@ class SafetyAstRewriter(AstRewriter):
     def visit(self, node: ast.AST):
         try:
             ret = super().visit(node)
-            cells().current_cell().to_ast(override=cast(ast.Module, self.orig_to_copy_mapping[id(node)]))
+            cells().current_cell().to_ast(
+                override=cast(ast.Module, self.orig_to_copy_mapping[id(node)])
+            )
             return ret
         except Exception as e:
             nbs().set_exception_raised_during_execution(e)

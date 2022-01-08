@@ -1,9 +1,6 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import typing
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Any, List, Iterable
+from typing import Any, List, Iterable
 
 _PRIMITIVE_TYPES = {int, float, str, type(None)}
 _CONTAINER_TYPES = {
@@ -57,10 +54,14 @@ def get_type_annotation(obj):
         return obj_type
     elif obj_type in _CONTAINER_TYPES:
         if obj_type == dict:
-            key_ann = _resolve_container_types(typing.List, _get_contained_type_annotations(obj.keys()))
-            value_ann = _resolve_container_types(typing.List, _get_contained_type_annotations(obj.values()))
-            key_args = getattr(key_ann, '__args__', None)
-            value_args = getattr(value_ann, '__args__', None)
+            key_ann = _resolve_container_types(
+                typing.List, _get_contained_type_annotations(obj.keys())
+            )
+            value_ann = _resolve_container_types(
+                typing.List, _get_contained_type_annotations(obj.values())
+            )
+            key_args = getattr(key_ann, "__args__", None)
+            value_args = getattr(value_ann, "__args__", None)
             if key_args is None or value_args is None:
                 return typing.Dict
             else:
@@ -83,41 +84,45 @@ def get_type_annotation(obj):
 
 def make_annotation_string(ann) -> str:
     if ann is type(None):
-        ret = 'None'
-    elif hasattr(ann, '__name__'):
+        ret = "None"
+    elif hasattr(ann, "__name__"):
         ret = ann.__name__
-    elif hasattr(ann, '_name'):
+    elif hasattr(ann, "_name"):
         ret = ann._name
         if ret is None:
             args = ann.__args__
             if args[-1] is type(None) and len(args) == 2:
-                ret = 'Optional'
+                ret = "Optional"
             else:
-                ret = 'Union'
+                ret = "Union"
     elif ann is ...:
-        ret = '...'
+        ret = "..."
     else:
         ret = str(ann)
 
-    if ret.startswith('typing.') and '[' in ret:
-        ret = ret.split('.')[1].split('[')[0]
+    if ret.startswith("typing.") and "[" in ret:
+        ret = ret.split(".")[1].split("[")[0]
 
-    module = getattr(ann, '__module__', None)
-    if module is not None and module not in ('typing', 'builtins', '__main__'):
-        ret = f'{module}.{ret}'
+    module = getattr(ann, "__module__", None)
+    if module is not None and module not in ("typing", "builtins", "__main__"):
+        ret = f"{module}.{ret}"
 
-    ann_args = getattr(ann, '__args__', None)
+    ann_args = getattr(ann, "__args__", None)
     if ann_args is not None:
         ann_args = [arg for arg in ann_args if not isinstance(arg, typing.TypeVar)]
-        if ret in ('Optional', 'Union') and len(ann_args) > 0 and ann_args[-1] is type(None):
+        if (
+            ret in ("Optional", "Union")
+            and len(ann_args) > 0
+            and ann_args[-1] is type(None)
+        ):
             if len(ann_args) == 2:
                 ann_args = ann_args[:-1]
             if len(ann_args) == 1:
-                ret = 'Optional'
+                ret = "Optional"
         if len(ann_args) > 0:
             args_anns = []
             for arg in ann_args:
                 args_anns.append(make_annotation_string(arg))
-            should_sort = ret == 'Union'
+            should_sort = ret == "Union"
             ret = f'{ret}[{", ".join(sorted(args_anns) if should_sort else args_anns)}]'
     return ret

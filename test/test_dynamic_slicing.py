@@ -1,4 +1,4 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import functools
 import logging
 
@@ -25,6 +25,7 @@ def dynamic_or_static_only_test(test_f, dynamic_enabled, static_enabled):
         finally:
             nbs().mut_settings.dynamic_slicing_enabled = orig_dynamic_enabled
             nbs().mut_settings.static_slicing_enabled = orig_static_enabled
+
     return dynamic_test_f
 
 
@@ -58,16 +59,16 @@ def num_stmts_in_slice(cell_num: int) -> int:
 
 
 def test_simple():
-    run_cell('a = 1')
-    run_cell('b = 2')
-    run_cell('logging.info(a)')
-    run_cell('c = a + b')
+    run_cell("a = 1")
+    run_cell("b = 2")
+    run_cell("logging.info(a)")
+    run_cell("c = a + b")
     deps = set(compute_slice(4).keys())
-    assert deps == {1, 2, 4}, 'got %s' % deps
+    assert deps == {1, 2, 4}, "got %s" % deps
 
 
 def test_dynamic_symbol_usage():
-    run_cell('x = 5')
+    run_cell("x = 5")
     run_cell(
         """
         class Foo:
@@ -81,38 +82,41 @@ def test_dynamic_symbol_usage():
             return Foo()
         """
     )
-    run_cell('logging.info(foo().foo())')
+    run_cell("logging.info(foo().foo())")
     deps = set(compute_slice(4).keys())
-    assert deps == {1, 2, 3, 4}, 'got %s' % deps
+    assert deps == {1, 2, 3, 4}, "got %s" % deps
     slice_size = num_stmts_in_slice(4)
-    assert slice_size == 4, 'got %d' % slice_size
+    assert slice_size == 4, "got %d" % slice_size
 
 
 def test_nested_symbol_usage():
-    run_cell('lst = [1, 2, 3, 4, 5]')
-    run_cell('lst[1] = 3')
-    run_cell('logging.info(lst[1])')
+    run_cell("lst = [1, 2, 3, 4, 5]")
+    run_cell("lst[1] = 3")
+    run_cell("logging.info(lst[1])")
     deps = set(compute_slice(3).keys())
-    assert deps == {1, 2, 3}, 'got %s' % deps
+    assert deps == {1, 2, 3}, "got %s" % deps
     slice_size = num_stmts_in_slice(3)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 def test_nested_symbol_usage_with_variable_subscript():
     for static_slicing_enabled in [True, False]:
-        if not static_slicing_enabled and not nbs().mut_settings.dynamic_slicing_enabled:
+        if (
+            not static_slicing_enabled
+            and not nbs().mut_settings.dynamic_slicing_enabled
+        ):
             continue
         orig_enabled = nbs().mut_settings.static_slicing_enabled
         try:
             nbs().mut_settings.static_slicing_enabled = static_slicing_enabled
-            run_cell('x = 1')
-            run_cell('lst = [1, 2, 3, 4, 5]')
-            run_cell('lst[x] = 3')
-            run_cell('logging.info(lst[1])')
+            run_cell("x = 1")
+            run_cell("lst = [1, 2, 3, 4, 5]")
+            run_cell("lst[x] = 3")
+            run_cell("logging.info(lst[1])")
             deps = set(compute_slice(4).keys())
-            assert deps == {1, 2, 3, 4}, 'got %s' % deps
+            assert deps == {1, 2, 3, 4}, "got %s" % deps
             slice_size = num_stmts_in_slice(4)
-            assert slice_size == 4, 'got %d' % slice_size
+            assert slice_size == 4, "got %d" % slice_size
         finally:
             nbs().mut_settings.static_slicing_enabled = orig_enabled
 
@@ -128,63 +132,63 @@ def test_liveness_timestamps():
             y = 2
         """
     )
-    run_cell('z = 42')
-    run_cell('logging.info(x + 1)')
+    run_cell("z = 42")
+    run_cell("logging.info(x + 1)")
     deps = set(compute_slice(3).keys())
-    assert deps == {1, 3}, 'got %s' % deps
+    assert deps == {1, 3}, "got %s" % deps
     slice_size = num_stmts_in_slice(3)
-    assert slice_size == 2, 'got %d' % slice_size
+    assert slice_size == 2, "got %d" % slice_size
 
 
 def test_list_mutations():
-    run_cell('dummy = 0')
-    run_cell('lst = []')
-    run_cell('lst.append(1)')
-    run_cell('lst.append(2)')
-    run_cell('lst.append(3); lst.append(4)')
-    run_cell('logging.info(lst)')
+    run_cell("dummy = 0")
+    run_cell("lst = []")
+    run_cell("lst.append(1)")
+    run_cell("lst.append(2)")
+    run_cell("lst.append(3); lst.append(4)")
+    run_cell("logging.info(lst)")
     deps = set(compute_slice(5).keys())
-    assert deps == {2, 3, 4, 5}, 'got %s' % deps
+    assert deps == {2, 3, 4, 5}, "got %s" % deps
     slice_size = num_stmts_in_slice(5)
-    assert slice_size == 5, 'got %d' % slice_size
+    assert slice_size == 5, "got %d" % slice_size
 
 
 def test_imports():
-    run_cell('import numpy as np')
-    run_cell('arr = np.zeros((5,))')
-    run_cell('logging.info(arr * 3)')
+    run_cell("import numpy as np")
+    run_cell("arr = np.zeros((5,))")
+    run_cell("logging.info(arr * 3)")
     deps = set(compute_slice(3).keys())
-    assert deps == {1, 2, 3}, 'got %s' % deps
+    assert deps == {1, 2, 3}, "got %s" % deps
     slice_size = num_stmts_in_slice(3)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 def test_handle_stale():
-    run_cell('a = 1')
-    run_cell('b = 2 * a')
-    run_cell('a = 2')
-    run_cell('logging.info(b)')
-    run_cell('logging.info(b)')
+    run_cell("a = 1")
+    run_cell("b = 2 * a")
+    run_cell("a = 2")
+    run_cell("logging.info(b)")
+    run_cell("logging.info(b)")
     deps = set(compute_slice(4).keys())
-    assert deps == {1, 2, 4}, 'got %s' % deps
+    assert deps == {1, 2, 4}, "got %s" % deps
     slice_size = num_stmts_in_slice(4)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 @dynamic_only_test
 def test_multiple_versions_captured():
-    run_cell('x = 0')
-    run_cell('logging.info(x); y = 7')
-    run_cell('x = 5')
-    run_cell('logging.info(x + y)')
+    run_cell("x = 0")
+    run_cell("logging.info(x); y = 7")
+    run_cell("x = 5")
+    run_cell("logging.info(x + y)")
     deps = set(compute_slice(4).keys())
-    assert deps == {1, 2, 3, 4}, 'got %s' % deps
+    assert deps == {1, 2, 3, 4}, "got %s" % deps
     slice_size = num_stmts_in_slice(4)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 def test_version_used_when_live():
-    run_cell('x = 0')
+    run_cell("x = 0")
     run_cell(
         """
         if True:
@@ -198,16 +202,16 @@ def test_version_used_when_live():
             logging.info(x)
         """
     )
-    run_cell('x = 5')
-    run_cell('logging.info(x + y)')
+    run_cell("x = 5")
+    run_cell("logging.info(x + y)")
     deps = set(compute_slice(4).keys())
-    assert deps == {1, 2, 3, 4}, 'got %s' % deps
+    assert deps == {1, 2, 3, 4}, "got %s" % deps
     slice_size = num_stmts_in_slice(4)
-    assert slice_size == 4, 'got %d' % slice_size
+    assert slice_size == 4, "got %d" % slice_size
 
 
 def test_no_definitely_spurious_cells():
-    run_cell('x = 0')
+    run_cell("x = 0")
     run_cell(
         """
         if True:
@@ -221,22 +225,22 @@ def test_no_definitely_spurious_cells():
             logging.info(x)
         """
     )
-    run_cell('x = 5')
-    run_cell('logging.info(y)')
+    run_cell("x = 5")
+    run_cell("logging.info(y)")
     deps = set(compute_slice(4).keys())
-    assert deps == {1, 2, 4}, 'got %s' % deps
+    assert deps == {1, 2, 4}, "got %s" % deps
     slice_size = num_stmts_in_slice(4)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 def test_parent_usage_includes_child_update():
-    run_cell('lst = [3]')
-    run_cell('lst[0] += 1')
-    run_cell('lst2 = lst + [5]')
+    run_cell("lst = [3]")
+    run_cell("lst[0] += 1")
+    run_cell("lst2 = lst + [5]")
     deps = set(compute_slice(3).keys())
-    assert deps == {1, 2, 3}, 'got %s' % deps
+    assert deps == {1, 2, 3}, "got %s" % deps
     slice_size = num_stmts_in_slice(3)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 def test_object_subscripting():
@@ -259,9 +263,9 @@ def test_object_subscripting():
     run_cell("something_i_dont_care_about = obj.bar()[name]")
     run_cell("something_i_care_about = obj.bar()[name]")
     deps = set(compute_slice(6).keys())
-    assert deps == {1, 2, 3, 6}, 'got %s' % deps
+    assert deps == {1, 2, 3, 6}, "got %s" % deps
     slice_size = num_stmts_in_slice(6)
-    assert slice_size == 4, 'got %d' % slice_size
+    assert slice_size == 4, "got %d" % slice_size
 
 
 def test_complicated_subscripting():
@@ -304,9 +308,9 @@ def test_complicated_subscripting():
     run_cell("the_dictionary = {'something': 1}")
     run_cell("Foo().new(0).foo(1)")
     deps = set(compute_slice(5).keys())
-    assert deps == {1, 2, 4, 5}, 'got %s' % deps
+    assert deps == {1, 2, 4, 5}, "got %s" % deps
     slice_size = num_stmts_in_slice(5)
-    assert slice_size == 4, 'got %d' % slice_size
+    assert slice_size == 4, "got %d" % slice_size
 
 
 def test_complicated_subscripting_use_conditional():
@@ -356,60 +360,60 @@ def test_complicated_subscripting_use_conditional():
     run_cell("logging.info(z)")
     run_cell("logging.info(y)")
     deps = set(compute_slice(6).keys())
-    assert deps == {1, 2, 3, 4, 5, 6}, 'got %s' % deps
+    assert deps == {1, 2, 3, 4, 5, 6}, "got %s" % deps
     slice_size = num_stmts_in_slice(6)
-    assert slice_size == 4, 'got %d' % slice_size
+    assert slice_size == 4, "got %d" % slice_size
     slice_size = num_stmts_in_slice(7)
-    assert slice_size == 5, 'got %d' % slice_size
+    assert slice_size == 5, "got %d" % slice_size
 
 
 def test_non_relevant_child_symbol_modified():
-    run_cell('lst = [0, 1, 2]')
-    run_cell('lst[0] += 1')
-    run_cell('lst[0] += 1')
-    run_cell('lst[1] += 1')
-    run_cell('lst[0] += 1')
-    run_cell('lst[0] += 1')
-    run_cell('logging.info(lst[1])')
-    run_cell('lst[1] = 42')
+    run_cell("lst = [0, 1, 2]")
+    run_cell("lst[0] += 1")
+    run_cell("lst[0] += 1")
+    run_cell("lst[1] += 1")
+    run_cell("lst[0] += 1")
+    run_cell("lst[0] += 1")
+    run_cell("logging.info(lst[1])")
+    run_cell("lst[1] = 42")
     deps = set(compute_slice(7).keys())
-    assert deps == {1, 4, 7}, 'got %s' % deps
+    assert deps == {1, 4, 7}, "got %s" % deps
     deps = set(compute_slice(8).keys())
-    assert deps == {1, 8}, 'got %s' % deps
+    assert deps == {1, 8}, "got %s" % deps
     slice_size = num_stmts_in_slice(7)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 @dynamic_only_test
 def test_dynamic_only_increment():
     nbs().mut_settings.static_slicing_enabled = False
-    run_cell('x = 0')
-    run_cell('x += 1')
-    run_cell('logging.info(x)')
+    run_cell("x = 0")
+    run_cell("x += 1")
+    run_cell("logging.info(x)")
     deps = set(compute_slice(3).keys())
-    assert deps == {1, 2, 3}, 'got %s' % deps
+    assert deps == {1, 2, 3}, "got %s" % deps
     slice_size = num_stmts_in_slice(3)
-    assert slice_size == 3, 'got %d' % slice_size
+    assert slice_size == 3, "got %d" % slice_size
 
 
 @dynamic_only_test
 def test_dynamic_only_variable_subscript():
     nbs().mut_settings.static_slicing_enabled = False
-    run_cell('lst = [0, 1, 2]')
-    run_cell('x = 0')
-    run_cell('lst[x] += 1')
-    run_cell('lst[x] += 1')
-    run_cell('x += 1')
-    run_cell('lst[x] += 1')
-    run_cell('x -= 1')
-    run_cell('lst[x] += 1')
-    run_cell('lst[x] += 1')
-    run_cell('x += 1')
-    run_cell('logging.info(lst[x])')
+    run_cell("lst = [0, 1, 2]")
+    run_cell("x = 0")
+    run_cell("lst[x] += 1")
+    run_cell("lst[x] += 1")
+    run_cell("x += 1")
+    run_cell("lst[x] += 1")
+    run_cell("x -= 1")
+    run_cell("lst[x] += 1")
+    run_cell("lst[x] += 1")
+    run_cell("x += 1")
+    run_cell("logging.info(lst[x])")
     deps = set(compute_slice(11).keys())
-    assert deps == {1, 2, 5, 6, 7, 10, 11}, 'got %s' % deps
+    assert deps == {1, 2, 5, 6, 7, 10, 11}, "got %s" % deps
     slice_size = num_stmts_in_slice(11)
-    assert slice_size == len(deps), 'got %d' % slice_size
+    assert slice_size == len(deps), "got %d" % slice_size
 
 
 @dynamic_only_test
@@ -431,27 +435,27 @@ def test_handler():
         """
     )
     deps = set(compute_slice(2).keys())
-    assert deps == {2}, 'got %s' % deps
+    assert deps == {2}, "got %s" % deps
     slice_size = num_stmts_in_slice(2)
-    assert slice_size == 1, 'got %d' % slice_size
+    assert slice_size == 1, "got %d" % slice_size
 
 
 @dynamic_only_test
 def test_list_delete():
-    run_cell('lst = [0, 1, 2, 3, 4, 5, 6]')
-    run_cell('lst.append(7)')
-    run_cell('del lst[0]')
-    run_cell('del lst[2]')
-    run_cell('logging.info(lst[1])')
+    run_cell("lst = [0, 1, 2, 3, 4, 5, 6]")
+    run_cell("lst.append(7)")
+    run_cell("del lst[0]")
+    run_cell("del lst[2]")
+    run_cell("logging.info(lst[1])")
     deps = set(compute_slice(5).keys())
-    assert deps == {1, 2, 3, 5}, 'got %s' % deps
+    assert deps == {1, 2, 3, 5}, "got %s" % deps
     slice_size = num_stmts_in_slice(5)
-    assert slice_size == len(deps), 'got %d' % slice_size
+    assert slice_size == len(deps), "got %d" % slice_size
 
 
 def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
-    run_cell('y = 3')
-    run_cell('def f(): return y + 5')
-    run_cell('f()')
-    run_cell('sink = f()')
+    run_cell("y = 3")
+    run_cell("def f(): return y + 5")
+    run_cell("f()")
+    run_cell("sink = f()")
     assert num_stmts_in_slice(4) == 3

@@ -1,15 +1,14 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import sys
 import textwrap
-from typing import TYPE_CHECKING
+from typing import Set, Tuple, Union
 
 from nbsafety.analysis.symbol_ref import SymbolRef
-from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts
+from nbsafety.analysis.live_refs import (
+    compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts,
+)
 from .utils import make_safety_fixture
-
-if TYPE_CHECKING:
-    from typing import Set, Tuple, Union
 
 
 _safety_fixture, _ = make_safety_fixture()
@@ -25,7 +24,9 @@ def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:
     return simplified
 
 
-def compute_live_dead_symbol_refs(code: Union[str, ast.AST]) -> Tuple[Set[str], Set[str]]:
+def compute_live_dead_symbol_refs(
+    code: Union[str, ast.AST]
+) -> Tuple[Set[str], Set[str]]:
     if isinstance(code, str):
         code = textwrap.dedent(code)
     live, dead = compute_live_dead_symbol_refs_with_stmts(code)
@@ -41,42 +42,53 @@ def test_simple():
         print(foo, x)
         """
     )
-    assert live == {'foo', 'print'}
-    assert dead == {'x'}
+    assert live == {"foo", "print"}
+    assert dead == {"x"}
 
 
 def test_function_body():
-    fbody = ast.parse(textwrap.dedent(
-        """
+    fbody = (
+        ast.parse(
+            textwrap.dedent(
+                """
         def func():
             y = 42
             print(foo, bar, baz, x)
             x = 5
         """
-    )).body[0].body
+            )
+        )
+        .body[0]
+        .body
+    )
     live, dead = compute_live_dead_symbol_refs(fbody)
-    assert live == {'foo', 'bar', 'baz', 'x', 'print'}
-    assert dead == {'x', 'y'}
+    assert live == {"foo", "bar", "baz", "x", "print"}
+    assert dead == {"x", "y"}
 
 
 def test_comprehension_with_killed_elt():
-    live, dead = compute_live_dead_symbol_refs('[x for y in range(10) for x in range(11)]')
-    assert live == {'range'}
-    assert dead == {'x', 'y'}
+    live, dead = compute_live_dead_symbol_refs(
+        "[x for y in range(10) for x in range(11)]"
+    )
+    assert live == {"range"}
+    assert dead == {"x", "y"}
 
 
 def test_comprehension_with_live_elt():
-    live, dead = compute_live_dead_symbol_refs('[x for y in range(10) for _ in range(11)]')
-    assert live == {'x', 'range'}, 'got %s' % live
-    assert dead == {'y', '_'}
+    live, dead = compute_live_dead_symbol_refs(
+        "[x for y in range(10) for _ in range(11)]"
+    )
+    assert live == {"x", "range"}, "got %s" % live
+    assert dead == {"y", "_"}
 
 
 def test_subscript_is_live():
-    live, dead = compute_live_dead_symbol_refs('foo[bar] = baz')
-    assert live == {'bar', 'baz'}
+    live, dead = compute_live_dead_symbol_refs("foo[bar] = baz")
+    assert live == {"bar", "baz"}
 
 
 if sys.version_info >= (3, 8):
+
     def test_walrus():
         live, dead = compute_live_dead_symbol_refs(
             """
@@ -84,5 +96,5 @@ if sys.version_info >= (3, 8):
                 z = y + 1
             """
         )
-        assert live == {'x'}
-        assert dead == {'y', 'z'}, 'got %s' % dead
+        assert live == {"x"}
+        assert dead == {"y", "z"}, "got %s" % dead

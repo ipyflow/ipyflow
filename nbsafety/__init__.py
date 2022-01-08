@@ -1,4 +1,4 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 
 # Jupyter Extension points
 def _jupyter_nbextension_paths():
@@ -10,7 +10,7 @@ def _jupyter_nbextension_paths():
             # directory in the `nbextension/` namespace
             dest="nbsafety",
             # _also_ in the `nbextension/` namespace
-            require="nbsafety/index"
+            require="nbsafety/index",
         )
     ]
 

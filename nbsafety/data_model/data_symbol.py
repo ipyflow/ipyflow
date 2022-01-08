@@ -1,11 +1,11 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import builtins
 from collections import defaultdict
 from enum import Enum
 import logging
 import sys
-from typing import cast, TYPE_CHECKING
+from typing import cast, TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 try:
     import numpy
@@ -13,18 +13,19 @@ except ImportError:
     numpy = None
 
 from nbsafety.data_model import sizing
-from nbsafety.data_model.annotation_utils import get_type_annotation, make_annotation_string
+from nbsafety.data_model.annotation_utils import (
+    get_type_annotation,
+    make_annotation_string,
+)
 from nbsafety.data_model.code_cell import ExecutedCodeCell, cells
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
 from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
 from nbsafety.singletons import nbs, tracer
+from nbsafety.types import SupportedIndexType
 
 if TYPE_CHECKING:
-    from nbsafety.types import SupportedIndexType
-    from typing import Any, Dict, List, Optional, Set, Tuple
-
     # avoid circular imports
     from nbsafety.data_model.scope import Scope
     from nbsafety.data_model.namespace import Namespace
@@ -34,12 +35,12 @@ logger.setLevel(logging.ERROR)
 
 
 class DataSymbolType(Enum):
-    DEFAULT = 'default'
-    SUBSCRIPT = 'subscript'
-    FUNCTION = 'function'
-    CLASS = 'class'
-    IMPORT = 'import'
-    ANONYMOUS = 'anonymous'
+    DEFAULT = "default"
+    SUBSCRIPT = "subscript"
+    FUNCTION = "function"
+    CLASS = "class"
+    IMPORT = "import"
+    ANONYMOUS = "anonymous"
 
 
 class DataSymbol:
@@ -61,7 +62,7 @@ class DataSymbol:
         name: SupportedIndexType,
         symbol_type: DataSymbolType,
         obj: Any,
-        containing_scope: Scope,
+        containing_scope: "Scope",
         stmt_node: Optional[ast.AST] = None,
         # TODO: also keep a reference to the target node?
         refresh_cached_obj: bool = False,
@@ -83,8 +84,8 @@ class DataSymbol:
         self.containing_scope = containing_scope
         self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
-        self.parents: Dict[DataSymbol, List[Timestamp]] = defaultdict(list)
-        self.children: Dict[DataSymbol, List[Timestamp]] = defaultdict(list)
+        self.parents: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
+        self.children: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
 
         self.call_scope: Optional[Scope] = None
         if self.is_function:
@@ -108,7 +109,7 @@ class DataSymbol:
         # All timestamps associated with this symbol
         self.updated_timestamps: Set[Timestamp] = set()
 
-        self.fresher_ancestors: Set[DataSymbol] = set()
+        self.fresher_ancestors: Set["DataSymbol"] = set()
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
 
         # cells where this symbol was live
@@ -126,9 +127,13 @@ class DataSymbol:
         self._temp_disable_warnings = False
 
         nbs().aliases[id(obj)].add(self)
-        if isinstance(self.name, str) and not self.is_anonymous and not self.containing_scope.is_namespace_scope:
+        if (
+            isinstance(self.name, str)
+            and not self.is_anonymous
+            and not self.containing_scope.is_namespace_scope
+        ):
             ns = self.namespace
-            if ns is not None and ns.scope_name == 'self':
+            if ns is not None and ns.scope_name == "self":
                 # hack to get a better name than `self.whatever` for fields of this object
                 # not ideal because it relies on the `self` convention but is probably
                 # acceptable for the use case of improving readable names
@@ -139,7 +144,7 @@ class DataSymbol:
         return self.cells_where_deep_live | self.cells_where_shallow_live
 
     def __repr__(self) -> str:
-        return f'<{self.readable_name}>'
+        return f"<{self.readable_name}>"
 
     def __str__(self) -> str:
         return self.readable_name
@@ -158,7 +163,7 @@ class DataSymbol:
             return max(self.timestamp_by_used_time.keys())
 
     @property
-    def namespace_stale_symbols(self) -> Set[DataSymbol]:
+    def namespace_stale_symbols(self) -> Set["DataSymbol"]:
         ns = self.namespace
         return set() if ns is None else ns.namespace_stale_symbols
 
@@ -203,22 +208,29 @@ class DataSymbol:
     @property
     def imported_module(self) -> str:
         if not self.is_import:
-            raise ValueError('only IMPORT symbols have `imported_module` property')
+            raise ValueError("only IMPORT symbols have `imported_module` property")
         if isinstance(self.stmt_node, ast.Import):
             for alias in self.stmt_node.names:
                 name = alias.asname or alias.name
                 if name == self.name:
                     return alias.name
-            raise ValueError('Unable to find module for symbol %s is stmt %s' % (self, ast.dump(self.stmt_node)))
+            raise ValueError(
+                "Unable to find module for symbol %s is stmt %s"
+                % (self, ast.dump(self.stmt_node))
+            )
         elif isinstance(self.stmt_node, ast.ImportFrom):
             return self.stmt_node.module
         else:
-            raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
+            raise TypeError(
+                "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
+            )
 
     @property
     def imported_symbol_original_name(self) -> str:
         if not self.is_import:
-            raise ValueError('only IMPORT symbols have `imported_symbol_original_name` property')
+            raise ValueError(
+                "only IMPORT symbols have `imported_symbol_original_name` property"
+            )
         if isinstance(self.stmt_node, ast.Import):
             return self.imported_module
         elif isinstance(self.stmt_node, ast.ImportFrom):
@@ -226,15 +238,20 @@ class DataSymbol:
                 name = alias.asname or alias.name
                 if name == self.name:
                     return alias.name
-            raise ValueError('Unable to find module for symbol %s is stmt %s' % (self, ast.dump(self.stmt_node)))
+            raise ValueError(
+                "Unable to find module for symbol %s is stmt %s"
+                % (self, ast.dump(self.stmt_node))
+            )
         else:
-            raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
+            raise TypeError(
+                "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
+            )
 
-    def get_top_level(self) -> Optional[DataSymbol]:
+    def get_top_level(self) -> Optional["DataSymbol"]:
         if not self.containing_scope.is_namespace_scope:
             return self
         else:
-            containing_scope = cast('Namespace', self.containing_scope)
+            containing_scope = cast("Namespace", self.containing_scope)
             for alias in nbs().aliases.get(containing_scope.obj_id, []):
                 if alias.is_globally_accessible:
                     return alias.get_top_level()
@@ -242,21 +259,23 @@ class DataSymbol:
 
     def get_import_string(self) -> str:
         if not self.is_import:
-            raise ValueError('only IMPORT symbols support recreating the import string')
+            raise ValueError("only IMPORT symbols support recreating the import string")
         module = self.imported_module
         if isinstance(self.stmt_node, ast.Import):
             if module == self.name:
-                return f'import {module}'
+                return f"import {module}"
             else:
-                return f'import {module} as {self.name}'
+                return f"import {module} as {self.name}"
         elif isinstance(self.stmt_node, ast.ImportFrom):
             original_symbol_name = self.imported_symbol_original_name
             if original_symbol_name == self.name:
-                return f'from {module} import {original_symbol_name}'
+                return f"from {module} import {original_symbol_name}"
             else:
-                return f'from {module} import {original_symbol_name} as {self.name}'
+                return f"from {module} import {original_symbol_name} as {self.name}"
         else:
-            raise TypeError('Invalid stmt type for import symbol: %s' % ast.dump(self.stmt_node))
+            raise TypeError(
+                "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
+            )
 
     @property
     def is_anonymous(self):
@@ -288,9 +307,9 @@ class DataSymbol:
         return nbs().namespaces.get(self.obj_id, None)
 
     @property
-    def containing_namespace(self) -> Optional[Namespace]:
+    def containing_namespace(self) -> Optional["Namespace"]:
         if self.containing_scope.is_namespace_scope:
-            return cast('Namespace', self.containing_scope)
+            return cast("Namespace", self.containing_scope)
         else:
             return None
 
@@ -309,7 +328,11 @@ class DataSymbol:
     def is_new_garbage(self):
         if self._tombstone:
             return False
-        if numpy is not None and self.containing_namespace is not None and isinstance(self.containing_namespace.obj, numpy.ndarray):
+        if (
+            numpy is not None
+            and self.containing_namespace is not None
+            and isinstance(self.containing_namespace.obj, numpy.ndarray)
+        ):
             # numpy atoms are not interned (so assigning array elts to a variable does not bump refcount);
             # also seems that refcount is always 0, so just check if the containing namespace is garbage
             return self.containing_namespace.is_garbage
@@ -359,7 +382,10 @@ class DataSymbol:
         logger.info("%s update obj ref to %s", self, obj)
         self._tombstone = False
         self._cached_out_of_sync = True
-        if nbs().settings.mark_typecheck_failures_unsafe and self.cached_obj_type != type(obj):
+        if (
+            nbs().settings.mark_typecheck_failures_unsafe
+            and self.cached_obj_type != type(obj)
+        ):
             for cell in self.cells_where_live:
                 cell.invalidate_typecheck_result()
         self.cells_where_shallow_live.clear()
@@ -369,7 +395,13 @@ class DataSymbol:
             new_ns = nbs().namespaces.get(self.obj_id, None)
             # don't overwrite existing namespace for this obj
             old_ns = nbs().namespaces.get(self.cached_obj_id, None)
-            if old_ns is not None and (new_ns is None or not new_ns.max_descendent_timestamp.is_initialized) and old_ns.full_namespace_path == self.full_namespace_path:
+            if (
+                old_ns is not None
+                and (
+                    new_ns is None or not new_ns.max_descendent_timestamp.is_initialized
+                )
+                and old_ns.full_namespace_path == self.full_namespace_path
+            ):
                 if new_ns is None:
                     logger.info("create fresh copy of namespace %s", old_ns)
                     new_ns = old_ns.fresh_copy(obj)
@@ -405,7 +437,10 @@ class DataSymbol:
             return False
         if prev_obj is None:
             return False
-        if nbs().blocked_reactive_timestamps_by_symbol.get(self, -1) == self.timestamp.cell_num:
+        if (
+            nbs().blocked_reactive_timestamps_by_symbol.get(self, -1)
+            == self.timestamp.cell_num
+        ):
             return False
         if not self._cached_out_of_sync or self.obj_id == self.cached_obj_id:
             return True
@@ -449,7 +484,9 @@ class DataSymbol:
         self.cached_obj_type = self.obj_type
 
     def get_definition_args(self) -> List[str]:
-        assert self.is_function and isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+        assert self.is_function and isinstance(
+            self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        )
         args = []
         for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
             args.append(arg.arg)
@@ -460,14 +497,16 @@ class DataSymbol:
         return args
 
     def _match_call_args_with_definition_args(self):
-        assert self.is_function and isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda))
+        assert self.is_function and isinstance(
+            self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        )
         caller_node = self._get_calling_ast_node()
         if caller_node is None or not isinstance(caller_node, ast.Call):
             return []
         def_args = self.stmt_node.args.args
         if len(self.stmt_node.args.defaults) > 0:
-            def_args = def_args[:-len(self.stmt_node.args.defaults)]
-        if len(def_args) > 0 and def_args[0].arg == 'self':
+            def_args = def_args[: -len(self.stmt_node.args.defaults)]
+        if len(def_args) > 0 and def_args[0].arg == "self":
             # FIXME: this is bad and I should feel bad
             def_args = def_args[1:]
         for def_arg, call_arg in zip(def_args, caller_node.args):
@@ -483,25 +522,32 @@ class DataSymbol:
                 continue
             seen_keys.add(key)
             yield key, tracer().resolve_loaded_symbols(value)
-        for key, value in zip(self.stmt_node.args.args[-len(self.stmt_node.args.defaults):], self.stmt_node.args.defaults):
+        for key, value in zip(
+            self.stmt_node.args.args[-len(self.stmt_node.args.defaults) :],
+            self.stmt_node.args.defaults,
+        ):
             if key.arg in seen_keys:
                 continue
             yield key.arg, tracer().resolve_loaded_symbols(value)
 
     def _get_calling_ast_node(self) -> Optional[ast.AST]:
         if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if self.name in ('__getitem__', '__setitem__', '__delitem__'):
+            if self.name in ("__getitem__", "__setitem__", "__delitem__"):
                 # TODO: handle case where we're looking for a subscript for the calling node
                 return None
             for decorator in self.stmt_node.decorator_list:
-                if isinstance(decorator, ast.Name) and decorator.id == 'property':
+                if isinstance(decorator, ast.Name) and decorator.id == "property":
                     # TODO: handle case where we're looking for an attribute for the calling node
                     return None
         lexical_call_stack = tracer().lexical_call_stack
         if len(lexical_call_stack) == 0:
             return None
-        prev_node_id_in_cur_frame_lexical = lexical_call_stack.get_field('prev_node_id_in_cur_frame_lexical')
-        caller_ast_node = tracer().ast_node_by_id.get(prev_node_id_in_cur_frame_lexical, None)
+        prev_node_id_in_cur_frame_lexical = lexical_call_stack.get_field(
+            "prev_node_id_in_cur_frame_lexical"
+        )
+        caller_ast_node = tracer().ast_node_by_id.get(
+            prev_node_id_in_cur_frame_lexical, None
+        )
         if caller_ast_node is None or not isinstance(caller_ast_node, ast.Call):
             return None
         return caller_ast_node
@@ -509,18 +555,22 @@ class DataSymbol:
     def create_symbols_for_call_args(self) -> None:
         assert self.is_function
         seen_def_args = set()
-        logger.info('create symbols for call to %s', self)
+        logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
             seen_def_args.add(def_arg)
             # TODO: ideally we should try pass the actual objects to the DataSymbol ctor.
             #  Will require matching the signature with the actual call,
             #  which will be tricky I guess.
-            self.call_scope.upsert_data_symbol_for_name(def_arg, None, deps, self.stmt_node, propagate=False)
-            logger.info('def arg %s matched with deps %s', def_arg, deps)
+            self.call_scope.upsert_data_symbol_for_name(
+                def_arg, None, deps, self.stmt_node, propagate=False
+            )
+            logger.info("def arg %s matched with deps %s", def_arg, deps)
         for def_arg in self.get_definition_args():
             if def_arg in seen_def_args:
                 continue
-            self.call_scope.upsert_data_symbol_for_name(def_arg, None, set(), self.stmt_node, propagate=False)
+            self.call_scope.upsert_data_symbol_for_name(
+                def_arg, None, set(), self.stmt_node, propagate=False
+            )
 
     @property
     def is_stale(self):
@@ -549,7 +599,9 @@ class DataSymbol:
                 for updated_ts in par.updated_timestamps:
                     if cells().from_timestamp(updated_ts).position > dep_introduced_pos:
                         continue
-                    if updated_ts.cell_num > ts.cell_num or par.is_stale_at_position(ts.cell_num):
+                    if updated_ts.cell_num > ts.cell_num or par.is_stale_at_position(
+                        ts.cell_num
+                    ):
                         # logger.error("sym: %s", self)
                         # logger.error("pos: %s", pos)
                         # logger.error("parent: %s", par)
@@ -565,7 +617,9 @@ class DataSymbol:
         return False
 
     def is_stale_at_position(self, pos: int, deep: bool = True) -> bool:
-        assert not hasattr(builtins, EMIT_EVENT), 'this should be called outside of tracing / execution context'
+        assert not hasattr(
+            builtins, EMIT_EVENT
+        ), "this should be called outside of tracing / execution context"
         if deep:
             if not self.is_stale:
                 return False
@@ -590,7 +644,7 @@ class DataSymbol:
             return False
         return True
 
-    def _is_simple_assign(self, new_deps: Set[DataSymbol]) -> bool:
+    def _is_simple_assign(self, new_deps: Set["DataSymbol"]) -> bool:
         if not isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign)):
             return False
         if len(new_deps) != 1:
@@ -601,7 +655,7 @@ class DataSymbol:
 
     def update_deps(
         self,
-        new_deps: Set[DataSymbol],
+        new_deps: Set["DataSymbol"],
         prev_obj: Any = None,
         overwrite: bool = True,
         mutated: bool = False,
@@ -623,7 +677,9 @@ class DataSymbol:
         # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
         # TODO: check higher-order ancestors too?
         overwrite = overwrite and self not in new_deps
-        overwrite = overwrite and not any(self in new_dep.parents for new_dep in new_deps)
+        overwrite = overwrite and not any(
+            self in new_dep.parents for new_dep in new_deps
+        )
         logger.warning("symbol %s new deps %s", self, new_deps)
         new_deps.discard(self)
         if overwrite:
@@ -641,31 +697,52 @@ class DataSymbol:
         self.fresher_ancestor_timestamps.clear()
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.update_usage_info()
-        should_preserve_timestamp = not mutated and self.should_preserve_timestamp(prev_obj)
+        should_preserve_timestamp = not mutated and self.should_preserve_timestamp(
+            prev_obj
+        )
         if refresh:
             self.refresh(
-                bump_version=not should_preserve_timestamp or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES,
+                bump_version=not should_preserve_timestamp
+                or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES,
                 # rationale: if this is a mutation for which we have more precise information,
                 # then we don't need to update the ns descendents as this will already have happened.
                 # also don't update ns descendents for things like `a = b`
-                refresh_descendent_namespaces=not (mutated and not propagate_to_namespace_descendents) and not self._is_simple_assign(new_deps),
+                refresh_descendent_namespaces=not (
+                    mutated and not propagate_to_namespace_descendents
+                )
+                and not self._is_simple_assign(new_deps),
                 refresh_namespace_stale=not mutated,
             )
         if propagate and (deleted or not should_preserve_timestamp):
-            UpdateProtocol(self)(new_deps, mutated, propagate_to_namespace_descendents, refresh)
+            UpdateProtocol(self)(
+                new_deps, mutated, propagate_to_namespace_descendents, refresh
+            )
         self._refresh_cached_obj()
         if self.is_class:
             # pop pending class defs and update obj ref
             pending_class_ns = tracer().pending_class_namespaces.pop()
             pending_class_ns.update_obj_ref(self.obj)
 
-    def update_usage_info(self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False) -> None:
+    def update_usage_info(
+        self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False
+    ) -> None:
         if used_time is None:
             used_time = Timestamp.current()
         if nbs().is_develop:
-            logger.info('sym `%s` used in cell %d last updated in cell %d', self, used_time.cell_num, self.timestamp)
-        ts_to_use = self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
-        if ts_to_use.is_initialized and used_time not in self.timestamp_by_used_time and ts_to_use < used_time:
+            logger.info(
+                "sym `%s` used in cell %d last updated in cell %d",
+                self,
+                used_time.cell_num,
+                self.timestamp,
+            )
+        ts_to_use = (
+            self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
+        )
+        if (
+            ts_to_use.is_initialized
+            and used_time not in self.timestamp_by_used_time
+            and ts_to_use < used_time
+        ):
             nbs().add_dynamic_data_dep(used_time, ts_to_use)
             self.timestamp_by_used_time[used_time] = ts_to_use
 
@@ -675,7 +752,7 @@ class DataSymbol:
         refresh_descendent_namespaces=False,
         refresh_namespace_stale=True,
         timestamp: Optional[Timestamp] = None,
-        seen: Set[DataSymbol] = None,
+        seen: Set["DataSymbol"] = None,
     ) -> None:
         self._temp_disable_warnings = False
         if bump_version:
@@ -708,7 +785,17 @@ class DataSymbol:
                     # `test_external_object_update_propagates_to_stale_namespace_symbols()`
                     # in `test_multicell_precheck.py`
                     if not dsym.is_stale or refresh_namespace_stale:
-                        # logger.error("refresh %s due to %s (value %s) via namespace %s", dsym.full_path, self.full_path, self.obj, ns.full_path)
-                        dsym.refresh(refresh_descendent_namespaces=True, timestamp=self._timestamp, seen=seen)
+                        # logger.error(
+                        #     "refresh %s due to %s (value %s) via namespace %s",
+                        #     dsym.full_path,
+                        #     self.full_path,
+                        #     self.obj,
+                        #     ns.full_path,
+                        # )
+                        dsym.refresh(
+                            refresh_descendent_namespaces=True,
+                            timestamp=self._timestamp,
+                            seen=seen,
+                        )
             if refresh_namespace_stale:
                 self.namespace_stale_symbols.clear()

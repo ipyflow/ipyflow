@@ -1,17 +1,16 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import astunparse
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Set, Type
 
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs
+from nbsafety.types import TimestampOrCounter
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Set, Type
     from nbsafety.data_model.code_cell import ExecutedCodeCell
-    from nbsafety.types import TimestampOrCounter
 
 
 logger = logging.getLogger(__name__)
@@ -52,7 +51,7 @@ def _get_ts_dependencies(
     # Retrieve cell numbers for the dependent symbols
     # Add dynamic and static dependencies
     dep_timestamps = timestamp_to_ts_deps[timestamp]
-    logger.info('dynamic ts deps for %s: %s', timestamp, dep_timestamps)
+    logger.info("dynamic ts deps for %s: %s", timestamp, dep_timestamps)
 
     # For each dependent cell, recursively get their dependencies
     for ts in dep_timestamps - dependencies:
@@ -79,17 +78,27 @@ def _graph_union(
 def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCounter]:
     assert len(seeds) > 0
     dependencies: Set[TimestampOrCounter] = set()
-    timestamp_to_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]] = defaultdict(set)
+    timestamp_to_ts_deps: Dict[
+        TimestampOrCounter, Set[TimestampOrCounter]
+    ] = defaultdict(set)
     if nbs().mut_settings.dynamic_slicing_enabled:
         if isinstance(seeds[0], Timestamp):
-            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, nbs().dynamic_data_deps)
+            timestamp_to_ts_deps = _graph_union(
+                timestamp_to_ts_deps, nbs().dynamic_data_deps
+            )
         else:
-            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, _coarsen_timestamps(nbs().dynamic_data_deps))
+            timestamp_to_ts_deps = _graph_union(
+                timestamp_to_ts_deps, _coarsen_timestamps(nbs().dynamic_data_deps)
+            )
     if nbs().mut_settings.static_slicing_enabled:
         if isinstance(seeds[0], Timestamp):
-            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, nbs().static_data_deps)
+            timestamp_to_ts_deps = _graph_union(
+                timestamp_to_ts_deps, nbs().static_data_deps
+            )
         else:
-            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, _coarsen_timestamps(nbs().static_data_deps))
+            timestamp_to_ts_deps = _graph_union(
+                timestamp_to_ts_deps, _coarsen_timestamps(nbs().static_data_deps)
+            )
 
     # ensure we at least get the static deps
     for seed in seeds:
@@ -104,13 +113,15 @@ def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCount
 
 class CodeCellSlicingMixin:
     def compute_slice(  # type: ignore
-        self: ExecutedCodeCell, stmt_level: bool = False
+        self: "ExecutedCodeCell", stmt_level: bool = False
     ) -> Dict[int, str]:
         return self.compute_slice_for_cells({self}, stmt_level=stmt_level)
 
     @classmethod
     def compute_slice_for_cells(  # type: ignore
-        cls: Type[ExecutedCodeCell], cells: Set[ExecutedCodeCell], stmt_level: bool = False
+        cls: Type["ExecutedCodeCell"],
+        cells: Set["ExecutedCodeCell"],
+        stmt_level: bool = False,
     ) -> Dict[int, str]:
         """
         Gets a dictionary object of cell dependencies for the cell with
@@ -129,7 +140,7 @@ class CodeCellSlicingMixin:
             for cell in cells:
                 stmts_by_cell_num.pop(cell.cell_ctr, None)
             ret = {
-                ctr: '\n'.join(astunparse.unparse(stmt).strip() for stmt in stmts)
+                ctr: "\n".join(astunparse.unparse(stmt).strip() for stmt in stmts)
                 for ctr, stmts in stmts_by_cell_num.items()
             }
             for cell in cells:
@@ -140,15 +151,18 @@ class CodeCellSlicingMixin:
             return {dep: cls.from_timestamp(dep).content for dep in deps}
 
     def compute_slice_stmts(  # type: ignore
-        self: ExecutedCodeCell,
+        self: "ExecutedCodeCell",
     ) -> Dict[int, List[ast.stmt]]:
         return self.compute_slice_stmts_for_cells({self})
 
     @classmethod
     def compute_slice_stmts_for_cells(  # type: ignore
-        cls: Type[ExecutedCodeCell], cells: Set[ExecutedCodeCell],
+        cls: Type["ExecutedCodeCell"],
+        cells: Set["ExecutedCodeCell"],
     ) -> Dict[int, List[ast.stmt]]:
-        deps_stmt: Set[Timestamp] = _compute_slice_impl([Timestamp(cell.cell_ctr, -1) for cell in cells])
+        deps_stmt: Set[Timestamp] = _compute_slice_impl(
+            [Timestamp(cell.cell_ctr, -1) for cell in cells]
+        )
         stmts_by_cell_num = defaultdict(list)
         seen_stmt_ids = set()
         for ts in sorted(deps_stmt):

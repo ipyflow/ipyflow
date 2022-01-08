@@ -1,14 +1,11 @@
-# -*- coding: future_annotations -*-
-from contextlib import contextmanager
+# -*- coding: utf-8 -*-
 import logging
-from typing import TYPE_CHECKING
+from contextlib import contextmanager
+from typing import Dict
 
 from nbsafety.safety import NotebookSafetySettings
 from nbsafety.singletons import nbs
 from test.utils import make_safety_fixture, skipif_known_failing
-
-if TYPE_CHECKING:
-    from typing import Dict
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -46,10 +43,10 @@ def run_all_cells(cells: Dict[int, str], **kwargs):
 
 def test_simple():
     cells = {
-        0: 'x = 0',
-        1: 'y = x + 1',
-        2: 'logging.info(y)',
-        3: 'x = 42',
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+        3: "x = 42",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
@@ -61,9 +58,9 @@ def test_simple():
 
 def test_refresh_after_exception_fixed():
     cells = {
-        0: 'x = 0',
-        1: 'y = x + 1',
-        2: 'logging.info(y)',
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
     }
     run_cell(cells[0], 0)
     run_cell(cells[2], 2, ignore_exceptions=True)
@@ -74,10 +71,10 @@ def test_refresh_after_exception_fixed():
 
 def test_refresh_after_val_changed():
     cells = {
-        0: 'x = 0',
-        1: 'y = x + 1',
-        2: 'logging.info(y)',
-        3: 'y = 42',
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+        3: "y = 42",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
@@ -86,11 +83,11 @@ def test_refresh_after_val_changed():
 
 def test_inner_mutation_considered_fresh():
     cells = {
-        0: 'lst_0 = [0,1,2]',
-        1: 'lst_1 = [3,4,5]',
-        2: 'lst = [lst_0, lst_1]',
-        3: 'logging.info(lst)',
-        4: 'lst_0.append(42)',
+        0: "lst_0 = [0,1,2]",
+        1: "lst_1 = [3,4,5]",
+        2: "lst = [lst_0, lst_1]",
+        3: "logging.info(lst)",
+        4: "lst_0.append(42)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
@@ -113,7 +110,6 @@ def test_update_list_elem():
                     self.counter += 1
             """
         ),
-
         1: (
             """
             lst = []
@@ -122,38 +118,36 @@ def test_update_list_elem():
                 lst.append(x)
             """
         ),
-
         2: (
             """
             for foo in lst:
                 foo.inc()
             """
         ),
-
-        3: 'logging.info(lst)',
+        3: "logging.info(lst)",
     }
 
     run_all_cells(cells)
 
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
-    assert response.fresh_cells == set(), 'got %s' % response.fresh_cells
+    assert response.fresh_cells == set(), "got %s" % response.fresh_cells
 
-    cells[4] = 'x.inc()'
+    cells[4] = "x.inc()"
     run_cell(cells[4], 4)
 
     response = nbs().check_and_link_multiple_cells()
-    assert response.stale_cells == set(), 'got %s' % response.stale_cells
-    assert response.fresh_cells == {2, 3}, 'got %s' % response.fresh_cells
+    assert response.stale_cells == set(), "got %s" % response.stale_cells
+    assert response.fresh_cells == {2, 3}, "got %s" % response.fresh_cells
 
-    cells[5] = 'foo.inc()'
+    cells[5] = "foo.inc()"
     run_cell(cells[5], 5)
     response = nbs().check_and_link_multiple_cells()
-    assert response.stale_cells == set(), 'got %s' % response.stale_cells
-    assert response.fresh_cells == {2, 3, 4}, 'got %s' % response.fresh_cells
+    assert response.stale_cells == set(), "got %s" % response.stale_cells
+    assert response.fresh_cells == {2, 3, 4}, "got %s" % response.fresh_cells
 
     if force_subscript_symbol_creation:
-        cells[6] = 'lst[-1]'
+        cells[6] = "lst[-1]"
         run_cell(cells[6], 6)
         response = nbs().check_and_link_multiple_cells()
         assert response.stale_cells == set()
@@ -162,14 +156,16 @@ def test_update_list_elem():
     run_cell(cells[4], 4)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
-    assert response.fresh_cells == set([2, 3, 5] + ([6] if force_subscript_symbol_creation else []))
+    assert response.fresh_cells == set(
+        [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
+    )
 
 
 def test_no_freshness_for_alias_assignment_post_mutation():
     cells = {
-        0: 'x = []',
-        1: 'y = x',
-        2: 'x.append(5)',
+        0: "x = []",
+        1: "y = x",
+        2: "x.append(5)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
@@ -178,10 +174,7 @@ def test_no_freshness_for_alias_assignment_post_mutation():
 
 
 def test_fresh_after_import():
-    cells = {
-        0: 'x = np.random.random(10)',
-        1: 'import numpy as np'
-    }
+    cells = {0: "x = np.random.random(10)", 1: "import numpy as np"}
     run_all_cells(cells, ignore_exceptions=True)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
@@ -190,27 +183,27 @@ def test_fresh_after_import():
 
 def test_external_object_update_propagates_to_stale_namespace_symbols():
     cells = {
-        0: 'import fakelib',
-        1: 'foo = fakelib.Foo()',
-        2: 'logging.info(foo.x)',
-        3: 'x = 42',
-        4: 'foo.x = x + 1',
-        5: 'x = 43',
-        6: 'foo = foo.set_x(10)',
+        0: "import fakelib",
+        1: "foo = fakelib.Foo()",
+        2: "logging.info(foo.x)",
+        3: "x = 42",
+        4: "foo.x = x + 1",
+        5: "x = 43",
+        6: "foo = foo.set_x(10)",
     }
     with override_settings(mark_stale_symbol_usages_unsafe=False):
         run_all_cells(cells)
         response = nbs().check_and_link_multiple_cells()
-        assert response.stale_cells == set(), 'got %s' % response.stale_cells
+        assert response.stale_cells == set(), "got %s" % response.stale_cells
         assert response.fresh_cells == {2, 4}
 
 
 def test_symbol_on_both_sides_of_assignment():
     cells = {
-        0: 'x = 0',
-        1: 'y = x + 1',
-        2: 'y += 7',
-        3: 'x = 42',
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "y += 7",
+        3: "x = 42",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
@@ -221,16 +214,16 @@ def test_symbol_on_both_sides_of_assignment():
 
 def test_updated_namespace_after_subscript_dep_removed():
     cells = {
-        0: 'x = 5',
-        1: 'd = {x: 5}',
-        2: 'logging.info(d[5])',
-        3: 'x = 9',
+        0: "x = 5",
+        1: "d = {x: 5}",
+        2: "logging.info(d[5])",
+        3: "x = 9",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
-    cells[1] = 'd = {5: 6}'
+    cells[1] = "d = {5: 6}"
     run_cell(cells[1], 1)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
@@ -242,14 +235,14 @@ def test_updated_namespace_after_subscript_dep_removed():
     run_cell(cells[0], 0)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
-    assert response.fresh_cells == set(), 'got %s' % response.fresh_cells
+    assert response.fresh_cells == set(), "got %s" % response.fresh_cells
 
 
 def test_equal_list_update_does_induce_fresh_cell():
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',
-        2: 'logging.info(y)',
+        2: "logging.info(y)",
         3: 'y = list("".join(y))',
     }
     run_all_cells(cells)
@@ -266,7 +259,7 @@ def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UB
     cells = {
         0: 'x = ["f"] + ["o"] * 10',
         1: 'y = x + list("bar")',
-        2: 'logging.info(y)',
+        2: "logging.info(y)",
         3: 'y = list("".join(y))',
     }
     run_all_cells(cells)
@@ -275,7 +268,7 @@ def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UB
     assert response.fresh_cells == {2}
     run_cell('y = ["f"]', 4)
     response = nbs().check_and_link_multiple_cells()
-    assert response.stale_cells == set(), 'got %s' % response.stale_cells
+    assert response.stale_cells == set(), "got %s" % response.stale_cells
     assert response.fresh_cells == {2, 3}
 
 
@@ -283,13 +276,13 @@ def test_equal_dict_update_does_induce_fresh_cell():
     cells = {
         0: 'x = {"foo": 42, "bar": 43}',
         1: 'y = dict(set(x.items()) | set({"baz": 44}.items()))',
-        2: 'logging.info(y)',
-        3: 'y = dict(y.items())',
+        2: "logging.info(y)",
+        3: "y = dict(y.items())",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
-    assert response.fresh_cells == {2}, 'got %s' % response.fresh_cells
+    assert response.fresh_cells == {2}, "got %s" % response.fresh_cells
     run_cell('y = {"foo": 99}', 4)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
@@ -298,16 +291,16 @@ def test_equal_dict_update_does_induce_fresh_cell():
 
 def test_list_append():
     cells = {
-        0: 'lst = [0, 1]',
-        1: 'x = lst[1] + 1',
-        2: 'logging.info(x)',
-        3: 'lst.append(2)',
+        0: "lst = [0, 1]",
+        1: "x = lst[1] + 1",
+        2: "logging.info(x)",
+        3: "lst.append(2)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
-    run_cell('lst[1] += 42', 4)
+    run_cell("lst[1] += 42", 4)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
@@ -315,16 +308,16 @@ def test_list_append():
 
 def test_list_extend():
     cells = {
-        0: 'lst = [0, 1]',
-        1: 'x = lst[1] + 1',
-        2: 'logging.info(x)',
-        3: 'lst.extend([2, 3, 4])',
+        0: "lst = [0, 1]",
+        1: "x = lst[1] + 1",
+        2: "logging.info(x)",
+        3: "lst.extend([2, 3, 4])",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
-    run_cell('lst[1] += 42', 4)
+    run_cell("lst[1] += 42", 4)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
@@ -332,9 +325,9 @@ def test_list_extend():
 
 def test_implicit_subscript_symbol_does_not_bump_ts():
     cells = {
-        0: 'lst = [] + [0, 1]',
-        1: 'logging.info(lst)',
-        2: 'logging.info(lst[0])',
+        0: "lst = [] + [0, 1]",
+        1: "logging.info(lst)",
+        2: "logging.info(lst[0])",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
@@ -344,45 +337,45 @@ def test_implicit_subscript_symbol_does_not_bump_ts():
 
 def test_liveness_skipped_for_simple_assignment_involving_aliases():
     cells = {
-        0: 'lst = [1, 2, 3]',
-        1: 'lst2 = lst',
-        2: 'lst.append(4)',
+        0: "lst = [1, 2, 3]",
+        1: "lst2 = lst",
+        2: "lst.append(4)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
-    run_cell('lst = [1, 2, 3, 4]', 3)
+    run_cell("lst = [1, 2, 3, 4]", 3)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
-    assert response.fresh_cells == {1, 2}, 'got %s' % response.fresh_cells
+    assert response.fresh_cells == {1, 2}, "got %s" % response.fresh_cells
 
 
 def test_incorrect_object_not_used_for_argument_symbols():
     cells = {
-        0: 'import numpy as np',
-        1: 'arr = np.random.randn(100)',
-        2: 'def f(x): return []',
+        0: "import numpy as np",
+        1: "arr = np.random.randn(100)",
+        2: "def f(x): return []",
         # when obj for `np` was passed to `x`, this created issues
-        3: 'f(np.arange(10))',
+        3: "f(np.arange(10))",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
-    assert response.fresh_cells == set(), 'got %s' % response.fresh_cells
+    assert response.fresh_cells == set(), "got %s" % response.fresh_cells
 
 
 def test_increment_by_same_amount():
     cells = {
-        0: 'x = 2',
-        1: 'y = x + 1',
-        2: 'logging.info(y)',
+        0: "x = 2",
+        1: "y = x + 1",
+        2: "logging.info(y)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
-    run_cell('x = 3', 0)
+    run_cell("x = 3", 0)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
@@ -390,36 +383,36 @@ def test_increment_by_same_amount():
 
 def test_list_insert():
     cells = {
-        0: 'lst = [0, 1, 2, 4, 5, 6]',
-        1: 'logging.info(lst[0])',
-        2: 'logging.info(lst[1])',
-        3: 'logging.info(lst[2])',
-        4: 'logging.info(lst[3])',
-        5: 'logging.info(lst[4])',
-        6: 'logging.info(lst[5])',
-        7: 'x = lst[5] + 42',
-        8: 'logging.info(x)',
-        9: 'lst.insert(3, 3)',
+        0: "lst = [0, 1, 2, 4, 5, 6]",
+        1: "logging.info(lst[0])",
+        2: "logging.info(lst[1])",
+        3: "logging.info(lst[2])",
+        4: "logging.info(lst[3])",
+        5: "logging.info(lst[4])",
+        6: "logging.info(lst[5])",
+        7: "x = lst[5] + 42",
+        8: "logging.info(x)",
+        9: "lst.insert(3, 3)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
-    assert response.stale_cells == {8}, 'got %s' % response.stale_cells
-    assert response.fresh_cells == {4, 5, 6, 7}, 'got %s' % response.fresh_cells
+    assert response.stale_cells == {8}, "got %s" % response.stale_cells
+    assert response.fresh_cells == {4, 5, 6, 7}, "got %s" % response.fresh_cells
 
 
 def _test_list_delete_helper(last_cell):
     cells = {
-        0: 'lst = [0, 1, 2, 3, 3, 4, 5, 6]',
-        1: 'logging.info(lst[0])',
-        2: 'logging.info(lst[1])',
-        3: 'logging.info(lst[2])',
-        4: 'logging.info(lst[3])',
-        5: 'logging.info(lst[4])',
-        6: 'logging.info(lst[5])',
-        7: 'logging.info(lst[6])',
-        8: 'logging.info(lst[7])',
-        9: 'x = lst[6] + 42',
-        10: 'logging.info(x)',
+        0: "lst = [0, 1, 2, 3, 3, 4, 5, 6]",
+        1: "logging.info(lst[0])",
+        2: "logging.info(lst[1])",
+        3: "logging.info(lst[2])",
+        4: "logging.info(lst[3])",
+        5: "logging.info(lst[4])",
+        6: "logging.info(lst[5])",
+        7: "logging.info(lst[6])",
+        8: "logging.info(lst[7])",
+        9: "x = lst[6] + 42",
+        10: "logging.info(x)",
         11: last_cell,
     }
     run_all_cells(cells)
@@ -429,32 +422,32 @@ def _test_list_delete_helper(last_cell):
     #  and not consider cell 4 to be fresh
     # TODO: ideally cell 8 would be considered unsafe since the last entry
     #  no longer exists
-    assert response.fresh_cells == {4, 5, 6, 7, 9}, 'got %s' % response.fresh_cells
+    assert response.fresh_cells == {4, 5, 6, 7, 9}, "got %s" % response.fresh_cells
 
 
 def test_list_delete():
-    _test_list_delete_helper('del lst[3]')
+    _test_list_delete_helper("del lst[3]")
 
 
 def test_list_pop():
-    _test_list_delete_helper('lst.pop(3)')
+    _test_list_delete_helper("lst.pop(3)")
 
 
 def test_list_remove():
-    _test_list_delete_helper('lst.remove(3)')
+    _test_list_delete_helper("lst.remove(3)")
 
 
 def test_list_clear():
     cells = {
-        0: 'lst = [0]',
-        1: 'logging.info(lst[0])',
-        2: 'logging.info(lst)',
+        0: "lst = [0]",
+        1: "logging.info(lst[0])",
+        2: "logging.info(lst)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
-    run_cell('lst.clear()', 3)
+    run_cell("lst.clear()", 3)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
@@ -462,15 +455,15 @@ def test_list_clear():
 
 def test_dict_clear():
     cells = {
-        0: 'd = {0: 0}',
-        1: 'logging.info(d[0])',
-        2: 'logging.info(d)',
+        0: "d = {0: 0}",
+        1: "logging.info(d[0])",
+        2: "logging.info(d)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
-    run_cell('d.clear()', 3)
+    run_cell("d.clear()", 3)
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
@@ -478,10 +471,10 @@ def test_dict_clear():
 
 def test_adhoc_pandas_series_update():
     cells = {
-        0: 'import pandas as pd',
-        1: 'df = pd.DataFrame({1: [2, 3], 4: [5, 7]})',
+        0: "import pandas as pd",
+        1: "df = pd.DataFrame({1: [2, 3], 4: [5, 7]})",
         2: 'df["foo"] = [8, 9]',
-        3: 'df.foo.dropna(inplace=True)',
+        3: "df.foo.dropna(inplace=True)",
     }
     run_all_cells(cells)
     response = nbs().check_and_link_multiple_cells()

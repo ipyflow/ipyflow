@@ -1,7 +1,7 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 from typing import Any, Dict, List, Set, Tuple, Union
 
-MAX_SIZE = 10**5
+MAX_SIZE = 10 ** 5
 
 """
 This module helps us detect if it will be too expensive to perform
@@ -13,13 +13,15 @@ otherwise the return float('inf').
 """
 
 
-def sizeof_list_or_set_or_tuple(obj: Union[List[Any], Set[Any], Tuple[Any, ...]]) -> float:
+def sizeof_list_or_set_or_tuple(
+    obj: Union[List[Any], Set[Any], Tuple[Any, ...]]
+) -> float:
     total_size: float = len(obj)
     for elt in obj:
         if total_size > MAX_SIZE:
             break
         total_size += sizeof(elt)
-    return total_size if total_size <= MAX_SIZE else float('inf')
+    return total_size if total_size <= MAX_SIZE else float("inf")
 
 
 def sizeof_dict(obj: Dict[Any, Any]) -> float:
@@ -28,11 +30,11 @@ def sizeof_dict(obj: Dict[Any, Any]) -> float:
         if total_size > MAX_SIZE:
             break
         total_size += sizeof(k) + sizeof(v)
-    return total_size if total_size <= MAX_SIZE else float('inf')
+    return total_size if total_size <= MAX_SIZE else float("inf")
 
 
 def sizeof(obj: Any) -> float:
-    sz: float = float('inf')
+    sz: float = float("inf")
     if isinstance(obj, (int, float)):
         sz = 1
     elif isinstance(obj, str):
@@ -41,4 +43,4 @@ def sizeof(obj: Any) -> float:
         sz = sizeof_list_or_set_or_tuple(obj)
     elif isinstance(obj, dict):
         sz = sizeof_dict(obj)
-    return sz if sz <= MAX_SIZE else float('inf')
+    return sz if sz <= MAX_SIZE else float("inf")

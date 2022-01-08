@@ -1,18 +1,21 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import List, Sequence, TYPE_CHECKING
+from typing import List, Sequence, Tuple, Union
 
-from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
-
-if TYPE_CHECKING:
-    from typing import Dict, Set, Tuple, Union
+from nbsafety.analysis.mixins import (
+    SaveOffAttributesMixin,
+    SkipUnboundArgsMixin,
+    VisitListsMixin,
+)
 
 
 logger = logging.getLogger(__name__)
 
 
-class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+class GetSymbolEdges(
+    SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
+):
     def __init__(self):
         self.edges: List[Tuple[Union[str, ast.AST], ast.AST]] = []
 
@@ -25,7 +28,7 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
 
     def visit_expr(self, node):
         # python <= 3.7 doesn't support isinstance(obj, None)
-        if hasattr(ast, 'NamedExpr') and isinstance(node, getattr(ast, 'NamedExpr')):
+        if hasattr(ast, "NamedExpr") and isinstance(node, getattr(ast, "NamedExpr")):
             self.visit_NamedExpr(node)
         else:
             super().generic_visit(node)
@@ -106,13 +109,15 @@ class GetSymbolEdges(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMix
     def visit_Import_or_ImportFrom(self, node: Union[ast.Import, ast.ImportFrom]):
         for name in node.names:
             if name.asname is None:
-                if name.name != '*' and '.' not in name.name:
+                if name.name != "*" and "." not in name.name:
                     self.edges.append((name.name, node))
             else:
                 self.edges.append((name.asname, node))
 
 
-def get_symbol_edges(node: Union[str, ast.AST]) -> List[Tuple[Union[str, ast.AST], ast.AST]]:
+def get_symbol_edges(
+    node: Union[str, ast.AST]
+) -> List[Tuple[Union[str, ast.AST], ast.AST]]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     return GetSymbolEdges()(node)

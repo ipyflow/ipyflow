@@ -1,6 +1,6 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import re
-from typing import TYPE_CHECKING
+from typing import List, Set
 from nbsafety.tracing.nbsafety_tracer import reactive_spec
 from pyccolo.syntax_augmentation import (
     AugmentationType,
@@ -11,21 +11,24 @@ from pyccolo.syntax_augmentation import (
 from nbsafety.singletons import tracer
 from .utils import make_safety_fixture
 
-if TYPE_CHECKING:
-    from typing import List, Set
-
 _safety_fixture, run_cell = make_safety_fixture(enable_reactive_modifiers=True)
 
 
-REACTIVE_ATOM_REGEX = re.compile(AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=reactive_spec.escaped_token))
+REACTIVE_ATOM_REGEX = re.compile(
+    AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=reactive_spec.escaped_token)
+)
 
 
 def _replace_reactive_atoms(s: str) -> str:
-    return replace_tokens_and_get_augmented_positions(s, reactive_spec, REACTIVE_ATOM_REGEX)[0]
+    return replace_tokens_and_get_augmented_positions(
+        s, reactive_spec, REACTIVE_ATOM_REGEX
+    )[0]
 
 
 def _get_reactive_positions(s: str) -> List[int]:
-    return replace_tokens_and_get_augmented_positions(s, reactive_spec, REACTIVE_ATOM_REGEX)[1]
+    return replace_tokens_and_get_augmented_positions(
+        s, reactive_spec, REACTIVE_ATOM_REGEX
+    )[1]
 
 
 def _get_augmented_positions(s: str, spec: AugmentationSpec) -> List[int]:
@@ -35,8 +38,7 @@ def _get_augmented_positions(s: str, spec: AugmentationSpec) -> List[int]:
 
 def _get_all_reactive_var_names() -> Set[str]:
     return {
-        tracer().ast_node_by_id[node_id].id
-        for node_id in tracer().reactive_node_ids
+        tracer().ast_node_by_id[node_id].id for node_id in tracer().reactive_node_ids
     }
 
 
@@ -50,13 +52,13 @@ def test_simple():
 
 
 def test_simple_names_recovered():
-    run_cell('x = 0')
-    run_cell('y = $x + 1')
-    assert _get_all_reactive_var_names() == {'x'}
-    run_cell('z = $y + 2')
-    assert _get_all_reactive_var_names() == {'x', 'y'}
-    run_cell('w1 = $z + 2\nw2 = $w1 + 3')
-    assert _get_all_reactive_var_names() == {'x', 'y', 'z', 'w1'}
+    run_cell("x = 0")
+    run_cell("y = $x + 1")
+    assert _get_all_reactive_var_names() == {"x"}
+    run_cell("z = $y + 2")
+    assert _get_all_reactive_var_names() == {"x", "y"}
+    run_cell("w1 = $z + 2\nw2 = $w1 + 3")
+    assert _get_all_reactive_var_names() == {"x", "y", "z", "w1"}
 
 
 def test_nested_names_recovered():
@@ -66,10 +68,10 @@ def test_nested_names_recovered():
             assert v != 0
         """
     )
-    run_cell('x = 42')
-    run_cell('$assert_nonzero($x)')
+    run_cell("x = 42")
+    run_cell("$assert_nonzero($x)")
     varnames = _get_all_reactive_var_names()
-    assert varnames == {'x', 'assert_nonzero'}, 'got %s' % varnames
+    assert varnames == {"x", "assert_nonzero"}, "got %s" % varnames
 
 
 def test_reactive_positions():

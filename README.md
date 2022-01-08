@@ -6,6 +6,7 @@
 
 [![](https://github.com/nbsafety-project/nbsafety/workflows/nbsafety/badge.svg)](https://github.com/nbsafety-project/nbsafety/actions)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License: BSD3](https://img.shields.io/badge/License-BSD3-maroon.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![](https://img.shields.io/pypi/v/nbsafety.svg)](https://pypi.org/project/nbsafety)
 ![](https://img.shields.io/pypi/pyversions/nbsafety.svg)

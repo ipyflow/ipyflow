@@ -1,5 +1,4 @@
 astunparse
-future-annotations
 ipykernel
 ipython
 jupyter

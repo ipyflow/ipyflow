@@ -1,10 +1,7 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 from contextlib import contextmanager
-from typing import Sequence, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Generator, Union
+from typing import Generator, Sequence, Union
 
 
 class SkipUnboundArgsMixin(ast.NodeVisitor):
@@ -30,7 +27,9 @@ class SaveOffAttributesMixin:
     def push_attributes(self, **kwargs) -> Generator[None, None, None]:
         for k in kwargs:
             if not hasattr(self, k):
-                raise AttributeError('requested to save unfound attribute %s of object %s' % (k, self))
+                raise AttributeError(
+                    "requested to save unfound attribute %s of object %s" % (k, self)
+                )
         saved_attributes = {}
         for k in kwargs:
             saved_attributes[k] = getattr(self, k)

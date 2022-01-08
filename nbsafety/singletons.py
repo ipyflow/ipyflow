@@ -1,4 +1,4 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 from typing import TYPE_CHECKING
 
 import pyccolo as pyc
@@ -23,11 +23,11 @@ class SingletonBaseTracer(pyc.BaseTracer):
     pass
 
 
-def nbs() -> NotebookSafetyInstance:
+def nbs() -> "NotebookSafetyInstance":
     assert NotebookSafety.initialized()
     return NotebookSafety.instance()
 
 
-def tracer() -> TracerInstance:
+def tracer() -> "TracerInstance":
     assert SingletonBaseTracer.initialized()
     return SingletonBaseTracer.instance()

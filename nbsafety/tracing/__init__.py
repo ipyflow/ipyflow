@@ -1,1 +1,1 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-

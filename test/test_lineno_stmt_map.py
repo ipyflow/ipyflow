@@ -1,14 +1,11 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import textwrap
-from typing import TYPE_CHECKING
+from typing import Dict
 
 from nbsafety.singletons import tracer
 from pyccolo.stmt_mapper import StatementMapper
 from .utils import make_safety_fixture
-
-if TYPE_CHECKING:
-    from typing import Dict
 
 
 _safety_fixture, _ = make_safety_fixture()
@@ -21,14 +18,12 @@ def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:
 
 
 def test_for_loop():
-    code = (
-        """
+    code = """
         for i in range(10):
             a: int = i
             b = a + i
             lst: List[int] = [a, b]
         """
-    )
     mapping = compute_lineno_to_stmt_mapping(code)
     assert isinstance(mapping[1], ast.For)
     assert isinstance(mapping[2], ast.AnnAssign)
@@ -37,8 +32,7 @@ def test_for_loop():
 
 
 def test_multiline_for_loop():
-    code = (
-        """
+    code = """
         for i in [
             0,
             1,
@@ -50,7 +44,6 @@ def test_multiline_for_loop():
             b = a + i
             lst = [a, b]
         """
-    )
     mapping = compute_lineno_to_stmt_mapping(code)
     # for i in range(1, 7):
     #     assert isinstance(mapping[i], ast.For)
@@ -64,14 +57,12 @@ def test_multiline_for_loop():
 
 
 def test_if():
-    code = (
-        """
+    code = """
         if True:
             x = 0
         else:
             x: int = 0
         """
-    )
     mapping = compute_lineno_to_stmt_mapping(code)
     assert isinstance(mapping[1], ast.If)
     assert isinstance(mapping[2], ast.Assign)

@@ -1,8 +1,5 @@
-# -*- coding: future_annotations -*-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Any, Dict, Optional, Type
+# -*- coding: utf-8 -*-
+from typing import Any, Dict, Optional, Type
 
 
 class MutationEvent:
@@ -61,13 +58,11 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Type[MutationEvent]] = {
     list.pop: ListPop,
     list.remove: ListRemove,
     list.sort: MutatingMethodEventNotYetImplemented,
-
     dict.clear: NamespaceClear,
     dict.pop: MutatingMethodEventNotYetImplemented,
     dict.popitem: MutatingMethodEventNotYetImplemented,
     dict.setdefault: MutatingMethodEventNotYetImplemented,
     dict.update: MutatingMethodEventNotYetImplemented,
-
     set.clear: MutatingMethodEventNotYetImplemented,
     set.difference_update: MutatingMethodEventNotYetImplemented,
     set.discard: MutatingMethodEventNotYetImplemented,
@@ -89,4 +84,3 @@ def resolve_mutating_method(obj: Any, method: Optional[str]) -> Optional[Mutatio
         return ListExtend(len(obj))
     else:
         return mutation_type()
-

@@ -1,24 +1,27 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import List, TYPE_CHECKING
+from typing import List, Optional, Set, Union
 
 from nbsafety.analysis.symbol_ref import resolve_slice_to_constant
-from nbsafety.analysis.mixins import SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin
+from nbsafety.analysis.mixins import (
+    SaveOffAttributesMixin,
+    SkipUnboundArgsMixin,
+    VisitListsMixin,
+)
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
-
-if TYPE_CHECKING:
-    from typing import Dict, Optional, Set, Tuple, Union
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor):
+class ResolveRvalSymbols(
+    SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
+):
     def __init__(self):
         self.symbols: List[Optional[DataSymbol]] = []
 
@@ -73,7 +76,9 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         self.symbols.extend(tracer().resolve_loaded_symbols(node))
         self.generic_visit([node.args, node.keywords])
 
-    def _get_attr_or_subscript_namespace(self, node: Union[ast.Attribute, ast.Subscript]) -> Optional[Namespace]:
+    def _get_attr_or_subscript_namespace(
+        self, node: Union[ast.Attribute, ast.Subscript]
+    ) -> Optional[Namespace]:
         with self._push_symbols():
             self.visit(node.value)
             symbols = self.symbols
@@ -93,11 +98,15 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
-            dsym = ns.lookup_data_symbol_by_name_this_indentation(node.attr, is_subscript=False)
+            dsym = ns.lookup_data_symbol_by_name_this_indentation(
+                node.attr, is_subscript=False
+            )
             if dsym is not None:
                 self.symbols.append(dsym)
         except Exception as e:
-            logger.warning("Exception occurred while resolving node %s: %s", ast.dump(node), e)
+            logger.warning(
+                "Exception occurred while resolving node %s: %s", ast.dump(node), e
+            )
 
     def visit_Subscript(self, node: ast.Subscript):
         if isinstance(node.value, ast.Call):
@@ -123,16 +132,22 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
             ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
-            dsym = ns.lookup_data_symbol_by_name_this_indentation(slice, is_subscript=True)
+            dsym = ns.lookup_data_symbol_by_name_this_indentation(
+                slice, is_subscript=True
+            )
             if dsym is None and isinstance(slice, int) and slice < 0:
                 try:
-                    dsym = ns.lookup_data_symbol_by_name_this_indentation(len(ns) + slice, is_subscript=True)
+                    dsym = ns.lookup_data_symbol_by_name_this_indentation(
+                        len(ns) + slice, is_subscript=True
+                    )
                 except TypeError:
                     dsym = None
             if dsym is not None:
                 self.symbols.append(dsym)
         except Exception as e:
-            logger.warning("Exception occurred while resolving node %s: %s", ast.dump(node), e)
+            logger.warning(
+                "Exception occurred while resolving node %s: %s", ast.dump(node), e
+            )
 
     def visit_keyword(self, node: ast.keyword):
         self.visit(node.value)
@@ -184,7 +199,9 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         # skip body here too
         self.visit(node.test)
 
-    def visit_FunctionDef_or_AsyncFunctionDef(self, node: Union[ast.AsyncFunctionDef, ast.FunctionDef]):
+    def visit_FunctionDef_or_AsyncFunctionDef(
+        self, node: Union[ast.AsyncFunctionDef, ast.FunctionDef]
+    ):
         self.visit(node.args)
         self.generic_visit(node.decorator_list)
 
@@ -217,7 +234,9 @@ class ResolveRvalSymbols(SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitList
         pass
 
 
-def resolve_rval_symbols(node: Union[str, ast.AST], should_update_usage_info: bool = True) -> Set[DataSymbol]:
+def resolve_rval_symbols(
+    node: Union[str, ast.AST], should_update_usage_info: bool = True
+) -> Set[DataSymbol]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     rval_symbols = ResolveRvalSymbols()(node)

@@ -1,12 +1,10 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import logging
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Iterable, NamedTuple, Optional, Union
 
 from nbsafety.singletons import nbs, tracer
 
 if TYPE_CHECKING:
-    from typing import Iterable, Optional, Union
-
     # avoid circular imports
     from nbsafety.data_model.data_symbol import DataSymbol
 
@@ -20,13 +18,13 @@ class Timestamp(NamedTuple):
     stmt_num: int
 
     @classmethod
-    def current(cls) -> Timestamp:
+    def current(cls) -> "Timestamp":
         # TODO: shouldn't have to go through nbs() singleton to get the cell counter,
         #  but the dependency structure prevents us from importing from nbsafety.data_model.code_cell
         return cls(nbs().cell_counter(), tracer().module_stmt_counter())
 
     @classmethod
-    def uninitialized(cls) -> Timestamp:
+    def uninitialized(cls) -> "Timestamp":
         return cls(-1, -1)
 
     @property
@@ -35,11 +33,18 @@ class Timestamp(NamedTuple):
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Timestamp):
-            raise TypeError("cannot compare non-timestamp value %s with timestamp %s" % (other, self))
+            raise TypeError(
+                "cannot compare non-timestamp value %s with timestamp %s"
+                % (other, self)
+            )
         return tuple(self._asdict().values()) == tuple(other._asdict().values())
 
     @classmethod
-    def update_usage_info(cls, symbols: Union[Optional[DataSymbol], Iterable[Optional[DataSymbol]]], exclude_ns=False):
+    def update_usage_info(
+        cls,
+        symbols: Union[Optional["DataSymbol"], Iterable[Optional["DataSymbol"]]],
+        exclude_ns=False,
+    ):
         if symbols is None:
             return
         try:

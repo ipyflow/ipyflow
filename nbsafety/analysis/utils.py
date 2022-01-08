@@ -1,4 +1,4 @@
-# -*- coding: future_annotations -*-
+# -*- coding: utf-8 -*-
 import ast
 import logging
 import sys
@@ -32,16 +32,19 @@ class ContainsNamedExprVisitor(ast.NodeVisitor):
 
 def stmt_contains_lval(node: ast.stmt):
     # TODO: expand to method calls, etc.
-    simple_contains_lval = isinstance(node, (
-        ast.Assign,
-        ast.AnnAssign,
-        ast.AugAssign,
-        ast.ClassDef,
-        ast.FunctionDef,
-        ast.AsyncFunctionDef,
-        ast.For,
-        ast.Import,
-        ast.ImportFrom,
-        ast.With,
-    ))
+    simple_contains_lval = isinstance(
+        node,
+        (
+            ast.Assign,
+            ast.AnnAssign,
+            ast.AugAssign,
+            ast.ClassDef,
+            ast.FunctionDef,
+            ast.AsyncFunctionDef,
+            ast.For,
+            ast.Import,
+            ast.ImportFrom,
+            ast.With,
+        ),
+    )
     return simple_contains_lval or ContainsNamedExprVisitor()(node)

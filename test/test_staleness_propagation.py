@@ -2516,6 +2516,15 @@ def test_pyccolo_exec():
     assert_not_detected()
 
 
+def test_pyccolo_exec_2():
+    run_cell("lst = [42]")
+    run_cell("lst2 = lst + [9001]")
+    run_cell("import pyccolo as pyc; _ = pyc.exec('lst.append(55)')")
+    run_cell("logging.info(lst2)")
+    assert_not_detected()
+    run_cell("assert lst == [42, 55]")
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

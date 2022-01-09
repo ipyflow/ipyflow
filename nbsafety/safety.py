@@ -638,7 +638,12 @@ class NotebookSafety(singletons.NotebookSafety):
 
         def _patched_exec(*args, **kwargs):
             with SafetyTracer.instance().tracing_disabled():
-                return orig_exec(*args, **kwargs)
+                return orig_exec(
+                    *args,
+                    num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
+                    + 1,
+                    **kwargs,
+                )
 
         def _patched_tracer_exec(*args, **kwargs):
             with SafetyTracer.instance().tracing_disabled():

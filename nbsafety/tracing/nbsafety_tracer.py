@@ -7,6 +7,7 @@ from types import FrameType
 from typing import cast, TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 
 import astunparse
+import pyccolo as pyc
 from IPython import get_ipython
 
 from nbsafety.analysis.live_refs import compute_live_dead_symbol_refs
@@ -33,14 +34,6 @@ from nbsafety.tracing.mutation_special_cases import (
 from nbsafety.tracing.safety_ast_rewriter import SafetyAstRewriter
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.trace_stmt import TraceStatement
-from pyccolo import (
-    AugmentationSpec,
-    AugmentationType,
-    TraceEvent,
-    TraceStack,
-    register_raw_handler,
-    skip_when_tracing_disabled,
-)
 from nbsafety.tracing.mutation_event import MutationEvent
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from nbsafety.types import SupportedIndexType
@@ -80,11 +73,11 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 }
 
 
-reactive_spec = AugmentationSpec(
-    aug_type=AugmentationType.prefix, token="$", replacement=""
+reactive_spec = pyc.AugmentationSpec(
+    aug_type=pyc.AugmentationType.prefix, token="$", replacement=""
 )
-blocking_spec = AugmentationSpec(
-    aug_type=AugmentationType.prefix, token="$:", replacement=""
+blocking_spec = pyc.AugmentationSpec(
+    aug_type=pyc.AugmentationType.prefix, token="$:", replacement=""
 )
 
 
@@ -92,17 +85,18 @@ class SafetyTracer(SingletonBaseTracer):
     ast_rewriter_cls = SafetyAstRewriter
 
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
-        return evt == TraceEvent.init_module.value or (
-            evt != TraceEvent.line.value and nbs().is_cell_file(filename)
+        return evt == pyc.init_module.value or (
+            evt != pyc.line.value and nbs().is_cell_file(filename)
         )
 
     def should_propagate_handler_exception(
-        self, evt: TraceEvent, exc: Exception
+        self, evt: pyc.TraceEvent, exc: Exception
     ) -> bool:
         return SafetyRunMode.get() == SafetyRunMode.DEVELOP
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._tracing_enabled_files.discard(self.defined_file)
         with self.persistent_fields():
             self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 reactive_spec
@@ -114,7 +108,7 @@ class SafetyTracer(SingletonBaseTracer):
         self._saved_stmt_ret_expr: Optional[Any] = None
         self._seen_loop_ids: Set[NodeId] = set()
         self._seen_functions_ids: Set[NodeId] = set()
-        self.prev_event: Optional[TraceEvent] = None
+        self.prev_event: Optional[pyc.TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.seen_stmts: Set[NodeId] = set()
         self.call_depth = 0
@@ -141,7 +135,7 @@ class SafetyTracer(SingletonBaseTracer):
                 "", f"<cell-{cells().exec_counter()}>", "exec"
             )
 
-        self.call_stack: TraceStack = self.make_stack()
+        self.call_stack: pyc.TraceStack = self.make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
@@ -158,7 +152,7 @@ class SafetyTracer(SingletonBaseTracer):
                 self.active_scope: Scope = nbs().global_scope
                 self.inside_anonymous_call = False
 
-            self.lexical_call_stack: TraceStack = self.make_stack()
+            self.lexical_call_stack: pyc.TraceStack = self.make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.num_args_seen = 0
                 self.first_obj_id_in_chain: Optional[ObjId] = None
@@ -169,13 +163,13 @@ class SafetyTracer(SingletonBaseTracer):
                 self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
                 self.mutation_candidate: Optional[MutationCandidate] = None
 
-                self.lexical_literal_stack: TraceStack = self.make_stack()
+                self.lexical_literal_stack: pyc.TraceStack = self.make_stack()
                 with self.lexical_literal_stack.register_stack_state():
                     # `None` means use 'cur_frame_original_scope'
                     self.active_literal_scope: Optional[Namespace] = None
 
     @property
-    def syntax_augmentation_specs(self) -> List[AugmentationSpec]:
+    def syntax_augmentation_specs(self) -> List[pyc.AugmentationSpec]:
         return [blocking_spec, reactive_spec]
 
     @property
@@ -221,13 +215,13 @@ class SafetyTracer(SingletonBaseTracer):
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _check_prev_stmt_done_executing_hook(
-        self, event: TraceEvent, trace_stmt: TraceStatement
+        self, event: pyc.TraceEvent, trace_stmt: TraceStatement
     ):
-        if event == TraceEvent.after_stmt and self.is_tracing_enabled:
+        if event == pyc.after_stmt and self.is_tracing_enabled:
             trace_stmt.finished_execution_hook()
-        elif event == TraceEvent.return_ and self.prev_event not in (
-            TraceEvent.call,
-            TraceEvent.exception,
+        elif event == pyc.return_ and self.prev_event not in (
+            pyc.call,
+            pyc.exception,
         ):
             # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             if self.prev_trace_stmt is not None:
@@ -252,7 +246,7 @@ class SafetyTracer(SingletonBaseTracer):
                 self._disable_tracing()
                 return
             assert return_to_stmt is not None
-            if self.prev_event != TraceEvent.exception:
+            if self.prev_event != pyc.exception:
                 # exception events are followed by return events until we hit an except clause
                 # no need to track dependencies in this case
                 if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
@@ -340,15 +334,15 @@ class SafetyTracer(SingletonBaseTracer):
 
     def state_transition_hook(
         self,
-        event: TraceEvent,
+        event: pyc.TraceEvent,
         trace_stmt: TraceStatement,
         ret: Any,
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
-        if event == TraceEvent.call:
+        if event == pyc.call:
             self._handle_call_transition(trace_stmt)
-        if event == TraceEvent.return_:
+        if event == pyc.return_:
             self._handle_return_transition(trace_stmt, ret)
         self.prev_trace_stmt = trace_stmt
         self.prev_event = event
@@ -541,49 +535,47 @@ class SafetyTracer(SingletonBaseTracer):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
 
-    @register_raw_handler(
+    @pyc.register_raw_handler(
         (
-            TraceEvent.before_call,
-            TraceEvent.before_attribute_load,
-            TraceEvent.before_attribute_store,
-            TraceEvent.before_attribute_del,
-            TraceEvent.before_subscript_load,
-            TraceEvent.before_subscript_store,
-            TraceEvent.before_subscript_del,
+            pyc.before_call,
+            pyc.before_attribute_load,
+            pyc.before_attribute_store,
+            pyc.before_attribute_del,
+            pyc.before_subscript_load,
+            pyc.before_subscript_store,
+            pyc.before_subscript_del,
         )
     )
     def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
 
-    @register_raw_handler(TraceEvent.init_module)
-    def init_cell(self, _obj, _node_id, frame: FrameType, _event: TraceEvent, **__):
+    @pyc.register_raw_handler(pyc.init_module)
+    def init_cell(self, _obj, _node_id, frame: FrameType, _event: pyc.TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
 
-    # @register_raw_handler((TraceEvent.before_for_loop_body, TraceEvent.before_while_loop_body))
+    # @pyc.register_raw_handler((pyc.before_for_loop_body, pyc.before_while_loop_body))
     # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
     #     ret = self.is_tracing_enabled and loop_id not in self._seen_loop_ids
     #     if ret:
     #         self._seen_loop_ids.add(loop_id)
     #     return ret
 
-    @register_raw_handler(
-        (TraceEvent.after_for_loop_iter, TraceEvent.after_while_loop_iter)
-    )
+    @pyc.register_raw_handler((pyc.after_for_loop_iter, pyc.after_while_loop_iter))
     def after_loop_iter(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
         self.activate_guard(guard)
 
-    # @register_raw_handler(TraceEvent.after_function_execution)
+    # @pyc.register_raw_handler(pyc.after_function_execution)
     # def after_function_exec(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
     #     self.activate_guard(guard)
 
-    @register_raw_handler(TraceEvent.after_assign_rhs)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.after_assign_rhs)
+    @pyc.skip_when_tracing_disabled
     def after_assign_rhs(self, obj: Any, *_, **__):
         self.saved_assign_rhs_obj = obj
 
-    @register_raw_handler(TraceEvent.subscript_slice)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.subscript_slice)
+    @pyc.skip_when_tracing_disabled
     def subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
         node = self.ast_node_by_id.get(node_id, None)
         if node is None:
@@ -604,23 +596,23 @@ class SafetyTracer(SingletonBaseTracer):
             for ref in subscript_live_refs
         )
 
-    @register_raw_handler(
+    @pyc.register_raw_handler(
         (
-            TraceEvent.before_attribute_load,
-            TraceEvent.before_attribute_store,
-            TraceEvent.before_attribute_del,
-            TraceEvent.before_subscript_load,
-            TraceEvent.before_subscript_store,
-            TraceEvent.before_subscript_del,
+            pyc.before_attribute_load,
+            pyc.before_attribute_store,
+            pyc.before_attribute_del,
+            pyc.before_subscript_load,
+            pyc.before_subscript_store,
+            pyc.before_subscript_del,
         )
     )
-    @skip_when_tracing_disabled
+    @pyc.skip_when_tracing_disabled
     def attrsub_tracer(
         self,
         obj: Any,
         node_id: NodeId,
         _frame_: FrameType,
-        event: TraceEvent,
+        event: pyc.TraceEvent,
         *_,
         attr_or_subscript: AttrSubVal,
         call_context: bool,
@@ -824,7 +816,7 @@ class SafetyTracer(SingletonBaseTracer):
                 pass
         self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
-    @register_raw_handler(TraceEvent.after_load_complex_symbol)
+    @pyc.register_raw_handler(pyc.after_load_complex_symbol)
     def after_complex_symbol(self, obj: Any, *_, **__):
         try:
             if not self.is_tracing_enabled:
@@ -843,8 +835,8 @@ class SafetyTracer(SingletonBaseTracer):
             self.top_level_node_id_for_chain = None
             self.active_scope = self.cur_frame_original_scope
 
-    @register_raw_handler(TraceEvent.argument)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.argument)
+    @pyc.skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1
         arg_node = self.ast_node_by_id.get(arg_node_id, None)
@@ -896,8 +888,8 @@ class SafetyTracer(SingletonBaseTracer):
             mutation_event = StandardMutation()
         self.mutation_candidate = ((obj, obj_name, method_name), mutation_event, [], [])
 
-    @register_raw_handler(TraceEvent.before_call)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.before_call)
+    @pyc.skip_when_tracing_disabled
     def before_call(self, function_or_method, *_, **__):
         if self.saved_complex_symbol_load_data is None:
             obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
@@ -925,16 +917,14 @@ class SafetyTracer(SingletonBaseTracer):
             pass
         self.active_scope = self.cur_frame_original_scope
 
-    @register_raw_handler(
-        (TraceEvent.before_function_body, TraceEvent.before_lambda_body)
-    )
+    @pyc.register_raw_handler((pyc.before_function_body, pyc.before_lambda_body))
     def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
         ret = self.is_tracing_enabled and function_id not in self._seen_functions_ids
         if ret:
             self._seen_functions_ids.add(function_id)
         return ret
 
-    @register_raw_handler(TraceEvent.after_call)
+    @pyc.register_raw_handler(pyc.after_call)
     def after_call(
         self,
         retval: Any,
@@ -972,14 +962,14 @@ class SafetyTracer(SingletonBaseTracer):
             self._enable_tracing()
 
     # Note: we don't trace set literals
-    @register_raw_handler(
+    @pyc.register_raw_handler(
         (
-            TraceEvent.before_dict_literal,
-            TraceEvent.before_list_literal,
-            TraceEvent.before_tuple_literal,
+            pyc.before_dict_literal,
+            pyc.before_list_literal,
+            pyc.before_tuple_literal,
         )
     )
-    @skip_when_tracing_disabled
+    @pyc.skip_when_tracing_disabled
     def before_literal(self, *_, **__):
         parent_scope = self.active_literal_scope or self.cur_frame_original_scope
         with self.lexical_literal_stack.push():
@@ -987,14 +977,14 @@ class SafetyTracer(SingletonBaseTracer):
                 None, Namespace.ANONYMOUS, parent_scope
             )
 
-    @register_raw_handler(
+    @pyc.register_raw_handler(
         (
-            TraceEvent.after_dict_literal,
-            TraceEvent.after_list_literal,
-            TraceEvent.after_tuple_literal,
+            pyc.after_dict_literal,
+            pyc.after_list_literal,
+            pyc.after_tuple_literal,
         )
     )
-    @skip_when_tracing_disabled
+    @pyc.skip_when_tracing_disabled
     def after_literal(
         self, literal: Union[dict, list, tuple], node_id: NodeId, *_, **__
     ):
@@ -1064,14 +1054,14 @@ class SafetyTracer(SingletonBaseTracer):
         finally:
             self.lexical_literal_stack.pop()
 
-    @register_raw_handler(TraceEvent.dict_key)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.dict_key)
+    @pyc.skip_when_tracing_disabled
     def dict_key(self, obj: Any, key_node_id: NodeId, *_, **__):
         self.node_id_to_saved_dict_key[key_node_id] = obj
         return obj
 
-    @register_raw_handler(TraceEvent.dict_value)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.dict_value)
+    @pyc.skip_when_tracing_disabled
     def dict_value(
         self,
         obj: Any,
@@ -1091,8 +1081,8 @@ class SafetyTracer(SingletonBaseTracer):
             scope.scope_name = str(key_obj)
         return obj
 
-    @register_raw_handler((TraceEvent.list_elt, TraceEvent.tuple_elt))
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler((pyc.list_elt, pyc.tuple_elt))
+    @pyc.skip_when_tracing_disabled
     def list_or_tuple_elt(
         self,
         obj: Any,
@@ -1109,8 +1099,8 @@ class SafetyTracer(SingletonBaseTracer):
             scope.scope_name = str(index)
         return obj
 
-    @register_raw_handler(TraceEvent.after_lambda)
-    @skip_when_tracing_disabled
+    @pyc.register_raw_handler(pyc.after_lambda)
+    @pyc.skip_when_tracing_disabled
     def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
         sym_deps = []
         node = self.ast_node_by_id[lambda_node_id]
@@ -1130,7 +1120,7 @@ class SafetyTracer(SingletonBaseTracer):
         sym.stmt_node = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
-    @register_raw_handler(TraceEvent.after_stmt)
+    @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         if stmt_id in self.seen_stmts:
             return ret_expr
@@ -1138,11 +1128,11 @@ class SafetyTracer(SingletonBaseTracer):
         stmt = self.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
             self.handle_sys_events(
-                None, 0, frame, TraceEvent.after_stmt, stmt_node=cast(ast.stmt, stmt)
+                None, 0, frame, pyc.after_stmt, stmt_node=cast(ast.stmt, stmt)
             )
         return ret_expr
 
-    @register_raw_handler(TraceEvent.after_module_stmt)
+    @pyc.register_raw_handler(pyc.after_module_stmt)
     def after_module_stmt(self, *_, **__):
         if self.is_tracing_enabled:
             assert self.cur_frame_original_scope.is_global
@@ -1151,7 +1141,7 @@ class SafetyTracer(SingletonBaseTracer):
         self._module_stmt_counter += 1
         return ret
 
-    @register_raw_handler(TraceEvent.before_stmt)
+    @pyc.register_raw_handler(pyc.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
         self.next_stmt_node_id = stmt_id
         if stmt_id in self.seen_stmts:
@@ -1213,13 +1203,13 @@ class SafetyTracer(SingletonBaseTracer):
             self.EVENT_LOGGER.warning("reenable tracing >>>")
         return True
 
-    @register_raw_handler((TraceEvent.call, TraceEvent.return_, TraceEvent.exception))
+    @pyc.register_raw_handler((pyc.call, pyc.return_, pyc.exception))
     def handle_sys_events(
         self,
         ret_obj: Any,
         _node_id: None,
         frame: FrameType,
-        event: TraceEvent,
+        event: pyc.TraceEvent,
         *_,
         stmt_node: Optional[ast.stmt] = None,
         **__,
@@ -1228,16 +1218,16 @@ class SafetyTracer(SingletonBaseTracer):
         assert nbs().is_cell_file(frame.f_code.co_filename), (
             "got %s" % frame.f_code.co_filename
         )
-        assert self.is_tracing_enabled or event == TraceEvent.after_stmt
+        assert self.is_tracing_enabled or event == pyc.after_stmt
 
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
-        if event == TraceEvent.call:
+        if event == pyc.call:
             self.call_depth += 1
             if self.call_depth == 1:
-                return self.sys_tracer
+                return
 
-        if event == TraceEvent.return_:
+        if event == pyc.return_:
             self.call_depth -= 1
             if nbs().is_develop:
                 assert self.call_depth >= 0
@@ -1246,18 +1236,18 @@ class SafetyTracer(SingletonBaseTracer):
 
         cell_num, lineno = nbs().get_position(frame)
         if cell_num is None:
-            return None
+            return pyc.Null
 
-        if event == TraceEvent.after_stmt:
+        if event == pyc.after_stmt:
             assert stmt_node is not None
-        elif event == TraceEvent.return_ and self.next_stmt_node_id is not None:
+        elif event == pyc.return_ and self.next_stmt_node_id is not None:
             # this branch necessary for python < 3.8 where the frame
             # position maps to the calling location instead of the return
             stmt_node = cast(ast.stmt, self.ast_node_by_id[self.next_stmt_node_id])
         else:
             try:
                 stmt_node = self.line_to_stmt_by_module_id[cell_num][lineno]
-                if event == TraceEvent.call and not isinstance(
+                if event == pyc.call and not isinstance(
                     stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)
                 ):
                     # TODO: this is bad and I should feel bad. Need a better way to figure out which
@@ -1285,7 +1275,6 @@ class SafetyTracer(SingletonBaseTracer):
                         lineno,
                     )
                     raise e
-                return self.sys_tracer
 
         trace_stmt = self.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
@@ -1298,7 +1287,7 @@ class SafetyTracer(SingletonBaseTracer):
             self.EVENT_LOGGER.warning(
                 " %3d: %10s >>> %s", trace_stmt.lineno, event, codeline
             )
-        if event == TraceEvent.call:
+        if event == pyc.call:
             try:
                 prev_node_id_in_cur_frame_lexical = self.lexical_call_stack.get_field(
                     "prev_node_id_in_cur_frame_lexical"
@@ -1313,7 +1302,6 @@ class SafetyTracer(SingletonBaseTracer):
                 if nbs().trace_messages_enabled:
                     self.EVENT_LOGGER.warning(" disable tracing >>>")
                 self._disable_tracing()
-                return None
+                return pyc.Null
             trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
         self.state_transition_hook(event, trace_stmt, ret_obj)
-        return self.sys_tracer

@@ -40,7 +40,8 @@ def patched_emit_event_fixture():
                 (event == TraceEvent.call and self.call_depth == 0)
                 or (event == TraceEvent.return_ and self.call_depth == 1)
             ):
-                _RECORDED_EVENTS.append(event)
+                if event in self.events_with_registered_handlers:
+                    _RECORDED_EVENTS.append(event)
         return original_emit_event(self, event, node_id, frame, **kwargs)
 
     SafetyTracer._emit_event = _patched_emit_event

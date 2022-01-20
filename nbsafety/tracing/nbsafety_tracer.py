@@ -84,11 +84,6 @@ blocking_spec = pyc.AugmentationSpec(
 class SafetyTracer(SingletonBaseTracer):
     ast_rewriter_cls = SafetyAstRewriter
 
-    def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
-        return evt == pyc.init_module.value or (
-            evt != pyc.line.value and nbs().is_cell_file(filename)
-        )
-
     def should_propagate_handler_exception(
         self, evt: pyc.TraceEvent, exc: Exception
     ) -> bool:
@@ -553,6 +548,7 @@ class SafetyTracer(SingletonBaseTracer):
     @pyc.register_raw_handler(pyc.init_module)
     def init_cell(self, _obj, _node_id, frame: FrameType, _event: pyc.TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
+        self._tracing_enabled_files.add(frame.f_code.co_filename)
 
     # @pyc.register_raw_handler((pyc.before_for_loop_body, pyc.before_while_loop_body))
     # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
@@ -1127,7 +1123,7 @@ class SafetyTracer(SingletonBaseTracer):
         self._saved_stmt_ret_expr = ret_expr
         stmt = self.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:
-            self.handle_sys_events(
+            self.handle_other_sys_events(
                 None, 0, frame, pyc.after_stmt, stmt_node=cast(ast.stmt, stmt)
             )
         return ret_expr
@@ -1203,8 +1199,123 @@ class SafetyTracer(SingletonBaseTracer):
             self.EVENT_LOGGER.warning("reenable tracing >>>")
         return True
 
-    @pyc.register_raw_handler((pyc.call, pyc.return_, pyc.exception))
-    def handle_sys_events(
+    def _get_or_make_trace_stmt(
+        self, stmt_node: ast.stmt, frame: FrameType
+    ) -> TraceStatement:
+        trace_stmt = self.traced_statements.get(id(stmt_node), None)
+        if trace_stmt is None:
+            trace_stmt = TraceStatement(frame, stmt_node)
+            self.traced_statements[id(stmt_node)] = trace_stmt
+        return trace_stmt
+
+    def _maybe_log_event(
+        self, event: pyc.TraceEvent, stmt_node: ast.stmt, trace_stmt: TraceStatement
+    ):
+        if nbs().trace_messages_enabled:
+            codeline = astunparse.unparse(stmt_node).strip("\n").split("\n")[0]
+            codeline = " " * getattr(stmt_node, "col_offset", 0) + codeline
+            self.EVENT_LOGGER.warning(
+                " %3d: %10s >>> %s", trace_stmt.lineno, event, codeline
+            )
+
+    def _get_stmt_node_for_sys_event(
+        self, event: pyc.TraceEvent, cell_num: int, lineno: int
+    ) -> Optional[ast.stmt]:
+        if event == pyc.return_ and self.next_stmt_node_id is not None:
+            # this branch necessary for python < 3.8 where the frame
+            # position maps to the calling location instead of the return
+            return cast(ast.stmt, self.ast_node_by_id[self.next_stmt_node_id])
+        try:
+            stmt_node = self.line_to_stmt_by_module_id[cell_num][lineno]
+            if event == pyc.call and not isinstance(
+                stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)
+            ):
+                # TODO: this is bad and I should feel bad. Need a better way to figure out which
+                #  stmt is executing than by using line numbers.
+                parent_node = self.parent_node_by_id.get(id(stmt_node), None)
+                if nbs().is_develop:
+                    logger.info(
+                        "node %s parent %s",
+                        ast.dump(stmt_node),
+                        None if parent_node is None else ast.dump(parent_node),
+                    )
+                if (
+                    parent_node is not None
+                    and getattr(parent_node, "lineno", None) == lineno
+                    and isinstance(parent_node, (ast.AsyncFunctionDef, ast.FunctionDef))
+                ):
+                    stmt_node = parent_node
+            return stmt_node
+        except KeyError as e:
+            if nbs().is_develop:
+                self.EVENT_LOGGER.warning(
+                    "got key error for stmt node in cell %d, line %d",
+                    cell_num,
+                    lineno,
+                )
+                raise e
+        return None
+
+    @pyc.register_raw_handler((pyc.call, pyc.return_))
+    def handle_first_ipython_frame(
+        self,
+        _ret: Any,
+        _node_id: None,
+        _frame: FrameType,
+        event: pyc.TraceEvent,
+        *_,
+        **__,
+    ):
+        # IPython quirk -- every line in outer scope apparently wrapped in lambda
+        # We want to skip the outer 'call' and 'return' for these
+        if event == pyc.call:
+            self.call_depth += 1
+            if self.call_depth == 1:
+                return pyc.Skip
+        elif event == pyc.return_:
+            self.call_depth -= 1
+            if nbs().is_develop:
+                assert self.call_depth >= 0
+            if self.call_depth == 0:
+                return pyc.Skip
+
+    @pyc.register_raw_handler(pyc.call)
+    def handle_call(
+        self,
+        ret_obj: Any,
+        _node_id: None,
+        frame: FrameType,
+        event: pyc.TraceEvent,
+        *_,
+        **__,
+    ):
+        cell_num, lineno = nbs().get_position(frame)
+        assert cell_num is not None
+        stmt_node = self._get_stmt_node_for_sys_event(event, cell_num, lineno)
+        trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
+        self._maybe_log_event(event, stmt_node, trace_stmt)
+
+        try:
+            prev_node_id_in_cur_frame_lexical = self.lexical_call_stack.get_field(
+                "prev_node_id_in_cur_frame_lexical"
+            )
+        except IndexError:
+            # this could happen if the call happens in library code,
+            # and the corresponding notebook statement isn't an ast.Call
+            # (e.g., it's a property or just induces a __repr__ call)
+            # Make node_id_for_last_call point to self to cover such cases
+            prev_node_id_in_cur_frame_lexical = id(stmt_node)
+
+        if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
+            if nbs().trace_messages_enabled:
+                self.EVENT_LOGGER.warning(" disable tracing >>>")
+            self._disable_tracing()
+            return pyc.Null
+        trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
+        self.state_transition_hook(event, trace_stmt, ret_obj)
+
+    @pyc.register_raw_handler((pyc.return_, pyc.exception))
+    def handle_other_sys_events(
         self,
         ret_obj: Any,
         _node_id: None,
@@ -1214,94 +1325,16 @@ class SafetyTracer(SingletonBaseTracer):
         stmt_node: Optional[ast.stmt] = None,
         **__,
     ):
-        # right now, this should only be enabled for notebook code
-        assert nbs().is_cell_file(frame.f_code.co_filename), (
-            "got %s" % frame.f_code.co_filename
-        )
         assert self.is_tracing_enabled or event == pyc.after_stmt
 
-        # IPython quirk -- every line in outer scope apparently wrapped in lambda
-        # We want to skip the outer 'call' and 'return' for these
-        if event == pyc.call:
-            self.call_depth += 1
-            if self.call_depth == 1:
-                return
-
-        if event == pyc.return_:
-            self.call_depth -= 1
-            if nbs().is_develop:
-                assert self.call_depth >= 0
-            if self.call_depth == 0:
-                return
-
         cell_num, lineno = nbs().get_position(frame)
-        if cell_num is None:
-            return pyc.Null
+        assert cell_num is not None
 
         if event == pyc.after_stmt:
             assert stmt_node is not None
-        elif event == pyc.return_ and self.next_stmt_node_id is not None:
-            # this branch necessary for python < 3.8 where the frame
-            # position maps to the calling location instead of the return
-            stmt_node = cast(ast.stmt, self.ast_node_by_id[self.next_stmt_node_id])
         else:
-            try:
-                stmt_node = self.line_to_stmt_by_module_id[cell_num][lineno]
-                if event == pyc.call and not isinstance(
-                    stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)
-                ):
-                    # TODO: this is bad and I should feel bad. Need a better way to figure out which
-                    #  stmt is executing than by using line numbers.
-                    parent_node = self.parent_node_by_id.get(id(stmt_node), None)
-                    if nbs().is_develop:
-                        logger.info(
-                            "node %s parent %s",
-                            ast.dump(stmt_node),
-                            None if parent_node is None else ast.dump(parent_node),
-                        )
-                    if (
-                        parent_node is not None
-                        and getattr(parent_node, "lineno", None) == lineno
-                        and isinstance(
-                            parent_node, (ast.AsyncFunctionDef, ast.FunctionDef)
-                        )
-                    ):
-                        stmt_node = parent_node
-            except KeyError as e:
-                if nbs().is_develop:
-                    self.EVENT_LOGGER.warning(
-                        "got key error for stmt node in cell %d, line %d",
-                        cell_num,
-                        lineno,
-                    )
-                    raise e
+            stmt_node = self._get_stmt_node_for_sys_event(event, cell_num, lineno)
 
-        trace_stmt = self.traced_statements.get(id(stmt_node), None)
-        if trace_stmt is None:
-            trace_stmt = TraceStatement(frame, stmt_node)
-            self.traced_statements[id(stmt_node)] = trace_stmt
-
-        if nbs().trace_messages_enabled:
-            codeline = astunparse.unparse(stmt_node).strip("\n").split("\n")[0]
-            codeline = " " * getattr(stmt_node, "col_offset", 0) + codeline
-            self.EVENT_LOGGER.warning(
-                " %3d: %10s >>> %s", trace_stmt.lineno, event, codeline
-            )
-        if event == pyc.call:
-            try:
-                prev_node_id_in_cur_frame_lexical = self.lexical_call_stack.get_field(
-                    "prev_node_id_in_cur_frame_lexical"
-                )
-            except IndexError:
-                # this could happen if the call happens in library code,
-                # and the corresponding notebook statement isn't an ast.Call
-                # (e.g., it's a property or just induces a __repr__ call)
-                # Make node_id_for_last_call point to self to cover such cases
-                prev_node_id_in_cur_frame_lexical = id(stmt_node)
-            if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
-                if nbs().trace_messages_enabled:
-                    self.EVENT_LOGGER.warning(" disable tracing >>>")
-                self._disable_tracing()
-                return pyc.Null
-            trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
+        trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
+        self._maybe_log_event(event, stmt_node, trace_stmt)
         self.state_transition_hook(event, trace_stmt, ret_obj)

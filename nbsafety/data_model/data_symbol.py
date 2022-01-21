@@ -11,6 +11,7 @@ try:
     import numpy
 except ImportError:
     numpy = None
+from pyccolo.extra_builtins import EMIT_EVENT
 
 from nbsafety.data_model import sizing
 from nbsafety.data_model.annotation_utils import (
@@ -20,7 +21,6 @@ from nbsafety.data_model.annotation_utils import (
 from nbsafety.data_model.code_cell import ExecutedCodeCell, cells
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.data_model.update_protocol import UpdateProtocol
-from nbsafety.extra_builtins import EMIT_EVENT
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
 from nbsafety.singletons import nbs, tracer
 from nbsafety.types import SupportedIndexType

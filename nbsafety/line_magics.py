@@ -26,23 +26,9 @@ USAGE = """Options:
 [stale|show_stale]: 
     - This will print out all the global variables that are stale. 
 
-remove_dependency <parent_name> <child_name>:
-    - This will remove the dependency between parent variable and the child variable.
-
 slice <cell_num>:
     - This will print the code necessary to reconstruct <cell_num> using a dynamic
-      program slicing algorithm.
-
-add_dependency <parent_name> <child_name>:
-    - This will add the dependency between parent variable and the child variable.
-
-turn_off_warnings_for  <variable_name> <variable_name2> ...: 
-    - This will turn off the warnings for given global variables. These variables will not be
-      considered as stale anymore. Multiple variables should be separated with spaces.
-
-turn_off_warnings_for  <variable_name> <variable_name2> ...: 
-    - This will turn the warnings back on for given global variables. These variables could have
-      stale dependencies now. Multiple variables should be separated with spaces."""
+      program slicing algorithm."""
 
 
 def show_deps(symbols: str) -> Optional[str]:
@@ -178,80 +164,6 @@ def make_slice(line: str) -> Optional[str]:
             f"# Cell {cell_num}\n" + content for cell_num, content in deps
         )
     return None
-
-
-def _find_symbols(syms: List[str]) -> List[DataSymbol]:
-    results = []
-    for sym in syms:
-        result = nbs().global_scope.lookup_data_symbol_by_name(sym)
-        if result is None:
-            logger.warning("Could not find symbol metadata for %s", sym)
-        results.append(result)
-    return results
-
-
-def remove_dep(line_: str) -> None:
-    usage = "Usage: %safety remove_dependency <parent_name> <child_name>"
-    line = line_.split()
-    if len(line) != 2:
-        logger.warning(usage)
-        return
-    results = _find_symbols(line)
-    if len(results) != len(line):
-        return
-    parent_data_sym, child_data_sym = results
-    if parent_data_sym not in child_data_sym.parents:
-        logger.warning("The two symbols do not have a dependency relation")
-        return
-    del parent_data_sym.children[child_data_sym]
-    del child_data_sym.parents[parent_data_sym]
-
-
-def add_dep(line_: str) -> None:
-    usage = "Usage: %safety add_dependency <parent_name> <child_name>"
-    line = line_.split()
-    if len(line) != 2:
-        logger.warning(usage)
-        return
-    results = _find_symbols(line)
-    if len(results) != len(line):
-        return
-    parent_data_sym, child_data_sym = results
-    if parent_data_sym in child_data_sym.parents:
-        logger.warning("The two symbols already have a dependency relation")
-        return
-    parent_data_sym.children[child_data_sym].append(Timestamp.current())
-    child_data_sym.parents[parent_data_sym].append(Timestamp.current())
-
-
-def turn_off_warnings_for(line_: str) -> None:
-    usage = "Usage: %safety turn_off_warnings_for <variable_name> <variable_name2> ..."
-    line = line_.split()
-    if len(line) <= 1:
-        logger.warning(usage)
-        return
-    for data_sym_name in line:
-        data_sym = nbs().global_scope.lookup_data_symbol_by_name(data_sym_name)
-        if data_sym:
-            data_sym.disable_warnings = True
-            logger.warning("Warnings are turned off for %s", data_sym_name)
-        else:
-            logger.warning("Could not find symbol metadata for %s", data_sym_name)
-
-
-def turn_on_warnings_for(line_: str) -> None:
-    usage = "Usage: %safety turn_on_warnings_for <variable_name> <variable_name2> ..."
-    line = line_.split()
-    if len(line) == 0:
-        logger.warning(usage)
-        return
-    for data_sym_name in line:
-        data_sym = nbs().global_scope.lookup_data_symbol_by_name(data_sym_name)
-        if data_sym:
-            data_sym.disable_warnings = False
-            logger.warning("Warnings are turned on for %s", data_sym_name)
-        else:
-            logger.warning("Could not find symbol metadata for %s", data_sym_name)
 
 
 def set_exec_mode(line_: str) -> None:

@@ -757,14 +757,6 @@ class NotebookSafety(singletons.NotebookSafety):
                 return json.dumps(self.create_dag_metadata(), indent=2)
             elif cmd in ("slice", "make_slice", "gather_slice"):
                 return line_magics.make_slice(line)
-            elif cmd == "remove_dependency":
-                return line_magics.remove_dep(line)
-            elif cmd in ("add_dependency", "add_dep"):
-                return line_magics.add_dep(line)
-            elif cmd == "turn_off_warnings_for":
-                return line_magics.turn_off_warnings_for(line)
-            elif cmd == "turn_on_warnings_for":
-                return line_magics.turn_on_warnings_for(line)
             elif cmd in ("mode", "exec_mode"):
                 return line_magics.set_exec_mode(line)
             elif cmd in ("schedule", "exec_schedule", "execution_schedule"):

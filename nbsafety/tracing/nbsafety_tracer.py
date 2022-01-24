@@ -570,9 +570,9 @@ class SafetyTracer(SingletonBaseTracer):
     def after_assign_rhs(self, obj: Any, *_, **__):
         self.saved_assign_rhs_obj = obj
 
-    @pyc.register_raw_handler(pyc.subscript_slice)
+    @pyc.register_raw_handler(pyc.after_subscript_slice)
     @pyc.skip_when_tracing_disabled
-    def subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
+    def after_subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
         node = self.ast_node_by_id.get(node_id, None)
         if node is None:
             return

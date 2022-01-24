@@ -225,6 +225,8 @@ class NotebookSafety(singletons.NotebookSafety):
             cell_num = self._cell_name_to_cell_num_mapping.get(
                 frame.f_code.co_filename, None
             )
+            if cell_num is None:
+                cell_num = self.cell_counter()
             return cell_num, frame.f_lineno
         except KeyError as e:
             logger.error(

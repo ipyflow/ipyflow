@@ -473,7 +473,7 @@ def test_fancy_slices(events):
                 TraceEvent.before_attribute_load,
                 TraceEvent.after_attribute_load,
                 TraceEvent.after_load_complex_symbol,
-                TraceEvent.subscript_slice,
+                TraceEvent.after_subscript_slice,
                 TraceEvent.before_subscript_load,
                 TraceEvent._load_saved_slice,
                 TraceEvent.after_subscript_load,

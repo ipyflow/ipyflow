@@ -27,5 +27,7 @@ def test_ast_rewrite():
     """
     No asserts; just make sure we don't throw an error.
     """
-    rewriter = ExprRewriter(KeyDict(), frozenset(TraceEvent), set())
+    rewriter = ExprRewriter(
+        KeyDict(), {event: (lambda nd: True) for event in TraceEvent}, set()
+    )
     assert rewriter.visit(ast.parse(PROGRAM)) is not None

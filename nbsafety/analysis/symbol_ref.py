@@ -208,6 +208,9 @@ class SymbolRefVisitor(ast.NodeVisitor):
         elif isinstance(node.func, ast.Call):
             # TODO: handle this case too, e.g. f.g()().h
             pass
+        elif isinstance(node.func, ast.Lambda):
+            # TODO: handle this case too, e.g. (lambda: [1, 2])()
+            pass
         else:
             raise TypeError("invalid type for node.func %s" % node.func)
 

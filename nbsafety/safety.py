@@ -629,14 +629,16 @@ class NotebookSafety(singletons.NotebookSafety):
         return cell_metadata
 
     @contextmanager
-    def _patch_pyccolo_exec(self):
+    def _patch_pyccolo_exec_eval(self):
         """
         The purpose of this context manager is to disable this project's
         tracer inside pyccolo's "exec()" functions, since it probably
         will not work properly inside of these.
         """
         orig_exec = pyc.exec
+        orig_eval = pyc.eval
         orig_tracer_exec = pyc.BaseTracer.exec
+        orig_tracer_eval = pyc.BaseTracer.eval
 
         def _patched_exec(*args, **kwargs):
             with SafetyTracer.instance().tracing_disabled():
@@ -647,17 +649,34 @@ class NotebookSafety(singletons.NotebookSafety):
                     **kwargs,
                 )
 
+        def _patched_eval(*args, **kwargs):
+            with SafetyTracer.instance().tracing_disabled():
+                return orig_eval(
+                    *args,
+                    num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
+                    + 1,
+                    **kwargs,
+                )
+
         def _patched_tracer_exec(*args, **kwargs):
             with SafetyTracer.instance().tracing_disabled():
                 return orig_tracer_exec(*args, **kwargs)
 
+        def _patched_tracer_eval(*args, **kwargs):
+            with SafetyTracer.instance().tracing_disabled():
+                return orig_tracer_eval(*args, **kwargs)
+
         try:
             pyc.exec = _patched_exec
+            pyc.eval = _patched_eval
             pyc.BaseTracer.exec = orig_tracer_exec
+            pyc.BaseTracer.eval = orig_tracer_eval
             yield
         finally:
             pyc.exec = orig_exec
+            pyc.eval = orig_eval
             pyc.BaseTracer.exec = orig_tracer_exec
+            pyc.BaseTracer.eval = orig_tracer_eval
 
     async def safe_execute(self, cell_content: str, is_async: bool, run_cell_func):
         if self._saved_debug_message is not None:  # pragma: no cover
@@ -737,7 +756,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 else []
             ):
                 with ast_transformer_context([ast_rewriter]):
-                    with self._patch_pyccolo_exec():
+                    with self._patch_pyccolo_exec_eval():
                         yield
 
     def _make_line_magic(self):

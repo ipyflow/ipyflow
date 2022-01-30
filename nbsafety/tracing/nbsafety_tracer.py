@@ -548,7 +548,8 @@ class SafetyTracer(SingletonBaseTracer):
     @pyc.register_raw_handler(pyc.init_module)
     def init_cell(self, _obj, _node_id, frame: FrameType, _event: pyc.TraceEvent, **__):
         nbs().set_name_to_cell_num_mapping(frame)
-        self._tracing_enabled_files.add(frame.f_code.co_filename)
+        for tracer in pyc._TRACER_STACK:
+            tracer._tracing_enabled_files.add(frame.f_code.co_filename)
 
     # @pyc.register_raw_handler((pyc.before_for_loop_body, pyc.before_while_loop_body))
     # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):
@@ -1261,11 +1262,13 @@ class SafetyTracer(SingletonBaseTracer):
         self,
         _ret: Any,
         _node_id: None,
-        _frame: FrameType,
+        frame: FrameType,
         event: pyc.TraceEvent,
         *_,
         **__,
     ):
+        if frame.f_code.co_name == "<traced_lambda>":
+            return pyc.Skip
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
         if event == pyc.call:

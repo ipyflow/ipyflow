@@ -745,16 +745,26 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 
-        with SafetyTracer.instance().tracing_context():
+        all_tracers = [
+            SafetyTracer.instance(),
+        ]
+
+        with pyc.multi_context(all_tracers):
             SafetyTracer.instance().reset()
             ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
                 module_id=self.cell_counter()
             )
-            with input_transformer_context(
-                SafetyTracer.instance().make_syntax_augmenters(ast_rewriter)
-                if self.settings.enable_reactive_modifiers
-                else []
-            ):
+            all_syntax_augmenters = []
+            for tracer in all_tracers:
+                if (
+                    isinstance(tracer, SafetyTracer)
+                    and not self.settings.enable_reactive_modifiers
+                ):
+                    continue
+                all_syntax_augmenters.extend(
+                    tracer.make_syntax_augmenters(ast_rewriter)
+                )
+            with input_transformer_context(all_syntax_augmenters):
                 with ast_transformer_context([ast_rewriter]):
                     with self._patch_pyccolo_exec_eval():
                         yield

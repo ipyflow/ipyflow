@@ -1,0 +1,30 @@
+[tool.black]
+line-length = 88
+target-version = ['py39']
+extend-exclude = '(^/versioneer|_version)\.py'
+
+[tool.pytest.ini_options]
+markers = ['integration: mark a test as an integration test.']
+filterwarnings = [
+    'ignore::DeprecationWarning',
+    'ignore::pytest.PytestAssertRewriteWarning',
+]
+
+[tool.coverage.run]
+source = ['nbsafety']
+omit = [
+    'nbsafety/__init__.py',
+    'nbsafety/install.py',
+    'nbsafety/kernel/*',
+    'nbsafety/types.py',
+    'nbsafety/version.py',
+    'nbsafety/_version.py',
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    'pragma: no cover *$',
+    '^ *if TYPE_CHECKING:',
+    '^ *except',
+    '^ *raise',
+]

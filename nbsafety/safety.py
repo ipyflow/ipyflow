@@ -25,8 +25,6 @@ from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
 import pyccolo as pyc
-from pyccolo.examples import QuickLambdaTracer
-from dfplanner import NumexprPlanner
 
 from nbsafety.ipython_utils import (
     ast_transformer_context,

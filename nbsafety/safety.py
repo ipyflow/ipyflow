@@ -25,6 +25,8 @@ from IPython import get_ipython
 from IPython.core.magic import register_cell_magic, register_line_magic
 
 import pyccolo as pyc
+from pyccolo.examples import QuickLambdaTracer
+from dfplanner import NumexprPlanner
 
 from nbsafety.ipython_utils import (
     ast_transformer_context,
@@ -40,7 +42,7 @@ from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
-from nbsafety.tracing.nbsafety_tracer import SafetyTracer
+from nbsafety.tracing.nbsafety_tracer import ModuleIniter, SafetyTracer
 from nbsafety.types import CellId, SupportedIndexType
 
 logger = logging.getLogger(__name__)
@@ -136,6 +138,7 @@ class NotebookSafety(singletons.NotebookSafety):
             )
         )
         # Note: explicitly adding the types helps PyCharm intellisense
+        self.registered_tracers: List[Type[pyc.BaseTracer]] = [SafetyTracer]
         self.namespaces: Dict[int, Namespace] = {}
         # TODO: wrap this in something that clears the dict entry when the set is 0 length
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
@@ -745,11 +748,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 
-        all_tracers = [
-            SafetyTracer.instance(),
-        ]
-
-        with pyc.multi_context(all_tracers):
+        all_tracers = [tracer.instance() for tracer in self.registered_tracers]
+        with pyc.multi_context([ModuleIniter.instance()] + all_tracers):
             SafetyTracer.instance().reset()
             ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
                 module_id=self.cell_counter()
@@ -794,6 +794,10 @@ class NotebookSafety(singletons.NotebookSafety):
                 return line_magics.set_exec_schedule(line)
             elif cmd in ("flow", "flow_order", "semantics", "flow_semantics"):
                 return line_magics.set_flow_order(line)
+            elif cmd in ("register", "register_tracer"):
+                return line_magics.register_tracer(line)
+            elif cmd in ("deregister", "deregister_tracer"):
+                return line_magics.deregister_tracer(line)
             elif cmd == "clear":
                 self.min_timestamp = self.cell_counter()
                 return None

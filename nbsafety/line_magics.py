@@ -2,9 +2,12 @@
 import argparse
 import ast
 import astunparse
+import importlib
 import logging
 import shlex
-from typing import cast, Iterable, List, Optional
+from typing import cast, Iterable, List, Optional, Type
+
+import pyccolo as pyc
 
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
@@ -206,3 +209,44 @@ def set_flow_order(line_: str) -> None:
         logger.warning(usage)
         return
     nbs().mut_settings.flow_order = flow_order
+
+
+def resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
+    if "." in name:
+        try:
+            return pyc.resolve_tracer(name)
+        except ImportError:
+            return None
+    else:
+        dsyms = resolve_rval_symbols(name, should_update_usage_info=False)
+        if len(dsyms) == 1:
+            return next(iter(dsyms)).obj
+        else:
+            return None
+
+
+def register_tracer(line_: str) -> None:
+    line_ = line_.strip()
+    usage = f"Usage: %safety register_tracer <module.path.to.tracer_class>"
+    tracer_cls = resolve_tracer_class(line_)
+    if tracer_cls is None:
+        logger.warning(usage)
+        return
+    try:
+        nbs().registered_tracers.remove(tracer_cls)
+    except ValueError:
+        pass
+    nbs().registered_tracers.insert(0, tracer_cls)
+
+
+def deregister_tracer(line_: str) -> None:
+    line_ = line_.strip()
+    usage = f"Usage: %safety deregister_tracer <module.path.to.tracer_class>"
+    tracer_cls = resolve_tracer_class(line_)
+    if tracer_cls is None:
+        logger.warning(usage)
+        return
+    try:
+        nbs().registered_tracers.remove(tracer_cls)
+    except ValueError:
+        pass

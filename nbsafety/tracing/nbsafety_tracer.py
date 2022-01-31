@@ -81,6 +81,14 @@ blocking_spec = pyc.AugmentationSpec(
 )
 
 
+class ModuleIniter(pyc.BaseTracer):
+    @pyc.register_raw_handler(pyc.init_module)
+    def init_cell(self, _obj, _node_id, frame: FrameType, _event: pyc.TraceEvent, **__):
+        nbs().set_name_to_cell_num_mapping(frame)
+        for tracer in pyc._TRACER_STACK:
+            tracer._tracing_enabled_files.add(frame.f_code.co_filename)
+
+
 class SafetyTracer(SingletonBaseTracer):
     ast_rewriter_cls = SafetyAstRewriter
 
@@ -544,12 +552,6 @@ class SafetyTracer(SingletonBaseTracer):
     def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
-
-    @pyc.register_raw_handler(pyc.init_module)
-    def init_cell(self, _obj, _node_id, frame: FrameType, _event: pyc.TraceEvent, **__):
-        nbs().set_name_to_cell_num_mapping(frame)
-        for tracer in pyc._TRACER_STACK:
-            tracer._tracing_enabled_files.add(frame.f_code.co_filename)
 
     # @pyc.register_raw_handler((pyc.before_for_loop_body, pyc.before_while_loop_body))
     # def before_loop_body(self, _obj: Any, loop_id: NodeId, *_, **__):

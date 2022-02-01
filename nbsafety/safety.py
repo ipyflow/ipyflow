@@ -40,7 +40,11 @@ from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
-from nbsafety.tracing.nbsafety_tracer import ModuleIniter, SafetyTracer
+from nbsafety.tracing.nbsafety_tracer import (
+    ModuleIniter,
+    SafetyTracer,
+    StackFrameManager,
+)
 from nbsafety.types import CellId, SupportedIndexType
 
 logger = logging.getLogger(__name__)
@@ -746,26 +750,33 @@ class NotebookSafety(singletons.NotebookSafety):
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 
-        all_tracers = [tracer.instance() for tracer in self.registered_tracers]
-        with pyc.multi_context([ModuleIniter.instance()] + all_tracers):
-            SafetyTracer.instance().reset()
-            ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
-                module_id=self.cell_counter()
-            )
-            all_syntax_augmenters = []
-            for tracer in all_tracers:
-                if (
-                    isinstance(tracer, SafetyTracer)
-                    and not self.settings.enable_reactive_modifiers
-                ):
-                    continue
-                all_syntax_augmenters.extend(
-                    tracer.make_syntax_augmenters(ast_rewriter)
+        try:
+            all_tracers = [tracer.instance() for tracer in self.registered_tracers]
+            if any(tracer.has_sys_trace_events for tracer in all_tracers):
+                if not any(isinstance(tracer, StackFrameManager) for tracer in all_tracers):
+                    all_tracers.append(StackFrameManager.instance())
+            with pyc.multi_context([ModuleIniter.instance()] + all_tracers):
+                SafetyTracer.instance().reset()
+                ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
+                    module_id=self.cell_counter()
                 )
-            with input_transformer_context(all_syntax_augmenters):
-                with ast_transformer_context([ast_rewriter]):
-                    with self._patch_pyccolo_exec_eval():
-                        yield
+                all_syntax_augmenters = []
+                for tracer in all_tracers:
+                    if (
+                        isinstance(tracer, SafetyTracer)
+                        and not self.settings.enable_reactive_modifiers
+                    ):
+                        continue
+                    all_syntax_augmenters.extend(
+                        tracer.make_syntax_augmenters(ast_rewriter)
+                    )
+                with input_transformer_context(all_syntax_augmenters):
+                    with ast_transformer_context([ast_rewriter]):
+                        with self._patch_pyccolo_exec_eval():
+                            yield
+        except Exception:
+            logger.exception("encountered an exception")
+            raise
 
     def _make_line_magic(self):
         print_ = print  # to keep the test from failing since this is a legitimate print

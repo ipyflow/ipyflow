@@ -7,6 +7,7 @@ import logging
 import shlex
 from typing import cast, Iterable, List, Optional, Type
 
+from IPython import get_ipython
 import pyccolo as pyc
 
 from nbsafety.data_model.code_cell import cells
@@ -211,13 +212,16 @@ def set_flow_order(line_: str) -> None:
     nbs().mut_settings.flow_order = flow_order
 
 
-def resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
+def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
     if "." in name:
         try:
             return pyc.resolve_tracer(name)
         except ImportError:
             return None
     else:
+        tracer_cls = get_ipython().ns_table["user_global"].get(name, None)
+        if tracer_cls is not None:
+            return tracer_cls
         dsyms = resolve_rval_symbols(name, should_update_usage_info=False)
         if len(dsyms) == 1:
             return next(iter(dsyms)).obj
@@ -225,28 +229,35 @@ def resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
             return None
 
 
+def _deregister_tracers_for(tracer_cls):
+    for tracer in [tracer_cls] + [
+        tracer
+        for tracer in nbs().registered_tracers
+        if tracer.__name__ == tracer_cls.__name__
+    ]:
+        tracer.clear_instance()
+        try:
+            nbs().registered_tracers.remove(tracer_cls)
+        except ValueError:
+            pass
+
+
 def register_tracer(line_: str) -> None:
     line_ = line_.strip()
     usage = f"Usage: %safety register_tracer <module.path.to.tracer_class>"
-    tracer_cls = resolve_tracer_class(line_)
+    tracer_cls = _resolve_tracer_class(line_)
     if tracer_cls is None:
         logger.warning(usage)
         return
-    try:
-        nbs().registered_tracers.remove(tracer_cls)
-    except ValueError:
-        pass
+    _deregister_tracers_for(tracer_cls)
     nbs().registered_tracers.insert(0, tracer_cls)
 
 
 def deregister_tracer(line_: str) -> None:
     line_ = line_.strip()
     usage = f"Usage: %safety deregister_tracer <module.path.to.tracer_class>"
-    tracer_cls = resolve_tracer_class(line_)
+    tracer_cls = _resolve_tracer_class(line_)
     if tracer_cls is None:
         logger.warning(usage)
         return
-    try:
-        nbs().registered_tracers.remove(tracer_cls)
-    except ValueError:
-        pass
+    _deregister_tracers_for(tracer_cls)

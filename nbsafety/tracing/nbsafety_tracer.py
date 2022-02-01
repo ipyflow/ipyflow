@@ -4,7 +4,7 @@ import logging
 import symtable
 from collections import defaultdict
 from types import FrameType
-from typing import cast, TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
+from typing import cast, Any, Dict, List, Optional, Set, Tuple, Union
 
 import astunparse
 import pyccolo as pyc
@@ -89,7 +89,38 @@ class ModuleIniter(pyc.BaseTracer):
             tracer._tracing_enabled_files.add(frame.f_code.co_filename)
 
 
-class SafetyTracer(SingletonBaseTracer):
+class StackFrameManager(SingletonBaseTracer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.call_depth = 0
+
+    @pyc.register_raw_handler((pyc.call, pyc.return_))
+    def handle_first_ipython_frame(
+        self,
+        _ret: Any,
+        _node_id: None,
+        frame: FrameType,
+        event: pyc.TraceEvent,
+        *_,
+        **__,
+    ):
+        if frame.f_code.co_name == "<traced_lambda>":
+            return pyc.SkipAll
+        # IPython quirk -- every line in outer scope apparently wrapped in lambda
+        # We want to skip the outer 'call' and 'return' for these
+        if event == pyc.call:
+            self.call_depth += 1
+            if self.call_depth == 1:
+                return pyc.SkipAll
+        elif event == pyc.return_:
+            self.call_depth -= 1
+            if nbs().is_develop:
+                assert self.call_depth >= 0
+            if self.call_depth == 0:
+                return pyc.SkipAll
+
+
+class SafetyTracer(StackFrameManager):
     ast_rewriter_cls = SafetyAstRewriter
 
     def should_propagate_handler_exception(
@@ -114,7 +145,6 @@ class SafetyTracer(SingletonBaseTracer):
         self.prev_event: Optional[pyc.TraceEvent] = None
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.seen_stmts: Set[NodeId] = set()
-        self.call_depth = 0
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
         self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = defaultdict(
             list
@@ -1258,31 +1288,6 @@ class SafetyTracer(SingletonBaseTracer):
                 )
                 raise e
         return None
-
-    @pyc.register_raw_handler((pyc.call, pyc.return_))
-    def handle_first_ipython_frame(
-        self,
-        _ret: Any,
-        _node_id: None,
-        frame: FrameType,
-        event: pyc.TraceEvent,
-        *_,
-        **__,
-    ):
-        if frame.f_code.co_name == "<traced_lambda>":
-            return pyc.Skip
-        # IPython quirk -- every line in outer scope apparently wrapped in lambda
-        # We want to skip the outer 'call' and 'return' for these
-        if event == pyc.call:
-            self.call_depth += 1
-            if self.call_depth == 1:
-                return pyc.Skip
-        elif event == pyc.return_:
-            self.call_depth -= 1
-            if nbs().is_develop:
-                assert self.call_depth >= 0
-            if self.call_depth == 0:
-                return pyc.Skip
 
     @pyc.register_raw_handler(pyc.call)
     def handle_call(

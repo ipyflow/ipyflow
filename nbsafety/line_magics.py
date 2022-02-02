@@ -229,17 +229,24 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
             return None
 
 
-def _deregister_tracers_for(tracer_cls):
-    for tracer in [tracer_cls] + [
-        tracer
-        for tracer in nbs().registered_tracers
-        if tracer.__name__ == tracer_cls.__name__
-    ]:
+def _deregister_tracers(tracers):
+    for tracer in tracers:
         tracer.clear_instance()
         try:
-            nbs().registered_tracers.remove(tracer_cls)
+            nbs().registered_tracers.remove(tracer)
         except ValueError:
             pass
+
+
+def _deregister_tracers_for(tracer_cls):
+    _deregister_tracers(
+        [tracer_cls]
+        + [
+            tracer
+            for tracer in nbs().registered_tracers
+            if tracer.__name__ == tracer_cls.__name__
+        ]
+    )
 
 
 def register_tracer(line_: str) -> None:
@@ -255,9 +262,12 @@ def register_tracer(line_: str) -> None:
 
 def deregister_tracer(line_: str) -> None:
     line_ = line_.strip()
-    usage = f"Usage: %safety deregister_tracer <module.path.to.tracer_class>"
-    tracer_cls = _resolve_tracer_class(line_)
-    if tracer_cls is None:
-        logger.warning(usage)
-        return
-    _deregister_tracers_for(tracer_cls)
+    usage = f"Usage: %safety deregister_tracer [<module.path.to.tracer_class>|all]"
+    if line_.lower() == "all":
+        _deregister_tracers(list(nbs().registered_tracers))
+    else:
+        tracer_cls = _resolve_tracer_class(line_)
+        if tracer_cls is None:
+            logger.warning(usage)
+            return
+        _deregister_tracers_for(tracer_cls)

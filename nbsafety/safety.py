@@ -745,16 +745,25 @@ class NotebookSafety(singletons.NotebookSafety):
         _dependency_safety.__name__ = cell_magic_name
         return register_cell_magic(_dependency_safety)
 
-    @staticmethod
     @contextmanager
-    def _patch_to_never_instrument_imports(
+    def _patch_tracer_filters(
+        self,
         tracer: pyc.BaseTracer,
     ) -> Generator[None, None, None]:
+        orig_passes_filter = tracer.__class__.file_passes_filter_for_event
         orig_checker = tracer.__class__.should_instrument_file
         try:
+            if not isinstance(tracer, (ModuleIniter, StackFrameManager)) or isinstance(
+                tracer, SafetyTracer
+            ):
+                tracer.__class__.file_passes_filter_for_event = (
+                    lambda *args: tracer.__class__ in self.registered_tracers
+                    and orig_passes_filter(*args)
+                )
             tracer.__class__.should_instrument_file = lambda *_: False
             yield
         finally:
+            tracer.__class__.file_passes_filter_for_event = orig_passes_filter
             tracer.__class__.should_instrument_file = orig_checker
 
     @contextmanager
@@ -776,10 +785,7 @@ class NotebookSafety(singletons.NotebookSafety):
             for tracer in all_tracers:
                 tracer.reset()
             with pyc.multi_context(
-                [
-                    self._patch_to_never_instrument_imports(tracer)
-                    for tracer in all_tracers
-                ]
+                [self._patch_tracer_filters(tracer) for tracer in all_tracers]
             ):
                 with pyc.multi_context(all_tracers):
                     ast_rewriter = SafetyTracer.instance().make_ast_rewriter(

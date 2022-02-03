@@ -103,9 +103,9 @@ class ResolveRvalSymbols(
             )
             if dsym is not None:
                 self.symbols.append(dsym)
-        except Exception as e:
-            logger.warning(
-                "Exception occurred while resolving node %s: %s", ast.dump(node), e
+        except Exception:
+            logger.exception(
+                "Exception occurred while resolving node %s", ast.dump(node)
             )
 
     def visit_Subscript(self, node: ast.Subscript):
@@ -144,9 +144,9 @@ class ResolveRvalSymbols(
                     dsym = None
             if dsym is not None:
                 self.symbols.append(dsym)
-        except Exception as e:
-            logger.warning(
-                "Exception occurred while resolving node %s: %s", ast.dump(node), e
+        except Exception:
+            logger.exception(
+                "Exception occurred while resolving node %s", ast.dump(node)
             )
 
     def visit_keyword(self, node: ast.keyword):

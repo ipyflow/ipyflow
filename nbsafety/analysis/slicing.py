@@ -21,6 +21,7 @@ def _get_ts_dependencies(
     timestamp: TimestampOrCounter,
     dependencies: Set[TimestampOrCounter],
     timestamp_to_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
+    timestamp_to_static_ts_deps: Dict[TimestampOrCounter, Set[TimestampOrCounter]],
 ) -> None:
     """
     For a given timestamps, this function recursively populates a set of
@@ -51,11 +52,20 @@ def _get_ts_dependencies(
     # Retrieve cell numbers for the dependent symbols
     # Add dynamic and static dependencies
     dep_timestamps = timestamp_to_ts_deps[timestamp]
-    logger.info("dynamic ts deps for %s: %s", timestamp, dep_timestamps)
+    if (
+        len(dep_timestamps) == 0
+        or isinstance(timestamp, int)
+        or not nbs().mut_settings.dynamic_slicing_enabled
+    ):
+        static_dep_timestamps = timestamp_to_static_ts_deps[timestamp]
+    else:
+        static_dep_timestamps = set()
 
     # For each dependent cell, recursively get their dependencies
-    for ts in dep_timestamps - dependencies:
-        _get_ts_dependencies(ts, dependencies, timestamp_to_ts_deps)
+    for ts in (dep_timestamps | static_dep_timestamps) - dependencies:
+        _get_ts_dependencies(
+            ts, dependencies, timestamp_to_ts_deps, timestamp_to_static_ts_deps
+        )
 
 
 def _coarsen_timestamps(graph: Dict[Timestamp, Set[Timestamp]]) -> Dict[int, Set[int]]:
@@ -81,6 +91,9 @@ def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCount
     timestamp_to_ts_deps: Dict[
         TimestampOrCounter, Set[TimestampOrCounter]
     ] = defaultdict(set)
+    timestamp_to_static_ts_deps: Dict[
+        TimestampOrCounter, Set[TimestampOrCounter]
+    ] = defaultdict(set)
     if nbs().mut_settings.dynamic_slicing_enabled:
         if isinstance(seeds[0], Timestamp):
             timestamp_to_ts_deps = _graph_union(
@@ -92,22 +105,31 @@ def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCount
             )
     if nbs().mut_settings.static_slicing_enabled:
         if isinstance(seeds[0], Timestamp):
-            timestamp_to_ts_deps = _graph_union(
-                timestamp_to_ts_deps, nbs().static_data_deps
+            timestamp_to_static_ts_deps = _graph_union(
+                timestamp_to_static_ts_deps, nbs().static_data_deps
             )
         else:
-            timestamp_to_ts_deps = _graph_union(
-                timestamp_to_ts_deps, _coarsen_timestamps(nbs().static_data_deps)
+            timestamp_to_static_ts_deps = _graph_union(
+                timestamp_to_static_ts_deps, _coarsen_timestamps(nbs().static_data_deps)
             )
 
     # ensure we at least get the static deps
     for seed in seeds:
-        _get_ts_dependencies(seed, dependencies, timestamp_to_ts_deps)
+        _get_ts_dependencies(
+            seed, dependencies, timestamp_to_ts_deps, timestamp_to_static_ts_deps
+        )
     if isinstance(seeds[0], Timestamp):
         for seed in seeds:
-            for ts in list(timestamp_to_ts_deps.keys()):
+            for ts in list(
+                timestamp_to_ts_deps.keys() | timestamp_to_static_ts_deps.keys()
+            ):
                 if ts.cell_num == seed.cell_num:
-                    _get_ts_dependencies(ts, dependencies, timestamp_to_ts_deps)
+                    _get_ts_dependencies(
+                        ts,
+                        dependencies,
+                        timestamp_to_ts_deps,
+                        timestamp_to_static_ts_deps,
+                    )
     return dependencies
 
 

@@ -35,13 +35,17 @@ def patched_emit_event_fixture():
         self, evt: Union[str, TraceEvent], node_id: int, frame: FrameType, **kwargs
     ):
         event = evt if isinstance(evt, TraceEvent) else TraceEvent(evt)
-        if (
-            frame.f_code.co_filename.startswith("<ipython-input")
-            and not frame.f_code.co_name == "<traced_lambda>"
-        ):
+        if frame.f_code.co_filename.startswith("<ipython-input"):
+            is_traced_lambda = frame.f_code.co_name == "<traced_lambda>"
             if not (
-                (event == TraceEvent.call and self.call_depth == 0)
-                or (event == TraceEvent.return_ and self.call_depth == 1)
+                (
+                    event == TraceEvent.call
+                    and (self.call_depth == 0 or is_traced_lambda)
+                )
+                or (
+                    event == TraceEvent.return_
+                    and (self.call_depth == 1 or is_traced_lambda)
+                )
             ):
                 if event in self.events_with_registered_handlers:
                     _RECORDED_EVENTS.append(event)

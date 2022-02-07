@@ -79,10 +79,6 @@ class SafeKernel(IPythonKernel):
                 else:
                     return ret
 
-            return next(
-                iter(
-                    asyncio.get_event_loop().run_until_complete(
-                        asyncio.wait([nbs().safe_execute(code, True, _run_cell_func)])
-                    )[0]
-                )
-            ).result()
+            return asyncio.get_event_loop().run_until_complete(
+                nbs().safe_execute(code, True, _run_cell_func)
+            )

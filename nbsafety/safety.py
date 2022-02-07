@@ -736,9 +736,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
         def _dependency_safety(_, cell: str):
             asyncio.get_event_loop().run_until_complete(
-                asyncio.wait(
-                    [singletons.nbs().safe_execute(cell, False, _run_cell_func)]
-                )
+                singletons.nbs().safe_execute(cell, False, _run_cell_func)
             )
 
         # FIXME (smacke): probably not a great idea to rely on this

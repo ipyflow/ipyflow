@@ -6,6 +6,14 @@ METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN: Set[Tuple[int, str]] = set()
 METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = set()
 
 try:
+    import time
+
+    time_id = id(time)
+    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((time_id, "sleep"))
+except ImportError:
+    pass
+
+try:
     import pylab
 
     pylab_id = id(pylab)

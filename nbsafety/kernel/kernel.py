@@ -70,15 +70,19 @@ class SafeKernel(IPythonKernel):
         ):
             super_ = super()
 
-            def _run_cell_func(cell):
-                return super_.do_execute(
+            async def _run_cell_func(cell):
+                ret = super_.do_execute(
                     cell, silent, store_history, user_expressions, allow_stdin
                 )
+                if inspect.isawaitable(ret):
+                    return await ret
+                else:
+                    return ret
 
             return next(
                 iter(
                     asyncio.get_event_loop().run_until_complete(
-                        asyncio.wait([nbs().safe_execute(code, False, _run_cell_func)])
+                        asyncio.wait([nbs().safe_execute(code, True, _run_cell_func)])
                     )[0]
                 )
             ).result()

@@ -1259,13 +1259,13 @@ class SafetyTracer(StackFrameManager):
             # position maps to the calling location instead of the return
             return cast(ast.stmt, self.ast_node_by_id[self.next_stmt_node_id])
         try:
-            stmt_node = self.line_to_stmt_by_module_id[cell_num][lineno]
+            stmt_node = self.stmt_by_lineno_by_module_id[cell_num][lineno]
             if event == pyc.call and not isinstance(
                 stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)
             ):
                 # TODO: this is bad and I should feel bad. Need a better way to figure out which
                 #  stmt is executing than by using line numbers.
-                parent_node = self.parent_node_by_id.get(id(stmt_node), None)
+                parent_node = self.parent_stmt_by_id.get(id(stmt_node), None)
                 if nbs().is_develop:
                     logger.info(
                         "node %s parent %s",

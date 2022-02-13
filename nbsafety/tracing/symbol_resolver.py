@@ -3,6 +3,7 @@ import ast
 import logging
 from typing import List, Optional, Set, Union
 
+from nbsafety.analysis.live_refs import static_resolve_rvals
 from nbsafety.analysis.symbol_ref import resolve_slice_to_constant
 from nbsafety.analysis.mixins import (
     SaveOffAttributesMixin,
@@ -240,6 +241,8 @@ def resolve_rval_symbols(
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     rval_symbols = ResolveRvalSymbols()(node)
+    if len(rval_symbols) == 0:
+        rval_symbols = static_resolve_rvals(node)
     if should_update_usage_info:
         Timestamp.update_usage_info(rval_symbols)
     return rval_symbols

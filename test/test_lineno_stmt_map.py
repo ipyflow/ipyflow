@@ -4,6 +4,7 @@ import textwrap
 from typing import Dict
 
 from nbsafety.singletons import tracer
+from pyccolo.ast_bookkeeping import BookkeepingVisitor
 from pyccolo.stmt_mapper import StatementMapper
 from .utils import make_safety_fixture
 
@@ -12,9 +13,12 @@ _safety_fixture, _ = make_safety_fixture()
 
 
 def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:
-    mapper = StatementMapper({}, [tracer()], {})
-    mapper(ast.parse(textwrap.dedent(code).strip()))
-    return mapper.line_to_stmt_map
+    node = ast.parse(textwrap.dedent(code).strip())
+    mapper = StatementMapper([tracer()], {})
+    copy_mapping = mapper(node)
+    bookkeeper = BookkeepingVisitor(*[{} for _ in range(5)])
+    bookkeeper.visit(copy_mapping[id(node)])
+    return bookkeeper.stmt_by_lineno
 
 
 def test_for_loop():

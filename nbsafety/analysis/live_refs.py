@@ -378,3 +378,11 @@ def compute_live_dead_symbol_refs(
     elif isinstance(code, list):
         code = ast.Module(code)
     return ComputeLiveSymbolRefs(scope=scope, init_killed=init_killed)(code)
+
+
+def static_resolve_rvals(code: Union[ast.AST, str]) -> Set["DataSymbol"]:
+    live_refs, *_ = compute_live_dead_symbol_refs(code)
+    resolved_live_syms, *_ = get_live_symbols_and_cells_for_references(
+        live_refs, nbs().global_scope, -1
+    )
+    return {resolved.dsym for resolved in resolved_live_syms}

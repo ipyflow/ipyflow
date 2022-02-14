@@ -81,7 +81,7 @@ def test_passed_sym_captured_as_dep_for_mutated_obj():
         class Foo:
             def __init__(self, x):
                 self.x = x
-                
+
         def mutate(foo, x):
             foo.x = x
         """
@@ -353,7 +353,7 @@ def test_redefined_function_in_list():
 
     run_cell(
         """
-        funcs_to_run = [foo,bar]
+        funcs_to_run = [foo, bar]
         """
     )
     run_cell(
@@ -713,7 +713,8 @@ def test_func_assign_objs():
         a = [1]
         b = [1]
         c = [2]
-        d = [3]"""
+        d = [3]
+        """
     )
     run_cell(
         """
@@ -1236,15 +1237,15 @@ def test_long_chain_attribute():
             def __init__(self, x, y):
                 self.x = x
                 self.y = y + self.shared
-                
+
             class Bar:
                 def __init__(self, a, b):
                     self.a = a
                     self.b = b
-                    
+
                 def foo(self):
                     return Foo(self.a, self.b)
-                    
+
                 def bar(self):
                     return Foo
         """
@@ -2413,12 +2414,12 @@ def test_getter_setter_with_global():
             @property
             def baz(self):
                 return z
-            
+
             @baz.setter
             def baz(self, new_val):
                 global z
                 z = new_val
-            
+
         class Foo:
             def __init__(self):
                 self.bar = Bar()

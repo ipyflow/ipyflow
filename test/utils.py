@@ -79,6 +79,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         else:
             yield
         # ensure each test didn't give failures during ast transformation
+        NotebookSafety.instance().cleanup_tracers()
         exc = nbs().set_exception_raised_during_execution(None)
         if exc is not None:
             raise exc

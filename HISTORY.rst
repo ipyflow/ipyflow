@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.83 (2022-02-14)
+-------------------
+* Add register / deregister subcommands for other Pyccolo tracers;
+* Keep tracing context active between cell executions;
+
 0.0.81 (2022-01-26)
 -------------------
 * Use pyccolo for instrumentation;

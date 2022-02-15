@@ -230,6 +230,7 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
 
 
 def _deregister_tracers(tracers):
+    nbs().tracer_cleanup_pending = True
     for tracer in tracers:
         tracer.clear_instance()
         try:
@@ -257,6 +258,7 @@ def register_tracer(line_: str) -> None:
         logger.warning(usage)
         return
     _deregister_tracers_for(tracer_cls)
+    tracer_cls.instance()
     nbs().registered_tracers.insert(0, tracer_cls)
 
 

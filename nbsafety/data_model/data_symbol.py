@@ -617,9 +617,6 @@ class DataSymbol:
         return False
 
     def is_stale_at_position(self, pos: int, deep: bool = True) -> bool:
-        assert not hasattr(
-            builtins, EMIT_EVENT
-        ), "this should be called outside of tracing / execution context"
         if deep:
             if not self.is_stale:
                 return False

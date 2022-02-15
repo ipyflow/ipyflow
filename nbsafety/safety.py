@@ -11,6 +11,7 @@ from types import FrameType
 from typing import (
     cast,
     Any,
+    Callable,
     Dict,
     Generator,
     Iterable,
@@ -142,6 +143,8 @@ class NotebookSafety(singletons.NotebookSafety):
         )
         # Note: explicitly adding the types helps PyCharm intellisense
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [SafetyTracer]
+        self.tracer_cleanup_callbacks: List[Callable] = []
+        self.tracer_cleanup_pending: bool = False
         self.namespaces: Dict[int, Namespace] = {}
         # TODO: wrap this in something that clears the dict entry when the set is 0 length
         self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
@@ -764,6 +767,12 @@ class NotebookSafety(singletons.NotebookSafety):
             tracer.__class__.file_passes_filter_for_event = orig_passes_filter
             tracer.__class__.should_instrument_file = orig_checker
 
+    def cleanup_tracers(self):
+        for cleanup in reversed(self.tracer_cleanup_callbacks):
+            cleanup()
+        self.tracer_cleanup_callbacks.clear()
+        self.tracer_cleanup_pending = False
+
     @contextmanager
     def _tracing_context(self):
         self.updated_symbols.clear()
@@ -785,24 +794,36 @@ class NotebookSafety(singletons.NotebookSafety):
             with pyc.multi_context(
                 [self._patch_tracer_filters(tracer) for tracer in all_tracers]
             ):
-                with pyc.multi_context(all_tracers):
-                    ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
-                        module_id=self.cell_counter()
-                    )
-                    all_syntax_augmenters = []
+                if len(self.tracer_cleanup_callbacks) == 0:
                     for tracer in all_tracers:
-                        if (
-                            isinstance(tracer, SafetyTracer)
-                            and not self.settings.enable_reactive_modifiers
-                        ):
-                            continue
-                        all_syntax_augmenters.extend(
-                            tracer.make_syntax_augmenters(ast_rewriter)
+                        self.tracer_cleanup_callbacks.append(
+                            tracer.tracing_non_context()
                         )
-                    with input_transformer_context(all_syntax_augmenters):
-                        with ast_transformer_context([ast_rewriter]):
-                            with self._patch_pyccolo_exec_eval():
-                                yield
+                else:
+                    for tracer in all_tracers:
+                        tracer._enable_tracing(check_disabled=False)
+                ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
+                    module_id=self.cell_counter()
+                )
+                all_syntax_augmenters = []
+                for tracer in all_tracers:
+                    if (
+                        isinstance(tracer, SafetyTracer)
+                        and not self.settings.enable_reactive_modifiers
+                    ):
+                        continue
+                    all_syntax_augmenters.extend(
+                        tracer.make_syntax_augmenters(ast_rewriter)
+                    )
+                with input_transformer_context(all_syntax_augmenters):
+                    with ast_transformer_context([ast_rewriter]):
+                        with self._patch_pyccolo_exec_eval():
+                            yield
+                if self.tracer_cleanup_pending:
+                    self.cleanup_tracers()
+                else:
+                    for tracer in all_tracers:
+                        tracer._disable_tracing(check_enabled=False)
         except Exception:
             logger.exception("encountered an exception")
             raise

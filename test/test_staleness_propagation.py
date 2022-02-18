@@ -2526,6 +2526,18 @@ def test_pyccolo_exec_2():
     run_cell("assert lst == [42, 55]")
 
 
+def test_nested_calls():
+    run_cell("x = 42")
+    run_cell("def bar(): return x + 1")
+    run_cell("def foo(): return bar() + 7")
+    run_cell("y = foo() + 9")
+    run_cell("logging.info(y)")
+    assert_not_detected()
+    run_cell("x = 43")
+    run_cell("logging.info(y)")
+    assert_detected()
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

@@ -822,7 +822,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 if self.tracer_cleanup_pending:
                     self.cleanup_tracers()
                 else:
-                    for tracer in all_tracers:
+                    for tracer in reversed(all_tracers):
                         tracer._disable_tracing(check_enabled=False)
         except Exception:
             logger.exception("encountered an exception")

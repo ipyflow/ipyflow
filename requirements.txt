@@ -1,6 +1,6 @@
 astunparse
 ipykernel
-ipython
+ipython<8.0.0
 jupyter
 jupyterlab>=3.0
 mypy

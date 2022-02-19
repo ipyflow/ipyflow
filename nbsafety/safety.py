@@ -675,7 +675,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     *args,
                     num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
                     + 1,
-                    **kwargs
+                    **kwargs,
                 )
 
         def _patched_tracer_eval(*args, **kwargs):
@@ -684,7 +684,7 @@ class NotebookSafety(singletons.NotebookSafety):
                     *args,
                     num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
                     + 1,
-                    **kwargs
+                    **kwargs,
                 )
 
         try:

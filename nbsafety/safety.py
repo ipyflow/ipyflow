@@ -307,7 +307,9 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
-        SafetyTracer.instance()  # force initialization here in case not already inited
+        for tracer in self.registered_tracers:
+            # force initialization here in case not already inited
+            tracer.instance()
         stale_cells = set()
         unsafe_order_cells: Set[CellId] = set()
         typecheck_error_cells = set()
@@ -669,17 +671,27 @@ class NotebookSafety(singletons.NotebookSafety):
 
         def _patched_tracer_exec(*args, **kwargs):
             with SafetyTracer.instance().tracing_disabled():
-                return orig_tracer_exec(*args, **kwargs)
+                return orig_tracer_exec(
+                    *args,
+                    num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
+                    + 1,
+                    **kwargs
+                )
 
         def _patched_tracer_eval(*args, **kwargs):
             with SafetyTracer.instance().tracing_disabled():
-                return orig_tracer_eval(*args, **kwargs)
+                return orig_tracer_eval(
+                    *args,
+                    num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
+                    + 1,
+                    **kwargs
+                )
 
         try:
             pyc.exec = _patched_exec
             pyc.eval = _patched_eval
-            pyc.BaseTracer.exec = orig_tracer_exec
-            pyc.BaseTracer.eval = orig_tracer_eval
+            pyc.BaseTracer.exec = _patched_tracer_exec
+            pyc.BaseTracer.eval = _patched_tracer_eval
             yield
         finally:
             pyc.exec = orig_exec

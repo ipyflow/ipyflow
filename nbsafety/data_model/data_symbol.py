@@ -95,6 +95,8 @@ class DataSymbol:
         # and we don't want liveness checker to think this was newly created unless we
         # explicitly trace an update somewhere
         self._timestamp: Timestamp = Timestamp.uninitialized()
+        # we need this to ensure we always use the latest version even for things like tuple unpack
+        self._last_refreshed_timestamp = Timestamp.uninitialized()
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()
@@ -735,6 +737,8 @@ class DataSymbol:
         ts_to_use = (
             self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
         )
+        if ts_to_use.is_initialized:
+            ts_to_use = max(ts_to_use, self._last_refreshed_timestamp)
         if (
             ts_to_use.is_initialized
             and used_time not in self.timestamp_by_used_time
@@ -751,6 +755,7 @@ class DataSymbol:
         timestamp: Optional[Timestamp] = None,
         seen: Set["DataSymbol"] = None,
     ) -> None:
+        self._last_refreshed_timestamp = Timestamp.current()
         self._temp_disable_warnings = False
         if bump_version:
             self._timestamp = Timestamp.current() if timestamp is None else timestamp

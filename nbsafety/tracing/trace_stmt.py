@@ -242,7 +242,9 @@ class TraceStatement:
                 )
         else:
             self._handle_assign_target_for_deps(
-                target, resolve_rval_symbols(value), maybe_fixup_literal_namespace=True
+                target,
+                resolve_rval_symbols(value),
+                maybe_fixup_literal_namespace=True,
             )
 
     def _handle_store(self, node: Union[ast.Assign, ast.For]):

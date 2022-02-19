@@ -37,13 +37,13 @@ def static_only_test(test_f):
     return dynamic_or_static_only_test(test_f, False, True)
 
 
-def run_cell(cell):
+def run_cell(cell, **kwargs):
     # print()
     # print('*******************************************')
     # print('running', cell)
     # print('*******************************************')
     # print()
-    run_cell_(cell)
+    run_cell_(cell, **kwargs)
 
 
 def compute_slice_stmts(cell_num):
@@ -185,6 +185,25 @@ def test_multiple_versions_captured():
     assert deps == {1, 2, 3, 4}, "got %s" % deps
     slice_size = num_stmts_in_slice(4)
     assert slice_size == 3, "got %d" % slice_size
+
+
+@dynamic_only_test
+def test_tuple_unpack_used_in_funcall_before_after_update_one():
+    run_cell("x, y = 0, 0", cell_id=1)
+    run_cell("def get_sum(): return x + y", cell_id=2)
+    run_cell("z = get_sum()", cell_id=3)
+    run_cell("logging.info(z)", cell_id=4)
+    deps = set(compute_slice(4).keys())
+    assert deps == {1, 2, 3, 4}, "got %s" % deps
+    slice_size = num_stmts_in_slice(4)
+    assert slice_size == 4, "got %d" % slice_size
+    run_cell("x, y = 0, 1", cell_id=1)
+    run_cell("z = get_sum()", cell_id=3)
+    run_cell("logging.info(z)", cell_id=4)
+    deps = set(compute_slice(7).keys())
+    assert deps == {2, 5, 6, 7}, "got %s" % deps
+    slice_size = num_stmts_in_slice(7)
+    assert slice_size == 4, "got %d" % slice_size
 
 
 def test_version_used_when_live():

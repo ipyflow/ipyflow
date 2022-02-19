@@ -345,7 +345,7 @@ class LiveSymbolRef(CommonEqualityMixin):
         scope: "Scope",
         only_yield_final_symbol: bool,
         yield_all_intermediate_symbols: bool = False,
-    ):
+    ) -> Generator[ResolvedDataSymbol, None, None]:
         blocking_seen = False
         for resolved_sym in self.ref.gen_resolved_symbols(
             scope,

@@ -34,7 +34,10 @@ class PyccoloKernelSettings(NamedTuple):
 
 
 class SafeKernelHooks:
-    def on_init_metadata(self, parent) -> None:
+    def after_init_class(self: "PyccoloKernelMixin") -> None:  # type: ignore
+        NotebookSafety.instance(use_comm=True)
+
+    def before_init_metadata(self: "PyccoloKernelMixin", parent) -> None:  # type: ignore
         """
         Don't actually change the metadata; we just want to get the cell id
         out of the execution request.
@@ -47,13 +50,13 @@ class SafeKernelHooks:
         tags = tuple(metadata.get("tags", ()))
         nbs_.set_tags(tags)
 
-    def before_enter_tracing_context(self):
+    def before_enter_tracing_context(self: "PyccoloKernelMixin"):  # type: ignore
         nbs_ = singletons.nbs()
         nbs_.updated_symbols.clear()
         nbs_.updated_reactive_symbols.clear()
         nbs_.updated_deep_reactive_symbols.clear()
 
-    def before_execute(self, cell_content: str) -> None:
+    def before_execute(self: "PyccoloKernelMixin", cell_content: str) -> None:  # type: ignore
         nbs_ = singletons.nbs()
         if nbs_._saved_debug_message is not None:  # pragma: no cover
             logger.error(nbs_._saved_debug_message)
@@ -65,13 +68,13 @@ class SafeKernelHooks:
             cell_id,
             cell_content,
             nbs_._tags,
-            validate_ipython_counter=self.settings.store_history,  # type: ignore
+            validate_ipython_counter=self.settings.store_history,
         )
 
         # Stage 1: Precheck.
         nbs_._safety_precheck_cell(cell)
 
-    def after_execute(self, cell_content: str) -> None:
+    def after_execute(self: "PyccoloKernelMixin", cell_content: str) -> None:  # type: ignore
         # resync any defined symbols that could have gotten out-of-sync
         #  due to tracing being disabled
         nbs_ = singletons.nbs()
@@ -85,7 +88,7 @@ class SafeKernelHooks:
         )
         nbs_.gc()
 
-    def on_exception(self, e: Exception) -> None:
+    def on_exception(self: "PyccoloKernelMixin", e: Exception) -> None:  # type: ignore
         nbs_ = singletons.nbs()
         if nbs_.is_test:
             nbs_.set_exception_raised_during_execution(e)
@@ -97,11 +100,11 @@ class PyccoloKernelMixin(singletons.SafeKernel, SafeKernelHooks):
             store_history=kwargs.pop("store_history", True)
         )
         super().__init__(**kwargs)
-        NotebookSafety.instance(use_comm=True)
 
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [SafetyTracer]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
+        self.after_init_class()
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
         # this is to avoid capturing `self` and creating an extra reference to the singleton
@@ -296,7 +299,7 @@ class SafeKernel(PyccoloKernelMixin, IPythonKernel):
         Don't actually change the metadata; we just want to get the cell id
         out of the execution request.
         """
-        self.on_init_metadata(parent)
+        self.before_init_metadata(parent)
         return super().init_metadata(parent)
 
     if inspect.iscoroutinefunction(IPythonKernel.do_execute):

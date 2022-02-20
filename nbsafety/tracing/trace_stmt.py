@@ -408,8 +408,6 @@ class TraceStatement:
                 namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
 
     def handle_dependencies(self):
-        if not nbs().dependency_tracking_enabled:
-            return
         for (
             mutated_obj_id,
             mutation_event,

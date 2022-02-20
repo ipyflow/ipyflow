@@ -7,7 +7,7 @@ import json
 import logging
 import re
 import shlex
-from typing import cast, Iterable, Optional, Type
+from typing import cast, TYPE_CHECKING, Iterable, Optional, Type
 
 import pyccolo as pyc
 from IPython import get_ipython
@@ -15,9 +15,15 @@ from IPython.core.magic import register_line_magic
 
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
+from nbsafety.experimental.dag import create_dag_metadata
 from nbsafety.run_mode import FlowOrder, ExecutionMode, ExecutionSchedule
-from nbsafety.singletons import kernel, nbs, NotebookSafety
+from nbsafety.singletons import kernel, nbs
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
+
+
+if TYPE_CHECKING:
+    from nbsafety.safety import NotebookSafety
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -41,7 +47,7 @@ slice <cell_num>:
       program slicing algorithm."""
 
 
-def make_line_magic(nbs_: NotebookSafety):
+def make_line_magic(nbs_: "NotebookSafety"):
     print_ = print  # to keep the test from failing since this is a legitimate print
     line_magic_names = [
         name for name, val in globals().items() if inspect.isfunction(val)
@@ -57,7 +63,7 @@ def make_line_magic(nbs_: NotebookSafety):
         elif cmd in ("hls", "nohls", "highlight", "highlights"):
             return set_highlights(cmd, line)
         elif cmd in ("dag", "make_dag", "cell_dag", "make_cell_dag"):
-            return json.dumps(nbs_.create_dag_metadata(), indent=2)
+            return json.dumps(create_dag_metadata(), indent=2)
         elif cmd in ("slice", "make_slice", "gather_slice"):
             return make_slice(line)
         elif cmd in ("mode", "exec_mode"):

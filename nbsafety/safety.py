@@ -8,17 +8,14 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    List,
     NamedTuple,
     Set,
     Optional,
     Tuple,
-    Union,
 )
 
-from IPython import get_ipython
-
 import pyccolo as pyc
+from IPython import get_ipython
 
 from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
@@ -37,7 +34,6 @@ logger.setLevel(logging.WARNING)
 class NotebookSafetySettings(NamedTuple):
     test_context: bool
     use_comm: bool
-    track_dependencies: bool
     mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool
@@ -95,7 +91,6 @@ class NotebookSafety(singletons.NotebookSafety):
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
             test_context=kwargs.pop("test_context", False),
             use_comm=use_comm,
-            track_dependencies=True,
             mark_stale_symbol_usages_unsafe=kwargs.pop(
                 "mark_stale_symbol_usages_unsafe", True
             ),
@@ -455,7 +450,7 @@ class NotebookSafety(singletons.NotebookSafety):
                 refresher_cell_ids.discard(last_executed_cell_id)
             stale_links[stale_cell_id] = refresher_cell_ids
         stale_link_changes = True
-        # transitive closer up until we hit non-stale refresher cells
+        # transitive closure up until we hit non-stale refresher cells
         while stale_link_changes:
             stale_link_changes = False
             for stale_cell_id in stale_cells:
@@ -524,85 +519,6 @@ class NotebookSafety(singletons.NotebookSafety):
             self.aliases[dsym.obj_id].discard(dsym)
             self.aliases[id(obj)].add(dsym)
             dsym.update_obj_ref(obj)
-
-    def create_dag_metadata(
-        self,
-    ) -> Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]]:
-        cell_num_to_used_imports: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        cell_num_to_dynamic_inputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        cell_num_to_dynamic_outputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
-        cell_num_to_dynamic_cell_parents: Dict[int, Set[int]] = defaultdict(set)
-        cell_num_to_dynamic_cell_children: Dict[int, Set[int]] = defaultdict(set)
-
-        for sym in self.all_data_symbols():
-            top_level_sym = sym.get_top_level()
-            if (
-                top_level_sym is None
-                or not top_level_sym.is_globally_accessible
-                or top_level_sym.is_anonymous
-            ):
-                # TODO: also skip lambdas
-                continue
-            for (
-                used_time,
-                sym_timestamp_when_used,
-            ) in sym.timestamp_by_used_time.items():
-                if top_level_sym.is_import:
-                    cell_num_to_used_imports[used_time.cell_num].add(top_level_sym)
-                elif used_time.cell_num != sym_timestamp_when_used.cell_num:
-                    cell_num_to_dynamic_cell_parents[used_time.cell_num].add(
-                        sym_timestamp_when_used.cell_num
-                    )
-                    cell_num_to_dynamic_cell_children[
-                        sym_timestamp_when_used.cell_num
-                    ].add(used_time.cell_num)
-                    cell_num_to_dynamic_inputs[used_time.cell_num].add(top_level_sym)
-                    cell_num_to_dynamic_outputs[sym_timestamp_when_used.cell_num].add(
-                        top_level_sym
-                    )
-            if not top_level_sym.is_import:
-                for updated_time in sym.updated_timestamps:
-                    # TODO: distinguished between used / unused outputs?
-                    cell_num_to_dynamic_outputs[updated_time.cell_num].add(
-                        top_level_sym
-                    )
-
-        cell_metadata: Dict[
-            int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]
-        ] = {}
-        all_relevant_cells = (
-            cell_num_to_used_imports.keys()
-            | cell_num_to_dynamic_inputs.keys()
-            | cell_num_to_dynamic_outputs.keys()
-            | cell_num_to_dynamic_cell_parents.keys()
-            | cell_num_to_dynamic_cell_children.keys()
-        )
-        for cell_num in all_relevant_cells:
-            cell_imports = [
-                dsym.get_import_string() for dsym in cell_num_to_used_imports[cell_num]
-            ]
-            input_symbols = {
-                str(dsym): {"type": dsym.get_type_annotation_string()}
-                for dsym in cell_num_to_dynamic_inputs[cell_num]
-            }
-            output_symbols = {
-                str(dsym): {"type": dsym.get_type_annotation_string()}
-                for dsym in cell_num_to_dynamic_outputs[cell_num]
-            }
-            parent_cells = list(cell_num_to_dynamic_cell_parents[cell_num])
-            child_cells = list(cell_num_to_dynamic_cell_children[cell_num])
-            cell_metadata[cell_num] = {
-                "cell_imports": cell_imports,
-                "input_symbols": input_symbols,
-                "output_symbols": output_symbols,
-                "parent_cells": parent_cells,
-                "child_cells": child_cells,
-            }
-        return cell_metadata
-
-    @property
-    def dependency_tracking_enabled(self):
-        return self.settings.track_dependencies
 
     @property
     def cell_magic_name(self):

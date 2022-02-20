@@ -34,67 +34,26 @@ class PyccoloKernelSettings(NamedTuple):
 
 
 class SafeKernelHooks:
-    def after_init_class(self: "PyccoloKernelMixin") -> None:  # type: ignore
-        NotebookSafety.instance(use_comm=True)
+    def after_init_class(self) -> None:
+        ...
 
-    def before_init_metadata(self: "PyccoloKernelMixin", parent) -> None:  # type: ignore
-        """
-        Don't actually change the metadata; we just want to get the cell id
-        out of the execution request.
-        """
-        nbs_ = singletons.nbs()
-        metadata = parent.get("metadata", {})
-        cell_id = metadata.get("cellId", None)
-        if cell_id is not None:
-            nbs_.set_active_cell(cell_id)
-        tags = tuple(metadata.get("tags", ()))
-        nbs_.set_tags(tags)
+    def before_init_metadata(self, parent) -> None:
+        ...
 
-    def before_enter_tracing_context(self: "PyccoloKernelMixin"):  # type: ignore
-        nbs_ = singletons.nbs()
-        nbs_.updated_symbols.clear()
-        nbs_.updated_reactive_symbols.clear()
-        nbs_.updated_deep_reactive_symbols.clear()
+    def before_enter_tracing_context(self) -> None:
+        ...
 
-    def before_execute(self: "PyccoloKernelMixin", cell_content: str) -> None:  # type: ignore
-        nbs_ = singletons.nbs()
-        if nbs_._saved_debug_message is not None:  # pragma: no cover
-            logger.error(nbs_._saved_debug_message)
-            nbs_._saved_debug_message = None
+    def before_execute(self, cell_content: str) -> None:
+        ...
 
-        cell_id, nbs_._active_cell_id = nbs_._active_cell_id, None
-        assert cell_id is not None
-        cell = cells().create_and_track(
-            cell_id,
-            cell_content,
-            nbs_._tags,
-            validate_ipython_counter=self.settings.store_history,
-        )
+    def after_execute(self, cell_content: str) -> None:
+        ...
 
-        # Stage 1: Precheck.
-        nbs_._safety_precheck_cell(cell)
-
-    def after_execute(self: "PyccoloKernelMixin", cell_content: str) -> None:  # type: ignore
-        # resync any defined symbols that could have gotten out-of-sync
-        #  due to tracing being disabled
-        nbs_ = singletons.nbs()
-        nbs_._resync_symbols(
-            [
-                # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                sym
-                for sym in nbs_.all_data_symbols()
-                if sym.timestamp.cell_num == cells().exec_counter()
-            ]
-        )
-        nbs_.gc()
-
-    def on_exception(self: "PyccoloKernelMixin", e: Exception) -> None:  # type: ignore
-        nbs_ = singletons.nbs()
-        if nbs_.is_test:
-            nbs_.set_exception_raised_during_execution(e)
+    def on_exception(self, e: Exception) -> None:
+        ...
 
 
-class PyccoloKernelMixin(singletons.SafeKernel, SafeKernelHooks):
+class PyccoloKernelMixin(SafeKernelHooks):
     def __init__(self, **kwargs):
         self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
             store_history=kwargs.pop("store_history", True)
@@ -104,7 +63,6 @@ class PyccoloKernelMixin(singletons.SafeKernel, SafeKernelHooks):
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [SafetyTracer]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
-        self.after_init_class()
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
         if run_cell_func is None:
@@ -281,70 +239,139 @@ class PyccoloKernelMixin(singletons.SafeKernel, SafeKernelHooks):
             finally:
                 return ret
 
+    @classmethod
+    def make_zmq_kernel_class(cls, name: str) -> Type[IPythonKernel]:
+        class ZMQKernel(cls, IPythonKernel):  # type: ignore
+            implementation = "kernel"
+            implementation_version = __version__
 
-class SafeKernel(PyccoloKernelMixin, IPythonKernel):
-    implementation = "kernel"
-    implementation_version = __version__
+            def __init__(self, **kwargs):
+                super().__init__(**kwargs)
+                import nest_asyncio
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        import nest_asyncio
+                # ref: https://github.com/erdewit/nest_asyncio
+                nest_asyncio.apply()
+                self.after_init_class()
 
-        # ref: https://github.com/erdewit/nest_asyncio
-        nest_asyncio.apply()
+            def init_metadata(self, parent):
+                """
+                Don't actually change the metadata; we just want to get the cell id
+                out of the execution request.
+                """
+                self.before_init_metadata(parent)
+                return super().init_metadata(parent)
 
-    def init_metadata(self, parent):
+            if inspect.iscoroutinefunction(IPythonKernel.do_execute):
+
+                async def do_execute(
+                    self,
+                    code,
+                    silent,
+                    store_history=False,
+                    user_expressions=None,
+                    allow_stdin=False,
+                ):
+                    super_ = super()
+
+                    async def _run_cell_func(cell):
+                        return await super_.do_execute(
+                            cell, silent, store_history, user_expressions, allow_stdin
+                        )
+
+                    if silent:
+                        # then it's probably a control message; don't run through nbsafety
+                        return await _run_cell_func(code)
+                    else:
+                        return await self.pyc_execute(code, True, _run_cell_func)
+
+            else:
+
+                def do_execute(
+                    self,
+                    code,
+                    silent,
+                    store_history=False,
+                    user_expressions=None,
+                    allow_stdin=False,
+                ):
+                    super_ = super()
+
+                    async def _run_cell_func(cell):
+                        ret = super_.do_execute(
+                            cell, silent, store_history, user_expressions, allow_stdin
+                        )
+                        if inspect.isawaitable(ret):
+                            return await ret
+                        else:
+                            return ret
+
+                    return asyncio.get_event_loop().run_until_complete(
+                        self.pyc_execute(code, True, _run_cell_func)
+                    )
+
+        ZMQKernel.__name__ = name
+        return ZMQKernel
+
+
+class SafeKernelMixin(singletons.SafeKernel, PyccoloKernelMixin):
+    def after_init_class(self) -> None:
+        NotebookSafety.instance(use_comm=True)
+
+    def before_init_metadata(self, parent) -> None:
         """
         Don't actually change the metadata; we just want to get the cell id
         out of the execution request.
         """
-        self.before_init_metadata(parent)
-        return super().init_metadata(parent)
+        nbs_ = singletons.nbs()
+        metadata = parent.get("metadata", {})
+        cell_id = metadata.get("cellId", None)
+        if cell_id is not None:
+            nbs_.set_active_cell(cell_id)
+        tags = tuple(metadata.get("tags", ()))
+        nbs_.set_tags(tags)
 
-    if inspect.iscoroutinefunction(IPythonKernel.do_execute):
+    def before_enter_tracing_context(self) -> None:
+        nbs_ = singletons.nbs()
+        nbs_.updated_symbols.clear()
+        nbs_.updated_reactive_symbols.clear()
+        nbs_.updated_deep_reactive_symbols.clear()
 
-        async def do_execute(
-            self,
-            code,
-            silent,
-            store_history=False,
-            user_expressions=None,
-            allow_stdin=False,
-        ):
-            super_ = super()
+    def before_execute(self, cell_content: str) -> None:
+        nbs_ = singletons.nbs()
+        if nbs_._saved_debug_message is not None:  # pragma: no cover
+            logger.error(nbs_._saved_debug_message)
+            nbs_._saved_debug_message = None
 
-            async def _run_cell_func(cell):
-                return await super_.do_execute(
-                    cell, silent, store_history, user_expressions, allow_stdin
-                )
+        cell_id, nbs_._active_cell_id = nbs_._active_cell_id, None
+        assert cell_id is not None
+        cell = cells().create_and_track(
+            cell_id,
+            cell_content,
+            nbs_._tags,
+            validate_ipython_counter=self.settings.store_history,
+        )
 
-            if silent:
-                # then it's probably a control message; don't run through nbsafety
-                return await _run_cell_func(code)
-            else:
-                return await self.pyc_execute(code, True, _run_cell_func)
+        # Stage 1: Precheck.
+        nbs_._safety_precheck_cell(cell)
 
-    else:
+    def after_execute(self, cell_content: str) -> None:
+        # resync any defined symbols that could have gotten out-of-sync
+        #  due to tracing being disabled
+        nbs_ = singletons.nbs()
+        nbs_._resync_symbols(
+            [
+                # TODO: avoid bad performance by only iterating over symbols updated in this cell
+                sym
+                for sym in nbs_.all_data_symbols()
+                if sym.timestamp.cell_num == cells().exec_counter()
+            ]
+        )
+        nbs_.gc()
 
-        def do_execute(
-            self,
-            code,
-            silent,
-            store_history=False,
-            user_expressions=None,
-            allow_stdin=False,
-        ):
-            super_ = super()
+    def on_exception(self, e: Exception) -> None:
+        nbs_ = singletons.nbs()
+        if nbs_.is_test:
+            nbs_.set_exception_raised_during_execution(e)
 
-            async def _run_cell_func(cell):
-                ret = super_.do_execute(
-                    cell, silent, store_history, user_expressions, allow_stdin
-                )
-                if inspect.isawaitable(ret):
-                    return await ret
-                else:
-                    return ret
 
-            return asyncio.get_event_loop().run_until_complete(
-                self.pyc_execute(code, True, _run_cell_func)
-            )
+SafeKernel = SafeKernelMixin.make_zmq_kernel_class("SafeKernel")

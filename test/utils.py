@@ -8,7 +8,7 @@ from IPython import get_ipython
 import pytest
 
 from nbsafety.data_model.code_cell import cells
-from nbsafety.kernel.kernel import PyccoloKernelMixin
+from nbsafety.kernel.kernel import SafeKernelMixin
 from nbsafety.run_mode import SafetyRunMode
 from nbsafety.safety import NotebookSafety
 from nbsafety.singletons import nbs
@@ -60,8 +60,8 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        PyccoloKernelMixin.clear_instance()
-        PyccoloKernelMixin.instance(
+        SafeKernelMixin.clear_instance()
+        SafeKernelMixin.instance(
             store_history=False,
         )
         NotebookSafety.clear_instance()
@@ -82,7 +82,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         else:
             yield
         # ensure each test didn't give failures during ast transformation
-        PyccoloKernelMixin.instance().cleanup_tracers()
+        SafeKernelMixin.instance().cleanup_tracers()
         exc = nbs().set_exception_raised_during_execution(None)
         if exc is not None:
             raise exc

@@ -107,10 +107,9 @@ class PyccoloKernelMixin(singletons.SafeKernel, SafeKernelHooks):
         self.after_init_class()
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
-        # this is to avoid capturing `self` and creating an extra reference to the singleton
-        store_history = self.settings.store_history
-
         if run_cell_func is None:
+            # this is to avoid capturing `self` and creating an extra reference to the singleton
+            store_history = self.settings.store_history
 
             def run_cell_func(cell):
                 run_cell(cell, store_history=store_history)

@@ -2,26 +2,32 @@
 import argparse
 import ast
 import astunparse
-import importlib
+import inspect
+import json
 import logging
+import re
 import shlex
-from typing import cast, Iterable, List, Optional, Type
+from typing import cast, Iterable, Optional, Type
 
-from IPython import get_ipython
 import pyccolo as pyc
+from IPython import get_ipython
+from IPython.core.magic import register_line_magic
 
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import FlowOrder, ExecutionMode, ExecutionSchedule
-from nbsafety.singletons import nbs
+from nbsafety.singletons import kernel, nbs, NotebookSafety
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-USAGE = """Options:
+_SAFETY_LINE_MAGIC = "safety"
+
+
+# TODO: update this
+_USAGE = """Options:
 
 [deps|show_deps|show_dependencies] <symbol_1>, <symbol_2> ...: 
     - This will print out the dependencies for given symbols.
@@ -33,6 +39,79 @@ USAGE = """Options:
 slice <cell_num>:
     - This will print the code necessary to reconstruct <cell_num> using a dynamic
       program slicing algorithm."""
+
+
+def make_line_magic(nbs_: NotebookSafety):
+    print_ = print  # to keep the test from failing since this is a legitimate print
+    line_magic_names = [
+        name for name, val in globals().items() if inspect.isfunction(val)
+    ]
+
+    def _handle(cmd, line):
+        if cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
+            return show_deps(line)
+        elif cmd in ("stale", "show_stale"):
+            return show_stale(line)
+        elif cmd == "trace_messages":
+            return trace_messages(line)
+        elif cmd in ("hls", "nohls", "highlight", "highlights"):
+            return set_highlights(cmd, line)
+        elif cmd in ("dag", "make_dag", "cell_dag", "make_cell_dag"):
+            return json.dumps(nbs_.create_dag_metadata(), indent=2)
+        elif cmd in ("slice", "make_slice", "gather_slice"):
+            return make_slice(line)
+        elif cmd in ("mode", "exec_mode"):
+            return set_exec_mode(line)
+        elif cmd in ("schedule", "exec_schedule", "execution_schedule"):
+            return set_exec_schedule(line)
+        elif cmd in ("flow", "flow_order", "semantics", "flow_semantics"):
+            return set_flow_order(line)
+        elif cmd in ("register", "register_tracer"):
+            return register_tracer(line)
+        elif cmd in ("deregister", "deregister_tracer"):
+            return deregister_tracer(line)
+        elif cmd == "clear":
+            nbs_.min_timestamp = nbs_.cell_counter()
+            return None
+        elif cmd in line_magic_names:
+            logger.warning(
+                "We have a magic for %s, but have not yet registered it", cmd
+            )
+            return None
+        else:
+            logger.warning(_USAGE)
+            return None
+
+    def _safety(line: str):
+        # this is to avoid capturing `self` and creating an extra reference to the singleton
+        try:
+            cmd, line = line.split(" ", 1)
+            if cmd in ("slice", "make_slice", "gather_slice"):
+                # FIXME: hack to workaround some input transformer
+                line = re.sub(r"--tag +<class '(\w+)'>", r"--tag $\1", line)
+        except ValueError:
+            cmd, line = line, ""
+        try:
+            line, fname = line.split(">", 1)
+        except ValueError:
+            line, fname = line, None
+        line = line.strip()
+        if fname is not None:
+            fname = fname.strip()
+
+        outstr = _handle(cmd, line)
+        if outstr is None:
+            return
+
+        if fname is None:
+            print_(outstr)
+        else:
+            with open(fname, "w") as f:
+                f.write(outstr)
+
+    # FIXME (smacke): probably not a great idea to rely on this
+    _safety.__name__ = _SAFETY_LINE_MAGIC
+    return register_line_magic(_safety)
 
 
 def show_deps(symbols: str) -> Optional[str]:
@@ -230,11 +309,11 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
 
 
 def _deregister_tracers(tracers):
-    nbs().tracer_cleanup_pending = True
+    kernel().tracer_cleanup_pending = True
     for tracer in tracers:
         tracer.clear_instance()
         try:
-            nbs().registered_tracers.remove(tracer)
+            kernel().registered_tracers.remove(tracer)
         except ValueError:
             pass
 
@@ -244,7 +323,7 @@ def _deregister_tracers_for(tracer_cls):
         [tracer_cls]
         + [
             tracer
-            for tracer in nbs().registered_tracers
+            for tracer in kernel().registered_tracers
             if tracer.__name__ == tracer_cls.__name__
         ]
     )
@@ -259,14 +338,14 @@ def register_tracer(line_: str) -> None:
         return
     _deregister_tracers_for(tracer_cls)
     tracer_cls.instance()
-    nbs().registered_tracers.insert(0, tracer_cls)
+    kernel().registered_tracers.insert(0, tracer_cls)
 
 
 def deregister_tracer(line_: str) -> None:
     line_ = line_.strip()
     usage = f"Usage: %safety deregister_tracer [<module.path.to.tracer_class>|all]"
     if line_.lower() == "all":
-        _deregister_tracers(list(nbs().registered_tracers))
+        _deregister_tracers(list(kernel().registered_tracers))
     else:
         tracer_cls = _resolve_tracer_class(line_)
         if tracer_cls is None:

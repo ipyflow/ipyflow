@@ -50,7 +50,6 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
             sys.last_traceback = None
         return cell_id
 
-    store_history = kwargs.pop("store_history", False)
     test_context = kwargs.pop("test_context", True)
     setup_cells = [
         "import sys",
@@ -62,11 +61,12 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
         PyccoloKernelMixin.clear_instance()
-        PyccoloKernelMixin.instance()
+        PyccoloKernelMixin.instance(
+            store_history=False,
+        )
         NotebookSafety.clear_instance()
         NotebookSafety.instance(
             cell_magic_name="_SAFETY_CELL_MAGIC",
-            store_history=store_history,
             test_context=test_context,
             **kwargs,
         )

@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
-import asyncio
 from collections import defaultdict
 from dataclasses import dataclass
-import inspect
-import json
 import logging
-import re
 from types import FrameType
 from typing import (
     cast,
@@ -21,17 +17,15 @@ from typing import (
 )
 
 from IPython import get_ipython
-from IPython.core.magic import register_cell_magic, register_line_magic
 
 import pyccolo as pyc
 
-from nbsafety.ipython_utils import run_cell
-from nbsafety import line_magics
 from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
+from nbsafety.line_magics import make_line_magic
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
 from nbsafety.types import CellId, SupportedIndexType
@@ -39,12 +33,8 @@ from nbsafety.types import CellId, SupportedIndexType
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
-_SAFETY_LINE_MAGIC = "safety"
-_NB_MAGIC_PATTERN = re.compile(r"(^%|^!|^cd |\?$)")
-
 
 class NotebookSafetySettings(NamedTuple):
-    store_history: bool
     test_context: bool
     use_comm: bool
     track_dependencies: bool
@@ -103,7 +93,6 @@ class NotebookSafety(singletons.NotebookSafety):
         super().__init__()
         cells().clear()
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
-            store_history=kwargs.pop("store_history", True),
             test_context=kwargs.pop("test_context", False),
             use_comm=use_comm,
             track_dependencies=True,
@@ -148,8 +137,8 @@ class NotebookSafety(singletons.NotebookSafety):
         if cell_magic_name is None:
             self._cell_magic = None
         else:
-            self._cell_magic = self._make_cell_magic(cell_magic_name)
-        self._line_magic = self._make_line_magic()
+            self._cell_magic = singletons.kernel().make_cell_magic(cell_magic_name)
+        self._line_magic = make_line_magic(self)
         self._prev_cell_stale_symbols: Set[DataSymbol] = set()
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
@@ -198,7 +187,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     def reset_cell_counter(self):
         # only called in test context
-        assert not self.settings.store_history
+        assert not singletons.kernel().settings.store_history
         self.dynamic_data_deps.clear()
         self.static_data_deps.clear()
         for sym in self.all_data_symbols():
@@ -497,21 +486,6 @@ class NotebookSafety(singletons.NotebookSafety):
             phantom_cell_info=phantom_cell_info,
         )
 
-    @staticmethod
-    def _get_max_timestamp_cell_num_for_symbols(
-        deep_symbols: Set[DataSymbol], shallow_symbols: Set[DataSymbol]
-    ) -> int:
-        max_timestamp_cell_num = -1
-        for dsym in deep_symbols:
-            max_timestamp_cell_num = max(
-                max_timestamp_cell_num, dsym.timestamp.cell_num
-            )
-        for dsym in shallow_symbols:
-            max_timestamp_cell_num = max(
-                max_timestamp_cell_num, dsym.timestamp_excluding_ns_descendents.cell_num
-            )
-        return max_timestamp_cell_num
-
     def _safety_precheck_cell(self, cell: ExecutedCodeCell) -> None:
         checker_result = self.check_and_link_multiple_cells(
             cells_to_check=[cell],
@@ -626,94 +600,6 @@ class NotebookSafety(singletons.NotebookSafety):
             }
         return cell_metadata
 
-    def _make_cell_magic(self, cell_magic_name):
-        # this is to avoid capturing `self` and creating an extra reference to the singleton
-        store_history = self.settings.store_history
-
-        def _run_cell_func(cell):
-            run_cell(cell, store_history=store_history)
-
-        def _dependency_safety(_, cell: str):
-            asyncio.get_event_loop().run_until_complete(
-                singletons.kernel().pyc_execute(cell, False, _run_cell_func)
-            )
-
-        # FIXME (smacke): probably not a great idea to rely on this
-        _dependency_safety.__name__ = cell_magic_name
-        return register_cell_magic(_dependency_safety)
-
-    def _make_line_magic(self):
-        print_ = print  # to keep the test from failing since this is a legitimate print
-        line_magic_names = [
-            f[0] for f in inspect.getmembers(line_magics) if inspect.isfunction(f[1])
-        ]
-
-        def _handle(cmd, line):
-            if cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
-                return line_magics.show_deps(line)
-            elif cmd in ("stale", "show_stale"):
-                return line_magics.show_stale(line)
-            elif cmd == "trace_messages":
-                return line_magics.trace_messages(line)
-            elif cmd in ("hls", "nohls", "highlight", "highlights"):
-                return line_magics.set_highlights(cmd, line)
-            elif cmd in ("dag", "make_dag", "cell_dag", "make_cell_dag"):
-                return json.dumps(self.create_dag_metadata(), indent=2)
-            elif cmd in ("slice", "make_slice", "gather_slice"):
-                return line_magics.make_slice(line)
-            elif cmd in ("mode", "exec_mode"):
-                return line_magics.set_exec_mode(line)
-            elif cmd in ("schedule", "exec_schedule", "execution_schedule"):
-                return line_magics.set_exec_schedule(line)
-            elif cmd in ("flow", "flow_order", "semantics", "flow_semantics"):
-                return line_magics.set_flow_order(line)
-            elif cmd in ("register", "register_tracer"):
-                return line_magics.register_tracer(line)
-            elif cmd in ("deregister", "deregister_tracer"):
-                return line_magics.deregister_tracer(line)
-            elif cmd == "clear":
-                self.min_timestamp = self.cell_counter()
-                return None
-            elif cmd in line_magic_names:
-                logger.warning(
-                    "We have a magic for %s, but have not yet registered it", cmd
-                )
-                return None
-            else:
-                logger.warning(line_magics.USAGE)
-                return None
-
-        def _safety(line: str):
-            # this is to avoid capturing `self` and creating an extra reference to the singleton
-            try:
-                cmd, line = line.split(" ", 1)
-                if cmd in ("slice", "make_slice", "gather_slice"):
-                    # FIXME: hack to workaround some input transformer
-                    line = re.sub(r"--tag +<class '(\w+)'>", r"--tag $\1", line)
-            except ValueError:
-                cmd, line = line, ""
-            try:
-                line, fname = line.split(">", 1)
-            except ValueError:
-                line, fname = line, None
-            line = line.strip()
-            if fname is not None:
-                fname = fname.strip()
-
-            outstr = _handle(cmd, line)
-            if outstr is None:
-                return
-
-            if fname is None:
-                print_(outstr)
-            else:
-                with open(fname, "w") as f:
-                    f.write(outstr)
-
-        # FIXME (smacke): probably not a great idea to rely on this
-        _safety.__name__ = _SAFETY_LINE_MAGIC
-        return register_line_magic(_safety)
-
     @property
     def dependency_tracking_enabled(self):
         return self.settings.track_dependencies
@@ -735,7 +621,7 @@ class NotebookSafety(singletons.NotebookSafety):
         self.safety_issue_detected = False
         return ret
 
-    def _gc(self):
+    def gc(self):
         # Need to do the garbage check and the collection separately
         garbage_syms = [
             dsym for dsym in self.all_data_symbols() if dsym.is_new_garbage()

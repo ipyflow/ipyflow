@@ -3,16 +3,18 @@ import asyncio
 import inspect
 import logging
 from contextlib import contextmanager
-from typing import Callable, List, Generator, Type
+from typing import Callable, List, Generator, NamedTuple, Type
 
 import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
+from IPython.core.magic import register_cell_magic
 
 from nbsafety import singletons
 from nbsafety.data_model.code_cell import cells
 from nbsafety.ipython_utils import (
     ast_transformer_context,
     input_transformer_context,
+    run_cell,
     save_number_of_currently_executing_cell,
 )
 from nbsafety.version import __version__
@@ -25,6 +27,10 @@ from nbsafety.tracing.nbsafety_tracer import (
 
 
 logger = logging.getLogger(__name__)
+
+
+class PyccoloKernelSettings(NamedTuple):
+    store_history: bool
 
 
 class SafeKernelHooks:
@@ -59,7 +65,7 @@ class SafeKernelHooks:
             cell_id,
             cell_content,
             nbs_._tags,
-            validate_ipython_counter=nbs_.settings.store_history,
+            validate_ipython_counter=self.settings.store_history,  # type: ignore
         )
 
         # Stage 1: Precheck.
@@ -77,7 +83,7 @@ class SafeKernelHooks:
                 if sym.timestamp.cell_num == cells().exec_counter()
             ]
         )
-        nbs_._gc()
+        nbs_.gc()
 
     def on_exception(self, e: Exception) -> None:
         nbs_ = singletons.nbs()
@@ -87,12 +93,33 @@ class SafeKernelHooks:
 
 class PyccoloKernelMixin(singletons.SafeKernel, SafeKernelHooks):
     def __init__(self, **kwargs):
+        self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
+            store_history=kwargs.pop("store_history", True)
+        )
         super().__init__(**kwargs)
         NotebookSafety.instance(use_comm=True)
 
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [SafetyTracer]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
+
+    def make_cell_magic(self, cell_magic_name, run_cell_func=None):
+        # this is to avoid capturing `self` and creating an extra reference to the singleton
+        store_history = self.settings.store_history
+
+        if run_cell_func is None:
+
+            def run_cell_func(cell):
+                run_cell(cell, store_history=store_history)
+
+        def cell_magic_func(_, cell: str):
+            asyncio.get_event_loop().run_until_complete(
+                self.pyc_execute(cell, False, run_cell_func)
+            )
+
+        # FIXME (smacke): probably not a great idea to rely on this
+        cell_magic_func.__name__ = cell_magic_name
+        return register_cell_magic(cell_magic_func)
 
     def cleanup_tracers(self):
         for cleanup in reversed(self.tracer_cleanup_callbacks):

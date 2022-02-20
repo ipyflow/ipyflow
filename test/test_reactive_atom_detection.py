@@ -11,7 +11,7 @@ from pyccolo.syntax_augmentation import (
 from nbsafety.singletons import tracer
 from .utils import make_safety_fixture
 
-_safety_fixture, run_cell = make_safety_fixture(enable_reactive_modifiers=True)
+_safety_fixture, run_cell = make_safety_fixture()
 
 
 REACTIVE_ATOM_REGEX = re.compile(

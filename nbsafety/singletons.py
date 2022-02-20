@@ -5,6 +5,7 @@ import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
+    from nbsafety.kernel.kernel import PyccoloKernelMixin as SafeKernelInstance
     from nbsafety.safety import NotebookSafety as NotebookSafetyInstance
     from nbsafety.tracing.nbsafety_tracer import SafetyTracer as TracerInstance
 
@@ -19,8 +20,17 @@ class NotebookSafety(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
+class SafeKernel(SingletonConfigurable):
+    pass
+
+
 class SingletonBaseTracer(pyc.BaseTracer):
     pass
+
+
+def kernel() -> "SafeKernelInstance":
+    assert SafeKernel.initialized()
+    return SafeKernel.instance()
 
 
 def nbs() -> "NotebookSafetyInstance":

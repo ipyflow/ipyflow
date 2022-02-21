@@ -25,6 +25,7 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.line_magics import make_line_magic
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
+from nbsafety.tracing.nbsafety_tracer import SafetyTracer
 from nbsafety.types import CellId, SupportedIndexType
 
 logger = logging.getLogger(__name__)
@@ -278,6 +279,16 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
+        if SafetyTracer not in singletons.kernel().registered_tracers:
+            return FrontendCheckerResult(
+                stale_cells=set(),
+                fresh_cells=set(),
+                new_fresh_cells=set(),
+                forced_reactive_cells=set(),
+                stale_links={},
+                refresher_links={},
+                phantom_cell_info={},
+            )
         for tracer in singletons.kernel().registered_tracers:
             # force initialization here in case not already inited
             tracer.instance()

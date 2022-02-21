@@ -352,7 +352,8 @@ class SafeKernelMixin(singletons.SafeKernel, PyccoloKernelMixin):
         )
 
         # Stage 1: Precheck.
-        nbs_._safety_precheck_cell(cell)
+        if SafetyTracer in self.registered_tracers:
+            nbs_._safety_precheck_cell(cell)
 
     def after_execute(self, cell_content: str) -> None:
         # resync any defined symbols that could have gotten out-of-sync

@@ -1,6 +1,13 @@
 History
 =======
 
+0.0.84 (2022-03-02)
+-------------------
+* Skip static checking when dataflow tracing not enabled;
+* Minor bugfix for dynamic slicing with tuple assignment;
+* Use ipython<8.0.0 for performance reasons, pending further investigation;
+* Start factoring out pyccolo-specific stuff into the kernel subclass for generic use later;
+
 0.0.83 (2022-02-14)
 -------------------
 * Add register / deregister subcommands for other Pyccolo tracers;

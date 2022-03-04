@@ -1,4 +1,5 @@
 astunparse
+black
 ipykernel
 ipython<8.0.0
 jupyter

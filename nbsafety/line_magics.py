@@ -2,6 +2,7 @@
 import argparse
 import ast
 import astunparse
+import black
 import inspect
 import json
 import logging
@@ -219,6 +220,7 @@ def set_highlights(cmd: str, rest: str) -> None:
 _SLICE_PARSER = argparse.ArgumentParser("slice")
 _SLICE_PARSER.add_argument("cell_num", nargs="?", type=int, default=None)
 _SLICE_PARSER.add_argument("--stmt", "--stmts", action="store_true")
+_SLICE_PARSER.add_argument("--blacken", action="store_true")
 _SLICE_PARSER.add_argument("--tag", nargs="?", type=str, default=None)
 
 
@@ -249,9 +251,12 @@ def make_slice(line: str) -> Optional[str]:
             cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt).items()
         )
         deps.sort()
-        return "\n\n".join(
+        slice_text = "\n\n".join(
             f"# Cell {cell_num}\n" + content for cell_num, content in deps
         )
+        if args.stmt or args.blacken:
+            slice_text = black.format_str(slice_text, mode=black.FileMode())
+        return slice_text
     return None
 
 

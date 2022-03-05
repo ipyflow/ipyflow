@@ -139,6 +139,31 @@ class CodeCellSlicingMixin:
     ) -> Dict[int, str]:
         return self.compute_slice_for_cells({self}, stmt_level=stmt_level)
 
+    @staticmethod
+    def _strip_tuple_parens(node: ast.AST, text: str) -> str:
+        if (
+            isinstance(node, ast.Tuple)
+            and len(text) >= 2
+            and text[0] == "("
+            and text[-1] == ")"
+        ):
+            return text[1:-1]
+        else:
+            return text
+
+    @classmethod
+    def _unparse(cls, stmt: ast.stmt) -> str:
+        if isinstance(stmt, ast.Assign) and stmt.lineno == max(
+            getattr(nd, "lineno", stmt.lineno) for nd in ast.walk(stmt)
+        ):
+            components = []
+            for node in stmt.targets + [stmt.value]:
+                components.append(astunparse.unparse(node).strip())
+                components[-1] = cls._strip_tuple_parens(node, components[-1])
+            return " = ".join(components)
+        else:
+            return astunparse.unparse(stmt)
+
     @classmethod
     def compute_slice_for_cells(  # type: ignore
         cls: Type["ExecutedCodeCell"],
@@ -162,7 +187,7 @@ class CodeCellSlicingMixin:
             for cell in cells:
                 stmts_by_cell_num.pop(cell.cell_ctr, None)
             ret = {
-                ctr: "\n".join(astunparse.unparse(stmt).strip() for stmt in stmts)
+                ctr: "\n".join(cls._unparse(stmt).strip() for stmt in stmts)
                 for ctr, stmts in stmts_by_cell_num.items()
             }
             for cell in cells:

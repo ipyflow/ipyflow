@@ -15,13 +15,32 @@ class FrontendCheckerResult(NamedTuple):
     fresh_cells: Set[CellId]
     new_fresh_cells: Set[CellId]
     forced_reactive_cells: Set[CellId]
+    typecheck_error_cells: Set[CellId]
+    # unsafe_order_cells: Set[CellId]
     stale_links: Dict[CellId, Set[CellId]]
     refresher_links: Dict[CellId, Set[CellId]]
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
 
+    @classmethod
+    def empty(cls):
+        return cls(
+            stale_cells=set(),
+            fresh_cells=set(),
+            new_fresh_cells=set(),
+            forced_reactive_cells=set(),
+            typecheck_error_cells=set(),
+            # unsafe_order_cells=set(),
+            stale_links=defaultdict(set),
+            refresher_links=defaultdict(set),
+            phantom_cell_info={},
+        )
+
     def to_json(self) -> Dict[str, Any]:
         return {
-            "stale_cells": list(self.stale_cells),
+            # TODO: we should probably have separate fields for stale vs non-typechecking cells,
+            #  or at least change the name to a more general "unsafe_cells" or equivalent
+            # "stale_cells": list(self.stale_cells | self.typecheck_error_cells | self.unsafe_order_cells),
+            "stale_cells": list(self.stale_cells | self.typecheck_error_cells),
             "fresh_cells": list(self.fresh_cells),
             "new_fresh_cells": list(self.new_fresh_cells),
             "forced_reactive_cells": list(self.forced_reactive_cells),
@@ -41,13 +60,10 @@ break_ = object()
 
 def _check_one_cell(
     cell: ExecutedCodeCell,
+    result: FrontendCheckerResult,
     update_liveness_time_versions: bool,
     last_executed_cell_pos: int,
     checker_results_by_cid: Dict[CellId, CheckerResult],
-    stale_cells: Set[CellId],
-    fresh_cells: Set[CellId],
-    new_fresh_cells: Set[CellId],
-    typecheck_error_cells: Set[CellId],
     stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
     killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
@@ -82,13 +98,13 @@ def _check_one_cell(
         stale_symbols = set()
     if len(stale_symbols) > 0:
         stale_symbols_by_cell_id[cell_id] = stale_symbols
-        stale_cells.add(cell_id)
+        result.stale_cells.add(cell_id)
     if not checker_result.typechecks:
-        typecheck_error_cells.add(cell_id)
+        result.typecheck_error_cells.add(cell_id)
     for dead_sym in checker_result.dead:
         killing_cell_ids_for_symbol[dead_sym].add(cell_id)
 
-    is_fresh = cell_id not in stale_cells
+    is_fresh = cell_id not in result.stale_cells
     if nbs_.settings.mark_phantom_cell_usages_unsafe:
         phantom_cell_info_for_cell = cell.compute_phantom_cell_info(
             checker_result.used_cells
@@ -122,9 +138,9 @@ def _check_one_cell(
             if dead_sym.timestamp.cell_num > max(cell.cell_ctr, nbs_.min_timestamp):
                 is_fresh = True
     if is_fresh:
-        fresh_cells.add(cell_id)
+        result.fresh_cells.add(cell_id)
     if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
-        new_fresh_cells.add(cell_id)
+        result.new_fresh_cells.add(cell_id)
     if is_fresh and nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
         return break_
 
@@ -134,30 +150,17 @@ def compute_frontend_cell_metadata(
     update_liveness_time_versions: bool = False,
     last_executed_cell_id: Optional[CellId] = None,
 ) -> FrontendCheckerResult:
+    result = FrontendCheckerResult.empty()
     if SafetyTracer not in kernel().registered_tracers:
-        return FrontendCheckerResult(
-            stale_cells=set(),
-            fresh_cells=set(),
-            new_fresh_cells=set(),
-            forced_reactive_cells=set(),
-            stale_links={},
-            refresher_links={},
-            phantom_cell_info={},
-        )
+        return result
     nbs_ = nbs()
     for tracer in kernel().registered_tracers:
         # force initialization here in case not already inited
         tracer.instance()
-    stale_cells = set()
-    unsafe_order_cells: Set[CellId] = set()
-    typecheck_error_cells = set()
-    fresh_cells = set()
-    new_fresh_cells = set()
-    forced_reactive_cells = set()
     stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
     killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
-    checker_results_by_cid = {}
+    checker_results_by_cid: Dict[CellId, CheckerResult] = {}
     if last_executed_cell_id is None:
         last_executed_cell = None
         last_executed_cell_pos = None
@@ -166,7 +169,7 @@ def compute_frontend_cell_metadata(
         last_executed_cell_pos = last_executed_cell.position
         for tag in last_executed_cell.tags:
             for reactive_cell_id in cells().get_reactive_ids_for_tag(tag):
-                forced_reactive_cells.add(reactive_cell_id)
+                result.forced_reactive_cells.add(reactive_cell_id)
     if cells_to_check is None:
         cells_to_check = cells().all_cells_most_recently_run_for_each_id()
     cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
@@ -174,13 +177,10 @@ def compute_frontend_cell_metadata(
         if (
             _check_one_cell(
                 cell,
+                result,
                 update_liveness_time_versions,
                 last_executed_cell_pos,
                 checker_results_by_cid,
-                stale_cells,
-                fresh_cells,
-                new_fresh_cells,
-                typecheck_error_cells,
                 stale_symbols_by_cell_id,
                 killing_cell_ids_for_symbol,
                 phantom_cell_info,
@@ -193,35 +193,37 @@ def compute_frontend_cell_metadata(
         prev_stale_cells: Set[CellId] = set()
         while True:
             for cell in cells_to_check:
-                if cell.cell_id in stale_cells:
+                if cell.cell_id in result.stale_cells:
                     continue
                 if nbs_.mut_settings.dynamic_slicing_enabled:
-                    if cell.dynamic_parent_ids & (fresh_cells | stale_cells):
-                        stale_cells.add(cell.cell_id)
+                    if cell.dynamic_parent_ids & (
+                        result.fresh_cells | result.stale_cells
+                    ):
+                        result.stale_cells.add(cell.cell_id)
                         continue
                 if nbs_.mut_settings.static_slicing_enabled:
-                    if cell.static_parent_ids & (fresh_cells | stale_cells):
-                        stale_cells.add(cell.cell_id)
-            if prev_stale_cells == stale_cells:
+                    if cell.static_parent_ids & (
+                        result.fresh_cells | result.stale_cells
+                    ):
+                        result.stale_cells.add(cell.cell_id)
+            if prev_stale_cells == result.stale_cells:
                 break
-            prev_stale_cells = set(stale_cells)
-        fresh_cells -= stale_cells
-        new_fresh_cells -= stale_cells
-        for cell_id in stale_cells:
+            prev_stale_cells = set(result.stale_cells)
+        result.fresh_cells -= result.stale_cells
+        result.new_fresh_cells -= result.stale_cells
+        for cell_id in result.stale_cells:
             cells().from_id(cell_id).set_fresh(False)
     if nbs_.mut_settings.exec_mode != ExecutionMode.REACTIVE:
-        for cell_id in new_fresh_cells:
+        for cell_id in result.new_fresh_cells:
             if cell_id not in checker_results_by_cid:
                 continue
             cell = cells().from_id(cell_id)
             if cell.get_max_used_live_symbol_cell_counter(
                 checker_results_by_cid[cell_id].live, filter_to_reactive=True
             ) > max(cell.cell_ctr, nbs_.min_timestamp):
-                forced_reactive_cells.add(cell_id)
-    stale_links: Dict[CellId, Set[CellId]] = defaultdict(set)
-    refresher_links: Dict[CellId, Set[CellId]] = defaultdict(set)
-    eligible_refresher_for_dag = fresh_cells | stale_cells
-    for stale_cell_id in stale_cells:
+                result.forced_reactive_cells.add(cell_id)
+    eligible_refresher_for_dag = result.fresh_cells | result.stale_cells
+    for stale_cell_id in result.stale_cells:
         refresher_cell_ids: Set[CellId] = set()
         if nbs_.mut_settings.flow_order == ExecutionSchedule.DAG_BASED:
             if nbs_.mut_settings.dynamic_slicing_enabled:
@@ -248,35 +250,25 @@ def compute_frontend_cell_metadata(
             }
         if last_executed_cell_id is not None:
             refresher_cell_ids.discard(last_executed_cell_id)
-        stale_links[stale_cell_id] = refresher_cell_ids
+        result.stale_links[stale_cell_id] = refresher_cell_ids
     stale_link_changes = True
     # transitive closure up until we hit non-stale refresher cells
     while stale_link_changes:
         stale_link_changes = False
-        for stale_cell_id in stale_cells:
-            new_stale_links = set(stale_links[stale_cell_id])
+        for stale_cell_id in result.stale_cells:
+            new_stale_links = set(result.stale_links[stale_cell_id])
             original_length = len(new_stale_links)
-            for refresher_cell_id in stale_links[stale_cell_id]:
-                if refresher_cell_id not in stale_cells:
+            for refresher_cell_id in result.stale_links[stale_cell_id]:
+                if refresher_cell_id not in result.stale_cells:
                     continue
-                new_stale_links |= stale_links[refresher_cell_id]
+                new_stale_links |= result.stale_links[refresher_cell_id]
             new_stale_links.discard(stale_cell_id)
             stale_link_changes = stale_link_changes or original_length != len(
                 new_stale_links
             )
-            stale_links[stale_cell_id] = new_stale_links
-    for stale_cell_id in stale_cells:
-        stale_links[stale_cell_id] -= stale_cells
-        for refresher_cell_id in stale_links[stale_cell_id]:
-            refresher_links[refresher_cell_id].add(stale_cell_id)
-    return FrontendCheckerResult(
-        # TODO: we should probably have separate fields for stale vs non-typechecking cells,
-        #  or at least change the name to a more general "unsafe_cells" or equivalent
-        stale_cells=stale_cells | typecheck_error_cells | unsafe_order_cells,
-        fresh_cells=fresh_cells,
-        new_fresh_cells=new_fresh_cells,
-        forced_reactive_cells=forced_reactive_cells,
-        stale_links=stale_links,
-        refresher_links=refresher_links,
-        phantom_cell_info=phantom_cell_info,
-    )
+            result.stale_links[stale_cell_id] = new_stale_links
+    for stale_cell_id in result.stale_cells:
+        result.stale_links[stale_cell_id] -= result.stale_cells
+        for refresher_cell_id in result.stale_links[stale_cell_id]:
+            result.refresher_links[refresher_cell_id].add(stale_cell_id)
+    return result

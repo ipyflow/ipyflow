@@ -255,15 +255,7 @@ class NotebookSafety(singletons.NotebookSafety):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
         if SafetyTracer not in singletons.kernel().registered_tracers:
-            return FrontendCheckerResult(
-                stale_cells=set(),
-                fresh_cells=set(),
-                new_fresh_cells=set(),
-                forced_reactive_cells=set(),
-                stale_links={},
-                refresher_links={},
-                phantom_cell_info={},
-            )
+            return FrontendCheckerResult.empty()
         for tracer in singletons.kernel().registered_tracers:
             # force initialization here in case not already inited
             tracer.instance()

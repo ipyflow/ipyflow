@@ -9,9 +9,6 @@ from nbsafety.singletons import nbs
 from nbsafety.types import CellId
 
 
-break_ = object()
-
-
 class FrontendCheckerResult(NamedTuple):
     stale_cells: Set[CellId]
     fresh_cells: Set[CellId]
@@ -209,14 +206,14 @@ class FrontendCheckerResult(NamedTuple):
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
-    ) -> Tuple[Optional[CheckerResult], Optional[object]]:
+    ) -> Optional[CheckerResult]:
         nbs_ = nbs()
         try:
             checker_result = cell.check_and_resolve_symbols(
                 update_liveness_time_versions=update_liveness_time_versions
             )
         except SyntaxError:
-            return None, None
+            return None
         cell_id = cell.cell_id
         # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
         #     for live_sym in checker_result.live:
@@ -228,7 +225,7 @@ class FrontendCheckerResult(NamedTuple):
                 last_executed_cell_pos is not None
                 and cell.position <= last_executed_cell_pos
             ):
-                return checker_result, None
+                return checker_result
         if nbs_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
             stale_symbols = {
                 sym.dsym
@@ -256,10 +253,7 @@ class FrontendCheckerResult(NamedTuple):
             self.fresh_cells.add(cell_id)
         if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
             self.new_fresh_cells.add(cell_id)
-        if is_fresh and nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
-            return checker_result, break_
-        else:
-            return checker_result, None
+        return checker_result
 
     def _get_last_executed_pos_and_handle_reactive_tags(
         self,
@@ -279,6 +273,7 @@ class FrontendCheckerResult(NamedTuple):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> "FrontendCheckerResult":
+        nbs_ = nbs()
         stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
@@ -290,7 +285,7 @@ class FrontendCheckerResult(NamedTuple):
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
         for cell in cells_to_check:
-            checker_result, control = self._check_one_cell(
+            checker_result = self._check_one_cell(
                 cell,
                 update_liveness_time_versions,
                 last_executed_cell_pos,
@@ -300,7 +295,12 @@ class FrontendCheckerResult(NamedTuple):
             )
             if checker_result is not None:
                 checker_results_by_cid[cell.cell_id] = checker_result
-            if control is break_:
+            if (
+                nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
+                and cell.is_fresh
+            ):
+                # in the case of strict scheduling, don't bother checking
+                # anything else once we get to the first fresh cell
                 break
 
         self._compute_dag_based_staleness(cells_to_check)

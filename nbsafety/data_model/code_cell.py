@@ -107,6 +107,10 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         if ctr > 0:
             self._used_cell_counters_by_live_symbol[sym].add(ctr)
 
+    @property
+    def is_fresh(self) -> bool:
+        return self._fresh
+
     def set_fresh(self, new_fresh: bool) -> bool:
         old_fresh = self._fresh
         self._fresh = new_fresh

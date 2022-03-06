@@ -154,6 +154,18 @@ def _check_one_cell(
         return checker_result, None
 
 
+def _get_last_executed_pos_and_handle_reactive_tags(
+    last_executed_cell_id: Optional[CellId], result: FrontendCheckerResult
+) -> Optional[int]:
+    if last_executed_cell_id is None:
+        return None
+    last_executed_cell = cells().from_id(last_executed_cell_id)
+    for tag in last_executed_cell.tags:
+        for reactive_cell_id in cells().get_reactive_ids_for_tag(tag):
+            result.forced_reactive_cells.add(reactive_cell_id)
+    return last_executed_cell.position
+
+
 def compute_frontend_cell_metadata(
     cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
     update_liveness_time_versions: bool = False,
@@ -165,15 +177,9 @@ def compute_frontend_cell_metadata(
     killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
     checker_results_by_cid: Dict[CellId, CheckerResult] = {}
-    if last_executed_cell_id is None:
-        last_executed_cell = None
-        last_executed_cell_pos = None
-    else:
-        last_executed_cell = cells().from_id(last_executed_cell_id)
-        last_executed_cell_pos = last_executed_cell.position
-        for tag in last_executed_cell.tags:
-            for reactive_cell_id in cells().get_reactive_ids_for_tag(tag):
-                result.forced_reactive_cells.add(reactive_cell_id)
+    last_executed_cell_pos = _get_last_executed_pos_and_handle_reactive_tags(
+        last_executed_cell_id, result
+    )
     if cells_to_check is None:
         cells_to_check = cells().all_cells_most_recently_run_for_each_id()
     cells_to_check = sorted(cells_to_check, key=lambda c: c.position)

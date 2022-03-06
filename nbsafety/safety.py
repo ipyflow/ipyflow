@@ -22,7 +22,7 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
 from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.frontend import compute_frontend_cell_metadata, FrontendCheckerResult
+from nbsafety.frontend import FrontendCheckerResult
 from nbsafety.line_magics import make_line_magic
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
 from nbsafety import singletons
@@ -254,12 +254,13 @@ class NotebookSafety(singletons.NotebookSafety):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
+        result = FrontendCheckerResult.empty()
         if SafetyTracer not in singletons.kernel().registered_tracers:
-            return FrontendCheckerResult.empty()
+            return result
         for tracer in singletons.kernel().registered_tracers:
             # force initialization here in case not already inited
             tracer.instance()
-        return compute_frontend_cell_metadata(
+        return result.compute_frontend_checker_result(
             cells_to_check=cells_to_check,
             update_liveness_time_versions=update_liveness_time_versions,
             last_executed_cell_id=last_executed_cell_id,

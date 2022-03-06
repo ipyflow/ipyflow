@@ -2,7 +2,7 @@
 from collections import defaultdict
 from typing import Any, Dict, Iterable, NamedTuple, Optional, Set
 
-from nbsafety.data_model.code_cell import cells, ExecutedCodeCell
+from nbsafety.data_model.code_cell import cells, CheckerResult, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
 from nbsafety.singletons import kernel, nbs
@@ -34,6 +34,99 @@ class FrontendCheckerResult(NamedTuple):
                 for cell_id, linked_cell_ids in self.refresher_links.items()
             },
         }
+
+
+break_ = object()
+
+
+def _check_one_cell(
+    cell: ExecutedCodeCell,
+    update_liveness_time_versions: bool,
+    last_executed_cell_pos: int,
+    checker_results_by_cid: Dict[CellId, CheckerResult],
+    stale_cells: Set[CellId],
+    fresh_cells: Set[CellId],
+    new_fresh_cells: Set[CellId],
+    typecheck_error_cells: Set[CellId],
+    stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
+    killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
+    phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
+):
+    nbs_ = nbs()
+    try:
+        checker_result = cell.check_and_resolve_symbols(
+            update_liveness_time_versions=update_liveness_time_versions
+        )
+    except SyntaxError:
+        return
+    cell_id = cell.cell_id
+    checker_results_by_cid[cell_id] = checker_result
+    # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
+    #     for live_sym in checker_result.live:
+    #         if cells().from_timestamp(live_sym.timestamp).position > cell.position:
+    #             unsafe_order_cells.add(cell_id)
+    #             break
+    if nbs_.mut_settings.flow_order == FlowOrder.IN_ORDER:
+        if (
+            last_executed_cell_pos is not None
+            and cell.position <= last_executed_cell_pos
+        ):
+            return
+    if nbs_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
+        stale_symbols = {
+            sym.dsym
+            for sym in checker_result.live
+            if sym.is_stale_at_position(cell.position)
+        }
+    else:
+        stale_symbols = set()
+    if len(stale_symbols) > 0:
+        stale_symbols_by_cell_id[cell_id] = stale_symbols
+        stale_cells.add(cell_id)
+    if not checker_result.typechecks:
+        typecheck_error_cells.add(cell_id)
+    for dead_sym in checker_result.dead:
+        killing_cell_ids_for_symbol[dead_sym].add(cell_id)
+
+    is_fresh = cell_id not in stale_cells
+    if nbs_.settings.mark_phantom_cell_usages_unsafe:
+        phantom_cell_info_for_cell = cell.compute_phantom_cell_info(
+            checker_result.used_cells
+        )
+        if len(phantom_cell_info_for_cell) > 0:
+            phantom_cell_info[cell_id] = phantom_cell_info_for_cell
+    if nbs_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
+        is_fresh = False
+        flow_order = nbs_.mut_settings.flow_order
+        if nbs_.mut_settings.dynamic_slicing_enabled:
+            for par in cell.dynamic_parents:
+                if flow_order == flow_order.IN_ORDER and par.position >= cell.position:
+                    continue
+                if par.cell_ctr > max(cell.cell_ctr, nbs_.min_timestamp):
+                    is_fresh = True
+                    break
+        if not is_fresh and nbs_.mut_settings.static_slicing_enabled:
+            for par in cell.static_parents:
+                if flow_order == flow_order.IN_ORDER and par.position >= cell.position:
+                    continue
+                if par.cell_ctr > max(cell.cell_ctr, nbs_.min_timestamp):
+                    is_fresh = True
+                    break
+    else:
+        is_fresh = is_fresh and (
+            cell.get_max_used_live_symbol_cell_counter(checker_result.live)
+            > max(cell.cell_ctr, nbs_.min_timestamp)
+        )
+    if nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
+        for dead_sym in checker_result.dead:
+            if dead_sym.timestamp.cell_num > max(cell.cell_ctr, nbs_.min_timestamp):
+                is_fresh = True
+    if is_fresh:
+        fresh_cells.add(cell_id)
+    if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
+        new_fresh_cells.add(cell_id)
+    if is_fresh and nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
+        return break_
 
 
 def compute_frontend_cell_metadata(
@@ -78,86 +171,24 @@ def compute_frontend_cell_metadata(
         cells_to_check = cells().all_cells_most_recently_run_for_each_id()
     cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
     for cell in cells_to_check:
-        try:
-            checker_result = cell.check_and_resolve_symbols(
-                update_liveness_time_versions=update_liveness_time_versions
+        if (
+            _check_one_cell(
+                cell,
+                update_liveness_time_versions,
+                last_executed_cell_pos,
+                checker_results_by_cid,
+                stale_cells,
+                fresh_cells,
+                new_fresh_cells,
+                typecheck_error_cells,
+                stale_symbols_by_cell_id,
+                killing_cell_ids_for_symbol,
+                phantom_cell_info,
             )
-        except SyntaxError:
-            continue
-        cell_id = cell.cell_id
-        checker_results_by_cid[cell_id] = checker_result
-        # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
-        #     for live_sym in checker_result.live:
-        #         if cells().from_timestamp(live_sym.timestamp).position > cell.position:
-        #             unsafe_order_cells.add(cell_id)
-        #             break
-        if nbs_.mut_settings.flow_order == FlowOrder.IN_ORDER:
-            if (
-                last_executed_cell_pos is not None
-                and cell.position <= last_executed_cell_pos
-            ):
-                continue
-        if nbs_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
-            stale_symbols = {
-                sym.dsym
-                for sym in checker_result.live
-                if sym.is_stale_at_position(cell.position)
-            }
-        else:
-            stale_symbols = set()
-        if len(stale_symbols) > 0:
-            stale_symbols_by_cell_id[cell_id] = stale_symbols
-            stale_cells.add(cell_id)
-        if not checker_result.typechecks:
-            typecheck_error_cells.add(cell_id)
-        for dead_sym in checker_result.dead:
-            killing_cell_ids_for_symbol[dead_sym].add(cell_id)
-
-        is_fresh = cell_id not in stale_cells
-        if nbs_.settings.mark_phantom_cell_usages_unsafe:
-            phantom_cell_info_for_cell = cell.compute_phantom_cell_info(
-                checker_result.used_cells
-            )
-            if len(phantom_cell_info_for_cell) > 0:
-                phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-        if nbs_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
-            is_fresh = False
-            flow_order = nbs_.mut_settings.flow_order
-            if nbs_.mut_settings.dynamic_slicing_enabled:
-                for par in cell.dynamic_parents:
-                    if (
-                        flow_order == flow_order.IN_ORDER
-                        and par.position >= cell.position
-                    ):
-                        continue
-                    if par.cell_ctr > max(cell.cell_ctr, nbs_.min_timestamp):
-                        is_fresh = True
-                        break
-            if not is_fresh and nbs_.mut_settings.static_slicing_enabled:
-                for par in cell.static_parents:
-                    if (
-                        flow_order == flow_order.IN_ORDER
-                        and par.position >= cell.position
-                    ):
-                        continue
-                    if par.cell_ctr > max(cell.cell_ctr, nbs_.min_timestamp):
-                        is_fresh = True
-                        break
-        else:
-            is_fresh = is_fresh and (
-                cell.get_max_used_live_symbol_cell_counter(checker_result.live)
-                > max(cell.cell_ctr, nbs_.min_timestamp)
-            )
-        if nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
-            for dead_sym in checker_result.dead:
-                if dead_sym.timestamp.cell_num > max(cell.cell_ctr, nbs_.min_timestamp):
-                    is_fresh = True
-        if is_fresh:
-            fresh_cells.add(cell_id)
-        if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
-            new_fresh_cells.add(cell_id)
-        if is_fresh and nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
+            is break_
+        ):
             break
+
     if nbs_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
         prev_stale_cells: Set[CellId] = set()
         while True:

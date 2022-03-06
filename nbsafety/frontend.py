@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 from collections import defaultdict
-from typing import Any, Dict, Iterable, NamedTuple, Optional, Set
+from typing import Any, Dict, Iterable, NamedTuple, Optional, Set, Tuple
 
 from nbsafety.data_model.code_cell import cells, CheckerResult, ExecutedCodeCell
 from nbsafety.data_model.data_symbol import DataSymbol
@@ -58,59 +58,12 @@ class FrontendCheckerResult(NamedTuple):
 break_ = object()
 
 
-def _check_one_cell(
-    cell: ExecutedCodeCell,
-    result: FrontendCheckerResult,
-    update_liveness_time_versions: bool,
-    last_executed_cell_pos: int,
-    checker_results_by_cid: Dict[CellId, CheckerResult],
-    stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
-    killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
-    phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
-):
+def _compute_is_fresh(
+    cell: ExecutedCodeCell, result: FrontendCheckerResult, checker_result: CheckerResult
+) -> bool:
     nbs_ = nbs()
-    try:
-        checker_result = cell.check_and_resolve_symbols(
-            update_liveness_time_versions=update_liveness_time_versions
-        )
-    except SyntaxError:
-        return
     cell_id = cell.cell_id
-    checker_results_by_cid[cell_id] = checker_result
-    # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
-    #     for live_sym in checker_result.live:
-    #         if cells().from_timestamp(live_sym.timestamp).position > cell.position:
-    #             unsafe_order_cells.add(cell_id)
-    #             break
-    if nbs_.mut_settings.flow_order == FlowOrder.IN_ORDER:
-        if (
-            last_executed_cell_pos is not None
-            and cell.position <= last_executed_cell_pos
-        ):
-            return
-    if nbs_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
-        stale_symbols = {
-            sym.dsym
-            for sym in checker_result.live
-            if sym.is_stale_at_position(cell.position)
-        }
-    else:
-        stale_symbols = set()
-    if len(stale_symbols) > 0:
-        stale_symbols_by_cell_id[cell_id] = stale_symbols
-        result.stale_cells.add(cell_id)
-    if not checker_result.typechecks:
-        result.typecheck_error_cells.add(cell_id)
-    for dead_sym in checker_result.dead:
-        killing_cell_ids_for_symbol[dead_sym].add(cell_id)
-
     is_fresh = cell_id not in result.stale_cells
-    if nbs_.settings.mark_phantom_cell_usages_unsafe:
-        phantom_cell_info_for_cell = cell.compute_phantom_cell_info(
-            checker_result.used_cells
-        )
-        if len(phantom_cell_info_for_cell) > 0:
-            phantom_cell_info[cell_id] = phantom_cell_info_for_cell
     if nbs_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
         is_fresh = False
         flow_order = nbs_.mut_settings.flow_order
@@ -137,12 +90,68 @@ def _check_one_cell(
         for dead_sym in checker_result.dead:
             if dead_sym.timestamp.cell_num > max(cell.cell_ctr, nbs_.min_timestamp):
                 is_fresh = True
+    return is_fresh
+
+
+def _check_one_cell(
+    cell: ExecutedCodeCell,
+    result: FrontendCheckerResult,
+    update_liveness_time_versions: bool,
+    last_executed_cell_pos: int,
+    stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
+    killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
+    phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
+) -> Tuple[Optional[CheckerResult], Optional[object]]:
+    nbs_ = nbs()
+    try:
+        checker_result = cell.check_and_resolve_symbols(
+            update_liveness_time_versions=update_liveness_time_versions
+        )
+    except SyntaxError:
+        return None, None
+    cell_id = cell.cell_id
+    # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
+    #     for live_sym in checker_result.live:
+    #         if cells().from_timestamp(live_sym.timestamp).position > cell.position:
+    #             unsafe_order_cells.add(cell_id)
+    #             break
+    if nbs_.mut_settings.flow_order == FlowOrder.IN_ORDER:
+        if (
+            last_executed_cell_pos is not None
+            and cell.position <= last_executed_cell_pos
+        ):
+            return checker_result, None
+    if nbs_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
+        stale_symbols = {
+            sym.dsym
+            for sym in checker_result.live
+            if sym.is_stale_at_position(cell.position)
+        }
+    else:
+        stale_symbols = set()
+    if len(stale_symbols) > 0:
+        stale_symbols_by_cell_id[cell_id] = stale_symbols
+        result.stale_cells.add(cell_id)
+    if not checker_result.typechecks:
+        result.typecheck_error_cells.add(cell_id)
+    for dead_sym in checker_result.dead:
+        killing_cell_ids_for_symbol[dead_sym].add(cell_id)
+
+    if nbs_.settings.mark_phantom_cell_usages_unsafe:
+        phantom_cell_info_for_cell = cell.compute_phantom_cell_info(
+            checker_result.used_cells
+        )
+        if len(phantom_cell_info_for_cell) > 0:
+            phantom_cell_info[cell_id] = phantom_cell_info_for_cell
+    is_fresh = _compute_is_fresh(cell, result, checker_result)
     if is_fresh:
         result.fresh_cells.add(cell_id)
     if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
         result.new_fresh_cells.add(cell_id)
     if is_fresh and nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
-        return break_
+        return checker_result, break_
+    else:
+        return checker_result, None
 
 
 def compute_frontend_cell_metadata(
@@ -150,13 +159,8 @@ def compute_frontend_cell_metadata(
     update_liveness_time_versions: bool = False,
     last_executed_cell_id: Optional[CellId] = None,
 ) -> FrontendCheckerResult:
-    result = FrontendCheckerResult.empty()
-    if SafetyTracer not in kernel().registered_tracers:
-        return result
     nbs_ = nbs()
-    for tracer in kernel().registered_tracers:
-        # force initialization here in case not already inited
-        tracer.instance()
+    result = FrontendCheckerResult.empty()
     stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
     killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
@@ -174,19 +178,18 @@ def compute_frontend_cell_metadata(
         cells_to_check = cells().all_cells_most_recently_run_for_each_id()
     cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
     for cell in cells_to_check:
-        if (
-            _check_one_cell(
-                cell,
-                result,
-                update_liveness_time_versions,
-                last_executed_cell_pos,
-                checker_results_by_cid,
-                stale_symbols_by_cell_id,
-                killing_cell_ids_for_symbol,
-                phantom_cell_info,
-            )
-            is break_
-        ):
+        checker_result, control = _check_one_cell(
+            cell,
+            result,
+            update_liveness_time_versions,
+            last_executed_cell_pos,
+            stale_symbols_by_cell_id,
+            killing_cell_ids_for_symbol,
+            phantom_cell_info,
+        )
+        if checker_result is not None:
+            checker_results_by_cid[cell.cell_id] = checker_result
+        if control is break_:
             break
 
     if nbs_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:

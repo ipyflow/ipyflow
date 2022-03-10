@@ -12,6 +12,7 @@ from typing import (
     Dict,
     FrozenSet,
     Generator,
+    List,
     NamedTuple,
     Optional,
     Set,
@@ -28,9 +29,9 @@ from nbsafety.analysis.live_refs import (
 )
 from nbsafety.analysis.slicing import CodeCellSlicingMixin
 from nbsafety.data_model.timestamp import Timestamp
-from nbsafety.ipython_utils import cell_counter as ipy_cell_counter
+from nbsafety.ipython_utils import CapturedIO, cell_counter as ipy_cell_counter
 from nbsafety.run_mode import FlowOrder
-from nbsafety.singletons import nbs
+from nbsafety.singletons import kernel, nbs
 from nbsafety.types import CellId, TimestampOrCounter
 
 if TYPE_CHECKING:
@@ -69,7 +70,9 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     ) -> None:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
+        self.history: List[int] = [cell_ctr]
         self.content: str = content
+        self.captured_output: Optional[CapturedIO] = None
         self.tags: Tuple[str, ...] = tags
         self.reactive_tags: Set[str] = set()
         self._dynamic_parents: Set[CellId] = set()
@@ -192,6 +195,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         prev_cell = cls.from_id(cell_id)
         cell = cls(cell_id, cell_ctr, content, tags)
         if prev_cell is not None:
+            cell.history = prev_cell.history + cell.history
             cell._dynamic_children = prev_cell._dynamic_children
             cell._static_children = prev_cell._static_children
             for tag in prev_cell.tags:
@@ -201,9 +205,8 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         for tag in tags:
             cls._cells_by_tag[tag].add(cell)
         cls._cell_by_cell_ctr[cell_ctr] = cell
-        cur_cell = cls._current_cell_by_cell_id.get(cell_id, None)
-        cur_cell_ctr = None if cur_cell is None else cur_cell.cell_ctr
-        if cur_cell_ctr is None or cell_ctr > cur_cell_ctr:
+        prev_cell_ctr = None if prev_cell is None else prev_cell.cell_ctr
+        if prev_cell_ctr is None or cell_ctr > prev_cell_ctr:
             cls._current_cell_by_cell_id[cell_id] = cell
         return cell
 
@@ -265,7 +268,11 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             # TODO: how to do this?
             if _NB_MAGIC_PATTERN.search(line.strip()) is None:
                 lines.append(line)
-        return "\n".join(lines)
+        content = "\n".join(lines)
+        syntax_augmenters = kernel().make_syntax_augmenters()
+        for aug in syntax_augmenters:
+            content = aug(content)
+        return content
 
     def to_ast(self, override: Optional[ast.Module] = None) -> ast.Module:
         if override is not None:

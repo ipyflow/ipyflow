@@ -15,7 +15,7 @@ class FrontendCheckerResult(NamedTuple):
     new_fresh_cells: Set[CellId]
     forced_reactive_cells: Set[CellId]
     typecheck_error_cells: Set[CellId]
-    # unsafe_order_cells: Set[CellId]
+    unsafe_order_cells: Dict[CellId, Set[ExecutedCodeCell]]
     stale_links: Dict[CellId, Set[CellId]]
     refresher_links: Dict[CellId, Set[CellId]]
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
@@ -28,7 +28,7 @@ class FrontendCheckerResult(NamedTuple):
             new_fresh_cells=set(),
             forced_reactive_cells=set(),
             typecheck_error_cells=set(),
-            # unsafe_order_cells=set(),
+            unsafe_order_cells=defaultdict(set),
             stale_links=defaultdict(set),
             refresher_links=defaultdict(set),
             phantom_cell_info={},
@@ -38,7 +38,6 @@ class FrontendCheckerResult(NamedTuple):
         return {
             # TODO: we should probably have separate fields for stale vs non-typechecking cells,
             #  or at least change the name to a more general "unsafe_cells" or equivalent
-            # "stale_cells": list(self.stale_cells | self.typecheck_error_cells | self.unsafe_order_cells),
             "stale_cells": list(self.stale_cells | self.typecheck_error_cells),
             "fresh_cells": list(self.fresh_cells),
             "new_fresh_cells": list(self.new_fresh_cells),
@@ -215,11 +214,14 @@ class FrontendCheckerResult(NamedTuple):
         except SyntaxError:
             return None
         cell_id = cell.cell_id
-        # if self.mut_settings.flow_order == FlowOrder.IN_ORDER:
-        #     for live_sym in checker_result.live:
-        #         if cells().from_timestamp(live_sym.timestamp).position > cell.position:
-        #             unsafe_order_cells.add(cell_id)
-        #             break
+        if (
+            nbs_.mut_settings.flow_order == FlowOrder.IN_ORDER
+            or nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
+        ):
+            for live_sym in checker_result.live:
+                updated_cell = cells().from_timestamp(live_sym.timestamp)
+                if updated_cell.position > cell.position:
+                    self.unsafe_order_cells[cell_id].add(updated_cell)
         if nbs_.mut_settings.flow_order == FlowOrder.IN_ORDER:
             if (
                 last_executed_cell_pos is not None

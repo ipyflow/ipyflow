@@ -104,7 +104,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[CellId] = None
-        self.safety_issue_detected = False
+        self.stale_usage_detected = False
+        self.out_of_order_usage_detected_counter: Optional[int] = None
         if cell_magic_name is None:
             self._cell_magic = None
         else:
@@ -116,6 +117,8 @@ class NotebookSafety(singletons.NotebookSafety):
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
         self._tags: Tuple[str, ...] = ()
+        self.last_executed_content: Optional[str] = None
+        self.last_executed_cell_id: Optional[CellId] = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -272,7 +275,12 @@ class NotebookSafety(singletons.NotebookSafety):
             update_liveness_time_versions=self.mut_settings.static_slicing_enabled,
         )
         if cell.cell_id in checker_result.stale_cells:
-            self.safety_issue_detected = True
+            self.stale_usage_detected = True
+        unsafe_order_cells = checker_result.unsafe_order_cells.get(cell.cell_id, None)
+        if unsafe_order_cells is not None:
+            self.out_of_order_usage_detected_counter = max(
+                (cell.position, cell.cell_ctr) for cell in unsafe_order_cells
+            )[1]
 
     def _resync_symbols(self, symbols: Iterable[DataSymbol]):
         for dsym in symbols:
@@ -317,9 +325,14 @@ class NotebookSafety(singletons.NotebookSafety):
         for alias_set in self.aliases.values():
             yield from alias_set
 
-    def test_and_clear_detected_flag(self):
-        ret = self.safety_issue_detected
-        self.safety_issue_detected = False
+    def test_and_clear_stale_usage_detected(self):
+        ret = self.stale_usage_detected
+        self.stale_usage_detected = False
+        return ret
+
+    def test_and_clear_out_of_order_usage_detected_counter(self):
+        ret = self.out_of_order_usage_detected_counter
+        self.out_of_order_usage_detected_counter = None
         return ret
 
     def gc(self):

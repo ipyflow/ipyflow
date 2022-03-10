@@ -3,7 +3,7 @@ import asyncio
 import inspect
 import logging
 from contextlib import contextmanager
-from typing import Callable, List, Generator, NamedTuple, Type
+from typing import Callable, List, Generator, NamedTuple, Optional, Type
 
 import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
@@ -13,6 +13,7 @@ from nbsafety import singletons
 from nbsafety.data_model.code_cell import cells
 from nbsafety.ipython_utils import (
     ast_transformer_context,
+    capture_output_tee,
     input_transformer_context,
     run_cell,
     save_number_of_currently_executing_cell,
@@ -43,7 +44,7 @@ class SafeKernelHooks:
     def before_enter_tracing_context(self) -> None:
         ...
 
-    def before_execute(self, cell_content: str) -> None:
+    def before_execute(self, cell_content: str) -> Optional[str]:
         ...
 
     def after_execute(self, cell_content: str) -> None:
@@ -53,6 +54,18 @@ class SafeKernelHooks:
         ...
 
 
+class OutputRecorder(pyc.BaseTracer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        with self.persistent_fields():
+            self.capture_output_tee = capture_output_tee()
+        self.capture_output = None
+
+    @pyc.register_raw_handler(pyc.init_module)
+    def init_module(self, *_, **__):
+        self.capture_output = self.capture_output_tee.__enter__()
+
+
 class PyccoloKernelMixin(SafeKernelHooks):
     def __init__(self, **kwargs):
         self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
@@ -60,7 +73,11 @@ class PyccoloKernelMixin(SafeKernelHooks):
         )
         super().__init__(**kwargs)
 
-        self.registered_tracers: List[Type[pyc.BaseTracer]] = [SafetyTracer]
+        self.tee_output_tracer = OutputRecorder.instance()
+        self.registered_tracers: List[Type[pyc.BaseTracer]] = [
+            OutputRecorder,
+            SafetyTracer,
+        ]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
 
@@ -171,6 +188,24 @@ class PyccoloKernelMixin(SafeKernelHooks):
             pyc.BaseTracer.exec = orig_tracer_exec
             pyc.BaseTracer.eval = orig_tracer_eval
 
+    def make_syntax_augmenters(
+        self,
+        tracers: Optional[List[pyc.BaseTracer]] = None,
+        ast_rewriter: Optional[pyc.AstRewriter] = None,
+    ) -> List[Callable]:
+        tracers = (
+            [tracer.instance() for tracer in self.registered_tracers]
+            if tracers is None
+            else tracers
+        )
+        if len(tracers) == 0:
+            return []
+        ast_rewriter = ast_rewriter or tracers[-1].make_ast_rewriter()
+        all_syntax_augmenters = []
+        for tracer in tracers:
+            all_syntax_augmenters.extend(tracer.make_syntax_augmenters(ast_rewriter))
+        return all_syntax_augmenters
+
     @contextmanager
     def _tracing_context(self):
         self.before_enter_tracing_context()
@@ -201,11 +236,9 @@ class PyccoloKernelMixin(SafeKernelHooks):
                 ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
                     module_id=self.cell_counter()
                 )
-                all_syntax_augmenters = []
-                for tracer in all_tracers:
-                    all_syntax_augmenters.extend(
-                        tracer.make_syntax_augmenters(ast_rewriter)
-                    )
+                all_syntax_augmenters = self.make_syntax_augmenters(
+                    tracers=all_tracers, ast_rewriter=ast_rewriter
+                )
                 with input_transformer_context(all_syntax_augmenters):
                     with ast_transformer_context([ast_rewriter]):
                         with self._patch_pyccolo_exec_eval():
@@ -223,7 +256,9 @@ class PyccoloKernelMixin(SafeKernelHooks):
         ret = None
         with save_number_of_currently_executing_cell():
             # Stage 1: Run pre-execute hook
-            self.before_execute(cell_content)
+            maybe_new_content = self.before_execute(cell_content)
+            if maybe_new_content is not None:
+                cell_content = maybe_new_content
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
@@ -235,8 +270,11 @@ class PyccoloKernelMixin(SafeKernelHooks):
                 # Stage 3:  Run post-execute hook
                 self.after_execute(cell_content)
             except Exception as e:
+                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
+                logger.exception("exception occurred")
                 self.on_exception(e)
             finally:
+                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
                 return ret
 
     @classmethod
@@ -336,7 +374,7 @@ class SafeKernelMixin(singletons.SafeKernel, PyccoloKernelMixin):
         nbs_.updated_reactive_symbols.clear()
         nbs_.updated_deep_reactive_symbols.clear()
 
-    def before_execute(self, cell_content: str) -> None:
+    def before_execute(self, cell_content: str) -> Optional[str]:
         nbs_ = singletons.nbs()
         if nbs_._saved_debug_message is not None:  # pragma: no cover
             logger.error(nbs_._saved_debug_message)
@@ -351,13 +389,49 @@ class SafeKernelMixin(singletons.SafeKernel, PyccoloKernelMixin):
             validate_ipython_counter=self.settings.store_history,
         )
 
+        last_content, nbs_.last_executed_content = (
+            nbs_.last_executed_content,
+            cell_content,
+        )
+        last_cell_id, nbs_.last_executed_cell_id = nbs_.last_executed_cell_id, cell_id
+
         # Stage 1: Precheck.
         if SafetyTracer in self.registered_tracers:
             nbs_._safety_precheck_cell(cell)
 
-    def after_execute(self, cell_content: str) -> None:
+            used_out_of_order_counter = nbs_.out_of_order_usage_detected_counter
+            if used_out_of_order_counter is not None and (cell_id, cell_content) != (
+                last_cell_id,
+                last_content,
+            ):
+                logger.warning(
+                    "detected out of order usage of cell [%d]; showing previous output if any (run again to ignore force execution)",
+                    used_out_of_order_counter,
+                )
+                return "pass"
+            else:
+                nbs_.test_and_clear_out_of_order_usage_detected_counter()
+        return None
+
+    def _handle_output(self):
+        prev_cell = None
+        cell = cells().current_cell()
+        if len(cell.history) >= 2:
+            prev_cell = cells().from_timestamp(cell.history[-2])
+        if (
+            singletons.nbs().test_and_clear_out_of_order_usage_detected_counter()
+            and prev_cell is not None
+            and prev_cell.captured_output is not None
+        ):
+            prev_cell.captured_output.show()
+        if prev_cell is not None:
+            prev_cell.captured_output = None
+        cell.captured_output = self.tee_output_tracer.capture_output
+
+    def after_execute(self, cell_content):
+        self._handle_output()
         # resync any defined symbols that could have gotten out-of-sync
-        #  due to tracing being disabled
+        # due to tracing being disabled
         nbs_ = singletons.nbs()
         nbs_._resync_symbols(
             [

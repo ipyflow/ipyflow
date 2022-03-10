@@ -428,6 +428,7 @@ const connectToComm = (
       cellPendingExecution = null;
       const exec_mode = msg.content.data['exec_mode'] as string;
       const flow_order = msg.content.data['flow_order'];
+      const exec_schedule = msg.content.data['exec_schedule'];
       lastExecutionMode = exec_mode;
       lastExecutionHighlightsEnabled = msg.content.data['highlights_enabled'] as boolean;
       executedReactiveFreshCells.add(msg.content.data['last_executed_cell_id'] as string);
@@ -441,7 +442,7 @@ const connectToComm = (
           if (cellPendingExecution === null) {
             cellPendingExecution = codeCell;
             // break early if using one of the order-based semantics
-            found = (flow_order === 'in_order' || flow_order === 'strict');
+            found = (flow_order === 'in_order' || exec_schedule === 'strict');
           } else if (codeCell.model.executionCount !== null && codeCell.model.executionCount < cellPendingExecution.model.executionCount) {
             // otherwise, execute in order of earliest execution counter
             cellPendingExecution = codeCell;

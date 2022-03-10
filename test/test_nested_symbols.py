@@ -16,7 +16,7 @@ run_cell = run_cell_
 
 
 def stale_detected():
-    return nbs().test_and_clear_detected_flag()
+    return nbs().test_and_clear_stale_usage_detected()
 
 
 def assert_detected(msg=""):

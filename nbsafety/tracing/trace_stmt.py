@@ -2,7 +2,7 @@
 import ast
 import logging
 from types import FrameType
-from typing import List, Optional, Set, Union
+from typing import cast, List, Optional, Set, Union
 
 import nbsafety.tracing.mutation_event as me
 from nbsafety.analysis.symbol_edges import get_symbol_edges
@@ -14,6 +14,12 @@ from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 from nbsafety.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
+
+
+try:
+    import pandas
+except ImportError:
+    pandas = None
 
 
 logger = logging.getLogger(__name__)
@@ -127,20 +133,29 @@ class TraceStatement:
             # if nbs().is_test:
             #     raise ke
             return
-        upserted = scope.upsert_data_symbol_for_name(
-            name,
-            obj,
-            deps - excluded_deps,
-            self.stmt_node,
-            is_subscript=is_subscript,
-        )
+        subscript_vals_to_use = [is_subscript]
+        if pandas is not None and scope.is_namespace_scope:
+            namespace = cast(Namespace, scope)
+            if (
+                isinstance(namespace.obj, pandas.DataFrame)
+                and name in namespace.obj.columns
+            ):
+                subscript_vals_to_use.append(not is_subscript)
+        for subscript_val in subscript_vals_to_use:
+            upserted = scope.upsert_data_symbol_for_name(
+                name,
+                obj,
+                deps - excluded_deps,
+                self.stmt_node,
+                is_subscript=subscript_val,
+            )
+            logger.info(
+                "sym %s upserted to scope %s has parents %s",
+                upserted,
+                scope,
+                upserted.parents,
+            )
         self._handle_reactive_store(target)
-        logger.info(
-            "sym %s upserted to scope %s has parents %s",
-            upserted,
-            scope,
-            upserted.parents,
-        )
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = nbs().namespaces.get(id(obj), None)
             if namespace_for_upsert is not None and namespace_for_upsert.is_anonymous:

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import logging
 from collections import defaultdict
 from typing import Any, Dict, List, Iterable, NamedTuple, Optional, Set, Tuple
 
@@ -7,6 +8,9 @@ from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
 from nbsafety.singletons import nbs
 from nbsafety.types import CellId
+
+
+logger = logging.getLogger(__name__)
 
 
 class FrontendCheckerResult(NamedTuple):
@@ -219,7 +223,7 @@ class FrontendCheckerResult(NamedTuple):
             or nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
         ):
             for live_sym in checker_result.live:
-                if live_sym.timestamp.cell_num <= 0:
+                if not live_sym.is_deep or not live_sym.timestamp.is_initialized:
                     continue
                 updated_cell = cells().from_timestamp(live_sym.timestamp)
                 if updated_cell.position > cell.position:

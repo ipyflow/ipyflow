@@ -219,6 +219,8 @@ class FrontendCheckerResult(NamedTuple):
             or nbs_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
         ):
             for live_sym in checker_result.live:
+                if live_sym.timestamp.cell_num <= 0:
+                    continue
                 updated_cell = cells().from_timestamp(live_sym.timestamp)
                 if updated_cell.position > cell.position:
                     self.unsafe_order_cells[cell_id].add(updated_cell)

@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.85 (2022-03-17)
+-------------------
+* Fixes for pyccolo 0.0.22 breaking changes;
+* Add out-of-order warnings for strict / in_order semantics;
+* Misc js security fixes;
+
 0.0.84 (2022-03-02)
 -------------------
 * Skip static checking when dataflow tracing not enabled;

@@ -94,9 +94,13 @@ class DataSymbol:
         # initialize at -1 for implicit since the corresponding piece of data could already be around,
         # and we don't want liveness checker to think this was newly created unless we
         # explicitly trace an update somewhere
-        self._timestamp: Timestamp = Timestamp.uninitialized() if implicit else Timestamp.current()
+        self._timestamp: Timestamp = (
+            Timestamp.uninitialized() if implicit else Timestamp.current()
+        )
         # we need this to ensure we always use the latest version even for things like tuple unpack
-        self._last_refreshed_timestamp = Timestamp.uninitialized() if implicit else Timestamp.current()
+        self._last_refreshed_timestamp = (
+            Timestamp.uninitialized() if implicit else Timestamp.current()
+        )
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()

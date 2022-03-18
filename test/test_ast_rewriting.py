@@ -4,6 +4,7 @@ import textwrap
 
 from pyccolo.expr_rewriter import ExprRewriter
 from pyccolo.trace_events import TraceEvent
+from nbsafety.singletons import tracer
 from nbsafety.utils import KeyDict
 
 
@@ -28,6 +29,6 @@ def test_ast_rewrite():
     No asserts; just make sure we don't throw an error.
     """
     rewriter = ExprRewriter(
-        KeyDict(), {event: (lambda nd: True) for event in TraceEvent}, set()
+        [tracer()], KeyDict(), {event: (lambda nd: True) for event in TraceEvent}, {}
     )
     assert rewriter.visit(ast.parse(PROGRAM)) is not None

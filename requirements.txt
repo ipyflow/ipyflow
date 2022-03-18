@@ -7,5 +7,5 @@ jupyterlab>=3.0
 mypy
 nbclassic>=0.2.8
 nest_asyncio
-pyccolo>=0.0.20
+pyccolo>=0.0.21
 traitlets

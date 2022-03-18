@@ -5,6 +5,7 @@ History
 -------------------
 * Fixes for pyccolo 0.0.22 breaking changes;
 * Add out-of-order warnings for strict / in_order semantics;
+* Upsert both df["col"] and df.col for pandas dataframes;
 * Misc js security fixes;
 
 0.0.84 (2022-03-02)

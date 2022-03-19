@@ -34,7 +34,7 @@ class PyccoloKernelSettings(NamedTuple):
     store_history: bool
 
 
-class SafeKernelHooks:
+class PyccoloKernelHooks:
     def after_init_class(self) -> None:
         ...
 
@@ -66,7 +66,7 @@ class OutputRecorder(pyc.BaseTracer):
         self.capture_output = self.capture_output_tee.__enter__()
 
 
-class PyccoloKernelMixin(SafeKernelHooks):
+class PyccoloKernelMixin(PyccoloKernelHooks):
     def __init__(self, **kwargs):
         self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
             store_history=kwargs.pop("store_history", True)
@@ -351,7 +351,7 @@ class PyccoloKernelMixin(SafeKernelHooks):
         return ZMQKernel
 
 
-class SafeKernelMixin(singletons.SafeKernel, PyccoloKernelMixin):
+class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
     def after_init_class(self) -> None:
         NotebookSafety.instance(use_comm=True)
 
@@ -449,4 +449,4 @@ class SafeKernelMixin(singletons.SafeKernel, PyccoloKernelMixin):
             nbs_.set_exception_raised_during_execution(e)
 
 
-SafeKernel = SafeKernelMixin.make_zmq_kernel_class("SafeKernel")
+SafeKernel = SafeKernelBase.make_zmq_kernel_class("SafeKernel")

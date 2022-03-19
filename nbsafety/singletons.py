@@ -5,7 +5,7 @@ import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
-    from nbsafety.kernel.kernel import SafeKernelMixin as SafeKernelInstance
+    from nbsafety.kernel.kernel import SafeKernelBase as SafeKernelInstance
     from nbsafety.safety import NotebookSafety as NotebookSafetyInstance
     from nbsafety.tracing.nbsafety_tracer import SafetyTracer as TracerInstance
 

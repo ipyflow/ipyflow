@@ -184,7 +184,7 @@ class Scope:
         name: SupportedIndexType,
         obj: Any,
         deps: Iterable[DataSymbol],
-        stmt_node: ast.AST,
+        stmt_node: ast.stmt,
         overwrite: bool = True,
         is_subscript: bool = False,
         is_function_def: bool = False,
@@ -228,7 +228,7 @@ class Scope:
         obj: Any,
         deps: Set[DataSymbol],
         symbol_type: DataSymbolType,
-        stmt_node: ast.AST,
+        stmt_node: ast.stmt,
         implicit: bool = False,
     ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[Any]]:
         prev_obj = None

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 from typing import cast, TYPE_CHECKING, Optional
+from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.run_mode import ExecutionMode
 from nbsafety.singletons import nbs
 from nbsafety.tracing.mutation_event import resolve_mutating_method
@@ -28,7 +29,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         self.next_atom = next_atom
         self.liveness_timestamp = liveness_timestamp
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(
             (
                 self.dsym,
@@ -39,19 +40,19 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         )
 
     @property
-    def timestamp(self):
+    def timestamp(self) -> Timestamp:
         return self.dsym.timestamp
 
     @property
-    def is_called(self):
+    def is_called(self) -> bool:
         return self.atom.is_callpoint
 
     @property
-    def is_last(self):
+    def is_last(self) -> bool:
         return self.next_atom is None
 
     @property
-    def is_reactive(self):
+    def is_reactive(self) -> bool:
         if self.is_blocking:
             return False
         return self.atom.is_reactive or (
@@ -59,7 +60,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         )
 
     @property
-    def is_blocking(self):
+    def is_blocking(self) -> bool:
         return self.atom.is_blocking or (
             self.is_live
             and nbs().blocked_reactive_timestamps_by_symbol.get(self.dsym, -1)
@@ -67,11 +68,11 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         )
 
     @property
-    def is_dead(self):
+    def is_dead(self) -> bool:
         return self.liveness_timestamp is None
 
     @property
-    def is_live(self):
+    def is_live(self) -> bool:
         return not self.is_dead
 
     @property
@@ -143,5 +144,5 @@ class ResolvedDataSymbol(CommonEqualityMixin):
             return True
         return False
 
-    def is_stale_at_position(self, pos: int):
+    def is_stale_at_position(self, pos: int) -> bool:
         return self.dsym.is_stale_at_position(pos, deep=self.is_deep)

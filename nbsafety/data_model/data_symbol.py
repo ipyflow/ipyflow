@@ -5,7 +5,18 @@ from collections import defaultdict
 from enum import Enum
 import logging
 import sys
-from typing import cast, TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
+from typing import (
+    cast,
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+)
 
 try:
     import numpy
@@ -63,11 +74,11 @@ class DataSymbol:
         symbol_type: DataSymbolType,
         obj: Any,
         containing_scope: "Scope",
-        stmt_node: Optional[ast.AST] = None,
+        stmt_node: Optional[ast.stmt] = None,
         # TODO: also keep a reference to the target node?
         refresh_cached_obj: bool = False,
         implicit: bool = False,
-    ):
+    ) -> None:
         if refresh_cached_obj:
             # TODO: clean up redundancies
             assert implicit
@@ -155,14 +166,14 @@ class DataSymbol:
     def __str__(self) -> str:
         return self.readable_name
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.full_path)
 
-    def temporary_disable_warnings(self):
+    def temporary_disable_warnings(self) -> None:
         self._temp_disable_warnings = True
 
     @property
-    def last_used_timestamp(self):
+    def last_used_timestamp(self) -> Timestamp:
         if len(self.timestamp_by_used_time) == 0:
             return Timestamp.uninitialized()
         else:
@@ -174,7 +185,7 @@ class DataSymbol:
         return set() if ns is None else ns.namespace_stale_symbols
 
     @property
-    def timestamp_excluding_ns_descendents(self):
+    def timestamp_excluding_ns_descendents(self) -> Timestamp:
         return self._timestamp
 
     @property
@@ -196,19 +207,19 @@ class DataSymbol:
         return self.containing_scope.make_namespace_qualified_name(self)
 
     @property
-    def is_subscript(self):
+    def is_subscript(self) -> bool:
         return self.symbol_type == DataSymbolType.SUBSCRIPT
 
     @property
-    def is_class(self):
+    def is_class(self) -> bool:
         return self.symbol_type == DataSymbolType.CLASS
 
     @property
-    def is_function(self):
+    def is_function(self) -> bool:
         return self.symbol_type == DataSymbolType.FUNCTION
 
     @property
-    def is_import(self):
+    def is_import(self) -> bool:
         return self.symbol_type == DataSymbolType.IMPORT
 
     @property
@@ -284,22 +295,24 @@ class DataSymbol:
             )
 
     @property
-    def is_anonymous(self):
+    def is_anonymous(self) -> bool:
         return self.symbol_type == DataSymbolType.ANONYMOUS
 
     @property
-    def is_implicit(self):
+    def is_implicit(self) -> bool:
         return self._implicit
 
-    def shallow_clone(self, new_obj, new_containing_scope, symbol_type):
+    def shallow_clone(
+        self, new_obj: Any, new_containing_scope: "Scope", symbol_type: DataSymbolType
+    ) -> "DataSymbol":
         return self.__class__(self.name, symbol_type, new_obj, new_containing_scope)
 
     @property
-    def obj_id(self):
+    def obj_id(self) -> int:
         return id(self.obj)
 
     @property
-    def obj_type(self):
+    def obj_type(self) -> Type[Any]:
         return type(self.obj)
 
     def get_type_annotation(self):
@@ -309,7 +322,7 @@ class DataSymbol:
         return make_annotation_string(self.get_type_annotation())
 
     @property
-    def namespace(self):
+    def namespace(self) -> Optional["Namespace"]:
         return nbs().namespaces.get(self.obj_id, None)
 
     @property
@@ -320,18 +333,18 @@ class DataSymbol:
             return None
 
     @property
-    def full_path(self):
-        return self.containing_scope.full_path + (self.name,)
+    def full_path(self) -> Tuple[str, ...]:
+        return self.containing_scope.full_path + (str(self.name),)
 
     @property
-    def full_namespace_path(self):
+    def full_namespace_path(self) -> str:
         return self.containing_scope.make_namespace_qualified_name(self)
 
     @property
-    def is_garbage(self):
+    def is_garbage(self) -> bool:
         return self._tombstone
 
-    def is_new_garbage(self):
+    def is_new_garbage(self) -> bool:
         if self._tombstone:
             return False
         if (
@@ -345,11 +358,11 @@ class DataSymbol:
         return self.get_ref_count() == 0
 
     @property
-    def is_globally_accessible(self):
+    def is_globally_accessible(self) -> bool:
         return self.containing_scope.is_globally_accessible
 
     @property
-    def is_user_accessible(self):
+    def is_user_accessible(self) -> bool:
         return (
             self.is_globally_accessible
             and not self.is_anonymous
@@ -359,7 +372,7 @@ class DataSymbol:
             )
         )
 
-    def collect_self_garbage(self):
+    def collect_self_garbage(self) -> None:
         """
         Just null out the reference to obj; we need to keep the edges
         and namespace relationships around for staleness propagation.
@@ -384,7 +397,7 @@ class DataSymbol:
     #     else:
     #         self.call_scope = None
 
-    def update_obj_ref(self, obj, refresh_cached=True):
+    def update_obj_ref(self, obj: Any, refresh_cached: bool = True) -> None:
         logger.info("%s update obj ref to %s", self, obj)
         self._tombstone = False
         self._cached_out_of_sync = True
@@ -419,12 +432,12 @@ class DataSymbol:
         if refresh_cached:
             self._refresh_cached_obj()
 
-    def invalidate_cached(self):
+    def invalidate_cached(self) -> None:
         self._cached_out_of_sync = True
         self.cached_obj_id = None
         self.cached_obj_type = None
 
-    def get_ref_count(self):
+    def get_ref_count(self) -> int:
         if self.obj is None or self.obj is DataSymbol.NULL:
             return -1
         total = sys.getrefcount(self.obj) - 1
@@ -472,7 +485,7 @@ class DataSymbol:
                 del nbs().aliases[self.cached_obj_id]
         nbs().aliases[self.obj_id].add(self)
 
-    def update_stmt_node(self, stmt_node):
+    def update_stmt_node(self, stmt_node: Optional[ast.stmt]) -> Optional[ast.stmt]:
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
         if self.is_function:
@@ -483,7 +496,7 @@ class DataSymbol:
             self.call_scope = self.containing_scope.make_child_scope(self.name)
         return stmt_node
 
-    def _refresh_cached_obj(self):
+    def _refresh_cached_obj(self) -> None:
         self._cached_out_of_sync = False
         # don't keep an actual ref to avoid bumping prefcount
         self.cached_obj_id = self.obj_id
@@ -502,13 +515,15 @@ class DataSymbol:
             args.append(self.stmt_node.args.kwarg.arg)
         return args
 
-    def _match_call_args_with_definition_args(self):
+    def _match_call_args_with_definition_args(
+        self,
+    ) -> Generator[Tuple[str, List["DataSymbol"]], None, None]:
         assert self.is_function and isinstance(
             self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
         )
         caller_node = self._get_calling_ast_node()
         if caller_node is None or not isinstance(caller_node, ast.Call):
-            return []
+            return
         def_args = self.stmt_node.args.args
         if len(self.stmt_node.args.defaults) > 0:
             def_args = def_args[: -len(self.stmt_node.args.defaults)]
@@ -523,18 +538,18 @@ class DataSymbol:
             yield def_arg.arg, tracer().resolve_loaded_symbols(call_arg)
         seen_keys = set()
         for keyword in caller_node.keywords:
-            key, value = keyword.arg, keyword.value
-            if value is None:
+            keyword_key, keyword_value = keyword.arg, keyword.value
+            if keyword_value is None:
                 continue
-            seen_keys.add(key)
-            yield key, tracer().resolve_loaded_symbols(value)
-        for key, value in zip(
+            seen_keys.add(keyword_key)
+            yield keyword_key, tracer().resolve_loaded_symbols(keyword_value)
+        for arg_key, arg_value in zip(
             self.stmt_node.args.args[-len(self.stmt_node.args.defaults) :],
             self.stmt_node.args.defaults,
         ):
-            if key.arg in seen_keys:
+            if arg_key.arg in seen_keys:
                 continue
-            yield key.arg, tracer().resolve_loaded_symbols(value)
+            yield arg_key.arg, tracer().resolve_loaded_symbols(arg_value)
 
     def _get_calling_ast_node(self) -> Optional[ast.AST]:
         if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -579,7 +594,7 @@ class DataSymbol:
             )
 
     @property
-    def is_stale(self):
+    def is_stale(self) -> bool:
         if self.disable_warnings or self._temp_disable_warnings:
             return False
         if self.staleness_timestamp < self.required_timestamp.cell_num:
@@ -591,7 +606,7 @@ class DataSymbol:
             return any(sym.is_stale for sym in self.namespace_stale_symbols)
 
     @property
-    def is_shallow_stale(self):
+    def is_shallow_stale(self) -> bool:
         if self.disable_warnings or self._temp_disable_warnings:
             return False
         return self.staleness_timestamp < self.required_timestamp.cell_num
@@ -753,11 +768,11 @@ class DataSymbol:
 
     def refresh(
         self,
-        bump_version=True,
-        refresh_descendent_namespaces=False,
-        refresh_namespace_stale=True,
+        bump_version: bool = True,
+        refresh_descendent_namespaces: bool = False,
+        refresh_namespace_stale: bool = True,
         timestamp: Optional[Timestamp] = None,
-        seen: Set["DataSymbol"] = None,
+        seen: Optional[Set["DataSymbol"]] = None,
     ) -> None:
         self._last_refreshed_timestamp = Timestamp.current()
         self._temp_disable_warnings = False

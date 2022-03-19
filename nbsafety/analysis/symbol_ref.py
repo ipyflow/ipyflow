@@ -84,7 +84,7 @@ class Atom(CommonEqualityMixin):
         is_subscript: bool = False,
         is_reactive: bool = False,
         is_blocking: bool = False,
-    ):
+    ) -> None:
         self.value = value
         self.is_callpoint = is_callpoint
         self.is_subscript = is_subscript
@@ -116,7 +116,7 @@ class Atom(CommonEqualityMixin):
             is_blocking=True,
         )
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(
             (
                 self.value,
@@ -127,11 +127,11 @@ class Atom(CommonEqualityMixin):
             )
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(str(self))
 
-    def __str__(self):
-        return self.value + ("(...)" if self.is_callpoint else "")
+    def __str__(self) -> str:
+        return str(self.value) + ("(...)" if self.is_callpoint else "")
 
 
 class SymbolRefVisitor(ast.NodeVisitor):
@@ -173,35 +173,20 @@ class SymbolRefVisitor(ast.NodeVisitor):
             )
         )
 
-    def visit_Call(self, node):
+    def visit_Call(self, node: ast.Call) -> None:
         if isinstance(node.func, ast.Attribute):
             self._append_atom(node.func, node.func.attr, is_callpoint=True)
             self.visit(node.func.value)
         elif isinstance(node.func, ast.Subscript):
-            if isinstance(node.func.slice, ast.Constant):
-                self.symbol_chain.append(
-                    Atom(str(node.func.slice.value), is_callpoint=True)
-                )
-            elif isinstance(node.func.slice, ast.Index) and isinstance(
-                node.func.slice.value, (ast.Str, ast.Num)
+            if isinstance(node.func.slice, ast.Constant) or (
+                isinstance(node.func.slice, ast.Index)
+                and isinstance(node.func.slice.value, (ast.Str, ast.Num))  # type: ignore
             ):
-                if isinstance(node.func.slice.value, ast.Str):
-                    self.symbol_chain.append(
-                        Atom(
-                            node.func.slice.value.s,
-                            is_callpoint=True,
-                            is_subscript=True,
-                        )
-                    )
-                else:
-                    self.symbol_chain.append(
-                        Atom(
-                            str(node.func.slice.value.n),
-                            is_callpoint=True,
-                            is_subscript=True,
-                        )
-                    )
-                self.visit(node.func.value)
+                sliceval = resolve_slice_to_constant(node.func)
+                self.symbol_chain.append(
+                    Atom(str(sliceval), is_callpoint=True, is_subscript=True)
+                )
+            self.visit(node.func.value)
         elif isinstance(node.func, ast.Name):
             self.visit(node.func)
             self.symbol_chain[-1].is_callpoint = True
@@ -242,7 +227,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self._append_atom(node, node.name)
 
-    def generic_visit(self, node):
+    def generic_visit(self, node) -> None:
         # raise ValueError('we should never get here: %s' % node)
         # give up
         return
@@ -251,7 +236,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
 class SymbolRef(CommonEqualityMixin):
     _cached_symbol_ref_visitor = SymbolRefVisitor()
 
-    def __init__(self, symbols: Union[ast.AST, Atom, Sequence[Atom]]):
+    def __init__(self, symbols: Union[ast.AST, Atom, Sequence[Atom]]) -> None:
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
         if isinstance(
@@ -273,13 +258,13 @@ class SymbolRef(CommonEqualityMixin):
             symbols = [symbols]
         self.chain: Tuple[Atom, ...] = tuple(symbols)
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.chain)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return repr(self.chain)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return repr(self)
 
     def nonreactive(self) -> "SymbolRef":
@@ -337,7 +322,7 @@ class LiveSymbolRef(CommonEqualityMixin):
         self.ref = ref
         self.timestamp = timestamp
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash((self.ref, self.timestamp))
 
     def gen_resolved_symbols(

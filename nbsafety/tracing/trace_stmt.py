@@ -10,6 +10,7 @@ from nbsafety.analysis.symbol_ref import SymbolRef
 from nbsafety.analysis.utils import stmt_contains_lval
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.data_model.namespace import Namespace
+from nbsafety.data_model.scope import Scope
 from nbsafety.data_model.timestamp import Timestamp
 from nbsafety.singletons import nbs, tracer
 from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
@@ -27,7 +28,7 @@ logger.setLevel(logging.WARNING)
 
 
 class TraceStatement:
-    def __init__(self, frame: FrameType, stmt_node: ast.stmt):
+    def __init__(self, frame: FrameType, stmt_node: ast.stmt) -> None:
         self.frame: FrameType = frame
         self.stmt_node = stmt_node
         self.class_scope: Optional[Namespace] = None
@@ -35,21 +36,21 @@ class TraceStatement:
         self.node_id_for_last_call: Optional[int] = None
 
     @property
-    def lineno(self):
+    def lineno(self) -> int:
         return self.stmt_node.lineno
 
     @property
-    def finished(self):
+    def finished(self) -> bool:
         return self.stmt_id in tracer().seen_stmts
 
     @property
-    def stmt_id(self):
+    def stmt_id(self) -> int:
         return id(self.stmt_node)
 
-    def _contains_lval(self):
+    def _contains_lval(self) -> bool:
         return stmt_contains_lval(self.stmt_node)
 
-    def get_post_call_scope(self):
+    def get_post_call_scope(self) -> Scope:
         old_scope = tracer().cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
@@ -111,7 +112,7 @@ class TraceStatement:
         self,
         target: ast.AST,
         deps: Set[DataSymbol],
-        maybe_fixup_literal_namespace=False,
+        maybe_fixup_literal_namespace: bool = False,
     ) -> None:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
@@ -164,7 +165,7 @@ class TraceStatement:
 
     def _handle_store_target_tuple_unpack_from_deps(
         self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]
-    ):
+    ) -> None:
         for inner_target in target.elts:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
                 self._handle_store_target_tuple_unpack_from_deps(inner_target, deps)
@@ -173,7 +174,7 @@ class TraceStatement:
 
     def _handle_starred_store_target(
         self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]
-    ):
+    ) -> None:
         try:
             scope, name, obj, is_subscript, _ = tracer().resolve_store_data_for_target(
                 target, self.frame
@@ -202,7 +203,7 @@ class TraceStatement:
 
     def _handle_store_target_tuple_unpack_from_namespace(
         self, target: Union[ast.List, ast.Tuple], rhs_namespace: Namespace
-    ):
+    ) -> None:
         saved_starred_node: Optional[ast.Starred] = None
         saved_starred_deps = []
         for (i, inner_dep), (
@@ -238,7 +239,7 @@ class TraceStatement:
 
     def _handle_store_target(
         self, target: ast.AST, value: ast.AST, skip_namespace_check: bool = False
-    ):
+    ) -> None:
         if isinstance(target, (ast.List, ast.Tuple)):
             rhs_namespace = (
                 None
@@ -262,7 +263,7 @@ class TraceStatement:
                 maybe_fixup_literal_namespace=True,
             )
 
-    def _handle_store(self, node: Union[ast.Assign, ast.For]):
+    def _handle_store(self, node: Union[ast.Assign, ast.For]) -> None:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 self._handle_store_target(target, node.value)
@@ -271,7 +272,7 @@ class TraceStatement:
         else:  # pragma: no cover
             raise TypeError("node type not supported for node: %s" % ast.dump(node))
 
-    def _handle_delete(self):
+    def _handle_delete(self) -> None:
         assert isinstance(self.stmt_node, ast.Delete)
         for target in self.stmt_node.targets:
             try:
@@ -284,13 +285,13 @@ class TraceStatement:
                 # logger.info("got key error while trying to handle %s: %s", ast.dump(self.stmt_node), e)
                 logger.info("got key error: %s", e)
 
-    def _make_lval_data_symbols(self):
+    def _make_lval_data_symbols(self) -> None:
         if isinstance(self.stmt_node, (ast.Assign, ast.For)):
             self._handle_store(self.stmt_node)
         else:
             self._make_lval_data_symbols_old()
 
-    def _make_lval_data_symbols_old(self):
+    def _make_lval_data_symbols_old(self) -> None:
         symbol_edges = get_symbol_edges(self.stmt_node)
         should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
         is_function_def = isinstance(
@@ -307,7 +308,7 @@ class TraceStatement:
             logger.info("create edges from %s to %s", rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None
-                class_ref = self.frame.f_locals[self.stmt_node.name]
+                class_ref = self.frame.f_locals[cast(ast.ClassDef, self.stmt_node).name]
                 self.class_scope.obj = class_ref
                 nbs().namespaces[id(class_ref)] = self.class_scope
             try:
@@ -356,7 +357,7 @@ class TraceStatement:
         mutation_event: me.MutationEvent,
         mutated_obj_id: int,
         mutation_upsert_deps: Set[DataSymbol],
-    ):
+    ) -> None:
         namespace_scope = nbs().namespaces.get(mutated_obj_id, None)
         mutated_sym = nbs().get_first_full_symbol(mutated_obj_id)
         if mutated_sym is None:
@@ -422,7 +423,7 @@ class TraceStatement:
             ):
                 namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
 
-    def handle_dependencies(self):
+    def handle_dependencies(self) -> None:
         for (
             mutated_obj_id,
             mutation_event,
@@ -481,7 +482,7 @@ class TraceStatement:
             # make sure usage timestamps get bumped
             resolve_rval_symbols(self.stmt_node)
 
-    def finished_execution_hook(self):
+    def finished_execution_hook(self) -> None:
         if self.finished:
             return
         tracer().seen_stmts.add(self.stmt_id)

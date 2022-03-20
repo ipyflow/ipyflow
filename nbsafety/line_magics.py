@@ -183,7 +183,7 @@ def show_stale(line_: str) -> Optional[str]:
     if not stale_set:
         return "No symbol has stale dependencies for now!"
     else:
-        return "Symbol(s) with stale dependencies are: %s" % stale_set
+        return "Symbol(s) with stale dependencies: %s" % stale_set
 
 
 def trace_messages(line_: str) -> None:
@@ -265,7 +265,7 @@ def set_exec_mode(line_: str) -> None:
 
 
 def set_exec_schedule(line_: str) -> None:
-    usage = f"Usage: %safety schedule [{ExecutionSchedule.LIVENESS_BASED}|{ExecutionSchedule.DAG_BASED}|{ExecutionSchedule.STRICT}]"
+    usage = f"Usage: %safety schedule [{'|'.join(schedule.value for schedule in ExecutionSchedule)}]"
     if line_.startswith("liveness"):
         schedule = ExecutionSchedule.LIVENESS_BASED
     elif line_.startswith("dag"):

@@ -246,11 +246,15 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         yield from cls._current_cell_by_cell_id.values()
 
     @classmethod
+    def from_counter(cls, ctr: int) -> "ExecutedCodeCell":
+        return cls._cell_by_cell_ctr[ctr]
+
+    @classmethod
     def from_timestamp(cls, ts: TimestampOrCounter) -> "ExecutedCodeCell":
         if isinstance(ts, Timestamp):
-            return cls._cell_by_cell_ctr[ts.cell_num]
+            return cls.from_counter(ts.cell_num)
         else:
-            return cls._cell_by_cell_ctr[ts]
+            return cls.from_counter(ts)
 
     @classmethod
     def from_id(cls, cell_id: CellId) -> Optional["ExecutedCodeCell"]:

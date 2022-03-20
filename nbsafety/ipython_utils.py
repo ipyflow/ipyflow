@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import logging
 import sys
 from contextlib import contextmanager
 from io import StringIO
@@ -7,6 +8,10 @@ from typing import Callable, List, Optional
 
 from IPython import get_ipython
 from IPython.utils.capture import CapturedIO
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 def _ipython():
@@ -134,7 +139,8 @@ class capture_output_tee:
                 self.save_display_pub = None
                 self.display = False
 
-        stdout = stderr = outputs = None
+        stdout = stderr = None
+        capture_display_pub = None
         if self.stdout:
             stdout = StringIO()
             sys.stdout = Tee(sys.stdout, stdout)
@@ -156,7 +162,11 @@ class capture_output_tee:
                 capture_display_hook,
             )
 
-        return CapturedIO(stdout, stderr, capture_display_pub.outputs)
+        return CapturedIO(
+            stdout,
+            stderr,
+            None if capture_display_pub is None else capture_display_pub.outputs,
+        )
 
     def __exit__(self, exc_type, exc_value, traceback):
         sys.stdout = self.sys_stdout

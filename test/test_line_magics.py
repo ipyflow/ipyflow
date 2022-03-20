@@ -1,16 +1,13 @@
 # -*- coding: utf-8 -*-
-import logging
 import textwrap
 
 from nbsafety.data_model.code_cell import cells
 
-# from nbsafety.line_magics import _USAGE
+from nbsafety.line_magics import _USAGE
 from nbsafety.run_mode import FlowOrder, ExecutionMode, ExecutionSchedule
 from nbsafety.singletons import kernel, nbs
 from nbsafety.tracing.nbsafety_tracer import SafetyTracer
 from test.utils import make_safety_fixture
-
-logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
 _safety_fixture, run_cell_ = make_safety_fixture()
@@ -25,13 +22,12 @@ def run_cell(cell, **kwargs):
     run_cell_(cell, **kwargs)
 
 
-# TODO: capture stderr too?
-# def test_show_usage():
-#     run_cell("%safety not_a_real_subcommand")
-#     cell1 = cells().from_id(1)
-#     assert str(cell1.captured_output).strip() == _USAGE, (
-#         "got %s" % cell1.captured_output
-#     )
+def test_show_usage():
+    run_cell("%safety not_a_real_subcommand")
+    cell1 = cells().from_id(1)
+    assert cell1.captured_output.stderr.strip() == _USAGE.strip(), (
+        "got %s" % cell1.captured_output.stderr
+    )
 
 
 def test_show_deps_show_stale():
@@ -41,26 +37,27 @@ def test_show_deps_show_stale():
     run_cell("%safety show_deps y")
     cell4 = cells().from_id(4)
     assert (
-        str(cell4.captured_output).strip()
+        cell4.captured_output.stdout.strip()
         == "Symbol y (defined cell: 2; last updated cell: 2) is dependent on {<x>} and is a parent of nothing"
     ), ("got %s" % cell4.captured_output)
     run_cell("%safety show_stale")
     cell5 = cells().from_id(5)
     assert (
-        str(cell5.captured_output).strip()
+        cell5.captured_output.stdout.strip()
         == "No symbol has stale dependencies for now!"
     ), ("got %s" % cell5.captured_output)
     run_cell("x = 42")
     run_cell("%safety show_stale")
     cell7 = cells().from_id(7)
     assert (
-        str(cell7.captured_output).strip() == "Symbol(s) with stale dependencies: {<y>}"
+        cell7.captured_output.stdout.strip()
+        == "Symbol(s) with stale dependencies: {<y>}"
     ), ("got %s" % cell7.captured_output)
     run_cell("y = x + 1")
     run_cell("%safety show_stale")
     cell9 = cells().from_id(9)
     assert (
-        str(cell9.captured_output).strip()
+        cell9.captured_output.stdout.strip()
         == "No symbol has stale dependencies for now!"
     ), ("got %s" % cell9.captured_output)
 
@@ -96,7 +93,7 @@ def test_make_slice():
     run_cell("%safety slice 4")
     cell5 = cells().from_id(5)
     assert (
-        str(cell5.captured_output).strip()
+        cell5.captured_output.stdout.strip()
         == textwrap.dedent(
             """
         # Cell 1

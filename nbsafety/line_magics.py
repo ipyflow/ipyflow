@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import shlex
+import sys
 from typing import cast, TYPE_CHECKING, Iterable, Optional, Type
 
 import pyccolo as pyc
@@ -24,10 +25,6 @@ from nbsafety.tracing.symbol_resolver import resolve_rval_symbols
 
 if TYPE_CHECKING:
     from nbsafety.safety import NotebookSafety
-
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.WARNING)
 
 
 _SAFETY_LINE_MAGIC = "safety"
@@ -48,8 +45,14 @@ slice <cell_num>:
       program slicing algorithm."""
 
 
+print_ = print  # to keep the test from failing since this is a legitimate print
+
+
+def warn(*args, **kwargs):
+    print_(*args, file=sys.stderr, **kwargs)
+
+
 def make_line_magic(nbs_: "NotebookSafety"):
-    print_ = print  # to keep the test from failing since this is a legitimate print
     line_magic_names = [
         name for name, val in globals().items() if inspect.isfunction(val)
     ]
@@ -81,12 +84,12 @@ def make_line_magic(nbs_: "NotebookSafety"):
             nbs_.min_timestamp = nbs_.cell_counter()
             return None
         elif cmd in line_magic_names:
-            logger.warning(
-                "We have a magic for %s, but have not yet registered it", cmd
+            warn(
+                f"We have a magic for {cmd}, but have not yet registered it",
             )
             return None
         else:
-            logger.warning(_USAGE)
+            warn(_USAGE)
             return None
 
     def _safety(line: str):
@@ -124,12 +127,12 @@ def make_line_magic(nbs_: "NotebookSafety"):
 def show_deps(symbols: str) -> Optional[str]:
     usage = "Usage: %safety show_[deps|dependencies] <symbol_1>[, <symbol_2> ...]"
     if len(symbols) == 0:
-        logger.warning(usage)
+        warn(usage)
         return None
     try:
         node = cast(ast.Expr, ast.parse(symbols).body[0]).value
     except SyntaxError:
-        logger.warning("Could not find symbol metadata for %s", symbols)
+        warn(f"Could not find symbol metadata for {symbols}")
         return None
     if isinstance(node, ast.Tuple):
         unresolved_symbols = node.elts
@@ -139,9 +142,8 @@ def show_deps(symbols: str) -> Optional[str]:
     for unresolved in unresolved_symbols:
         dsyms = resolve_rval_symbols(unresolved, should_update_usage_info=False)
         if len(dsyms) == 0:
-            logger.warning(
-                "Could not find symbol metadata for %s",
-                astunparse.unparse(unresolved).strip(),
+            warn(
+                f"Could not find symbol metadata for {astunparse.unparse(unresolved).strip()}",
             )
         for dsym in dsyms:
             parents = {par for par in dsym.parents if par.is_user_accessible}
@@ -173,7 +175,7 @@ def show_stale(line_: str) -> Optional[str]:
     elif line[0] == "all":
         dsym_sets = nbs().aliases.values()
     else:
-        logger.warning(usage)
+        warn(usage)
         return None
     stale_set = set()
     for dsym_set in dsym_sets:
@@ -190,7 +192,7 @@ def trace_messages(line_: str) -> None:
     line = line_.split()
     usage = "Usage: %safety trace_messages [enable|disable]"
     if len(line) != 1:
-        logger.warning(usage)
+        warn(usage)
         return
     setting = line[0].lower()
     if setting == "on" or setting.startswith("enable"):
@@ -198,7 +200,7 @@ def trace_messages(line_: str) -> None:
     elif setting == "off" or setting.startswith("disable"):
         nbs().trace_messages_enabled = False
     else:
-        logger.warning(usage)
+        warn(usage)
 
 
 def set_highlights(cmd: str, rest: str) -> None:
@@ -214,7 +216,7 @@ def set_highlights(cmd: str, rest: str) -> None:
         elif rest == "off" or rest.startswith("disable"):
             nbs().mut_settings.highlights_enabled = False
         else:
-            logger.warning(usage)
+            warn(usage)
 
 
 _SLICE_PARSER = argparse.ArgumentParser("slice")
@@ -243,9 +245,9 @@ def make_slice(line: str) -> Optional[str]:
             cells().current_cell().mark_as_reactive_for_tag(tag)
         slice_cells = cells().from_tag(tag)
     if slice_cells is None:
-        logger.warning("Cell(s) have not yet been run")
+        warn("Cell(s) have not yet been run")
     elif len(slice_cells) == 0 and tag is not None:
-        logger.warning("No cell(s) for tag: %s", tag)
+        warn(f"No cell(s) for tag: {tag}")
     else:
         return make_slice_text(
             cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt),
@@ -259,7 +261,7 @@ def set_exec_mode(line_: str) -> None:
     try:
         exec_mode = ExecutionMode(line_.strip())
     except ValueError:
-        logger.warning(usage)
+        warn(usage)
         return
     nbs().mut_settings.exec_mode = exec_mode
 
@@ -272,13 +274,13 @@ def set_exec_schedule(line_: str) -> None:
         schedule = ExecutionSchedule.DAG_BASED
     elif line_.startswith("strict"):
         if nbs().mut_settings.flow_order != FlowOrder.IN_ORDER:
-            logger.warning(
-                "Strict schedule only applicable for forward data flow; skipping"
+            warn(
+                "Strict schedule only applicable for forward data flow; skipping",
             )
             return
         schedule = ExecutionSchedule.STRICT
     else:
-        logger.warning(usage)
+        warn(usage)
         return
     nbs().mut_settings.exec_schedule = schedule
 
@@ -291,7 +293,7 @@ def set_flow_order(line_: str) -> None:
     elif line_.startswith("in") or line_ in ("ordered", "linear"):
         flow_order = FlowOrder.IN_ORDER
     else:
-        logger.warning(usage)
+        warn(usage)
         return
     nbs().mut_settings.flow_order = flow_order
 
@@ -339,7 +341,7 @@ def register_tracer(line_: str) -> None:
     usage = f"Usage: %safety register_tracer <module.path.to.tracer_class>"
     tracer_cls = _resolve_tracer_class(line_)
     if tracer_cls is None:
-        logger.warning(usage)
+        warn(usage)
         return
     _deregister_tracers_for(tracer_cls)
     tracer_cls.instance()
@@ -354,6 +356,6 @@ def deregister_tracer(line_: str) -> None:
     else:
         tracer_cls = _resolve_tracer_class(line_)
         if tracer_cls is None:
-            logger.warning(usage)
+            warn(usage)
             return
         _deregister_tracers_for(tracer_cls)

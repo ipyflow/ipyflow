@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
 from contextlib import contextmanager
+from dataclasses import asdict
 from typing import Dict
 
-from nbsafety.safety import NotebookSafetySettings
+from nbsafety.data_model.code_cell import cells
+from nbsafety.run_mode import FlowOrder
+from nbsafety.safety import NotebookSafetySettings, MutableNotebookSafetySettings
 from nbsafety.singletons import nbs
 from test.utils import make_safety_fixture, skipif_known_failing
 
@@ -17,14 +20,25 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 @contextmanager
 def override_settings(**kwargs):
     old_settings = nbs().settings
+    old_mut_settings = nbs().mut_settings
     new_settings = old_settings._asdict()
-    new_settings.update(kwargs)
+    new_mut_settings = asdict(old_mut_settings)
+    for k, v in kwargs.items():
+        if k in new_settings:
+            new_settings[k] = v
+        elif k in new_mut_settings:
+            new_mut_settings[k] = v
+        else:
+            raise ValueError("key %s not in either settings or mut_settings" % k)
     new_settings = NotebookSafetySettings(**new_settings)
+    new_mut_settings = MutableNotebookSafetySettings(**new_mut_settings)
     try:
         nbs().settings = new_settings
+        nbs().mut_settings = new_mut_settings
         yield
     finally:
         nbs().settings = old_settings
+        nbs().mut_settings = old_mut_settings
 
 
 def run_cell(cell, cell_id, **kwargs):
@@ -484,3 +498,21 @@ def test_adhoc_pandas_series_update():
     response = nbs().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {3}
+
+
+def test_unsafe_order():
+    cells_to_run = {
+        0: "x = 0",
+        1: "y = x + 1",
+    }
+    with override_settings(flow_order=FlowOrder.IN_ORDER):
+        run_all_cells(cells_to_run)
+        assert nbs().out_of_order_usage_detected_counter is None
+        cells().set_cell_positions({0: 0, 1: 1})
+        response = nbs().check_and_link_multiple_cells()
+        assert not response.stale_cells
+        assert not response.fresh_cells
+        assert not response.stale_links
+        assert not response.refresher_links
+        run_cell("x = y + 1", 0)
+        assert nbs().out_of_order_usage_detected_counter == 2

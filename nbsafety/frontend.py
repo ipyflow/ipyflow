@@ -11,6 +11,7 @@ from nbsafety.types import CellId
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class FrontendCheckerResult(NamedTuple):

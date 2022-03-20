@@ -15,6 +15,7 @@ source = ['nbsafety']
 omit = [
     'nbsafety/__init__.py',
     'nbsafety/install.py',
+    'nbsafety/experimental/*',
     'nbsafety/kernel/*',
     'nbsafety/types.py',
     'nbsafety/version.py',

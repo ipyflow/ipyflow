@@ -28,6 +28,7 @@ from nbsafety.tracing.nbsafety_tracer import (
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class PyccoloKernelSettings(NamedTuple):
@@ -376,6 +377,8 @@ class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
 
     def before_execute(self, cell_content: str) -> Optional[str]:
         nbs_ = singletons.nbs()
+        nbs_.test_and_clear_stale_usage_detected()
+        nbs_.test_and_clear_out_of_order_usage_detected_counter()
         if nbs_._saved_debug_message is not None:  # pragma: no cover
             logger.error(nbs_._saved_debug_message)
             nbs_._saved_debug_message = None
@@ -409,8 +412,6 @@ class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
                     used_out_of_order_counter,
                 )
                 return "pass"
-            else:
-                nbs_.test_and_clear_out_of_order_usage_detected_counter()
         return None
 
     def _handle_output(self):
@@ -419,7 +420,7 @@ class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
         if len(cell.history) >= 2:
             prev_cell = cells().from_timestamp(cell.history[-2])
         if (
-            singletons.nbs().test_and_clear_out_of_order_usage_detected_counter()
+            singletons.nbs().out_of_order_usage_detected_counter
             and prev_cell is not None
             and prev_cell.captured_output is not None
         ):

@@ -804,7 +804,7 @@ class DataSymbol:
                     # the stale namespace descendents are no longer stale, as
                     # this is likely the user intention. For an example, see
                     # `test_external_object_update_propagates_to_stale_namespace_symbols()`
-                    # in `test_multicell_precheck.py`
+                    # in `test_frontend_checker.py`
                     if not dsym.is_stale or refresh_namespace_stale:
                         # logger.error(
                         #     "refresh %s due to %s (value %s) via namespace %s",

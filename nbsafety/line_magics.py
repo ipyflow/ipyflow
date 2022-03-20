@@ -2,7 +2,6 @@
 import argparse
 import ast
 import astunparse
-import black
 import inspect
 import json
 import logging
@@ -14,6 +13,7 @@ import pyccolo as pyc
 from IPython import get_ipython
 from IPython.core.magic import register_line_magic
 
+from nbsafety.analysis.slicing import make_slice_text
 from nbsafety.data_model.code_cell import cells
 from nbsafety.data_model.data_symbol import DataSymbol
 from nbsafety.experimental.dag import create_dag_metadata
@@ -247,16 +247,10 @@ def make_slice(line: str) -> Optional[str]:
     elif len(slice_cells) == 0 and tag is not None:
         logger.warning("No cell(s) for tag: %s", tag)
     else:
-        deps = list(
-            cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt).items()
+        return make_slice_text(
+            cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt),
+            blacken=args.stmt or args.blacken,
         )
-        deps.sort()
-        slice_text = "\n\n".join(
-            f"# Cell {cell_num}\n" + content for cell_num, content in deps
-        )
-        if args.stmt or args.blacken:
-            slice_text = black.format_str(slice_text, mode=black.FileMode())
-        return slice_text
     return None
 
 

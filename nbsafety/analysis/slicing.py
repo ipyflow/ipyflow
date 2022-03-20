@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import astunparse
+import black
 import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, List, Set, Type
@@ -131,6 +132,15 @@ def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCount
                         timestamp_to_static_ts_deps,
                     )
     return dependencies
+
+
+def make_slice_text(slice: Dict[int, str], blacken: bool = True) -> str:
+    slice_text = "\n\n".join(
+        f"# Cell {cell_num}\n" + content for cell_num, content in sorted(slice.items())
+    )
+    if blacken:
+        slice_text = black.format_str(slice_text, mode=black.FileMode())
+    return slice_text
 
 
 class CodeCellSlicingMixin:

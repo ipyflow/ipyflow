@@ -55,7 +55,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
     test_context = kwargs.pop("test_context", True)
     setup_cells = [
         "import sys",
-        'sys.path.append("./test")',
+        'sys.path.append("./core/test")',
         "import logging",
     ] + kwargs.pop("setup_cells", [])
     extra_fixture = kwargs.pop("extra_fixture", None)

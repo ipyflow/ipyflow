@@ -13,12 +13,12 @@ if '--coverage' in sys.argv:
     setattr(builtins, '__codecov', cov)
     sys.argv.remove('--coverage')
 
-# need PYTHONPATH="." for this to work
+# need PYTHONPATH="./core" for this to work
 try:
     import test
 except ImportError:
     import sys
-    sys.path.append(".")
+    sys.path.append("./core")
     import test
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@
 .PHONY: clean black blackcheck build deploy check check_no_typing test tests deps devdeps dev typecheck version bump markdown kernel nbext
 
 clean:
-	rm -rf build/ dist/ nbsafety.egg-info/ nbsafety/resources/nbextension nbsafety/resources/labextension
+	rm -rf build/ dist/ nbsafety.egg-info/ core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
 
 build: clean
 	./scripts/build.sh
@@ -28,7 +28,7 @@ blackcheck:
 	./scripts/blacken.sh --check
 
 typecheck:
-	mypy nbsafety
+	./scripts/typecheck.sh
 
 # this is the one used for CI, since sometimes we want to skip typcheck
 check_no_typing:
@@ -60,7 +60,7 @@ dev: devdeps build
 	./scripts/extlink.sh
 
 kernel:
-	python -m nbsafety.install --sys-prefix
+	python -m ipyflow.install --sys-prefix
 
 nbext:
 	./scripts/nbext.sh --sys-prefix

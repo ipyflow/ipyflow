@@ -111,7 +111,8 @@ def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCount
             )
         else:
             timestamp_to_static_ts_deps = _graph_union(
-                timestamp_to_static_ts_deps, _coarsen_timestamps(flow().static_data_deps)
+                timestamp_to_static_ts_deps,
+                _coarsen_timestamps(flow().static_data_deps),
             )
 
     # ensure we at least get the static deps

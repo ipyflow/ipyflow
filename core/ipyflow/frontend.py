@@ -198,7 +198,9 @@ class FrontendCheckerResult(NamedTuple):
             )
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
             for dead_sym in checker_result.dead:
-                if dead_sym.timestamp.cell_num > max(cell.cell_ctr, flow_.min_timestamp):
+                if dead_sym.timestamp.cell_num > max(
+                    cell.cell_ctr, flow_.min_timestamp
+                ):
                     is_fresh = True
         return is_fresh
 

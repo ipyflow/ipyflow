@@ -39,7 +39,9 @@ class Namespace(Scope):
         self.obj = obj
         self.cached_obj_id = id(obj)
         if (
-            obj is not None and not isinstance(obj, int) and id(obj) in flow().namespaces
+            obj is not None
+            and not isinstance(obj, int)
+            and id(obj) in flow().namespaces
         ):  # pragma: no cover
             msg = "namespace already registered for %s" % obj
             if flow().is_develop:

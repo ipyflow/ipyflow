@@ -2,10 +2,7 @@ astunparse
 black
 ipykernel
 ipython<8.0.0
-jupyter
-jupyterlab>=3.0
 mypy
-nbclassic>=0.2.8
 nest_asyncio
 pyccolo>=0.0.21
 traitlets

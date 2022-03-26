@@ -7,12 +7,12 @@ from typing import Any, Tuple
 from IPython import get_ipython
 import pytest
 
-from nbsafety.data_model.code_cell import cells
-from nbsafety.kernel.kernel import SafeKernelBase
-from nbsafety.run_mode import SafetyRunMode
-from nbsafety.safety import NotebookSafety
-from nbsafety.singletons import nbs
-from nbsafety.tracing.nbsafety_tracer import SafetyTracer
+from ipyflow.data_model.code_cell import cells
+from ipyflow.kernel.kernel import SafeKernelBase
+from ipyflow.run_mode import SafetyRunMode
+from ipyflow.safety import NotebookSafety
+from ipyflow.singletons import flow
+from ipyflow.tracing.ipyflow_tracer import SafetyTracer
 
 
 def should_skip_known_failing(reason="this test tests unimpled functionality"):
@@ -36,8 +36,10 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
     def run_cell(code, cell_id=None, ignore_exceptions=False) -> int:
         if cell_id is None:
             cell_id = cells().next_exec_counter()
-        nbs().set_active_cell(cell_id)
-        get_ipython().run_cell_magic(nbs().cell_magic_name, None, textwrap.dedent(code))
+        flow().set_active_cell(cell_id)
+        get_ipython().run_cell_magic(
+            flow().cell_magic_name, None, textwrap.dedent(code)
+        )
         try:
             if not ignore_exceptions and getattr(sys, "last_value", None) is not None:
                 last_tb = getattr(sys, "last_traceback", None)
@@ -75,7 +77,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         # run all at once to prevent exec counter
         # from getting too far ahead
         run_cell("\n".join(setup_cells))
-        nbs().reset_cell_counter()
+        flow().reset_cell_counter()
         # yield to execution of the actual test
         if extra_fixture is not None:
             yield from extra_fixture()
@@ -83,7 +85,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
             yield
         # ensure each test didn't give failures during ast transformation
         SafeKernelBase.instance().cleanup_tracers()
-        exc = nbs().set_exception_raised_during_execution(None)
+        exc = flow().set_exception_raised_during_execution(None)
         if exc is not None:
             raise exc
         get_ipython().reset()  # reset ipython state

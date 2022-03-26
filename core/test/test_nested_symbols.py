@@ -2,8 +2,8 @@
 import logging
 from typing import Optional, Set
 
-from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.singletons import nbs
+from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.singletons import flow
 from test.utils import assert_bool, make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
@@ -16,7 +16,7 @@ run_cell = run_cell_
 
 
 def stale_detected():
-    return nbs().test_and_clear_stale_usage_detected()
+    return flow().test_and_clear_stale_usage_detected()
 
 
 def assert_detected(msg=""):
@@ -28,7 +28,7 @@ def assert_not_detected(msg=""):
 
 
 def lookup_symbols(val) -> Optional[Set[DataSymbol]]:
-    safety = nbs()
+    safety = flow()
     alias_set = {
         alias for alias in safety.aliases.get(id(val), []) if not alias.is_anonymous
     }

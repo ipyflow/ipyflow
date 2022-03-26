@@ -6,11 +6,11 @@ make it into production.
 import ast
 import os
 
-import nbsafety
+import ipyflow
 
 
 join = os.path.join
-root = join(os.curdir, nbsafety.__name__)
+root = join(os.curdir, ipyflow.__name__)
 
 
 _EXCEPTED_FILES = {

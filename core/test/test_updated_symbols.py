@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from nbsafety.singletons import nbs
+from ipyflow.singletons import flow
 from test.utils import make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)
@@ -13,7 +13,7 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 
 def updated_symbol_names():
     return sorted(
-        [sym.readable_name for sym in nbs().updated_symbols if not sym.is_anonymous]
+        [sym.readable_name for sym in flow().updated_symbols if not sym.is_anonymous]
     )
 
 

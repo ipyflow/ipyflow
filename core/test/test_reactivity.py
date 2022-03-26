@@ -3,9 +3,9 @@ import logging
 import sys
 from typing import Optional, Set, Tuple
 
-from nbsafety.data_model.code_cell import cells
-from nbsafety.run_mode import ExecutionMode
-from nbsafety.singletons import nbs
+from ipyflow.data_model.code_cell import cells
+from ipyflow.run_mode import ExecutionMode
+from ipyflow.singletons import flow
 from test.utils import make_safety_fixture
 
 logger = logging.getLogger(__name__)
@@ -19,10 +19,10 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 def run_cell(
     cell_content: str, cell_id: Optional[int] = None, fresh_are_reactive: bool = False
 ) -> Tuple[int, Set[int]]:
-    orig_mode = nbs().mut_settings.exec_mode
+    orig_mode = flow().mut_settings.exec_mode
     try:
         if fresh_are_reactive:
-            nbs().mut_settings.exec_mode = ExecutionMode.REACTIVE
+            flow().mut_settings.exec_mode = ExecutionMode.REACTIVE
         executed_cells = set()
         reactive_cells = set()
         next_content_to_run = cell_content
@@ -34,7 +34,7 @@ def run_cell(
             if len(executed_cells) == 1:
                 cell_id = next(iter(executed_cells))
             next_content_to_run = None
-            checker_result = nbs().check_and_link_multiple_cells()
+            checker_result = flow().check_and_link_multiple_cells()
             if fresh_are_reactive:
                 reactive_cells |= checker_result.new_fresh_cells
             else:
@@ -45,8 +45,8 @@ def run_cell(
                 break
         return cell_id, executed_cells
     finally:
-        nbs().mut_settings.exec_mode = orig_mode
-        nbs().reactivity_cleanup()
+        flow().mut_settings.exec_mode = orig_mode
+        flow().reactivity_cleanup()
 
 
 def run_reactively(

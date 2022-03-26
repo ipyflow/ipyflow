@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 import re
 from typing import List, Set
-from nbsafety.tracing.nbsafety_tracer import reactive_spec
+from ipyflow.tracing.ipyflow_tracer import reactive_spec
 from pyccolo.syntax_augmentation import (
     AugmentationType,
     AugmentationSpec,
     AUGMENTED_SYNTAX_REGEX_TEMPLATE,
     replace_tokens_and_get_augmented_positions,
 )
-from nbsafety.singletons import tracer
+from ipyflow.singletons import tracer
 from .utils import make_safety_fixture
 
 _safety_fixture, run_cell = make_safety_fixture()

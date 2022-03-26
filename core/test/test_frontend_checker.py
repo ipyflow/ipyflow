@@ -4,10 +4,10 @@ from contextlib import contextmanager
 from dataclasses import asdict
 from typing import Dict
 
-from nbsafety.data_model.code_cell import cells
-from nbsafety.run_mode import FlowOrder
-from nbsafety.safety import NotebookSafetySettings, MutableNotebookSafetySettings
-from nbsafety.singletons import nbs
+from ipyflow.data_model.code_cell import cells
+from ipyflow.run_mode import FlowOrder
+from ipyflow.safety import NotebookSafetySettings, MutableNotebookSafetySettings
+from ipyflow.singletons import flow
 from test.utils import make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
@@ -19,8 +19,8 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 
 @contextmanager
 def override_settings(**kwargs):
-    old_settings = nbs().settings
-    old_mut_settings = nbs().mut_settings
+    old_settings = flow().settings
+    old_mut_settings = flow().mut_settings
     new_settings = old_settings._asdict()
     new_mut_settings = asdict(old_mut_settings)
     for k, v in kwargs.items():
@@ -33,12 +33,12 @@ def override_settings(**kwargs):
     new_settings = NotebookSafetySettings(**new_settings)
     new_mut_settings = MutableNotebookSafetySettings(**new_mut_settings)
     try:
-        nbs().settings = new_settings
-        nbs().mut_settings = new_mut_settings
+        flow().settings = new_settings
+        flow().mut_settings = new_mut_settings
         yield
     finally:
-        nbs().settings = old_settings
-        nbs().mut_settings = old_mut_settings
+        flow().settings = old_settings
+        flow().mut_settings = old_mut_settings
 
 
 def run_cell(cell, cell_id, **kwargs):
@@ -63,7 +63,7 @@ def test_simple():
         3: "x = 42",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
     assert response.stale_links == {2: {1}}
@@ -79,7 +79,7 @@ def test_refresh_after_exception_fixed():
     run_cell(cells[0], 0)
     run_cell(cells[2], 2, ignore_exceptions=True)
     run_cell(cells[1], 1)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.fresh_cells == {2}
 
 
@@ -91,7 +91,7 @@ def test_refresh_after_val_changed():
         3: "y = 42",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.fresh_cells == {2}
 
 
@@ -104,7 +104,7 @@ def test_inner_mutation_considered_fresh():
         4: "lst_0.append(42)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2, 3}
 
@@ -143,32 +143,32 @@ def test_update_list_elem():
 
     run_all_cells(cells)
 
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set(), "got %s" % response.fresh_cells
 
     cells[4] = "x.inc()"
     run_cell(cells[4], 4)
 
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set(), "got %s" % response.stale_cells
     assert response.fresh_cells == {2, 3}, "got %s" % response.fresh_cells
 
     cells[5] = "foo.inc()"
     run_cell(cells[5], 5)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set(), "got %s" % response.stale_cells
     assert response.fresh_cells == {2, 3, 4}, "got %s" % response.fresh_cells
 
     if force_subscript_symbol_creation:
         cells[6] = "lst[-1]"
         run_cell(cells[6], 6)
-        response = nbs().check_and_link_multiple_cells()
+        response = flow().check_and_link_multiple_cells()
         assert response.stale_cells == set()
         assert response.fresh_cells == {2, 3, 4}
 
     run_cell(cells[4], 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set(
         [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
@@ -182,7 +182,7 @@ def test_no_freshness_for_alias_assignment_post_mutation():
         2: "x.append(5)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
 
@@ -190,7 +190,7 @@ def test_no_freshness_for_alias_assignment_post_mutation():
 def test_fresh_after_import():
     cells = {0: "x = np.random.random(10)", 1: "import numpy as np"}
     run_all_cells(cells, ignore_exceptions=True)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {0}
 
@@ -207,7 +207,7 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
     }
     with override_settings(mark_stale_symbol_usages_unsafe=False):
         run_all_cells(cells)
-        response = nbs().check_and_link_multiple_cells()
+        response = flow().check_and_link_multiple_cells()
         assert response.stale_cells == set(), "got %s" % response.stale_cells
         assert response.fresh_cells == {2, 4}
 
@@ -220,7 +220,7 @@ def test_symbol_on_both_sides_of_assignment():
         3: "x = 42",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
     assert list(response.refresher_links.keys()) == [1]
@@ -234,20 +234,20 @@ def test_updated_namespace_after_subscript_dep_removed():
         3: "x = 9",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
     cells[1] = "d = {5: 6}"
     run_cell(cells[1], 1)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
     run_cell(cells[2], 2)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell(cells[0], 0)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set(), "got %s" % response.fresh_cells
 
@@ -260,11 +260,11 @@ def test_equal_list_update_does_induce_fresh_cell():
         3: 'y = list("".join(y))',
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
     run_cell('y = ("f",)', 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2, 3}
 
@@ -277,11 +277,11 @@ def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UB
         3: 'y = list("".join(y))',
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
     run_cell('y = ["f"]', 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set(), "got %s" % response.stale_cells
     assert response.fresh_cells == {2, 3}
 
@@ -294,11 +294,11 @@ def test_equal_dict_update_does_induce_fresh_cell():
         3: "y = dict(y.items())",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}, "got %s" % response.fresh_cells
     run_cell('y = {"foo": 99}', 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2, 3}
 
@@ -311,11 +311,11 @@ def test_list_append():
         3: "lst.append(2)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell("lst[1] += 42", 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
 
@@ -328,11 +328,11 @@ def test_list_extend():
         3: "lst.extend([2, 3, 4])",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell("lst[1] += 42", 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
 
@@ -344,7 +344,7 @@ def test_implicit_subscript_symbol_does_not_bump_ts():
         2: "logging.info(lst[0])",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
 
@@ -356,11 +356,11 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
         2: "lst.append(4)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell("lst = [1, 2, 3, 4]", 3)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {1, 2}, "got %s" % response.fresh_cells
 
@@ -374,7 +374,7 @@ def test_incorrect_object_not_used_for_argument_symbols():
         3: "f(np.arange(10))",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set(), "got %s" % response.fresh_cells
 
@@ -386,11 +386,11 @@ def test_increment_by_same_amount():
         2: "logging.info(y)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell("x = 3", 0)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {2}
     assert response.fresh_cells == {1}
 
@@ -409,7 +409,7 @@ def test_list_insert():
         9: "lst.insert(3, 3)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {8}, "got %s" % response.stale_cells
     assert response.fresh_cells == {4, 5, 6, 7}, "got %s" % response.fresh_cells
 
@@ -430,7 +430,7 @@ def _test_list_delete_helper(last_cell):
         11: last_cell,
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == {10}
     # TODO: ideally we would detect that lst[3] is the same after deleting
     #  and not consider cell 4 to be fresh
@@ -458,11 +458,11 @@ def test_list_clear():
         2: "logging.info(lst)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell("lst.clear()", 3)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
 
@@ -474,11 +474,11 @@ def test_dict_clear():
         2: "logging.info(d)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell("d.clear()", 3)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {2}
 
@@ -491,11 +491,11 @@ def test_adhoc_pandas_series_update():
         3: "df.foo.dropna(inplace=True)",
     }
     run_all_cells(cells)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == set()
     run_cell('df["foo"] = [8, 9]', 4)
-    response = nbs().check_and_link_multiple_cells()
+    response = flow().check_and_link_multiple_cells()
     assert response.stale_cells == set()
     assert response.fresh_cells == {3}
 
@@ -507,12 +507,12 @@ def test_unsafe_order():
     }
     with override_settings(flow_order=FlowOrder.IN_ORDER):
         run_all_cells(cells_to_run)
-        assert nbs().out_of_order_usage_detected_counter is None
+        assert flow().out_of_order_usage_detected_counter is None
         cells().set_cell_positions({0: 0, 1: 1})
-        response = nbs().check_and_link_multiple_cells()
+        response = flow().check_and_link_multiple_cells()
         assert not response.stale_cells
         assert not response.fresh_cells
         assert not response.stale_links
         assert not response.refresher_links
         run_cell("x = y + 1", 0)
-        assert nbs().out_of_order_usage_detected_counter == 2
+        assert flow().out_of_order_usage_detected_counter == 2

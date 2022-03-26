@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from nbsafety.data_model.code_cell import cells
+from ipyflow.data_model.code_cell import cells
 from test.utils import make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)

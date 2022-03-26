@@ -8,9 +8,9 @@ from typing import List, Set, Union
 import hypothesis.strategies as st
 from hypothesis import example, given, settings
 
-from nbsafety.safety import NotebookSafety
-from nbsafety.singletons import tracer
-from nbsafety.tracing.nbsafety_tracer import SafetyTracer
+from ipyflow.safety import NotebookSafety
+from ipyflow.singletons import tracer
+from ipyflow.tracing.ipyflow_tracer import SafetyTracer
 from pyccolo import TraceEvent
 from .utils import make_safety_fixture, skipif_known_failing
 

@@ -3,7 +3,7 @@ import ast
 import textwrap
 from typing import Dict
 
-from nbsafety.singletons import tracer
+from ipyflow.singletons import tracer
 from pyccolo.ast_bookkeeping import BookkeepingVisitor
 from pyccolo.stmt_mapper import StatementMapper
 from .utils import make_safety_fixture

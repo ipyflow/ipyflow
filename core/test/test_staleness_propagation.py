@@ -2,7 +2,7 @@
 import logging
 import sys
 
-from nbsafety.singletons import nbs
+from ipyflow.singletons import flow
 from pyccolo.extra_builtins import EMIT_EVENT
 from .utils import assert_bool, make_safety_fixture, skipif_known_failing
 
@@ -23,7 +23,7 @@ def run_cell(cell, **kwargs):
 
 
 def stale_detected():
-    return nbs().test_and_clear_stale_usage_detected()
+    return flow().test_and_clear_stale_usage_detected()
 
 
 def assert_detected(msg=""):
@@ -1839,7 +1839,7 @@ def test_exception_stack_unwind():
     run_cell(
         f"""
         import numpy as np
-        from nbsafety.singletons import tracer
+        from ipyflow.singletons import tracer
         {assert_stack_size(0)}
         def f():
             {assert_stack_size(1)}

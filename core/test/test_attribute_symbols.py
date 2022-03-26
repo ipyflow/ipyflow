@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 
-from nbsafety.analysis.symbol_ref import SymbolRef, Atom
+from ipyflow.analysis.symbol_ref import SymbolRef, Atom
 from .utils import make_safety_fixture
 
 

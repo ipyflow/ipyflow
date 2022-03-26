@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from nbsafety.data_model.data_symbol import DataSymbol
-from nbsafety.singletons import nbs
+from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.singletons import flow
 from test.utils import make_safety_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
@@ -12,7 +12,7 @@ _safety_fixture, run_cell = make_safety_fixture()
 
 
 def lookup_symbol(name: str) -> DataSymbol:
-    ret = nbs().global_scope.lookup_data_symbol_by_name_this_indentation(name)
+    ret = flow().global_scope.lookup_data_symbol_by_name_this_indentation(name)
     assert ret is not None, "got None for %s" % name
     return ret
 

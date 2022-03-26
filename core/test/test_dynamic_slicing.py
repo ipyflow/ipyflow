@@ -4,9 +4,9 @@ import logging
 import textwrap
 from typing import Dict
 
-from nbsafety.analysis.slicing import make_slice_text
-from nbsafety.data_model.code_cell import cells
-from nbsafety.singletons import nbs
+from ipyflow.analysis.slicing import make_slice_text
+from ipyflow.data_model.code_cell import cells
+from ipyflow.singletons import flow
 from test.utils import make_safety_fixture
 
 logging.basicConfig(level=logging.ERROR)
@@ -19,15 +19,15 @@ _safety_fixture, run_cell_ = make_safety_fixture()
 def dynamic_or_static_only_test(test_f, dynamic_enabled, static_enabled):
     @functools.wraps(test_f)
     def dynamic_test_f(*args, **kwargs):
-        orig_dynamic_enabled = nbs().mut_settings.dynamic_slicing_enabled
-        orig_static_enabled = nbs().mut_settings.dynamic_slicing_enabled
+        orig_dynamic_enabled = flow().mut_settings.dynamic_slicing_enabled
+        orig_static_enabled = flow().mut_settings.dynamic_slicing_enabled
         try:
-            nbs().mut_settings.dynamic_slicing_enabled = dynamic_enabled
-            nbs().mut_settings.static_slicing_enabled = static_enabled
+            flow().mut_settings.dynamic_slicing_enabled = dynamic_enabled
+            flow().mut_settings.static_slicing_enabled = static_enabled
             test_f(*args, **kwargs)
         finally:
-            nbs().mut_settings.dynamic_slicing_enabled = orig_dynamic_enabled
-            nbs().mut_settings.static_slicing_enabled = orig_static_enabled
+            flow().mut_settings.dynamic_slicing_enabled = orig_dynamic_enabled
+            flow().mut_settings.static_slicing_enabled = orig_static_enabled
 
     return dynamic_test_f
 
@@ -110,12 +110,12 @@ def test_nested_symbol_usage_with_variable_subscript():
     for static_slicing_enabled in [True, False]:
         if (
             not static_slicing_enabled
-            and not nbs().mut_settings.dynamic_slicing_enabled
+            and not flow().mut_settings.dynamic_slicing_enabled
         ):
             continue
-        orig_enabled = nbs().mut_settings.static_slicing_enabled
+        orig_enabled = flow().mut_settings.static_slicing_enabled
         try:
-            nbs().mut_settings.static_slicing_enabled = static_slicing_enabled
+            flow().mut_settings.static_slicing_enabled = static_slicing_enabled
             run_cell("x = 1")
             run_cell("lst = [1, 2, 3, 4, 5]")
             run_cell("lst[x] = 3")
@@ -125,7 +125,7 @@ def test_nested_symbol_usage_with_variable_subscript():
             slice_size = num_stmts_in_slice(4)
             assert slice_size == 4, "got %d" % slice_size
         finally:
-            nbs().mut_settings.static_slicing_enabled = orig_enabled
+            flow().mut_settings.static_slicing_enabled = orig_enabled
 
 
 @static_only_test
@@ -431,7 +431,7 @@ def test_non_relevant_child_symbol_modified():
 
 @dynamic_only_test
 def test_dynamic_only_increment():
-    nbs().mut_settings.static_slicing_enabled = False
+    flow().mut_settings.static_slicing_enabled = False
     run_cell("x = 0")
     run_cell("x += 1")
     run_cell("logging.info(x)")
@@ -443,7 +443,7 @@ def test_dynamic_only_increment():
 
 @dynamic_only_test
 def test_dynamic_only_variable_subscript():
-    nbs().mut_settings.static_slicing_enabled = False
+    flow().mut_settings.static_slicing_enabled = False
     run_cell("lst = [0, 1, 2]")
     run_cell("x = 0")
     run_cell("lst[x] += 1")

@@ -4,8 +4,8 @@ import sys
 import textwrap
 from typing import Set, Tuple, Union
 
-from nbsafety.analysis.symbol_ref import SymbolRef
-from nbsafety.analysis.live_refs import (
+from ipyflow.analysis.symbol_ref import SymbolRef
+from ipyflow.analysis.live_refs import (
     compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts,
 )
 from .utils import make_safety_fixture

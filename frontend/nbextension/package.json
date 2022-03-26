@@ -1,7 +1,7 @@
 {
-  "name": "jupyter-nbsafety",
+  "name": "jupyter-ipyflow",
   "version": "0.0.85",
-  "description": "JupyterLab extension for nbsafety user interface",
+  "description": "Jupyter notebook extension for ipyflow user interface",
   "keywords": [
     "jupyter",
     "nbextension"

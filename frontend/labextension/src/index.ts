@@ -23,13 +23,13 @@ import {
   Notebook
 } from '@jupyterlab/notebook';
 
-const NBSAFETY_KERNEL_NAME: string = 'nbsafety';
+const IPYFLOW_KERNEL_NAME: string = 'ipyflow';
 
 /**
- * Initialization data for the jupyterlab-nbsafety extension.
+ * Initialization data for the jupyterlab-ipyflow extension.
  */
 const extension: JupyterFrontEndPlugin<void> = {
-  id: 'jupyterlab-nbsafety',
+  id: 'jupyterlab-ipyflow',
   requires: [INotebookTracker],
   autoStart: true,
   activate: (
@@ -43,7 +43,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         activeCell = nbPanel.content.activeCell;
         activeCellId = nbPanel.content.activeCell.model.id;
         let commDisconnectHandler = () => {};
-        if (session.session.kernel.name === NBSAFETY_KERNEL_NAME) {
+        if (session.session.kernel.name === IPYFLOW_KERNEL_NAME) {
           commDisconnectHandler = connectToComm(
             session,
             nbPanel.content
@@ -53,7 +53,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           clearCellState(nbPanel.content);
           commDisconnectHandler();
           commDisconnectHandler = () => {};
-          if (args.newValue !== null && args.newValue.name === NBSAFETY_KERNEL_NAME) {
+          if (args.newValue !== null && args.newValue.name === IPYFLOW_KERNEL_NAME) {
             commDisconnectHandler = connectToComm(
               session,
               nbPanel.content
@@ -72,7 +72,7 @@ const extension: JupyterFrontEndPlugin<void> = {
               clearCellState(nbPanel.content);
               commDisconnectHandler();
               commDisconnectHandler = () => {};
-              if (session.session.kernel.name === NBSAFETY_KERNEL_NAME) {
+              if (session.session.kernel.name === IPYFLOW_KERNEL_NAME) {
                 commDisconnectHandler = connectToComm(
                     session,
                     nbPanel.content
@@ -240,7 +240,7 @@ const connectToComm = (
   session: ISessionContext,
   notebook: Notebook
 ) => {
-  const comm = session.session.kernel.createComm('nbsafety');
+  const comm = session.session.kernel.createComm('ipyflow');
   let disconnected = false;
 
   const onExecution = (cell: ICellModel, args: IChangedArgs<any>) => {

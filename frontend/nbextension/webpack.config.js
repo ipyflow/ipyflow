@@ -22,8 +22,8 @@ module.exports = {
   entry: "./src/index.ts",
   output: {
     filename: "index.js",
-    path: path.resolve(__dirname, "../../nbsafety/resources/nbextension"),
+    path: path.resolve(__dirname, "../../core/ipyflow/resources/nbextension"),
     libraryTarget: "amd",
-    library: "nbextensions/nbsafety/index",
+    library: "nbextensions/ipyflow/index",
   }
 };

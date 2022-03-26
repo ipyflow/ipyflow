@@ -16,8 +16,7 @@ dist/
 !**/notebooks/*.ipynb
 **/[uU]ntitled*
 MANIFEST
-core/ipyflow/resources/nbextension/index.js
-core/ipyflow/resources/nbextension/index.js.map
+core/ipyflow/resources/**
 .coverage
 coverage.xml
 htmlcov/**

@@ -1,6 +1,6 @@
 {
-  "name": "jupyterlab-nbsafety",
-  "description": "JupyterLab extension for nbsafety user interface",
+  "name": "jupyterlab-ipyflow",
+  "description": "JupyterLab extension for ipyflow user interface",
   "keywords": [
     "jupyter",
     "jupyterlab",
@@ -56,14 +56,14 @@
     "eslint-plugin-prettier": "^4.0.0",
     "prettier": "2.6.0",
     "rimraf": "^3.0.2",
-    "typescript": "4.6.2"
+    "typescript": "^3.7.7"
   },
   "sideEffects": [
     "style/*.css"
   ],
   "jupyterlab": {
     "extension": true,
-    "outputDir": "../../nbsafety/resources/labextension/"
+    "outputDir": "../../core/ipyflow/resources/labextension/"
   },
   "version": "0.0.85"
 }

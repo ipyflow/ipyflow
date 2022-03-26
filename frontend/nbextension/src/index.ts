@@ -122,7 +122,7 @@ const gatherCellContentsById = (Jupyter: any) => {
 }
 
 const connectToComm = (Jupyter: any) => {
-    const comm = Jupyter.notebook.kernel.comm_manager.new_comm('nbsafety');
+    const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow');
     const onExecution = (evt: any, data: {cell: any}) => {
         if (data.cell.notebook !== Jupyter.notebook) {
             return;

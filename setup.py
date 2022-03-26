@@ -15,6 +15,7 @@ def read_file(fname):
 
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
+requirements_dev = read_file('requirements-dev.txt').strip().split()
 
 setup(
     name=pkg_name,
@@ -43,27 +44,30 @@ setup(
     data_files=[
         # like `jupyter nbextension install --sys-prefix`
         ("share/jupyter/nbextensions/nbsafety", [
-            "nbsafety/resources/nbextension/index.js",
-            "nbsafety/resources/nbextension/index.js.map",
+            "core/ipyflow/resources/nbextension/index.js",
+            "core/ipyflow/resources/nbextension/index.js.map",
         ]),
         # like `jupyter nbextension enable --sys-prefix`
         ("etc/jupyter/nbconfig/notebook.d", [
-            "nbsafety/resources/nbextension/nbsafety.json",
+            "core/ipyflow/resources/nbextension/nbsafety.json",
         ]),
         ("share/jupyter/labextensions/jupyterlab-nbsafety",
-            glob("nbsafety/resources/labextension/package.json")
+            glob("core/ipyflow/resources/labextension/package.json")
         ),
         ("share/jupyter/labextensions/jupyterlab-nbsafety/static",
-            glob("nbsafety/resources/labextension/static/*")
+            glob("core/ipyflow/resources/labextension/static/*")
         ),
         # like `python -m nbsafety.install --sys-prefix`
         ("share/jupyter/kernels/nbsafety", [
-            "nbsafety/resources/kernel/kernel.json",
-            "nbsafety/resources/kernel/logo-32x32.png",
-            "nbsafety/resources/kernel/logo-64x64.png",
+            "core/ipyflow/resources/kernel/kernel.json",
+            "core/ipyflow/resources/kernel/logo-32x32.png",
+            "core/ipyflow/resources/kernel/logo-64x64.png",
         ]),
     ],
     install_requires=requirements,
+    extras_require={
+        "dev": requirements_dev,
+    },
     license='BSD-3-Clause',
     zip_safe=False,
     classifiers=[

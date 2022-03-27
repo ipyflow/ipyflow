@@ -1,11 +1,1 @@
-coverage
-flake8
-hypothesis
-ipytest==0.9.1
-numpy
-pandas
-py
-pytest
-twine
-types-dataclasses
-versioneer
+ipyflow-core[dev]

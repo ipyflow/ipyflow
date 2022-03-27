@@ -31,22 +31,22 @@ setup(
     include_package_data=True,
     data_files=[
         # like `jupyter nbextension install --sys-prefix`
-        ("share/jupyter/nbextensions/nbsafety", [
+        ("share/jupyter/nbextensions/ipyflow", [
             "core/ipyflow/resources/nbextension/index.js",
             "core/ipyflow/resources/nbextension/index.js.map",
         ]),
         # like `jupyter nbextension enable --sys-prefix`
         ("etc/jupyter/nbconfig/notebook.d", [
-            "core/ipyflow/resources/nbextension/nbsafety.json",
+            "core/ipyflow/resources/nbextension/ipyflow.json",
         ]),
-        ("share/jupyter/labextensions/jupyterlab-nbsafety",
+        ("share/jupyter/labextensions/jupyterlab-ipyflow",
             glob("core/ipyflow/resources/labextension/package.json")
         ),
-        ("share/jupyter/labextensions/jupyterlab-nbsafety/static",
+        ("share/jupyter/labextensions/jupyterlab-ipyflow/static",
             glob("core/ipyflow/resources/labextension/static/*")
         ),
-        # like `python -m nbsafety.install --sys-prefix`
-        ("share/jupyter/kernels/nbsafety", [
+        # like `python -m ipyflow.install --sys-prefix`
+        ("share/jupyter/kernels/ipyflow", [
             "core/ipyflow/resources/kernel/kernel.json",
             "core/ipyflow/resources/kernel/logo-32x32.png",
             "core/ipyflow/resources/kernel/logo-64x64.png",

@@ -232,7 +232,9 @@ class NotebookSafety(singletons.NotebookSafety):
                 cells().set_cell_positions(order_index_by_id)
                 cells_to_check = (
                     cell
-                    for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)
+                    for cell in (
+                        cells().from_id(cell_id) for cell_id in order_index_by_id
+                    )
                     if cell is not None
                 )
             response = self.check_and_link_multiple_cells(

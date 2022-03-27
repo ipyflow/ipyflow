@@ -1,0 +1,2 @@
+include versioneer.py
+include ipyflow/_version.py

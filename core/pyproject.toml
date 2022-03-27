@@ -1,3 +1,14 @@
+[build-system]
+requires = [
+    "setuptools >= 48",
+    "wheel >= 0.30.0",
+    "setuptools-git-versioning",
+]
+build-backend = 'setuptools.build_meta'
+
+[tool.setuptools-git-versioning]
+enabled = true
+
 [tool.black]
 line-length = 88
 target-version = ['py39']

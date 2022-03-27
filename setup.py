@@ -27,7 +27,7 @@ setup(
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
     url='https://github.com/nbsafety-project/nbsafety',
-    packages=find_packages(where='core'),
+    packages=find_packages(where='./core', exclude=['./core/test']),
     include_package_data=True,
     data_files=[
         # like `jupyter nbextension install --sys-prefix`

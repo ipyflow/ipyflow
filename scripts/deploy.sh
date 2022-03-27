@@ -37,7 +37,7 @@ if [[ "$current" != "$jlab" ]]; then
     exit 1
 fi
 
-for pkg_dir in . ./core; do
+for pkg_dir in ./core .; do
     pushd $pkg_dir
     expect <<EOF
 set timeout -1

@@ -2,7 +2,7 @@
 .PHONY: clean black blackcheck build deploy check check_no_typing test tests deps devdeps dev typecheck version bump markdown kernel nbext
 
 clean:
-	rm -rf build/ core/build/ core/dist/ dist/ nbsafety.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
+	rm -rf __pycache__ core/__pycache__ build/ core/build/ core/dist/ dist/ nbsafety.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
 
 build: clean
 	./scripts/build.sh

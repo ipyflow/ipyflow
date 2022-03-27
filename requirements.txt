@@ -1,8 +1,1 @@
-astunparse
-black
-ipykernel
-ipython<8.0.0
-mypy
-nest_asyncio
-pyccolo>=0.0.21
-traitlets
+ipyflow-core

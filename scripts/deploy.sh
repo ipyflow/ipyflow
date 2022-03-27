@@ -13,7 +13,7 @@ if ! git describe --exact-match --tags HEAD > /dev/null; then
     exit 1
 fi
 
-if [ ! -f ./nbsafety/resources/nbextension/index.js ]; then
+if [ ! -f ./core/ipyflow/resources/nbextension/index.js ]; then
     echo "resources/nbextension/index.js not present; please build the nbextension with `make build` and try again"
     exit 1
 fi
@@ -37,7 +37,9 @@ if [[ "$current" != "$jlab" ]]; then
     exit 1
 fi
 
-expect <<EOF
+for pkg_dir in . ./core; do
+    pushd $pkg_dir
+    expect <<EOF
 set timeout -1
 
 spawn twine upload dist/*
@@ -49,6 +51,7 @@ expect "Enter your password:"
 send -- "$(lpass show pypi.org --field=password)\r"
 expect
 EOF
+    popd
 
 pushd ./frontend/labextension
 npm publish

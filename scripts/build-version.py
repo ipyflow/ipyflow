@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 
-from nbsafety.version import make_version_tuple
+from ipyflow.version import make_version_tuple
 
 
 def main(args):

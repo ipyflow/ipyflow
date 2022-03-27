@@ -10,5 +10,5 @@ pushd ./frontend/nbextension
 npm install
 npm run build
 popd
-jupyter nbextension install --py nbsafety "$prefix"
-jupyter nbextension enable --py nbsafety "$prefix"
+jupyter nbextension install --py ipyflow "$prefix"
+jupyter nbextension enable --py ipyflow "$prefix"

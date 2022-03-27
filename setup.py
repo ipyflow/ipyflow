@@ -15,7 +15,6 @@ def read_file(fname):
 
 history = read_file('HISTORY.rst')
 requirements = read_file('requirements.txt').strip().split()
-requirements_dev = read_file('requirements-dev.txt').strip().split()
 
 setup(
     name=pkg_name,
@@ -54,7 +53,7 @@ setup(
     ],
     install_requires=requirements,
     extras_require={
-        "dev": requirements_dev,
+        "dev": ["ipyflow-core[dev]"],
     },
     license='BSD-3-Clause',
     zip_safe=False,

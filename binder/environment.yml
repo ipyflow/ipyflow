@@ -1,4 +1,4 @@
-name: nbsafety
+name: ipyflow
 channels:
 - conda-forge
 dependencies:

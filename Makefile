@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean black blackcheck build deploy check check_no_typing test tests deps devdeps dev typecheck version bump markdown kernel nbext
+.PHONY: clean black blackcheck build deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel nbext
 
 clean:
 	rm -rf __pycache__ core/__pycache__ build/ core/build/ core/dist/ dist/ nbsafety.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
@@ -12,11 +12,6 @@ version:
 
 bump:
 	./scripts/bump.sh
-
-markdown:
-	# ref: https://github.com/andreasbm/readme
-	npx @appnest/readme generate -i markdown-blueprints/README.md -o README.md
-	npx @appnest/readme generate -i markdown-blueprints/CONTRIBUTORS.md -o CONTRIBUTORS.md
 
 deploy: version build
 	./scripts/deploy.sh
@@ -56,7 +51,7 @@ devdeps:
 	pip install -e .
 	pip install -r requirements-dev.txt
 
-dev: devdeps build
+extlink:
 	./scripts/extlink.sh
 
 kernel:
@@ -64,3 +59,5 @@ kernel:
 
 nbext:
 	./scripts/nbext.sh --sys-prefix
+
+dev: devdeps build extlink kernel nbext

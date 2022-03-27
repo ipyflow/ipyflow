@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 from glob import glob
-from setuptools import setup, find_packages
+from setuptools import setup
 
 import versioneer
 
-pkg_name = 'nbsafety'
+pkg_name = 'ipyflow'
 
 
 def read_file(fname):
@@ -27,7 +27,7 @@ setup(
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
     url='https://github.com/nbsafety-project/nbsafety',
-    packages=[],
+    packages=['ipyflow_full_stub'],
     include_package_data=True,
     data_files=[
         # like `jupyter nbextension install --sys-prefix`

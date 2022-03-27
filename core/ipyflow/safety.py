@@ -226,13 +226,15 @@ class NotebookSafety(singletons.NotebookSafety):
             if self._active_cell_id is None:
                 self.set_active_cell(request.get("executed_cell_id", None))
             cell_id = request.get("executed_cell_id", None)
-            order_index_by_id = request["order_index_by_cell_id"]
-            cells().set_cell_positions(order_index_by_id)
-            cells_to_check = (
-                cell
-                for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)
-                if cell is not None
-            )
+            order_index_by_id = request.get("order_index_by_cell_id", None)
+            cells_to_check = None
+            if order_index_by_id is not None:
+                cells().set_cell_positions(order_index_by_id)
+                cells_to_check = (
+                    cell
+                    for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)
+                    if cell is not None
+                )
             response = self.check_and_link_multiple_cells(
                 cells_to_check=cells_to_check, last_executed_cell_id=cell_id
             ).to_json()

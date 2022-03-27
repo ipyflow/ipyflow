@@ -26,7 +26,7 @@ setup(
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
     url='https://github.com/nbsafety-project/nbsafety',
-    packages=['ipyflow_full_stub'],
+    packages=[],
     include_package_data=True,
     data_files=[
         # like `jupyter nbextension install --sys-prefix`

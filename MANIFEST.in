@@ -1,4 +1,4 @@
 include README.md HISTORY.rst requirements.txt
 include core/ipyflow/resources/**
 include versioneer.py
-include ipyflow_full_stub/_version.py
+include frontend/_version.py

@@ -2538,6 +2538,16 @@ def test_nested_calls():
     assert_detected()
 
 
+def test_underscore():
+    run_cell("x = 42")
+    run_cell("x")
+    run_cell("y = _ + 1")
+    run_cell("x = 43")
+    run_cell("x")
+    run_cell("logging.info(y)")
+    assert_detected()
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

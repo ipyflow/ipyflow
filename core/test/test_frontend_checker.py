@@ -165,7 +165,7 @@ def test_update_list_elem():
         run_cell(cells[6], 6)
         response = flow().check_and_link_multiple_cells()
         assert response.stale_cells == set()
-        assert response.fresh_cells == {2, 3, 4}
+        assert response.fresh_cells == {2, 3, 4}, "got %s" % response.fresh_cells
 
     run_cell(cells[4], 4)
     response = flow().check_and_link_multiple_cells()

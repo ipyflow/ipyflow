@@ -1162,11 +1162,21 @@ class SafetyTracer(StackFrameManager):
         return ret_expr
 
     @pyc.register_raw_handler(pyc.after_module_stmt)
-    def after_module_stmt(self, *_, **__):
+    def after_module_stmt(self, _ret, node_id, *_, **__):
         if self.is_tracing_enabled:
             assert self.cur_frame_original_scope.is_global
         ret = self._saved_stmt_ret_expr
         self._saved_stmt_ret_expr = None
+        if ret is not None:
+            stmt: ast.stmt = self.ast_node_by_id[node_id]
+            flow().global_scope.upsert_data_symbol_for_name(
+                "_",
+                ret,
+                resolve_rval_symbols(stmt),
+                stmt,
+                is_anonymous=True,
+                implicit=True,
+            )
         self._module_stmt_counter += 1
         return ret
 

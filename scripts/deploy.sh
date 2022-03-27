@@ -52,6 +52,7 @@ send -- "$(lpass show pypi.org --field=password)\r"
 expect
 EOF
     popd
+    done
 
 pushd ./frontend/labextension
 npm publish

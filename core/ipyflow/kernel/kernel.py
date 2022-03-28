@@ -3,7 +3,7 @@ import asyncio
 import inspect
 import logging
 from contextlib import contextmanager
-from typing import Callable, List, Generator, NamedTuple, Optional, Type
+from typing import Callable, List, Generator, NamedTuple, Optional, Tuple, Type
 
 import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
@@ -18,13 +18,14 @@ from ipyflow.ipython_utils import (
     run_cell,
     save_number_of_currently_executing_cell,
 )
-from ipyflow.version import __version__
 from ipyflow.safety import NotebookSafety
 from ipyflow.tracing.ipyflow_tracer import (
     ModuleIniter,
     SafetyTracer,
     StackFrameManager,
 )
+from ipyflow.tracing.safety_ast_rewriter import SafetyAstRewriter
+from ipyflow.version import __version__
 
 
 logger = logging.getLogger(__name__)
@@ -189,23 +190,24 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             pyc.BaseTracer.exec = orig_tracer_exec
             pyc.BaseTracer.eval = orig_tracer_eval
 
-    def make_syntax_augmenters(
+    def make_rewriter_and_syntax_augmenters(
         self,
         tracers: Optional[List[pyc.BaseTracer]] = None,
         ast_rewriter: Optional[pyc.AstRewriter] = None,
-    ) -> List[Callable]:
+    ) -> Tuple[Optional[pyc.AstRewriter], List[Callable]]:
         tracers = (
             [tracer.instance() for tracer in self.registered_tracers]
             if tracers is None
             else tracers
         )
         if len(tracers) == 0:
-            return []
-        ast_rewriter = ast_rewriter or tracers[-1].make_ast_rewriter()
+            return None, []
+        ast_rewriter = ast_rewriter or SafetyAstRewriter(tracers)
+        # ast_rewriter = ast_rewriter or tracers[-1].make_ast_rewriter()
         all_syntax_augmenters = []
         for tracer in tracers:
             all_syntax_augmenters.extend(tracer.make_syntax_augmenters(ast_rewriter))
-        return all_syntax_augmenters
+        return ast_rewriter, all_syntax_augmenters
 
     @contextmanager
     def _tracing_context(self):
@@ -237,7 +239,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
                     module_id=self.cell_counter()
                 )
-                all_syntax_augmenters = self.make_syntax_augmenters(
+                _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
                     tracers=all_tracers, ast_rewriter=ast_rewriter
                 )
                 with input_transformer_context(all_syntax_augmenters):

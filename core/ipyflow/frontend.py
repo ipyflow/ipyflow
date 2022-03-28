@@ -131,9 +131,10 @@ class FrontendCheckerResult(NamedTuple):
             if cell_id not in checker_results_by_cid:
                 continue
             cell = cells().from_id(cell_id)
-            if cell.get_max_used_live_symbol_cell_counter(
+            max_used_ctr = cell.get_max_used_live_symbol_cell_counter(
                 checker_results_by_cid[cell_id].live, filter_to_reactive=True
-            ) > max(cell.cell_ctr, flow_.min_timestamp):
+            )
+            if max_used_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 self.forced_reactive_cells.add(cell_id)
 
     def _compute_dag_based_staleness(

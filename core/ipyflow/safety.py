@@ -219,13 +219,27 @@ class NotebookSafety(singletons.NotebookSafety):
 
         comm.send({"type": "establish"})
 
+    def _recompute_ast_for_dirty_cells(self, content_by_cell_id: Dict[CellId, str]):
+        for cell_id, content in content_by_cell_id.items():
+            if cell_id == self.last_executed_cell_id:
+                continue
+            cell = cells().from_id(cell_id)
+            if cell is None or cell.current_content == content:
+                continue
+            prev_content = cell.current_content
+            try:
+                cell.current_content = content
+                cell.to_ast()
+            except SyntaxError:
+                cell.current_content = prev_content
+
     def handle(self, request, comm=None) -> None:
         if request["type"] == "change_active_cell":
             self.set_active_cell(request["active_cell_id"])
         elif request["type"] == "cell_freshness":
             if self._active_cell_id is None:
                 self.set_active_cell(request.get("executed_cell_id", None))
-            cell_id = request.get("executed_cell_id", None)
+            last_cell_id = request.get("executed_cell_id", None)
             order_index_by_id = request.get("order_index_by_cell_id", None)
             cells_to_check = None
             if order_index_by_id is not None:
@@ -237,26 +251,15 @@ class NotebookSafety(singletons.NotebookSafety):
                     )
                     if cell is not None
                 )
-            content_by_cell_id = request.get("content_by_cell_id", None)
-            if content_by_cell_id is not None:
-                for cell_id, content in content_by_cell_id.items():
-                    cell = cells().from_id(cell_id)
-                    if cell is None:
-                        continue
-                    prev_content = cell.current_content
-                    try:
-                        cell.current_content = content
-                        cell.to_ast()
-                    except SyntaxError:
-                        cell.current_content = prev_content
+            self._recompute_ast_for_dirty_cells(request.get("content_by_cell_id", {}))
             response = self.check_and_link_multiple_cells(
-                cells_to_check=cells_to_check, last_executed_cell_id=cell_id
+                cells_to_check=cells_to_check, last_executed_cell_id=last_cell_id
             ).to_json()
             response["type"] = "cell_freshness"
             response["exec_mode"] = self.mut_settings.exec_mode.value
             response["exec_schedule"] = self.mut_settings.exec_schedule.value
             response["flow_order"] = self.mut_settings.flow_order.value
-            response["last_executed_cell_id"] = cell_id
+            response["last_executed_cell_id"] = last_cell_id
             response["highlights_enabled"] = self.mut_settings.highlights_enabled
             if comm is not None:
                 comm.send(response)

@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from typing import (
     cast,
     TYPE_CHECKING,
+    Callable,
     Dict,
     FrozenSet,
     Generator,
@@ -20,6 +21,8 @@ from typing import (
     Type,
     Union,
 )
+
+import pyccolo as pyc
 
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.live_refs import (
@@ -64,6 +67,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     _position_by_cell_id: Dict[CellId, int] = {}
     _cells_by_tag: Dict[str, Set["ExecutedCodeCell"]] = defaultdict(set)
     _reactive_cells_by_tag: Dict[str, Set[CellId]] = defaultdict(set)
+    _override_current_cell: Optional["ExecutedCodeCell"] = None
 
     def __init__(
         self, cell_id: CellId, cell_ctr: int, content: str, tags: Tuple[str, ...]
@@ -266,7 +270,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     def from_tag(cls, tag: str) -> Set["ExecutedCodeCell"]:
         return cls._cells_by_tag.get(tag, set())
 
-    def sanitized_content(self):
+    def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
         lines = []
         for line in self.current_content.strip().split("\n"):
             # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
@@ -275,21 +279,38 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             if _NB_MAGIC_PATTERN.search(line.strip()) is None:
                 lines.append(line)
         content = "\n".join(lines)
-        syntax_augmenters = kernel().make_syntax_augmenters()
+        ast_rewriter, syntax_augmenters = kernel().make_rewriter_and_syntax_augmenters()
         for aug in syntax_augmenters:
             content = aug(content)
-        return content
+        return ast_rewriter, content
+
+    def sanitized_content(self) -> str:
+        return self._rewriter_and_sanitized_content()[1]
+
+    @contextmanager
+    def override_current_cell(self):
+        orig_override = self._override_current_cell
+        try:
+            self.__class__._override_current_cell = self
+            yield
+        finally:
+            self.__class__._override_current_cell = orig_override
 
     def to_ast(self, override: Optional[ast.Module] = None) -> ast.Module:
         if override is not None:
             self._cached_ast = override
+            return self._cached_ast
         if (
             self._cached_ast is None
             or len(self.last_ast_content) != len(self.current_content)
             or self.last_ast_content != self.current_content
         ):
-            self._cached_ast = ast.parse(self.sanitized_content())
+            rewriter, content = self._rewriter_and_sanitized_content()
+            self._cached_ast = ast.parse(content)
             self.last_ast_content = self.current_content
+            if rewriter is not None:
+                with self.override_current_cell():
+                    rewriter.visit(self._cached_ast)
         return self._cached_ast
 
     @property
@@ -298,7 +319,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
 
     @classmethod
     def current_cell(cls) -> "ExecutedCodeCell":
-        return cls._cell_by_cell_ctr[cls._cell_counter]
+        return cls._override_current_cell or cls._cell_by_cell_ctr[cls._cell_counter]
 
     def get_max_used_live_symbol_cell_counter(
         self, live_symbols: Set[ResolvedDataSymbol], filter_to_reactive: bool = False

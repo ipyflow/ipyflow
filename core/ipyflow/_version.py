@@ -44,7 +44,7 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440"
     cfg.tag_prefix = ""
-    cfg.parentdir_prefix = "ipyflow-core-"
+    cfg.parentdir_prefix = "ipyflow-"
     cfg.versionfile_source = "ipyflow/_version.py"
     cfg.verbose = False
     return cfg

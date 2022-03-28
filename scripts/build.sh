@@ -11,6 +11,6 @@ popd
 cp ./frontend/labextension/install.json ./core/ipyflow/resources/labextension
 cp ./frontend/nbextension/ipyflow.json ./core/ipyflow/resources/nbextension
 pushd ./core
-python setup.py sdist bdist_wheel --universal
+python -m build
 popd
 python setup.py sdist bdist_wheel --universal

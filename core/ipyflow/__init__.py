@@ -22,3 +22,6 @@ def load_jupyter_server_extension(nbapp):
 from . import _version
 
 __version__ = _version.get_versions()["version"]
+
+from . import _version
+__version__ = _version.get_versions()['version']

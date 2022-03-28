@@ -273,6 +273,8 @@ class FrontendCheckerResult(NamedTuple):
         if last_executed_cell_id is None:
             return None
         last_executed_cell = cells().from_id(last_executed_cell_id)
+        if last_executed_cell is None:
+            return None
         for tag in last_executed_cell.tags:
             for reactive_cell_id in cells().get_reactive_ids_for_tag(tag):
                 self.forced_reactive_cells.add(reactive_cell_id)

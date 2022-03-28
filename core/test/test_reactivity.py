@@ -40,7 +40,7 @@ def run_cell(
             else:
                 reactive_cells |= checker_result.forced_reactive_cells
             for reactive_cell_id in sorted(reactive_cells - executed_cells):
-                next_content_to_run = cells().from_id(reactive_cell_id).content
+                next_content_to_run = cells().from_id(reactive_cell_id).executed_content
                 next_cell_to_run_id = reactive_cell_id
                 break
         return cell_id, executed_cells

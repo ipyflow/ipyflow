@@ -237,6 +237,18 @@ class NotebookSafety(singletons.NotebookSafety):
                     )
                     if cell is not None
                 )
+            content_by_cell_id = request.get("content_by_cell_id", None)
+            if content_by_cell_id is not None:
+                for cell_id, content in content_by_cell_id.items():
+                    cell = cells().from_id(cell_id)
+                    if cell is None:
+                        continue
+                    prev_content = cell.current_content
+                    try:
+                        cell.current_content = content
+                        cell.to_ast()
+                    except SyntaxError:
+                        cell.current_content = prev_content
             response = self.check_and_link_multiple_cells(
                 cells_to_check=cells_to_check, last_executed_cell_id=cell_id
             ).to_json()

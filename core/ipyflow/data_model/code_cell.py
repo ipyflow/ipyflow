@@ -71,7 +71,9 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
         self.history: List[int] = [cell_ctr]
-        self.content: str = content
+        self.executed_content: str = content
+        self.current_content: str = content
+        self.last_ast_content: Optional[str] = None
         self.captured_output: Optional[CapturedIO] = None
         self.tags: Tuple[str, ...] = tags
         self.reactive_tags: Set[str] = set()
@@ -98,7 +100,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         cls._reactive_cells_by_tag.clear()
 
     def __str__(self):
-        return self.content
+        return self.executed_content
 
     def __repr__(self):
         return f"<{self.__class__.__name__}[id={self.cell_id},ctr={self.cell_ctr}]>"
@@ -266,7 +268,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
 
     def sanitized_content(self):
         lines = []
-        for line in self.content.strip().split("\n"):
+        for line in self.current_content.strip().split("\n"):
             # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
             # we filter line magics, but for %time, we would ideally like to trace the statement being timed
             # TODO: how to do this?
@@ -281,8 +283,13 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     def to_ast(self, override: Optional[ast.Module] = None) -> ast.Module:
         if override is not None:
             self._cached_ast = override
-        if self._cached_ast is None:
+        if (
+            self._cached_ast is None
+            or len(self.last_ast_content) != len(self.current_content)
+            or self.last_ast_content != self.current_content
+        ):
             self._cached_ast = ast.parse(self.sanitized_content())
+            self.last_ast_content = self.current_content
         return self._cached_ast
 
     @property

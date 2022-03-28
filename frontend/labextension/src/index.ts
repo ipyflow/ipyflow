@@ -252,8 +252,10 @@ const connectToComm = (
       return;
     }
     const order_index_by_cell_id: {[id: string]: number} = {};
+    const content_by_cell_id: {[id: string]: string} = {};
     notebook.widgets.forEach((itercell, idx) => {
       order_index_by_cell_id[itercell.model.id] = idx;
+      content_by_cell_id[itercell.model.id] = itercell.model.value.text;
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(freshClass);
         itercell.node.classList.remove(refresherInputClass);
@@ -263,6 +265,7 @@ const connectToComm = (
       type: 'cell_freshness',
       executed_cell_id: cell.id,
       order_index_by_cell_id: order_index_by_cell_id,
+      content_by_cell_id: content_by_cell_id,
     };
     comm.send(payload).done.then(() => {
       if (cellPendingExecution !== null) {

@@ -347,7 +347,9 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                             return ret
 
                     return asyncio.get_event_loop().run_until_complete(
-                        self.pyc_execute(code, True, _run_cell_func)
+                        _run_cell_func(code)
+                        if silent
+                        else self.pyc_execute(code, True, _run_cell_func)
                     )
 
         ZMQKernel.__name__ = name

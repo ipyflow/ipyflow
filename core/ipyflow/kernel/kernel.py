@@ -288,10 +288,9 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
             def __init__(self, **kwargs):
                 super().__init__(**kwargs)
-                import nest_asyncio
+                from ipyflow.kernel import patched_nest_asyncio
 
-                # ref: https://github.com/erdewit/nest_asyncio
-                nest_asyncio.apply()
+                patched_nest_asyncio.apply()
                 self.after_init_class()
 
             def init_metadata(self, parent):

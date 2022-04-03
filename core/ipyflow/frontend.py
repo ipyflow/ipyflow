@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Iterable, NamedTuple, Optional, Set, Tuple
 
 from ipyflow.data_model.code_cell import cells, CheckerResult, ExecutedCodeCell
 from ipyflow.data_model.data_symbol import DataSymbol
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow
 from ipyflow.types import CellId
 
@@ -108,7 +108,7 @@ class FrontendCheckerResult(NamedTuple):
                         for stale_sym in stale_syms
                     )
                 )
-            if flow_.mut_settings.flow_order == FlowOrder.IN_ORDER:
+            if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
                 refresher_cell_ids = {
                     cid
                     for cid in refresher_cell_ids
@@ -223,7 +223,7 @@ class FrontendCheckerResult(NamedTuple):
             return None
         cell_id = cell.cell_id
         if (
-            flow_.mut_settings.flow_order == FlowOrder.IN_ORDER
+            flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
             or flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
         ):
             for live_sym in checker_result.live:
@@ -232,7 +232,7 @@ class FrontendCheckerResult(NamedTuple):
                 updated_cell = cells().from_timestamp(live_sym.timestamp)
                 if updated_cell.position > cell.position:
                     self.unsafe_order_cells[cell_id].add(updated_cell)
-        if flow_.mut_settings.flow_order == FlowOrder.IN_ORDER:
+        if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
             if (
                 last_executed_cell_pos is not None
                 and cell.position <= last_executed_cell_pos

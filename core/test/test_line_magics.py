@@ -4,7 +4,7 @@ import textwrap
 from ipyflow.data_model.code_cell import cells
 
 from ipyflow.line_magics import _USAGE
-from ipyflow.run_mode import FlowOrder, ExecutionMode, ExecutionSchedule
+from ipyflow.run_mode import FlowDirection, ExecutionMode, ExecutionSchedule
 from ipyflow.singletons import kernel, flow
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from test.utils import make_flow_fixture
@@ -119,15 +119,15 @@ def test_set_exec_mode():
 
 def test_set_exec_schedule_and_flow_order():
     assert flow().mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
-    run_cell(f"%flow flow {FlowOrder.IN_ORDER.value}")
-    assert flow().mut_settings.flow_order == FlowOrder.IN_ORDER
+    run_cell(f"%flow direction {FlowDirection.IN_ORDER.value}")
+    assert flow().mut_settings.flow_order == FlowDirection.IN_ORDER
     for schedule in ExecutionSchedule:
         run_cell(f"%flow schedule {schedule.value}")
         assert flow().mut_settings.exec_schedule == schedule
     run_cell(f"%flow schedule {ExecutionSchedule.LIVENESS_BASED.value}")
     assert flow().mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
-    run_cell(f"%flow flow {FlowOrder.ANY_ORDER.value}")
-    assert flow().mut_settings.flow_order == FlowOrder.ANY_ORDER
+    run_cell(f"%flow direction {FlowDirection.ANY_ORDER.value}")
+    assert flow().mut_settings.flow_order == FlowDirection.ANY_ORDER
     run_cell(f"%flow schedule {ExecutionSchedule.STRICT.value}")
     # strict schedule only works for in_order semantics
     assert flow().mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED

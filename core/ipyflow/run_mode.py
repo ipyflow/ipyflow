@@ -29,6 +29,6 @@ class ExecutionSchedule(Enum):
     STRICT = "strict"
 
 
-class FlowOrder(Enum):
+class FlowDirection(Enum):
     ANY_ORDER = "any_order"
     IN_ORDER = "in_order"

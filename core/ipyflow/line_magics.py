@@ -18,7 +18,7 @@ from ipyflow.analysis.slicing import make_slice_text
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
-from ipyflow.run_mode import FlowOrder, ExecutionMode, ExecutionSchedule
+from ipyflow.run_mode import FlowDirection, ExecutionMode, ExecutionSchedule
 from ipyflow.singletons import kernel, flow
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -86,8 +86,15 @@ def make_line_magic(flow_: "NotebookFlow"):
             return set_exec_mode(line)
         elif cmd in ("schedule", "exec_schedule", "execution_schedule"):
             return set_exec_schedule(line)
-        elif cmd in ("flow", "flow_order", "semantics", "flow_semantics"):
-            return set_flow_order(line)
+        elif cmd in (
+            "direction",
+            "flow_direction",
+            "order",
+            "flow_order",
+            "semantics",
+            "flow_semantics",
+        ):
+            return set_flow_direction(line)
         elif cmd in ("register", "register_tracer"):
             return register_tracer(line)
         elif cmd in ("deregister", "deregister_tracer"):
@@ -329,7 +336,7 @@ def set_exec_schedule(line_: str) -> None:
     elif line_.startswith("dag"):
         schedule = ExecutionSchedule.DAG_BASED
     elif line_.startswith("strict"):
-        if flow().mut_settings.flow_order != FlowOrder.IN_ORDER:
+        if flow().mut_settings.flow_order != FlowDirection.IN_ORDER:
             warn(
                 "Strict schedule only applicable for forward data flow; skipping",
             )
@@ -341,13 +348,15 @@ def set_exec_schedule(line_: str) -> None:
     flow().mut_settings.exec_schedule = schedule
 
 
-def set_flow_order(line_: str) -> None:
+def set_flow_direction(line_: str) -> None:
     line_ = line_.lower().strip()
-    usage = f"Usage: %flow flow [{FlowOrder.ANY_ORDER}|{FlowOrder.IN_ORDER}]"
+    usage = (
+        f"Usage: %flow direction [{FlowDirection.ANY_ORDER}|{FlowDirection.IN_ORDER}]"
+    )
     if line_.startswith("any") or line_ in ("unordered", "both"):
-        flow_order = FlowOrder.ANY_ORDER
+        flow_order = FlowDirection.ANY_ORDER
     elif line_.startswith("in") or line_ in ("ordered", "linear"):
-        flow_order = FlowOrder.IN_ORDER
+        flow_order = FlowDirection.IN_ORDER
     else:
         warn(usage)
         return

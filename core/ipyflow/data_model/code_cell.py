@@ -33,7 +33,7 @@ from ipyflow.analysis.live_refs import (
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.ipython_utils import CapturedIO, cell_counter as ipy_cell_counter
-from ipyflow.run_mode import FlowOrder
+from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import kernel, flow
 from ipyflow.types import CellId, TimestampOrCounter
 
@@ -229,7 +229,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     ) -> Generator[None, None, None]:
         orig_position_by_cell_id = cls._position_by_cell_id
         try:
-            if flow().mut_settings.flow_order == FlowOrder.ANY_ORDER:
+            if flow().mut_settings.flow_order == FlowDirection.ANY_ORDER:
                 cls.set_cell_positions({})
             yield
         finally:

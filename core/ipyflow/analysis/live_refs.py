@@ -12,7 +12,7 @@ from ipyflow.analysis.mixins import (
     VisitListsMixin,
 )
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.run_mode import FlowOrder
+from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:
@@ -100,7 +100,7 @@ class ComputeLiveSymbolRefs(
         # TODO: ideally under the current abstraction we should
         #  not be resolving static references to symbols here
         if (
-            flow().mut_settings.flow_order == FlowOrder.ANY_ORDER
+            flow().mut_settings.flow_order == FlowDirection.ANY_ORDER
             and self._scope is not None
             and len(this_assign_live) == 1
             and len(this_assign_dead) == 1

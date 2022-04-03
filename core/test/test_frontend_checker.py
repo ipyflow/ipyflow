@@ -5,7 +5,7 @@ from dataclasses import asdict
 from typing import Dict
 
 from ipyflow.data_model.code_cell import cells
-from ipyflow.run_mode import FlowOrder
+from ipyflow.run_mode import FlowDirection
 from ipyflow.flow import NotebookSafetySettings, MutableNotebookSafetySettings
 from ipyflow.singletons import flow
 from test.utils import make_flow_fixture, skipif_known_failing
@@ -505,7 +505,7 @@ def test_unsafe_order():
         0: "x = 0",
         1: "y = x + 1",
     }
-    with override_settings(flow_order=FlowOrder.IN_ORDER):
+    with override_settings(flow_order=FlowDirection.IN_ORDER):
         run_all_cells(cells_to_run)
         assert flow().out_of_order_usage_detected_counter is None
         cells().set_cell_positions({0: 0, 1: 1})

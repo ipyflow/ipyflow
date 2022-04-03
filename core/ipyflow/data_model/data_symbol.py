@@ -32,7 +32,7 @@ from ipyflow.data_model.annotation_utils import (
 from ipyflow.data_model.code_cell import ExecutedCodeCell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.update_protocol import UpdateProtocol
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, tracer
 from ipyflow.types import SupportedIndexType
 
@@ -644,7 +644,7 @@ class DataSymbol:
         else:
             if not self.is_shallow_stale:
                 return False
-        if flow().mut_settings.flow_order == FlowOrder.ANY_ORDER:
+        if flow().mut_settings.flow_order == FlowDirection.ANY_ORDER:
             return True
         if cells().exec_counter() > self._last_computed_staleness_cache_ts:
             self._is_stale_at_position_cache.clear()

@@ -24,7 +24,12 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, FlowRunMode
+from ipyflow.run_mode import (
+    ExecutionMode,
+    ExecutionSchedule,
+    FlowDirection,
+    FlowRunMode,
+)
 from ipyflow import singletons
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.types import CellId, SupportedIndexType
@@ -50,7 +55,7 @@ class MutableNotebookSafetySettings:
     dynamic_slicing_enabled: bool
     exec_mode: ExecutionMode
     exec_schedule: ExecutionSchedule
-    flow_order: FlowOrder
+    flow_order: FlowDirection
 
 
 class NotebookFlow(singletons.NotebookFlow):
@@ -88,7 +93,9 @@ class NotebookFlow(singletons.NotebookFlow):
                 exec_schedule=ExecutionSchedule(
                     kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
                 ),
-                flow_order=FlowOrder(kwargs.pop("flow_order", FlowOrder.ANY_ORDER)),
+                flow_order=FlowDirection(
+                    kwargs.pop("flow_direction", FlowDirection.ANY_ORDER)
+                ),
             )
         )
         # Note: explicitly adding the types helps PyCharm intellisense

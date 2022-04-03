@@ -2,7 +2,7 @@
 import asyncio
 import inspect
 import logging
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Callable, List, Generator, NamedTuple, Optional, Tuple, Type
 
 import pyccolo as pyc
@@ -47,6 +47,9 @@ class PyccoloKernelHooks:
         ...
 
     def before_execute(self, cell_content: str) -> Optional[str]:
+        ...
+
+    def should_trace(self) -> bool:
         ...
 
     def after_execute(self, cell_content: str) -> None:
@@ -265,7 +268,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
-                with self._tracing_context():
+                with self._tracing_context() if self.should_trace() else suppress():
                     if is_async:
                         ret = await run_cell_func(cell_content)  # pragma: no cover
                     else:
@@ -378,6 +381,9 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
         flow_.updated_reactive_symbols.clear()
         flow_.updated_deep_reactive_symbols.clear()
 
+    def should_trace(self) -> bool:
+        return singletons.flow().mut_settings.dataflow_enabled
+
     def before_execute(self, cell_content: str) -> Optional[str]:
         flow_ = singletons.flow()
         flow_.test_and_clear_stale_usage_detected()
@@ -402,6 +408,9 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
         )
         last_cell_id, flow_.last_executed_cell_id = flow_.last_executed_cell_id, cell_id
 
+        if not flow_.mut_settings.dataflow_enabled:
+            return None
+
         # Stage 1: Precheck.
         if DataflowTracer in self.registered_tracers:
             flow_._safety_precheck_cell(cell)
@@ -418,7 +427,7 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
                 return "pass"
         return None
 
-    def _handle_output(self):
+    def _handle_output(self) -> None:
         prev_cell = None
         cell = cells().current_cell()
         if len(cell.history) >= 2:
@@ -433,11 +442,13 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
             prev_cell.captured_output = None
         cell.captured_output = self.tee_output_tracer.capture_output
 
-    def after_execute(self, cell_content):
+    def after_execute(self, cell_content: str) -> None:
         self._handle_output()
         # resync any defined symbols that could have gotten out-of-sync
         # due to tracing being disabled
         flow_ = singletons.flow()
+        if not flow_.mut_settings.dataflow_enabled:
+            return
         flow_._resync_symbols(
             [
                 # TODO: avoid bad performance by only iterating over symbols updated in this cell

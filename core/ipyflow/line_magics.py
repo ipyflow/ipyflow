@@ -32,6 +32,8 @@ _FLOW_LINE_MAGIC = "flow"
 
 # TODO: update this
 _USAGE = """Options:
+[enable|disable]
+    - Toggle dataflow capture. On by default.
 
 [deps|show_deps|show_dependencies] <symbol_1>, <symbol_2> ...: 
     - This will print out the dependencies for given symbols.
@@ -66,7 +68,9 @@ def make_line_magic(flow_: "NotebookFlow"):
 
     def _handle(cmd, line):
         cmd = cmd.replace("-", "_")
-        if cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
+        if cmd in ("enable", "disable", "on", "off"):
+            return toggle_dataflow(cmd)
+        elif cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
             return show_deps(line)
         elif cmd in ("stale", "show_stale"):
             return show_stale(line)
@@ -141,6 +145,21 @@ def make_line_magic(flow_: "NotebookFlow"):
     # FIXME (smacke): probably not a great idea to rely on this
     _flow_magic.__name__ = _FLOW_LINE_MAGIC
     return register_line_magic(_flow_magic)
+
+
+def toggle_dataflow(line: str) -> Optional[str]:
+    usage = "Usage: %flow [enable|disable]"
+    line = line.strip()
+    flow_ = flow()
+    if line in ("enable", "on"):
+        flow_.mut_settings.dataflow_enabled = True
+        return "dataflow capture enabled"
+    elif line in ("disable", "off"):
+        flow_.mut_settings.dataflow_enabled = False
+        return "dataflow capture disabled"
+    else:
+        warn(usage)
+        return None
 
 
 def show_deps(symbols: str) -> Optional[str]:

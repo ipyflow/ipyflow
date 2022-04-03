@@ -30,6 +30,14 @@ def test_show_usage():
     )
 
 
+def test_toggle_dataflow():
+    assert flow().mut_settings.dataflow_enabled
+    run_cell("%flow disable")
+    assert not flow().mut_settings.dataflow_enabled
+    run_cell("%flow enable")
+    assert flow().mut_settings.dataflow_enabled
+
+
 def test_show_deps_show_stale():
     run_cell("x = 0")
     run_cell("y = x + 1")

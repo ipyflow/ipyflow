@@ -49,6 +49,7 @@ class NotebookSafetySettings(NamedTuple):
 
 @dataclass
 class MutableNotebookSafetySettings:
+    dataflow_enabled: bool
     trace_messages_enabled: bool
     highlights_enabled: bool
     static_slicing_enabled: bool
@@ -59,7 +60,7 @@ class MutableNotebookSafetySettings:
 
 
 class NotebookFlow(singletons.NotebookFlow):
-    """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
+    """Holds all the state necessary to capture dataflow in Jupyter notebooks."""
 
     def __init__(
         self,
@@ -85,6 +86,7 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self.mut_settings: MutableNotebookSafetySettings = (
             MutableNotebookSafetySettings(
+                dataflow_enabled=kwargs.pop("dataflow_enabled", True),
                 trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
                 highlights_enabled=kwargs.pop("highlights_enabled", True),
                 static_slicing_enabled=kwargs.pop("static_slicing_enabled", True),

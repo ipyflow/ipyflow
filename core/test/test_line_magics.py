@@ -152,7 +152,15 @@ def test_clear():
 
 def test_tags():
     run_cell("%flow tag foo")
-    assert cells().current_cell().tags == ("foo",)
-    assert cells().from_counter(1).tags == ("foo",)
+    cell1 = cells().current_cell()
+    assert cell1 is cells().from_counter(1)
+    assert cell1.tags == ("foo",)
+    run_cell("%flow show_tags --cell 1")
+    assert (
+        cells().current_cell().captured_output.stdout.strip()
+        == "Cell has tags: ('foo',)"
+    )
     run_cell("%flow tag --remove foo --cell 1")
     assert cells().from_counter(1).tags == ()
+    run_cell("%flow show-tags --cell 1")
+    assert cells().current_cell().captured_output.stdout.strip() == "Cell has tags: ()"

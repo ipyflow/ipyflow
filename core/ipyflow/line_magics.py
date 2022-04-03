@@ -46,6 +46,9 @@ slice <cell_num>:
       
 tag <tag>:
     - This will tag the executing cell with the given tag.
+      
+show_tags:
+    - This will display the current tags of the executing cell.
 """.strip()
 
 
@@ -62,6 +65,7 @@ def make_line_magic(flow_: "NotebookFlow"):
     ]
 
     def _handle(cmd, line):
+        cmd = cmd.replace("-", "_")
         if cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
             return show_deps(line)
         elif cmd in ("stale", "show_stale"):
@@ -76,6 +80,8 @@ def make_line_magic(flow_: "NotebookFlow"):
             return make_slice(line)
         elif cmd == "tag":
             return tag(line)
+        elif cmd == "show_tags":
+            return show_tags(line)
         elif cmd in ("mode", "exec_mode"):
             return set_exec_mode(line)
         elif cmd in ("schedule", "exec_schedule", "execution_schedule"):
@@ -285,6 +291,24 @@ def tag(line: str) -> None:
     else:
         cell.tags = tuple(cell_tags | {tag})
         cells()._cells_by_tag[tag].add(cell)
+    return None
+
+
+_SHOW_TAGS_PARSER = argparse.ArgumentParser("show_tags")
+_SHOW_TAGS_PARSER.add_argument("--cell", type=int, default=None)
+
+
+def show_tags(line: str) -> None:
+    usage = f"Usage: %flow show_tags [--cell cell_num]"
+    try:
+        args = _SHOW_TAGS_PARSER.parse_args(shlex.split(line))
+    except:
+        return None
+    if args.cell is None:
+        cell = cells().current_cell()
+    else:
+        cell = cells().from_counter(args.cell)
+    print_("Cell has tags:", cell.tags)
     return None
 
 

@@ -42,7 +42,11 @@ _USAGE = """Options:
 
 slice <cell_num>:
     - This will print the code necessary to reconstruct <cell_num> using a dynamic
-      program slicing algorithm."""
+      program slicing algorithm.
+      
+tag <tag>:
+    - This will tag the executing cell with the given tag.
+""".strip()
 
 
 print_ = print  # to keep the test from failing since this is a legitimate print
@@ -70,6 +74,8 @@ def make_line_magic(flow_: "NotebookSafety"):
             return json.dumps(create_dag_metadata(), indent=2)
         elif cmd in ("slice", "make_slice", "gather_slice"):
             return make_slice(line)
+        elif cmd == "tag":
+            return tag(line)
         elif cmd in ("mode", "exec_mode"):
             return set_exec_mode(line)
         elif cmd in ("schedule", "exec_schedule", "execution_schedule"):
@@ -253,6 +259,32 @@ def make_slice(line: str) -> Optional[str]:
             cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt),
             blacken=args.stmt or args.blacken,
         )
+    return None
+
+
+_TAG_PARSER = argparse.ArgumentParser("tag")
+_TAG_PARSER.add_argument("tag_name", type=str)
+_TAG_PARSER.add_argument("--remove", action="store_true")
+_TAG_PARSER.add_argument("--cell", type=int, default=None)
+
+
+def tag(line: str) -> None:
+    usage = f"Usage: %safety tag <tag_name> [--remove] [--cell cell_num]"
+    try:
+        args = _TAG_PARSER.parse_args(shlex.split(line))
+    except:
+        return None
+    tag = args.tag_name
+    if args.cell is None:
+        cell = cells().current_cell()
+    else:
+        cell = cells().from_counter(args.cell)
+    cell_tags = set(cell.tags)
+    if args.remove:
+        cell.tags = tuple(cell_tags - {tag})
+    else:
+        cell.tags = tuple(cell_tags | {tag})
+        cells()._cells_by_tag[tag].add(cell)
     return None
 
 

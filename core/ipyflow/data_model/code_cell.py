@@ -199,6 +199,8 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         if validate_ipython_counter:
             assert cell_ctr == ipy_cell_counter()
         prev_cell = cls.from_id(cell_id)
+        if prev_cell is not None:
+            tags = tuple(set(tags) | set(prev_cell.tags))
         cell = cls(cell_id, cell_ctr, content, tags)
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history

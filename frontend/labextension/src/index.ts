@@ -457,6 +457,7 @@ const connectToComm = (
         forcedReactiveCells = new Set<string>();
         updateUI(notebook);
       } else {
+        onActiveCellChange(notebook, cellPendingExecution);
         clearCellState(notebook);
       }
     }

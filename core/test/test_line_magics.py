@@ -148,3 +148,11 @@ def test_clear():
     assert flow().min_timestamp == flow().cell_counter() - 1
     run_cell("%safety clear")
     assert flow().min_timestamp == flow().cell_counter()
+
+
+def test_tags():
+    run_cell("%safety tag foo")
+    assert cells().current_cell().tags == ("foo",)
+    assert cells().from_counter(1).tags == ("foo",)
+    run_cell("%safety tag --remove foo --cell 1")
+    assert cells().from_counter(1).tags == ()

@@ -24,9 +24,9 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, SafetyRunMode
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowOrder, FlowRunMode
 from ipyflow import singletons
-from ipyflow.tracing.ipyflow_tracer import SafetyTracer
+from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.types import CellId, SupportedIndexType
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class NotebookSafetySettings(NamedTuple):
     mark_stale_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool
-    mode: SafetyRunMode
+    mode: FlowRunMode
 
 
 @dataclass
@@ -53,7 +53,7 @@ class MutableNotebookSafetySettings:
     flow_order: FlowOrder
 
 
-class NotebookSafety(singletons.NotebookSafety):
+class NotebookFlow(singletons.NotebookFlow):
     """Holds all the state necessary to detect stale dependencies in Jupyter notebooks."""
 
     def __init__(
@@ -76,7 +76,7 @@ class NotebookSafety(singletons.NotebookSafety):
             mark_phantom_cell_usages_unsafe=kwargs.pop(
                 "mark_phantom_cell_usages_unsafe", False
             ),
-            mode=SafetyRunMode.get(),
+            mode=FlowRunMode.get(),
         )
         self.mut_settings: MutableNotebookSafetySettings = (
             MutableNotebookSafetySettings(
@@ -126,7 +126,7 @@ class NotebookSafety(singletons.NotebookSafety):
 
     @property
     def is_develop(self) -> bool:
-        return self.settings.mode == SafetyRunMode.DEVELOP
+        return self.settings.mode == FlowRunMode.DEVELOP
 
     @property
     def is_test(self) -> bool:
@@ -277,7 +277,7 @@ class NotebookSafety(singletons.NotebookSafety):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
         result = FrontendCheckerResult.empty()
-        if SafetyTracer not in singletons.kernel().registered_tracers:
+        if DataflowTracer not in singletons.kernel().registered_tracers:
             return result
         for tracer in singletons.kernel().registered_tracers:
             # force initialization here in case not already inited

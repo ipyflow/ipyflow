@@ -7,13 +7,13 @@ from typing import Dict
 from ipyflow.analysis.slicing import make_slice_text
 from ipyflow.data_model.code_cell import cells
 from ipyflow.singletons import flow
-from test.utils import make_safety_fixture
+from test.utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture()
+# _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
+_flow_fixture, run_cell_ = make_flow_fixture()
 
 
 def dynamic_or_static_only_test(test_f, dynamic_enabled, static_enabled):

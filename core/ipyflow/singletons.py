@@ -5,12 +5,12 @@ import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
-    from ipyflow.kernel.kernel import SafeKernelBase as SafeKernelInstance
-    from ipyflow.safety import NotebookSafety as NotebookSafetyInstance
-    from ipyflow.tracing.ipyflow_tracer import SafetyTracer as TracerInstance
+    from ipyflow.kernel.kernel import DataflowKernelBase as DataflowKernelInstance
+    from ipyflow.flow import NotebookFlow as NotebookFlowInstance
+    from ipyflow.tracing.ipyflow_tracer import DataflowTracer as TracerInstance
 
 
-class NotebookSafety(SingletonConfigurable):
+class NotebookFlow(SingletonConfigurable):
     _Xyud34_INSTANCE = None
 
     def __init__(self):
@@ -20,7 +20,7 @@ class NotebookSafety(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
-class SafeKernel(SingletonConfigurable):
+class DataflowKernel(SingletonConfigurable):
     pass
 
 
@@ -28,14 +28,14 @@ class SingletonBaseTracer(pyc.BaseTracer):
     pass
 
 
-def kernel() -> "SafeKernelInstance":
-    assert SafeKernel.initialized()
-    return SafeKernel.instance()
+def kernel() -> "DataflowKernelInstance":
+    assert DataflowKernel.initialized()
+    return DataflowKernel.instance()
 
 
-def flow() -> "NotebookSafetyInstance":
-    assert NotebookSafety.initialized()
-    return NotebookSafety.instance()
+def flow() -> "NotebookFlowInstance":
+    assert NotebookFlow.initialized()
+    return NotebookFlow.instance()
 
 
 def tracer() -> "TracerInstance":

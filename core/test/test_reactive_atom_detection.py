@@ -9,9 +9,9 @@ from pyccolo.syntax_augmentation import (
     replace_tokens_and_get_augmented_positions,
 )
 from ipyflow.singletons import tracer
-from .utils import make_safety_fixture
+from .utils import make_flow_fixture
 
-_safety_fixture, run_cell = make_safety_fixture()
+_flow_fixture, run_cell = make_flow_fixture()
 
 
 REACTIVE_ATOM_REGEX = re.compile(

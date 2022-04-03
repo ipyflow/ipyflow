@@ -3,19 +3,19 @@ from enum import Enum
 import os
 
 
-class SafetyRunMode(Enum):
-    PRODUCTION = "NBSAFETY_PRODUCTION"
-    DEVELOP = "NBSAFETY_DEVELOP"
+class FlowRunMode(Enum):
+    PRODUCTION = "IPYFLOW_PRODUCTION"
+    DEVELOP = "IPYFLOW_DEVELOP"
 
     @staticmethod
     def get():
         if (
-            SafetyRunMode.DEVELOP.value in os.environ
-            and str(os.environ[SafetyRunMode.DEVELOP.value]) == "1"
+            FlowRunMode.DEVELOP.value in os.environ
+            and str(os.environ[FlowRunMode.DEVELOP.value]) == "1"
         ):
-            return SafetyRunMode.DEVELOP
+            return FlowRunMode.DEVELOP
         else:
-            return SafetyRunMode.PRODUCTION
+            return FlowRunMode.PRODUCTION
 
 
 class ExecutionMode(Enum):

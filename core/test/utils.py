@@ -8,11 +8,11 @@ from IPython import get_ipython
 import pytest
 
 from ipyflow.data_model.code_cell import cells
-from ipyflow.kernel.kernel import SafeKernelBase
-from ipyflow.run_mode import SafetyRunMode
-from ipyflow.safety import NotebookSafety
+from ipyflow.kernel.kernel import DataflowKernelBase
+from ipyflow.run_mode import FlowRunMode
+from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import flow
-from ipyflow.tracing.ipyflow_tracer import SafetyTracer
+from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
 
 def should_skip_known_failing(reason="this test tests unimpled functionality"):
@@ -30,8 +30,8 @@ def assert_bool(val, msg=""):
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency
-def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
-    os.environ[SafetyRunMode.DEVELOP.value] = "1"
+def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
+    os.environ[FlowRunMode.DEVELOP.value] = "1"
 
     def run_cell(code, cell_id=None, ignore_exceptions=False) -> int:
         if cell_id is None:
@@ -62,18 +62,18 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        SafeKernelBase.clear_instance()
-        SafeKernelBase.instance(
+        DataflowKernelBase.clear_instance()
+        DataflowKernelBase.instance(
             store_history=False,
         )
-        NotebookSafety.clear_instance()
-        NotebookSafety.instance(
+        NotebookFlow.clear_instance()
+        NotebookFlow.instance(
             cell_magic_name="_SAFETY_CELL_MAGIC",
             test_context=test_context,
             **kwargs,
         )
-        SafetyTracer.clear_instance()
-        SafetyTracer.instance()
+        DataflowTracer.clear_instance()
+        DataflowTracer.instance()
         # run all at once to prevent exec counter
         # from getting too far ahead
         run_cell("\n".join(setup_cells))
@@ -84,7 +84,7 @@ def make_safety_fixture(**kwargs) -> Tuple[Any, Any]:
         else:
             yield
         # ensure each test didn't give failures during ast transformation
-        SafeKernelBase.instance().cleanup_tracers()
+        DataflowKernelBase.instance().cleanup_tracers()
         exc = flow().set_exception_raised_during_execution(None)
         if exc is not None:
             raise exc

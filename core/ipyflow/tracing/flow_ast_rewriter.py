@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class SafetyAstRewriter(AstRewriter):
+class DataflowAstRewriter(AstRewriter):
     def visit(self, node: ast.AST):
         try:
             ret = super().visit(node)

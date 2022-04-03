@@ -24,10 +24,10 @@ from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
 
 if TYPE_CHECKING:
-    from ipyflow.safety import NotebookSafety
+    from ipyflow.flow import NotebookFlow
 
 
-_SAFETY_LINE_MAGIC = "safety"
+_FLOW_LINE_MAGIC = "flow"
 
 
 # TODO: update this
@@ -56,7 +56,7 @@ def warn(*args, **kwargs):
     print_(*args, file=sys.stderr, **kwargs)
 
 
-def make_line_magic(flow_: "NotebookSafety"):
+def make_line_magic(flow_: "NotebookFlow"):
     line_magic_names = [
         name for name, val in globals().items() if inspect.isfunction(val)
     ]
@@ -98,7 +98,7 @@ def make_line_magic(flow_: "NotebookSafety"):
             warn(_USAGE)
             return None
 
-    def _safety(line: str):
+    def _flow_magic(line: str):
         # this is to avoid capturing `self` and creating an extra reference to the singleton
         try:
             cmd, line = line.split(" ", 1)
@@ -126,12 +126,12 @@ def make_line_magic(flow_: "NotebookSafety"):
                 f.write(outstr)
 
     # FIXME (smacke): probably not a great idea to rely on this
-    _safety.__name__ = _SAFETY_LINE_MAGIC
-    return register_line_magic(_safety)
+    _flow_magic.__name__ = _FLOW_LINE_MAGIC
+    return register_line_magic(_flow_magic)
 
 
 def show_deps(symbols: str) -> Optional[str]:
-    usage = "Usage: %safety show_[deps|dependencies] <symbol_1>[, <symbol_2> ...]"
+    usage = "Usage: %flow show_[deps|dependencies] <symbol_1>[, <symbol_2> ...]"
     if len(symbols) == 0:
         warn(usage)
         return None
@@ -172,7 +172,7 @@ def show_deps(symbols: str) -> Optional[str]:
 
 
 def show_stale(line_: str) -> Optional[str]:
-    usage = "Usage: %safety show_stale [global|all]"
+    usage = "Usage: %flow show_stale [global|all]"
     line = line_.split()
     if len(line) == 0 or line[0] == "global":
         dsym_sets: Iterable[Iterable[DataSymbol]] = [
@@ -196,7 +196,7 @@ def show_stale(line_: str) -> Optional[str]:
 
 def trace_messages(line_: str) -> None:
     line = line_.split()
-    usage = "Usage: %safety trace_messages [enable|disable]"
+    usage = "Usage: %flow trace_messages [enable|disable]"
     if len(line) != 1:
         warn(usage)
         return
@@ -210,7 +210,7 @@ def trace_messages(line_: str) -> None:
 
 
 def set_highlights(cmd: str, rest: str) -> None:
-    usage = "Usage: %safety [hls|nohls]"
+    usage = "Usage: %flow [hls|nohls]"
     if cmd == "hls":
         flow().mut_settings.highlights_enabled = True
     elif cmd == "nohls":
@@ -269,7 +269,7 @@ _TAG_PARSER.add_argument("--cell", type=int, default=None)
 
 
 def tag(line: str) -> None:
-    usage = f"Usage: %safety tag <tag_name> [--remove] [--cell cell_num]"
+    usage = f"Usage: %flow tag <tag_name> [--remove] [--cell cell_num]"
     try:
         args = _TAG_PARSER.parse_args(shlex.split(line))
     except:
@@ -289,7 +289,7 @@ def tag(line: str) -> None:
 
 
 def set_exec_mode(line_: str) -> None:
-    usage = f"Usage: %safety mode [{ExecutionMode.NORMAL}|{ExecutionMode.REACTIVE}]"
+    usage = f"Usage: %flow mode [{ExecutionMode.NORMAL}|{ExecutionMode.REACTIVE}]"
     try:
         exec_mode = ExecutionMode(line_.strip())
     except ValueError:
@@ -299,7 +299,7 @@ def set_exec_mode(line_: str) -> None:
 
 
 def set_exec_schedule(line_: str) -> None:
-    usage = f"Usage: %safety schedule [{'|'.join(schedule.value for schedule in ExecutionSchedule)}]"
+    usage = f"Usage: %flow schedule [{'|'.join(schedule.value for schedule in ExecutionSchedule)}]"
     if line_.startswith("liveness"):
         schedule = ExecutionSchedule.LIVENESS_BASED
     elif line_.startswith("dag"):
@@ -319,7 +319,7 @@ def set_exec_schedule(line_: str) -> None:
 
 def set_flow_order(line_: str) -> None:
     line_ = line_.lower().strip()
-    usage = f"Usage: %safety flow [{FlowOrder.ANY_ORDER}|{FlowOrder.IN_ORDER}]"
+    usage = f"Usage: %flow flow [{FlowOrder.ANY_ORDER}|{FlowOrder.IN_ORDER}]"
     if line_.startswith("any") or line_ in ("unordered", "both"):
         flow_order = FlowOrder.ANY_ORDER
     elif line_.startswith("in") or line_ in ("ordered", "linear"):
@@ -370,7 +370,7 @@ def _deregister_tracers_for(tracer_cls):
 
 def register_tracer(line_: str) -> None:
     line_ = line_.strip()
-    usage = f"Usage: %safety register_tracer <module.path.to.tracer_class>"
+    usage = f"Usage: %flow register_tracer <module.path.to.tracer_class>"
     tracer_cls = _resolve_tracer_class(line_)
     if tracer_cls is None:
         warn(usage)
@@ -382,7 +382,7 @@ def register_tracer(line_: str) -> None:
 
 def deregister_tracer(line_: str) -> None:
     line_ = line_.strip()
-    usage = f"Usage: %safety deregister_tracer [<module.path.to.tracer_class>|all]"
+    usage = f"Usage: %flow deregister_tracer [<module.path.to.tracer_class>|all]"
     if line_.lower() == "all":
         _deregister_tracers(list(kernel().registered_tracers))
     else:

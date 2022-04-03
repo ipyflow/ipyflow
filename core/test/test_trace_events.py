@@ -8,18 +8,18 @@ from typing import List, Set, Union
 import hypothesis.strategies as st
 from hypothesis import example, given, settings
 
-from ipyflow.safety import NotebookSafety
+from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import tracer
-from ipyflow.tracing.ipyflow_tracer import SafetyTracer
+from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from pyccolo import TraceEvent
-from .utils import make_safety_fixture, skipif_known_failing
+from .utils import make_flow_fixture, skipif_known_failing
 
 
 logging.basicConfig(level=logging.INFO)
 
 
-NotebookSafety.instance()
-_ALL_EVENTS_WITH_HANDLERS = SafetyTracer.instance().events_with_registered_handlers
+NotebookFlow.instance()
+_ALL_EVENTS_WITH_HANDLERS = DataflowTracer.instance().events_with_registered_handlers
 _RECORDED_EVENTS = []
 
 
@@ -29,7 +29,7 @@ def subsets(draw, elements):
 
 def patched_emit_event_fixture():
     _RECORDED_EVENTS.clear()
-    original_emit_event = SafetyTracer._emit_event
+    original_emit_event = DataflowTracer._emit_event
 
     def _patched_emit_event(
         self, evt: Union[str, TraceEvent], node_id: int, frame: FrameType, **kwargs
@@ -51,13 +51,13 @@ def patched_emit_event_fixture():
                     _RECORDED_EVENTS.append(event)
         return original_emit_event(self, event, node_id, frame, **kwargs)
 
-    SafetyTracer._emit_event = _patched_emit_event
+    DataflowTracer._emit_event = _patched_emit_event
     yield
-    SafetyTracer._emit_event = original_emit_event
+    DataflowTracer._emit_event = original_emit_event
 
 
 # Reset dependency graph before each test
-_safety_fixture, run_cell_ = make_safety_fixture(
+_flow_fixture, run_cell_ = make_flow_fixture(
     extra_fixture=patched_emit_event_fixture,
     # trace_messages_enabled=True,
 )

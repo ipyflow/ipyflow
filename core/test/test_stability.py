@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from .utils import make_safety_fixture, skipif_known_failing
+from .utils import make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture(enable_reactive_variables=True)
+# _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
+_flow_fixture, run_cell_ = make_flow_fixture(enable_reactive_variables=True)
 
 
 def run_cell(cell, **kwargs):
@@ -151,7 +151,7 @@ def test_fancy_slices():
 
 
 def test_fancy_slice_assign_augassign():
-    run_cell("%safety trace_messages enable")
+    run_cell("%flow trace_messages enable")
     run_cell("import numpy as np")
     run_cell("x = np.zeros((3, 3, 3))")
     run_cell("x[:, 1 ,...] = 1.")

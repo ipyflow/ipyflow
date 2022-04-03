@@ -2,10 +2,10 @@
 import ast
 
 from ipyflow.analysis.symbol_ref import SymbolRef, Atom
-from .utils import make_safety_fixture
+from .utils import make_flow_fixture
 
 
-_safety_fixture, _ = make_safety_fixture()
+_flow_fixture, _ = make_flow_fixture()
 
 
 def at(sym: str, **kwargs) -> Atom:

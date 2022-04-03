@@ -5,13 +5,13 @@ from typing import Set
 from ipyflow.data_model.code_cell import cells
 from ipyflow.singletons import flow
 from ipyflow.types import CellId
-from test.utils import make_safety_fixture, skipif_known_failing
+from test.utils import make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture(mark_typecheck_failures_unsafe=True)
+# _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
+_flow_fixture, run_cell_ = make_flow_fixture(mark_typecheck_failures_unsafe=True)
 
 
 def run_cell(cell, cell_id=None, **kwargs):

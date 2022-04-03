@@ -16,7 +16,7 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.run_mode import SafetyRunMode
+from ipyflow.run_mode import FlowRunMode
 from ipyflow.singletons import flow, SingletonBaseTracer
 from ipyflow.tracing.mutation_event import (
     ArgMutate,
@@ -31,7 +31,7 @@ from ipyflow.tracing.mutation_special_cases import (
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
 )
-from ipyflow.tracing.safety_ast_rewriter import SafetyAstRewriter
+from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.trace_stmt import TraceStatement
 from ipyflow.tracing.mutation_event import MutationEvent
@@ -120,13 +120,13 @@ class StackFrameManager(SingletonBaseTracer):
                 return pyc.SkipAll
 
 
-class SafetyTracer(StackFrameManager):
-    ast_rewriter_cls = SafetyAstRewriter
+class DataflowTracer(StackFrameManager):
+    ast_rewriter_cls = DataflowAstRewriter
 
     def should_propagate_handler_exception(
         self, evt: pyc.TraceEvent, exc: Exception
     ) -> bool:
-        return SafetyRunMode.get() == SafetyRunMode.DEVELOP
+        return FlowRunMode.get() == FlowRunMode.DEVELOP
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

@@ -4,12 +4,12 @@ from typing import Optional, Set
 
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
-from test.utils import assert_bool, make_safety_fixture, skipif_known_failing
+from test.utils import assert_bool, make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, run_cell_ = make_safety_fixture(
+_flow_fixture, run_cell_ = make_flow_fixture(
     setup_cells=["from test.test_nested_symbols import DotDict"]
 )
 run_cell = run_cell_
@@ -28,9 +28,9 @@ def assert_not_detected(msg=""):
 
 
 def lookup_symbols(val) -> Optional[Set[DataSymbol]]:
-    safety = flow()
+    flow_ = flow()
     alias_set = {
-        alias for alias in safety.aliases.get(id(val), []) if not alias.is_anonymous
+        alias for alias in flow_.aliases.get(id(val), []) if not alias.is_anonymous
     }
     if len(alias_set) == 0:
         return None

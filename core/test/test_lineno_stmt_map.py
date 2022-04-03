@@ -6,10 +6,10 @@ from typing import Dict
 from ipyflow.singletons import tracer
 from pyccolo.ast_bookkeeping import BookkeepingVisitor
 from pyccolo.stmt_mapper import StatementMapper
-from .utils import make_safety_fixture
+from .utils import make_flow_fixture
 
 
-_safety_fixture, _ = make_safety_fixture()
+_flow_fixture, _ = make_flow_fixture()
 
 
 def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:

@@ -3,12 +3,12 @@ import logging
 
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
-from test.utils import make_safety_fixture, skipif_known_failing
+from test.utils import make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-_safety_fixture, run_cell = make_safety_fixture()
+_flow_fixture, run_cell = make_flow_fixture()
 
 
 def lookup_symbol(name: str) -> DataSymbol:

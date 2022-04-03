@@ -4,13 +4,13 @@ import sys
 
 from ipyflow.singletons import flow
 from pyccolo.extra_builtins import EMIT_EVENT
-from .utils import assert_bool, make_safety_fixture, skipif_known_failing
+from .utils import assert_bool, make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture()
+# _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
+_flow_fixture, run_cell_ = make_flow_fixture()
 
 
 def run_cell(cell, **kwargs):
@@ -734,13 +734,13 @@ def test_func_assign_objs():
             logging.info(b[0])
             e = [c[0] + d[0]]
             f = [x[0] + y[0]]
-            %safety show_deps f[0]
+            %flow show_deps f[0]
             return f
         # z = func(c)
         """
     )
     run_cell("z = func(c)")
-    run_cell("%safety show_deps z[0]")
+    run_cell("%flow show_deps z[0]")
     run_cell("logging.info(z[0])")
     assert_not_detected()
     run_cell("logging.info(z)")
@@ -1052,8 +1052,8 @@ def test_attributes_2():
     )
     run_cell("x = Foo(5)")
     run_cell("y = x.x + 5")
-    run_cell("%safety show_deps x")
-    run_cell("%safety show_deps y")
+    run_cell("%flow show_deps x")
+    run_cell("%flow show_deps y")
     run_cell("x = 8")
     run_cell("logging.info(y)")
     assert_detected("y depends on stale x")
@@ -2168,7 +2168,7 @@ def test_one_time_tracing_func():
 
 
 def test_tracing_disable_with_nested_calls():
-    # run_cell('%safety trace_messages enable')
+    # run_cell('%flow trace_messages enable')
     run_cell("y = 0")
     run_cell(
         """

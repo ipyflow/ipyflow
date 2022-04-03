@@ -2,13 +2,13 @@
 import logging
 
 from ipyflow.singletons import flow
-from test.utils import make_safety_fixture
+from test.utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
-# _safety_fixture, run_cell_ = make_safety_fixture(trace_messages_enabled=True)
-_safety_fixture, run_cell_ = make_safety_fixture()
+# _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
+_flow_fixture, run_cell_ = make_flow_fixture()
 
 
 def updated_symbol_names():

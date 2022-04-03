@@ -18,13 +18,13 @@ from ipyflow.ipython_utils import (
     run_cell,
     save_number_of_currently_executing_cell,
 )
-from ipyflow.safety import NotebookSafety
+from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.ipyflow_tracer import (
     ModuleIniter,
-    SafetyTracer,
+    DataflowTracer,
     StackFrameManager,
 )
-from ipyflow.tracing.safety_ast_rewriter import SafetyAstRewriter
+from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.version import __version__
 
 
@@ -78,7 +78,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         self.tee_output_tracer = OutputRecorder.instance()
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [
             OutputRecorder,
-            SafetyTracer,
+            DataflowTracer,
         ]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
@@ -118,7 +118,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         orig_checker = tracer.__class__.should_instrument_file
         try:
             if not isinstance(tracer, (ModuleIniter, StackFrameManager)) or isinstance(
-                tracer, SafetyTracer
+                tracer, DataflowTracer
             ):
                 tracer.__class__.file_passes_filter_for_event = (
                     lambda *args: tracer.__class__ in self.registered_tracers
@@ -143,7 +143,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         orig_tracer_eval = pyc.BaseTracer.eval
 
         def _patched_exec(*args, **kwargs):
-            with SafetyTracer.instance().tracing_disabled():
+            with DataflowTracer.instance().tracing_disabled():
                 return orig_exec(
                     *args,
                     num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
@@ -152,7 +152,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 )
 
         def _patched_eval(*args, **kwargs):
-            with SafetyTracer.instance().tracing_disabled():
+            with DataflowTracer.instance().tracing_disabled():
                 return orig_eval(
                     *args,
                     num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
@@ -161,7 +161,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 )
 
         def _patched_tracer_exec(*args, **kwargs):
-            with SafetyTracer.instance().tracing_disabled():
+            with DataflowTracer.instance().tracing_disabled():
                 return orig_tracer_exec(
                     *args,
                     num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
@@ -170,7 +170,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 )
 
         def _patched_tracer_eval(*args, **kwargs):
-            with SafetyTracer.instance().tracing_disabled():
+            with DataflowTracer.instance().tracing_disabled():
                 return orig_tracer_eval(
                     *args,
                     num_extra_lookback_frames=kwargs.pop("num_extra_lookback_frames", 0)
@@ -202,7 +202,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         )
         if len(tracers) == 0:
             return None, []
-        ast_rewriter = ast_rewriter or SafetyAstRewriter(tracers)
+        ast_rewriter = ast_rewriter or DataflowAstRewriter(tracers)
         # ast_rewriter = ast_rewriter or tracers[-1].make_ast_rewriter()
         all_syntax_augmenters = []
         for tracer in tracers:
@@ -236,7 +236,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 else:
                     for tracer in all_tracers:
                         tracer._enable_tracing(check_disabled=False)
-                ast_rewriter = SafetyTracer.instance().make_ast_rewriter(
+                ast_rewriter = DataflowTracer.instance().make_ast_rewriter(
                     module_id=self.cell_counter()
                 )
                 _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
@@ -355,9 +355,9 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         return ZMQKernel
 
 
-class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
+class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
     def after_init_class(self) -> None:
-        NotebookSafety.instance(use_comm=True)
+        NotebookFlow.instance(use_comm=True)
 
     def before_init_metadata(self, parent) -> None:
         """
@@ -403,7 +403,7 @@ class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
         last_cell_id, flow_.last_executed_cell_id = flow_.last_executed_cell_id, cell_id
 
         # Stage 1: Precheck.
-        if SafetyTracer in self.registered_tracers:
+        if DataflowTracer in self.registered_tracers:
             flow_._safety_precheck_cell(cell)
 
             used_out_of_order_counter = flow_.out_of_order_usage_detected_counter
@@ -454,4 +454,4 @@ class SafeKernelBase(singletons.SafeKernel, PyccoloKernelMixin):
             flow_.set_exception_raised_during_execution(e)
 
 
-SafeKernel = SafeKernelBase.make_zmq_kernel_class("SafeKernel")
+SafeKernel = DataflowKernelBase.make_zmq_kernel_class("SafeKernel")

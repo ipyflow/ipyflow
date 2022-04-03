@@ -8,10 +8,10 @@ from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.live_refs import (
     compute_live_dead_symbol_refs as compute_live_dead_symbol_refs_with_stmts,
 )
-from .utils import make_safety_fixture
+from .utils import make_flow_fixture
 
 
-_safety_fixture, _ = make_safety_fixture()
+_flow_fixture, _ = make_flow_fixture()
 
 
 def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:

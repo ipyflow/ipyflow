@@ -53,6 +53,8 @@ setup(
     ],
     install_requires=requirements,
     extras_require={
+        "typecheck": ["ipyflow-core[typecheck]"],
+        "test": ["ipyflow-core[test]"],
         "dev": ["ipyflow-core[dev]"],
     },
     license='BSD-3-Clause',

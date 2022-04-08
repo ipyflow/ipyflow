@@ -262,7 +262,7 @@ const connectToComm = (
       }
     });
     const payload = {
-      type: 'cell_freshness',
+      type: 'compute_exec_schedule',
       executed_cell_id: cell.id,
       order_index_by_cell_id: order_index_by_cell_id,
       content_by_cell_id: content_by_cell_id,
@@ -419,7 +419,7 @@ const connectToComm = (
     if (msg.content.data['type'] === 'establish') {
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
-    } else if (msg.content.data['type'] === 'cell_freshness') {
+    } else if (msg.content.data['type'] === 'compute_exec_schedule') {
       staleCells = new Set(msg.content.data['stale_cells'] as string[]);
       freshCells = new Set(msg.content.data['fresh_cells'] as string[]);
       newFreshCells = new Set([...newFreshCells, ...msg.content.data['new_fresh_cells'] as string[]]);
@@ -435,23 +435,29 @@ const connectToComm = (
       lastExecutionMode = exec_mode;
       lastExecutionHighlightsEnabled = msg.content.data['highlights_enabled'] as boolean;
       executedReactiveFreshCells.add(msg.content.data['last_executed_cell_id'] as string);
-      let found = false;
-      notebook.widgets.forEach(cell => {
-        if (found || cell.model.type !== 'code' || executedReactiveFreshCells.has(cell.model.id)) {
-          return;
+      for (const cell of notebook.widgets) {
+        if (cell.model.type !== 'code' || executedReactiveFreshCells.has(cell.model.id)) {
+          continue;
         }
-        if ((exec_mode === 'reactive' && newFreshCells.has(cell.model.id)) || forcedReactiveCells.has(cell.model.id)) {
-          const codeCell = (cell as CodeCell);
-          if (cellPendingExecution === null) {
-            cellPendingExecution = codeCell;
-            // break early if using one of the order-based semantics
-            found = (flow_order === 'in_order' || exec_schedule === 'strict');
-          } else if (codeCell.model.executionCount !== null && codeCell.model.executionCount < cellPendingExecution.model.executionCount) {
-            // otherwise, execute in order of earliest execution counter
-            cellPendingExecution = codeCell;
+        if (!forcedReactiveCells.has(cell.model.id)) {
+          if (exec_mode !== 'reactive' || !newFreshCells.has(cell.model.id)) {
+            continue;
           }
         }
-      });
+        const codeCell = (cell as CodeCell);
+        if (cellPendingExecution === null) {
+          cellPendingExecution = codeCell;
+          // break early if using one of the order-based semantics
+          if (flow_order === 'in_order' || exec_schedule === 'strict') {
+            break;
+          }
+        } else if (codeCell.model.executionCount == null) {
+          // pass
+        } else if (codeCell.model.executionCount < cellPendingExecution.model.executionCount) {
+          // otherwise, execute in order of earliest execution counter
+          cellPendingExecution = codeCell;
+        }
+      }
       if (cellPendingExecution === null) {
         newFreshCells = new Set<string>();
         forcedReactiveCells = new Set<string>();

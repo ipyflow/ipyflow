@@ -130,7 +130,7 @@ const connectToComm = (Jupyter: any) => {
         data.cell.element[0].classList.remove(freshClass);
         data.cell.element[0].classList.remove(refresherInputClass);
         comm.send({
-            type: 'cell_freshness',
+            type: 'compute_exec_schedule',
             executed_cell_id: data.cell.cell_id,
             content_by_cell_id: gatherCellContentsById(Jupyter)
         });
@@ -156,7 +156,7 @@ const connectToComm = (Jupyter: any) => {
         if (msg.content.data.type == 'establish') {
             Jupyter.notebook.events.on('execute.CodeCell', onExecution);
             Jupyter.notebook.events.on('select.Cell', onSelect);
-        } else if (msg.content.data.type === 'cell_freshness') {
+        } else if (msg.content.data.type === 'compute_exec_schedule') {
             clearCellState(Jupyter);
             const staleCells: any = msg.content.data['stale_cells'];
             const freshCells: any = msg.content.data['fresh_cells'];
@@ -228,7 +228,7 @@ const connectToComm = (Jupyter: any) => {
         }
     });
     comm.send({
-        type: 'cell_freshness',
+        type: 'compute_exec_schedule',
         content_by_cell_id: gatherCellContentsById(Jupyter)
     });
     return () => {

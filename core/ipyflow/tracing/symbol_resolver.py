@@ -10,6 +10,7 @@ from ipyflow.analysis.mixins import (
     SkipUnboundArgsMixin,
     VisitListsMixin,
 )
+from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.timestamp import Timestamp
@@ -242,7 +243,10 @@ def resolve_rval_symbols(
         node = ast.parse(node).body[0]
     rval_symbols = ResolveRvalSymbols()(node)
     if len(rval_symbols) == 0:
-        rval_symbols = static_resolve_rvals(node)
+        prev_cell = cells().current_cell().prev_cell
+        rval_symbols = static_resolve_rvals(
+            node, cell_ctr=-1 if prev_cell is None else prev_cell.cell_ctr
+        )
     if should_update_usage_info:
         Timestamp.update_usage_info(rval_symbols)
     return rval_symbols

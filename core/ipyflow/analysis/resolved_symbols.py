@@ -22,7 +22,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         dsym: "DataSymbol",
         atom: "Atom",
         next_atom: Optional["Atom"],
-        liveness_timestamp: Optional[int] = None,
+        liveness_timestamp: Optional[Timestamp] = None,
     ) -> None:
         self.dsym = dsym
         self.atom = atom
@@ -52,11 +52,22 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         return self.next_atom is None
 
     @property
+    def is_recursive_reactive(self):
+        return self.atom.is_recursive_reactive or (
+            self.is_live
+            and self.dsym.is_recursive_reactive_at_counter(
+                self.liveness_timestamp.cell_num
+            )
+        )
+
+    @property
     def is_reactive(self) -> bool:
         if self.is_blocking:
             return False
-        return self.atom.is_reactive or (
-            self.is_live and self.dsym in flow().updated_deep_reactive_symbols
+        return (
+            self.atom.is_reactive
+            or self.is_recursive_reactive
+            or (self.is_live and self.dsym in flow().updated_deep_reactive_symbols)
         )
 
     @property

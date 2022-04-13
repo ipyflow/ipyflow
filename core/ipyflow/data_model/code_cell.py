@@ -70,7 +70,12 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     _override_current_cell: Optional["ExecutedCodeCell"] = None
 
     def __init__(
-        self, cell_id: CellId, cell_ctr: int, content: str, tags: Tuple[str, ...]
+        self,
+        cell_id: CellId,
+        cell_ctr: int,
+        content: str,
+        tags: Tuple[str, ...],
+        prev_cell: Optional["ExecutedCodeCell"] = None,
     ) -> None:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
@@ -80,6 +85,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self.last_ast_content: Optional[str] = None
         self.captured_output: Optional[CapturedIO] = None
         self.tags: Tuple[str, ...] = tags
+        self.prev_cell = prev_cell
         self.reactive_tags: Set[str] = set()
         self._dynamic_parents: Set[CellId] = set()
         self._dynamic_children: Set[CellId] = set()
@@ -201,7 +207,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         prev_cell = cls.from_id(cell_id)
         if prev_cell is not None:
             tags = tuple(set(tags) | set(prev_cell.tags))
-        cell = cls(cell_id, cell_ctr, content, tags)
+        cell = cls(cell_id, cell_ctr, content, tags, prev_cell=prev_cell)
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
             cell._dynamic_children = prev_cell._dynamic_children

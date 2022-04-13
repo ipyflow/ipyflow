@@ -127,7 +127,7 @@ class FrontendCheckerResult(NamedTuple):
             # no need to do this computation if already in reactive mode, since
             # everything that is new ready is automatically considered reactive
             return
-        for cell_id in self.new_ready_cells:
+        for cell_id in self.ready_cells:
             if cell_id not in checker_results_by_cid:
                 continue
             cell = cells().from_id(cell_id)

@@ -301,7 +301,10 @@ def get_live_symbols_and_cells_for_references(
     called_dsyms: Set[Tuple["DataSymbol", int]] = set()
     for live_symbol_ref in symbol_refs:
         for resolved in live_symbol_ref.gen_resolved_symbols(
-            scope, only_yield_final_symbol=False, yield_all_intermediate_symbols=True
+            scope,
+            only_yield_final_symbol=False,
+            yield_all_intermediate_symbols=True,
+            cell_ctr=cell_ctr,
         ):
             if update_liveness_time_versions:
                 ts_to_use = (
@@ -309,11 +312,13 @@ def get_live_symbols_and_cells_for_references(
                     if resolved.is_last
                     else resolved.dsym.timestamp_excluding_ns_descendents
                 )
-                liveness_time = Timestamp(cell_ctr, resolved.liveness_timestamp)
+                liveness_time = resolved.liveness_timestamp
                 assert liveness_time > ts_to_use
                 if ts_to_use.is_initialized:
                     flow().add_static_data_dep(liveness_time, ts_to_use)
                     resolved.dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
+                if resolved.atom.is_recursive_reactive:
+                    resolved.dsym.recursive_reactive_cell_num = cell_ctr
             if resolved.is_called:
                 called_dsyms.add((resolved.dsym, live_symbol_ref.timestamp))
             if not resolved.is_unsafe:
@@ -380,9 +385,11 @@ def compute_live_dead_symbol_refs(
     return ComputeLiveSymbolRefs(scope=scope, init_killed=init_killed)(code)
 
 
-def static_resolve_rvals(code: Union[ast.AST, str]) -> Set["DataSymbol"]:
+def static_resolve_rvals(
+    code: Union[ast.AST, str], cell_ctr: int = -1
+) -> Set["DataSymbol"]:
     live_refs, *_ = compute_live_dead_symbol_refs(code)
     resolved_live_syms, *_ = get_live_symbols_and_cells_for_references(
-        live_refs, flow().global_scope, -1
+        live_refs, flow().global_scope, cell_ctr=cell_ctr
     )
     return {resolved.dsym for resolved in resolved_live_syms}

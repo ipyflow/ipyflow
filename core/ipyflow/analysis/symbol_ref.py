@@ -15,6 +15,7 @@ from typing import (
 )
 
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
+from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import tracer
 from ipyflow.utils.ast_utils import subscript_to_slice
 from ipyflow.utils import CommonEqualityMixin
@@ -83,12 +84,14 @@ class Atom(CommonEqualityMixin):
         is_callpoint: bool = False,
         is_subscript: bool = False,
         is_reactive: bool = False,
+        is_recursive_reactive: bool = False,
         is_blocking: bool = False,
     ) -> None:
         self.value = value
         self.is_callpoint = is_callpoint
         self.is_subscript = is_subscript
         self.is_reactive = is_reactive
+        self.is_recursive_reactive = is_recursive_reactive
         self.is_blocking = is_blocking
 
     def nonreactive(self) -> "Atom":
@@ -97,6 +100,8 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=False,
+            is_recursive_reactive=self.is_recursive_reactive,
+            is_blocking=self.is_blocking,
         )
 
     def reactive(self) -> "Atom":
@@ -105,6 +110,18 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=True,
+            is_recursive_reactive=self.is_recursive_reactive,
+            is_blocking=False,
+        )
+
+    def recursive_reactive(self) -> "Atom":
+        return self.__class__(
+            self.value,
+            is_callpoint=self.is_callpoint,
+            is_subscript=self.is_subscript,
+            is_reactive=self.is_reactive,
+            is_recursive_reactive=True,
+            is_blocking=False,
         )
 
     def blocking(self) -> "Atom":
@@ -113,6 +130,7 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=False,
+            is_recursive_reactive=False,
             is_blocking=True,
         )
 
@@ -123,6 +141,7 @@ class Atom(CommonEqualityMixin):
                 self.is_callpoint,
                 self.is_subscript,
                 self.is_reactive,
+                self.is_recursive_reactive,
                 self.is_blocking,
             )
         )
@@ -168,6 +187,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
             Atom(
                 val,
                 is_reactive=id(node) in tracer().reactive_node_ids,
+                is_recursive_reactive=id(node) in tracer().recursive_reactive_node_ids,
                 is_blocking=id(node) in tracer().blocking_node_ids,
                 **kwargs,
             )
@@ -282,6 +302,7 @@ class SymbolRef(CommonEqualityMixin):
         assert not (yield_in_reverse and not yield_all_intermediate_symbols)
         dsym, atom, next_atom = None, None, None
         reactive_seen = False
+        recursive_reactive_seen = False
         blocking_seen = False
         if yield_in_reverse:
             gen: Iterable[Tuple["DataSymbol", Atom, Atom]] = [
@@ -299,13 +320,22 @@ class SymbolRef(CommonEqualityMixin):
             gen = scope.gen_data_symbols_for_attrsub_chain(self)
         for dsym, atom, next_atom in gen:
             reactive_seen = reactive_seen or atom.is_reactive
+            recursive_reactive_seen = (
+                recursive_reactive_seen or atom.is_recursive_reactive
+            )
             yield_all_intermediate_symbols = (
                 yield_all_intermediate_symbols or reactive_seen
             )
             if inherit_reactivity:
                 if reactive_seen and not blocking_seen and not atom.is_reactive:
                     atom = atom.reactive()
-                elif blocking_seen and not atom.is_blocking:
+                if (
+                    recursive_reactive_seen
+                    and not blocking_seen
+                    and not atom.is_recursive_reactive
+                ):
+                    atom = atom.recursive_reactive()
+                if blocking_seen and not atom.is_blocking:
                     atom = atom.blocking()
             if yield_all_intermediate_symbols:
                 # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
@@ -330,6 +360,7 @@ class LiveSymbolRef(CommonEqualityMixin):
         scope: "Scope",
         only_yield_final_symbol: bool,
         yield_all_intermediate_symbols: bool = False,
+        cell_ctr: int = -1,
     ) -> Generator[ResolvedDataSymbol, None, None]:
         blocking_seen = False
         for resolved_sym in self.ref.gen_resolved_symbols(
@@ -337,7 +368,7 @@ class LiveSymbolRef(CommonEqualityMixin):
             only_yield_final_symbol,
             yield_all_intermediate_symbols=yield_all_intermediate_symbols,
         ):
-            resolved_sym.liveness_timestamp = self.timestamp
+            resolved_sym.liveness_timestamp = Timestamp(cell_ctr, self.timestamp)
             blocking_seen = blocking_seen or resolved_sym.is_blocking
             if blocking_seen and not resolved_sym.is_blocking:
                 resolved_sym.atom = resolved_sym.atom.blocking()

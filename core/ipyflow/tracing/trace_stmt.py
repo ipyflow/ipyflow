@@ -99,6 +99,10 @@ class TraceStatement:
                 if resolved.is_reactive and not blocking_seen:
                     flow().updated_deep_reactive_symbols.add(resolved.dsym)
                     reactive_seen = True
+                    if resolved.is_recursive_reactive:
+                        resolved.dsym.recursive_reactive_cell_num = (
+                            flow().cell_counter()
+                        )
                 if reactive_seen and not blocking_seen:
                     flow().updated_reactive_symbols.add(resolved.dsym)
                 if blocking_seen and resolved.dsym not in flow().updated_symbols:
@@ -142,6 +146,7 @@ class TraceStatement:
                 and name in namespace.obj.columns
             ):
                 subscript_vals_to_use.append(not is_subscript)
+        self._handle_reactive_store(target)
         for subscript_val in subscript_vals_to_use:
             upserted = scope.upsert_data_symbol_for_name(
                 name,
@@ -156,7 +161,6 @@ class TraceStatement:
                 scope,
                 upserted.parents,
             )
-        self._handle_reactive_store(target)
         if maybe_fixup_literal_namespace:
             namespace_for_upsert = flow().namespaces.get(id(obj), None)
             if namespace_for_upsert is not None and namespace_for_upsert.is_anonymous:

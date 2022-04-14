@@ -144,5 +144,5 @@ class ResolvedDataSymbol(CommonEqualityMixin):
             return True
         return False
 
-    def is_stale_at_position(self, pos: int) -> bool:
-        return self.dsym.is_stale_at_position(pos, deep=self.is_deep)
+    def is_waiting_at_position(self, pos: int) -> bool:
+        return self.dsym.is_waiting_at_position(pos, deep=self.is_deep)

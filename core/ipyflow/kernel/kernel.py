@@ -386,7 +386,7 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
 
     def before_execute(self, cell_content: str) -> Optional[str]:
         flow_ = singletons.flow()
-        flow_.test_and_clear_stale_usage_detected()
+        flow_.test_and_clear_waiter_usage_detected()
         flow_.test_and_clear_out_of_order_usage_detected_counter()
         if flow_._saved_debug_message is not None:  # pragma: no cover
             logger.error(flow_._saved_debug_message)

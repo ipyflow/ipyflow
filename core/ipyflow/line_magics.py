@@ -39,8 +39,8 @@ _USAGE = """Options:
     - This will print out the dependencies for given symbols.
       Multiple symbols should be separated with commas.
 
-[stale|show_stale]: 
-    - This will print out all the global variables that are stale. 
+[waiting|show_waiting]: 
+    - This will print out all the global variables that are waiting for newer dependencies. 
 
 slice <cell_num>:
     - This will print the code necessary to reconstruct <cell_num> using a dynamic
@@ -72,8 +72,8 @@ def make_line_magic(flow_: "NotebookFlow"):
             return toggle_dataflow(cmd)
         elif cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
             return show_deps(line)
-        elif cmd in ("stale", "show_stale"):
-            return show_stale(line)
+        elif cmd in ("waiting", "show_waiting"):
+            return show_waiting(line)
         elif cmd == "trace_messages":
             return trace_messages(line)
         elif cmd in ("hls", "nohls", "highlight", "highlights"):
@@ -203,8 +203,8 @@ def show_deps(symbols: str) -> Optional[str]:
         return "\n".join(statements)
 
 
-def show_stale(line_: str) -> Optional[str]:
-    usage = "Usage: %flow show_stale [global|all]"
+def show_waiting(line_: str) -> Optional[str]:
+    usage = "Usage: %flow show_waiting [global|all]"
     line = line_.split()
     if len(line) == 0 or line[0] == "global":
         dsym_sets: Iterable[Iterable[DataSymbol]] = [
@@ -215,15 +215,15 @@ def show_stale(line_: str) -> Optional[str]:
     else:
         warn(usage)
         return None
-    stale_set = set()
+    waiter_set = set()
     for dsym_set in dsym_sets:
         for data_sym in dsym_set:
-            if data_sym.is_stale and not data_sym.is_anonymous:
-                stale_set.add(data_sym)
-    if not stale_set:
-        return "No symbol has stale dependencies for now!"
+            if data_sym.is_waiting and not data_sym.is_anonymous:
+                waiter_set.add(data_sym)
+    if not waiter_set:
+        return "No symbol waiting on dependencies for now!"
     else:
-        return "Symbol(s) with stale dependencies: %s" % stale_set
+        return "Symbol(s) waiting on dependencies: %s" % waiter_set
 
 
 def trace_messages(line_: str) -> None:

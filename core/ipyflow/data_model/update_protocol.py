@@ -57,11 +57,11 @@ class UpdateProtocol:
         tracer().this_stmt_updated_symbols |= self.seen
         if refresh:
             for updated_sym in directly_updated_symbols:
-                if not updated_sym.is_stale and updated_sym is not self.updated_sym:
+                if not updated_sym.is_waiting and updated_sym is not self.updated_sym:
                     updated_sym.refresh()
         self.seen |= new_deps  # don't propagate to stuff on RHS
         for dsym in updated_symbols_with_ancestors:
-            self._propagate_staleness_to_deps(dsym, skip_seen_check=True)
+            self._propagate_waiting_to_deps(dsym, skip_seen_check=True)
 
     def _maybe_get_adhoc_pandas_updated_syms(self):
         try:
@@ -108,7 +108,7 @@ class UpdateProtocol:
                     dsym.obj_id,
                     containing_ns.obj_id,
                 )
-                containing_ns.namespace_stale_symbols.discard(dsym)
+                containing_ns.namespace_waiting_symbols.discard(dsym)
                 containing_ns.max_descendent_timestamp = Timestamp.current()
                 self._collect_updated_symbols_and_refresh_namespaces(
                     flow().aliases[containing_ns.obj_id], refresh_descendent_namespaces
@@ -121,7 +121,7 @@ class UpdateProtocol:
                         refresh_descendent_namespaces,
                     )
 
-    def _propagate_staleness_to_namespace_parents(
+    def _propagate_waiting_to_namespace_parents(
         self, dsym: "DataSymbol", skip_seen_check: bool = False
     ) -> None:
         if not skip_seen_check and dsym in self.seen:
@@ -130,10 +130,10 @@ class UpdateProtocol:
         containing_ns = dsym.containing_namespace
         if containing_ns is None:
             return
-        logger.warning("add %s to namespace stale symbols of %s", dsym, containing_ns)
-        containing_ns.namespace_stale_symbols.add(dsym)
+        logger.warning("add %s to namespace waiting symbols of %s", dsym, containing_ns)
+        containing_ns.namespace_waiting_symbols.add(dsym)
         for containing_alias in flow().aliases[containing_ns.obj_id]:
-            self._propagate_staleness_to_namespace_parents(containing_alias)
+            self._propagate_waiting_to_namespace_parents(containing_alias)
 
         for containing_alias in flow().aliases[containing_ns.obj_id]:
             # do this in 2 separate loops to make sure all containing_alias are added to 'seen'
@@ -142,7 +142,7 @@ class UpdateProtocol:
                 logger.warning(
                     "propagate from namespace parent of %s to child %s", dsym, child
                 )
-                self._propagate_staleness_to_deps(child)
+                self._propagate_waiting_to_deps(child)
 
     def _non_class_to_instance_children(
         self, dsym: "DataSymbol"
@@ -159,7 +159,7 @@ class UpdateProtocol:
                     continue
             yield child
 
-    def _propagate_staleness_to_namespace_children(
+    def _propagate_waiting_to_namespace_children(
         self, dsym: "DataSymbol", skip_seen_check: bool = False
     ) -> None:
         if not skip_seen_check and dsym in self.seen:
@@ -170,9 +170,9 @@ class UpdateProtocol:
             return
         for ns_child in self_ns.all_data_symbols_this_indentation(exclude_class=True):
             logger.warning("propagate from %s to namespace child %s", dsym, ns_child)
-            self._propagate_staleness_to_deps(ns_child)
+            self._propagate_waiting_to_deps(ns_child)
 
-    def _propagate_staleness_to_deps(
+    def _propagate_waiting_to_deps(
         self, dsym: "DataSymbol", skip_seen_check: bool = False
     ) -> None:
         if not skip_seen_check and dsym in self.seen:
@@ -182,16 +182,14 @@ class UpdateProtocol:
             dsym not in flow().updated_symbols
             and dsym not in tracer().this_stmt_updated_symbols
         ):
-            if dsym.should_mark_stale(self.updated_sym):
+            if dsym.should_mark_waiting(self.updated_sym):
                 dsym.fresher_ancestors.add(self.updated_sym)
                 dsym.fresher_ancestor_timestamps.add(self.updated_sym.timestamp)
                 dsym.required_timestamp = Timestamp.current()
-                self._propagate_staleness_to_namespace_parents(
-                    dsym, skip_seen_check=True
-                )
-                self._propagate_staleness_to_namespace_children(
+                self._propagate_waiting_to_namespace_parents(dsym, skip_seen_check=True)
+                self._propagate_waiting_to_namespace_children(
                     dsym, skip_seen_check=True
                 )
         for child in self._non_class_to_instance_children(dsym):
             logger.warning("propagate %s %s to %s", dsym, dsym.obj_id, child)
-            self._propagate_staleness_to_deps(child)
+            self._propagate_waiting_to_deps(child)

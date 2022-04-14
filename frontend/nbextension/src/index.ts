@@ -2,13 +2,13 @@
 import '../style/index.css';
 // import "jqueryui";
 
-const staleClass = 'stale-cell';
-const freshClass = 'fresh-cell';
-const refresherClass = 'refresher-cell';
-const refresherInputClass = 'refresher-input-cell';
-const linkedStaleClass = 'linked-stale';
-const linkedFreshClass = 'linked-fresh';
-const linkedRefresherClass = 'linked-refresher';
+const waitingClass = 'waiting-cell';
+const readyClass = 'ready-cell';
+const readyMakingClass = 'ready-making-cell';
+const readyMakingInputClass = 'ready-making-input-cell';
+const linkedWaitingClass = 'linked-waiting';
+const linkedReadyClass = 'linked-ready';
+const linkedReadyMakingClass = 'linked-ready-making';
 
 const cleanup = new Event('cleanup');
 
@@ -44,7 +44,7 @@ const attachCleanupListener = (elem: any, evt: "mouseover" | "mouseout", listene
     elem.addEventListener('cleanup', cleanupListener);
 };
 
-const addFreshInteraction = (elem: Element,
+const addReadyInteraction = (elem: Element,
                                    linkedElem: Element,
                                    evt: "mouseover" | "mouseout",
                                    add_or_remove: "add" | "remove",
@@ -58,19 +58,19 @@ const addFreshInteraction = (elem: Element,
     attachCleanupListener(elem, evt, listener);
 };
 
-const addFreshInteractions = (elem: HTMLElement) => {
-    addFreshInteraction(
-        getCellInputSection(elem), elem, 'mouseover', 'add', linkedFreshClass
+const addReadyInteractions = (elem: HTMLElement) => {
+    addReadyInteraction(
+        getCellInputSection(elem), elem, 'mouseover', 'add', linkedReadyClass
     );
-    addFreshInteraction(
-        getCellInputSection(elem), elem, 'mouseout', 'remove', linkedFreshClass
+    addReadyInteraction(
+        getCellInputSection(elem), elem, 'mouseout', 'remove', linkedReadyClass
     );
 
-    addFreshInteraction(
-        getCellOutputSection(elem), elem, 'mouseover', 'add', linkedRefresherClass
+    addReadyInteraction(
+        getCellOutputSection(elem), elem, 'mouseover', 'add', linkedReadyMakingClass
     );
-    addFreshInteraction(
-        getCellOutputSection(elem), elem, 'mouseout', 'remove', linkedRefresherClass
+    addReadyInteraction(
+        getCellOutputSection(elem), elem, 'mouseout', 'remove', linkedReadyMakingClass
     );
 };
 
@@ -90,13 +90,13 @@ const addFreshInteractions = (elem: HTMLElement) => {
 
 const clearCellState = (Jupyter: any) => {
     Jupyter.notebook.get_cells().forEach((cell: any, idx: any) => {
-        cell.element[0].classList.remove(staleClass);
-        cell.element[0].classList.remove(refresherClass);
-        cell.element[0].classList.remove(freshClass);
-        cell.element[0].classList.remove(refresherInputClass);
-        cell.element[0].classList.remove(linkedStaleClass);
-        cell.element[0].classList.remove(linkedFreshClass);
-        cell.element[0].classList.remove(linkedRefresherClass);
+        cell.element[0].classList.remove(waitingClass);
+        cell.element[0].classList.remove(readyMakingClass);
+        cell.element[0].classList.remove(readyClass);
+        cell.element[0].classList.remove(readyMakingInputClass);
+        cell.element[0].classList.remove(linkedWaitingClass);
+        cell.element[0].classList.remove(linkedReadyClass);
+        cell.element[0].classList.remove(linkedReadyMakingClass);
 
         const cellInput = getCellInputSection(cell.element[0]);
         if (cellInput !== null) {
@@ -127,8 +127,8 @@ const connectToComm = (Jupyter: any) => {
         if (data.cell.notebook !== Jupyter.notebook) {
             return;
         }
-        data.cell.element[0].classList.remove(freshClass);
-        data.cell.element[0].classList.remove(refresherInputClass);
+        data.cell.element[0].classList.remove(readyClass);
+        data.cell.element[0].classList.remove(readyMakingInputClass);
         comm.send({
             type: 'compute_exec_schedule',
             executed_cell_id: data.cell.cell_id,
@@ -158,70 +158,70 @@ const connectToComm = (Jupyter: any) => {
             Jupyter.notebook.events.on('select.Cell', onSelect);
         } else if (msg.content.data.type === 'compute_exec_schedule') {
             clearCellState(Jupyter);
-            const staleCells: any = msg.content.data['stale_cells'];
-            const freshCells: any = msg.content.data['fresh_cells'];
-            const staleLinks: any = msg.content.data['stale_links'];
-            const refresherLinks: any = msg.content.data['refresher_links'];
+            const waitingCells: any = msg.content.data['waiting_cells'];
+            const readyCells: any = msg.content.data['ready_cells'];
+            const waiterLinks: any = msg.content.data['waiter_links'];
+            const readyMakerLinks: any = msg.content.data['ready_maker_links'];
             const cellsById: {[id: string]: HTMLElement} = {};
             Jupyter.notebook.get_cells().forEach((cell: any) => {
                 cellsById[cell.cell_id] = cell.element[0];
             });
             for (const [id, elem] of Object.entries(cellsById)) {
-                if (staleCells.indexOf(id) > -1) {
-                    elem.classList.add(staleClass);
-                    elem.classList.add(freshClass);
-                    elem.classList.remove(refresherInputClass);
-                } else if (freshCells.indexOf(id) > -1) {
-                    elem.classList.add(refresherInputClass);
-                    elem.classList.add(freshClass);
+                if (waitingCells.indexOf(id) > -1) {
+                    elem.classList.add(waitingClass);
+                    elem.classList.add(readyClass);
+                    elem.classList.remove(readyMakingInputClass);
+                } else if (readyCells.indexOf(id) > -1) {
+                    elem.classList.add(readyMakingInputClass);
+                    elem.classList.add(readyClass);
 
-                    addFreshInteractions(elem);
+                    addReadyInteractions(elem);
                 }
 
-                if (staleLinks.hasOwnProperty(id)) {
+                if (waiterLinks.hasOwnProperty(id)) {
                     addUnsafeCellInteraction(
-                        getCellInputSection(elem), staleLinks[id], cellsById,
-                        'mouseover', 'add', linkedRefresherClass
+                        getCellInputSection(elem), waiterLinks[id], cellsById,
+                        'mouseover', 'add', linkedReadyMakingClass
                     );
 
                     addUnsafeCellInteraction(
-                        getCellOutputSection(elem), staleLinks[id], cellsById,
-                        'mouseover', 'add', linkedRefresherClass
+                        getCellOutputSection(elem), waiterLinks[id], cellsById,
+                        'mouseover', 'add', linkedReadyMakingClass
                     );
 
                     addUnsafeCellInteraction(
-                        getCellInputSection(elem), staleLinks[id], cellsById,
-                        'mouseout', 'remove', linkedRefresherClass
+                        getCellInputSection(elem), waiterLinks[id], cellsById,
+                        'mouseout', 'remove', linkedReadyMakingClass
                     );
 
                     addUnsafeCellInteraction(
-                        getCellOutputSection(elem), staleLinks[id], cellsById,
-                        'mouseout', 'remove', linkedRefresherClass
+                        getCellOutputSection(elem), waiterLinks[id], cellsById,
+                        'mouseout', 'remove', linkedReadyMakingClass
                     );
                 }
 
-                if (refresherLinks.hasOwnProperty(id)) {
-                    elem.classList.add(refresherClass);
-                    elem.classList.add(freshClass);
-                    addFreshInteractions(elem);
+                if (readyMakerLinks.hasOwnProperty(id)) {
+                    elem.classList.add(readyMakingClass);
+                    elem.classList.add(readyClass);
+                    addReadyInteractions(elem);
                     addUnsafeCellInteraction(
-                        getCellInputSection(elem), refresherLinks[id], cellsById,
-                        'mouseover', 'add', linkedStaleClass
+                        getCellInputSection(elem), readyMakerLinks[id], cellsById,
+                        'mouseover', 'add', linkedWaitingClass
                     );
 
                     addUnsafeCellInteraction(
-                        getCellInputSection(elem), refresherLinks[id], cellsById,
-                        'mouseover', 'add', linkedFreshClass,
+                        getCellInputSection(elem), readyMakerLinks[id], cellsById,
+                        'mouseover', 'add', linkedReadyClass,
                     );
 
                     addUnsafeCellInteraction(
-                        getCellInputSection(elem), refresherLinks[id], cellsById,
-                        'mouseout', 'remove', linkedStaleClass
+                        getCellInputSection(elem), readyMakerLinks[id], cellsById,
+                        'mouseout', 'remove', linkedWaitingClass
                     );
 
                     addUnsafeCellInteraction(
-                        getCellInputSection(elem), refresherLinks[id], cellsById,
-                        'mouseout', 'remove', linkedFreshClass
+                        getCellInputSection(elem), readyMakerLinks[id], cellsById,
+                        'mouseout', 'remove', linkedReadyClass
                     );
                 }
             }

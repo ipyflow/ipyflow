@@ -38,7 +38,7 @@ def test_toggle_dataflow():
     assert flow().mut_settings.dataflow_enabled
 
 
-def test_show_deps_show_stale():
+def test_show_deps_show_waiting():
     run_cell("x = 0")
     run_cell("y = x + 1")
     run_cell("logging.info(y)")
@@ -48,25 +48,25 @@ def test_show_deps_show_stale():
         cell4.captured_output.stdout.strip()
         == "Symbol y (defined cell: 2; last updated cell: 2) is dependent on {<x>} and is a parent of nothing"
     ), ("got %s" % cell4.captured_output)
-    run_cell("%flow show_stale")
+    run_cell("%flow show_waiting")
     cell5 = cells().from_id(5)
     assert (
         cell5.captured_output.stdout.strip()
-        == "No symbol has stale dependencies for now!"
+        == "No symbol waiting on dependencies for now!"
     ), ("got %s" % cell5.captured_output)
     run_cell("x = 42")
-    run_cell("%flow show_stale")
+    run_cell("%flow show_waiting")
     cell7 = cells().from_id(7)
     assert (
         cell7.captured_output.stdout.strip()
-        == "Symbol(s) with stale dependencies: {<y>}"
+        == "Symbol(s) waiting on dependencies: {<y>}"
     ), ("got %s" % cell7.captured_output)
     run_cell("y = x + 1")
-    run_cell("%flow show_stale")
+    run_cell("%flow show_waiting")
     cell9 = cells().from_id(9)
     assert (
         cell9.captured_output.stdout.strip()
-        == "No symbol has stale dependencies for now!"
+        == "No symbol waiting on dependencies for now!"
     ), ("got %s" % cell9.captured_output)
 
 

@@ -170,7 +170,7 @@ def test_imports():
     assert slice_size == 3, "got %d" % slice_size
 
 
-def test_handle_stale():
+def test_handle_waiters():
     run_cell("a = 1")
     run_cell("b = 2 * a")
     run_cell("a = 2")

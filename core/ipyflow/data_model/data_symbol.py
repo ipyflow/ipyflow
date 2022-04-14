@@ -116,7 +116,7 @@ class DataSymbol:
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()
 
-        # The necessary last-updated timestamp / cell counter for this symbol to not be stale
+        # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
         self.required_timestamp: Timestamp = self.timestamp
 
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
@@ -133,8 +133,8 @@ class DataSymbol:
         self.cells_where_deep_live: Set[ExecutedCodeCell] = set()
         self.cells_where_shallow_live: Set[ExecutedCodeCell] = set()
 
-        self._last_computed_staleness_cache_ts: int = -1
-        self._is_stale_at_position_cache: Dict[Tuple[int, bool], bool] = {}
+        self._last_computed_waiting_cache_ts: int = -1
+        self._is_waiting_at_position_cache: Dict[Tuple[int, bool], bool] = {}
 
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
@@ -180,9 +180,9 @@ class DataSymbol:
             return max(self.timestamp_by_used_time.keys())
 
     @property
-    def namespace_stale_symbols(self) -> Set["DataSymbol"]:
+    def namespace_waiting_symbols(self) -> Set["DataSymbol"]:
         ns = self.namespace
-        return set() if ns is None else ns.namespace_stale_symbols
+        return set() if ns is None else ns.namespace_waiting_symbols
 
     @property
     def timestamp_excluding_ns_descendents(self) -> Timestamp:
@@ -195,7 +195,7 @@ class DataSymbol:
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
     @property
-    def staleness_timestamp(self) -> int:
+    def waiting_timestamp(self) -> int:
         return max(self._timestamp.cell_num, flow().min_timestamp)
 
     @property
@@ -375,7 +375,7 @@ class DataSymbol:
     def collect_self_garbage(self) -> None:
         """
         Just null out the reference to obj; we need to keep the edges
-        and namespace relationships around for staleness propagation.
+        and namespace relationships around for waiter propagation.
         """
         # TODO: ideally we should figure out how to GC the symbols themselves
         #  and remove them from the symbol graph, to keep this from getting
@@ -594,24 +594,24 @@ class DataSymbol:
             )
 
     @property
-    def is_stale(self) -> bool:
+    def is_waiting(self) -> bool:
         if self.disable_warnings or self._temp_disable_warnings:
             return False
-        if self.staleness_timestamp < self.required_timestamp.cell_num:
+        if self.waiting_timestamp < self.required_timestamp.cell_num:
             return True
         elif flow().min_timestamp == -1:
-            return len(self.namespace_stale_symbols) > 0
+            return len(self.namespace_waiting_symbols) > 0
         else:
             # TODO: guard against infinite recurision
-            return any(sym.is_stale for sym in self.namespace_stale_symbols)
+            return any(sym.is_waiting for sym in self.namespace_waiting_symbols)
 
     @property
     def is_shallow_stale(self) -> bool:
         if self.disable_warnings or self._temp_disable_warnings:
             return False
-        return self.staleness_timestamp < self.required_timestamp.cell_num
+        return self.waiting_timestamp < self.required_timestamp.cell_num
 
-    def _is_stale_at_position_impl(self, pos: int, deep: bool) -> bool:
+    def _is_waiting_at_position_impl(self, pos: int, deep: bool) -> bool:
         for par, timestamps in self.parents.items():
             for ts in timestamps:
                 dep_introduced_pos = cells().from_timestamp(ts).position
@@ -620,7 +620,7 @@ class DataSymbol:
                 for updated_ts in par.updated_timestamps:
                     if cells().from_timestamp(updated_ts).position > dep_introduced_pos:
                         continue
-                    if updated_ts.cell_num > ts.cell_num or par.is_stale_at_position(
+                    if updated_ts.cell_num > ts.cell_num or par.is_waiting_at_position(
                         ts.cell_num
                     ):
                         # logger.error("sym: %s", self)
@@ -632,30 +632,30 @@ class DataSymbol:
                         # logger.error("par updated position: %s", cells().from_timestamp(updated_ts).position)
                         return True
         if deep:
-            for sym in self.namespace_stale_symbols:
-                if sym.is_stale_at_position(pos):
+            for sym in self.namespace_waiting_symbols:
+                if sym.is_waiting_at_position(pos):
                     return True
         return False
 
-    def is_stale_at_position(self, pos: int, deep: bool = True) -> bool:
+    def is_waiting_at_position(self, pos: int, deep: bool = True) -> bool:
         if deep:
-            if not self.is_stale:
+            if not self.is_waiting:
                 return False
         else:
             if not self.is_shallow_stale:
                 return False
         if flow().mut_settings.flow_order == FlowDirection.ANY_ORDER:
             return True
-        if cells().exec_counter() > self._last_computed_staleness_cache_ts:
-            self._is_stale_at_position_cache.clear()
-            self._last_computed_staleness_cache_ts = cells().exec_counter()
-        if (pos, deep) in self._is_stale_at_position_cache:
-            return self._is_stale_at_position_cache[pos, deep]
-        is_stale = self._is_stale_at_position_impl(pos, deep)
-        self._is_stale_at_position_cache[pos, deep] = is_stale
-        return is_stale
+        if cells().exec_counter() > self._last_computed_waiting_cache_ts:
+            self._is_waiting_at_position_cache.clear()
+            self._last_computed_waiting_cache_ts = cells().exec_counter()
+        if (pos, deep) in self._is_waiting_at_position_cache:
+            return self._is_waiting_at_position_cache[pos, deep]
+        is_waiting = self._is_waiting_at_position_impl(pos, deep)
+        self._is_waiting_at_position_cache[pos, deep] = is_waiting
+        return is_waiting
 
-    def should_mark_stale(self, updated_dep):
+    def should_mark_waiting(self, updated_dep):
         if self.disable_warnings:
             return False
         if updated_dep is self:
@@ -729,7 +729,7 @@ class DataSymbol:
                     mutated and not propagate_to_namespace_descendents
                 )
                 and not self._is_simple_assign(new_deps),
-                refresh_namespace_stale=not mutated,
+                refresh_namespace_waiting=not mutated,
             )
         if propagate and (deleted or not should_preserve_timestamp):
             UpdateProtocol(self)(
@@ -770,7 +770,7 @@ class DataSymbol:
         self,
         bump_version: bool = True,
         refresh_descendent_namespaces: bool = False,
-        refresh_namespace_stale: bool = True,
+        refresh_namespace_waiting: bool = True,
         timestamp: Optional[Timestamp] = None,
         seen: Optional[Set["DataSymbol"]] = None,
     ) -> None:
@@ -805,7 +805,7 @@ class DataSymbol:
                     # this is likely the user intention. For an example, see
                     # `test_external_object_update_propagates_to_stale_namespace_symbols()`
                     # in `test_frontend_checker.py`
-                    if not dsym.is_stale or refresh_namespace_stale:
+                    if not dsym.is_waiting or refresh_namespace_waiting:
                         # logger.error(
                         #     "refresh %s due to %s (value %s) via namespace %s",
                         #     dsym.full_path,
@@ -818,5 +818,5 @@ class DataSymbol:
                             timestamp=self._timestamp,
                             seen=seen,
                         )
-            if refresh_namespace_stale:
-                self.namespace_stale_symbols.clear()
+            if refresh_namespace_waiting:
+                self.namespace_waiting_symbols.clear()

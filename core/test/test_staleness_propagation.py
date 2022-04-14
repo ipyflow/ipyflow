@@ -22,12 +22,12 @@ def run_cell(cell, **kwargs):
     run_cell_(cell, **kwargs)
 
 
-def stale_detected():
-    return flow().test_and_clear_stale_usage_detected()
+def waiter_detected():
+    return flow().test_and_clear_waiter_usage_detected()
 
 
 def assert_detected(msg=""):
-    assert_bool(stale_detected(), msg=msg)
+    assert_bool(waiter_detected(), msg=msg)
 
 
 def assert_false_positive(msg=""):
@@ -39,7 +39,7 @@ def assert_false_positive(msg=""):
 
 
 def assert_not_detected(msg=""):
-    assert_bool(not stale_detected(), msg=msg)
+    assert_bool(not waiter_detected(), msg=msg)
 
 
 def assert_false_negative(msg=""):

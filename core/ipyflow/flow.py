@@ -41,7 +41,7 @@ logger.setLevel(logging.WARNING)
 class NotebookSafetySettings(NamedTuple):
     test_context: bool
     use_comm: bool
-    mark_stale_symbol_usages_unsafe: bool
+    mark_waiting_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool
     mode: FlowRunMode
@@ -73,8 +73,8 @@ class NotebookFlow(singletons.NotebookFlow):
         self.settings: NotebookSafetySettings = NotebookSafetySettings(
             test_context=kwargs.pop("test_context", False),
             use_comm=use_comm,
-            mark_stale_symbol_usages_unsafe=kwargs.pop(
-                "mark_stale_symbol_usages_unsafe", True
+            mark_waiting_symbol_usages_unsafe=kwargs.pop(
+                "mark_waiting_symbol_usages_unsafe", True
             ),
             mark_typecheck_failures_unsafe=kwargs.pop(
                 "mark_typecheck_failures_unsafe", False
@@ -113,14 +113,14 @@ class NotebookFlow(singletons.NotebookFlow):
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[CellId] = None
-        self.stale_usage_detected = False
+        self.waiter_usage_detected = False
         self.out_of_order_usage_detected_counter: Optional[int] = None
         if cell_magic_name is None:
             self._cell_magic = None
         else:
             self._cell_magic = singletons.kernel().make_cell_magic(cell_magic_name)
         self._line_magic = make_line_magic(self)
-        self._prev_cell_stale_symbols: Set[DataSymbol] = set()
+        self._prev_cell_waiting_symbols: Set[DataSymbol] = set()
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
@@ -218,7 +218,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def reactivity_cleanup(self) -> None:
         for cell in cells().all_cells_most_recently_run_for_each_id():
-            cell.set_fresh(False)
+            cell.set_ready(False)
 
     def _comm_target(self, comm, open_msg) -> None:
         @comm.on_msg
@@ -302,8 +302,8 @@ class NotebookFlow(singletons.NotebookFlow):
             cells_to_check=[cell],
             update_liveness_time_versions=self.mut_settings.static_slicing_enabled,
         )
-        if cell.cell_id in checker_result.stale_cells:
-            self.stale_usage_detected = True
+        if cell.cell_id in checker_result.waiting_cells:
+            self.waiter_usage_detected = True
         unsafe_order_cells = checker_result.unsafe_order_cells.get(cell.cell_id, None)
         if unsafe_order_cells is not None:
             self.out_of_order_usage_detected_counter = max(
@@ -353,9 +353,9 @@ class NotebookFlow(singletons.NotebookFlow):
         for alias_set in self.aliases.values():
             yield from alias_set
 
-    def test_and_clear_stale_usage_detected(self):
-        ret = self.stale_usage_detected
-        self.stale_usage_detected = False
+    def test_and_clear_waiter_usage_detected(self):
+        ret = self.waiter_usage_detected
+        self.waiter_usage_detected = False
         return ret
 
     def test_and_clear_out_of_order_usage_detected_counter(self):

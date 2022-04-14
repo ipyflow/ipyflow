@@ -86,18 +86,18 @@ const extension: JupyterFrontEndPlugin<void> = {
   }
 };
 
-const staleClass = 'stale-cell';
-const freshClass = 'fresh-cell';
-const refresherClass = 'refresher-cell';
-const refresherInputClass = 'refresher-input-cell';
-const linkedStaleClass = 'linked-stale';
-const linkedRefresherClass = 'linked-refresher';
+const waitingClass = 'waiting-cell';
+const readyClass = 'ready-cell';
+const readyMakingClass = 'ready-making-cell';
+const readyMakingInputClass = 'ready-making-input-cell';
+const linkedWaitingClass = 'linked-waiting';
+const linkedReadyMakerClass = 'linked-ready-maker';
 
 let dirtyCells: Set<string> = new Set();
-let staleCells: Set<string> = new Set();
-let freshCells: Set<string> = new Set();
-let staleLinks: {[id: string]: string[]} = {}
-let refresherLinks: {[id: string]: string[]} = {}
+let waitingCells: Set<string> = new Set();
+let readyCells: Set<string> = new Set();
+let waiterLinks: {[id: string]: string[]} = {}
+let readyMakerLinks: {[id: string]: string[]} = {}
 let activeCell: Cell<ICellModel> = null;
 let activeCellId: string = null;
 let cellsById: {[id: string]: HTMLElement} = {};
@@ -106,8 +106,8 @@ let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
 let lastExecutionHighlightsEnabled: boolean = null;
-let executedReactiveFreshCells: Set<string> = new Set();
-let newFreshCells: Set<string> = new Set();
+let executedReactiveReadyCells: Set<string> = new Set();
+let newReadyCells: Set<string> = new Set();
 let forcedReactiveCells: Set<string> = new Set();
 
 const cleanup = new Event('cleanup');
@@ -143,7 +143,7 @@ const attachCleanupListener = (elem: Element, evt: "mouseover" | "mouseout", lis
   elem.addEventListener('cleanup', cleanupListener);
 };
 
-const addStaleOutputInteraction = (elem: Element,
+const addWaitingOutputInteraction = (elem: Element,
                                    linkedElem: Element,
                                    evt: "mouseover" | "mouseout",
                                    add_or_remove: "add" | "remove",
@@ -157,26 +157,26 @@ const addStaleOutputInteraction = (elem: Element,
   attachCleanupListener(elem, evt, listener);
 };
 
-const addStaleOutputInteractions = (elem: HTMLElement, linkedInputClass: string) => {
-  addStaleOutputInteraction(
-      getJpInputCollapser(elem), getJpOutputCollapser(elem), 'mouseover', 'add', linkedStaleClass
+const addWaitingOutputInteractions = (elem: HTMLElement, linkedInputClass: string) => {
+  addWaitingOutputInteraction(
+      getJpInputCollapser(elem), getJpOutputCollapser(elem), 'mouseover', 'add', linkedWaitingClass
   );
-  addStaleOutputInteraction(
-      getJpInputCollapser(elem), getJpOutputCollapser(elem), 'mouseout', 'remove', linkedStaleClass
+  addWaitingOutputInteraction(
+      getJpInputCollapser(elem), getJpOutputCollapser(elem), 'mouseout', 'remove', linkedWaitingClass
   );
 
-  addStaleOutputInteraction(
+  addWaitingOutputInteraction(
       getJpOutputCollapser(elem), getJpInputCollapser(elem),
       'mouseover', 'add', linkedInputClass
   );
-  addStaleOutputInteraction(
+  addWaitingOutputInteraction(
       getJpOutputCollapser(elem), getJpInputCollapser(elem),
       'mouseout', 'remove', linkedInputClass
   );
 };
 
 
-const refreshNodeMapping = (notebook: Notebook) => {
+const rereadyNodeMapping = (notebook: Notebook) => {
   cellsById = {};
   orderIdxById = {};
 
@@ -188,23 +188,23 @@ const refreshNodeMapping = (notebook: Notebook) => {
 
 const clearCellState = (notebook: Notebook) => {
   notebook.widgets.forEach((cell, idx) => {
-    cell.node.classList.remove(staleClass);
-    cell.node.classList.remove(refresherClass);
-    cell.node.classList.remove(freshClass);
-    cell.node.classList.remove(refresherInputClass);
+    cell.node.classList.remove(waitingClass);
+    cell.node.classList.remove(readyMakingClass);
+    cell.node.classList.remove(readyClass);
+    cell.node.classList.remove(readyMakingInputClass);
 
     // clear any old event listeners
     const inputCollapser = getJpInputCollapser(cell.node);
     if (inputCollapser !== null) {
-      inputCollapser.firstElementChild.classList.remove(linkedStaleClass);
-      inputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+      inputCollapser.firstElementChild.classList.remove(linkedWaitingClass);
+      inputCollapser.firstElementChild.classList.remove(linkedReadyMakerClass);
       inputCollapser.dispatchEvent(cleanup);
     }
 
     const outputCollapser = getJpOutputCollapser(cell.node);
     if (outputCollapser !== null) {
-      outputCollapser.firstElementChild.classList.remove(linkedStaleClass);
-      outputCollapser.firstElementChild.classList.remove(linkedRefresherClass);
+      outputCollapser.firstElementChild.classList.remove(linkedWaitingClass);
+      outputCollapser.firstElementChild.classList.remove(linkedReadyMakerClass);
       outputCollapser.dispatchEvent(cleanup);
     }
   });
@@ -215,15 +215,15 @@ const addUnsafeCellInteraction = (elem: Element, linkedElems: string[],
                                   collapserFun: (elem: HTMLElement) => Element,
                                   evt: "mouseover" | "mouseout",
                                   add_or_remove: "add" | "remove",
-                                  staleCells: Set<string>) => {
+                                  waitingCells: Set<string>) => {
   if (elem === null) {
     return;
   }
   const listener = () => {
     for (const linkedId of linkedElems) {
-      let css = linkedRefresherClass;
-      if (staleCells.has(linkedId)) {
-        css = linkedStaleClass;
+      let css = linkedReadyMakerClass;
+      if (waitingCells.has(linkedId)) {
+        css = linkedWaitingClass;
       }
       const collapser = collapserFun(cellsById[linkedId]);
       if (collapser === null || collapser.firstElementChild === null) {
@@ -257,8 +257,8 @@ const connectToComm = (
       order_index_by_cell_id[itercell.model.id] = idx;
       content_by_cell_id[itercell.model.id] = itercell.model.value.text;
       if (itercell.model.id === cell.id) {
-        itercell.node.classList.remove(freshClass);
-        itercell.node.classList.remove(refresherInputClass);
+        itercell.node.classList.remove(readyClass);
+        itercell.node.classList.remove(readyMakingInputClass);
       }
     });
     const payload = {
@@ -272,12 +272,12 @@ const connectToComm = (
         CodeCell.execute(cellPendingExecution, session)
       } else {
         if (lastExecutionMode === 'reactive') {
-          freshCells = executedReactiveFreshCells;
+          readyCells = executedReactiveReadyCells;
           updateUI(notebook);
         }
-        newFreshCells = new Set<string>();
+        newReadyCells = new Set<string>();
         forcedReactiveCells = new Set<string>();
-        executedReactiveFreshCells = new Set<string>();
+        executedReactiveReadyCells = new Set<string>();
         comm.send({
           type: 'reactivity_cleanup',
         });
@@ -334,7 +334,7 @@ const connectToComm = (
         activeCellModel._setDirty(true);
       }
     }
-    refreshNodeMapping(notebook);
+    rereadyNodeMapping(notebook);
     updateOneCellUI(activeCellId);
   };
   notebook.activeCellChanged.connect(onActiveCellChange);
@@ -351,16 +351,16 @@ const connectToComm = (
 
   const updateOneCellUI = (id: string) => {
     const elem = cellsById[id];
-    if (staleCells.has(id)) {
-      elem.classList.add(staleClass);
-      elem.classList.add(freshClass);
-      elem.classList.remove(refresherInputClass);
-      addStaleOutputInteractions(elem, linkedStaleClass);
-    } else if (freshCells.has(id)) {
-      elem.classList.add(refresherInputClass);
+    if (waitingCells.has(id)) {
+      elem.classList.add(waitingClass);
+      elem.classList.add(readyClass);
+      elem.classList.remove(readyMakingInputClass);
+      addWaitingOutputInteractions(elem, linkedWaitingClass);
+    } else if (readyCells.has(id)) {
+      elem.classList.add(readyMakingInputClass);
       if (lastExecutionMode === 'normal') {
-        elem.classList.add(freshClass);
-        addStaleOutputInteractions(elem, linkedRefresherClass);
+        elem.classList.add(readyClass);
+        addWaitingOutputInteractions(elem, linkedReadyMakerClass);
       }
     }
 
@@ -368,34 +368,34 @@ const connectToComm = (
       return;
     }
 
-    if (staleLinks.hasOwnProperty(id)) {
+    if (waiterLinks.hasOwnProperty(id)) {
       actionUpdatePairs.forEach(({action, update}) => {
         addUnsafeCellInteraction(
-            getJpInputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-            action, update, staleCells
+            getJpInputCollapser(elem), waiterLinks[id], cellsById, getJpInputCollapser,
+            action, update, waitingCells
         );
 
         addUnsafeCellInteraction(
-            getJpOutputCollapser(elem), staleLinks[id], cellsById, getJpInputCollapser,
-            action, update, staleCells,
+            getJpOutputCollapser(elem), waiterLinks[id], cellsById, getJpInputCollapser,
+            action, update, waitingCells,
         );
       });
     }
 
-    if (refresherLinks.hasOwnProperty(id)) {
-      if (!staleCells.has(id)) {
-        elem.classList.add(refresherClass);
-        elem.classList.add(freshClass);
+    if (readyMakerLinks.hasOwnProperty(id)) {
+      if (!waitingCells.has(id)) {
+        elem.classList.add(readyMakingClass);
+        elem.classList.add(readyClass);
       }
       actionUpdatePairs.forEach(({action, update}) => {
         addUnsafeCellInteraction(
-            getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpInputCollapser,
-            action, update, staleCells
+            getJpInputCollapser(elem), readyMakerLinks[id], cellsById, getJpInputCollapser,
+            action, update, waitingCells
         );
 
         addUnsafeCellInteraction(
-            getJpInputCollapser(elem), refresherLinks[id], cellsById, getJpOutputCollapser,
-            action, update, staleCells,
+            getJpInputCollapser(elem), readyMakerLinks[id], cellsById, getJpOutputCollapser,
+            action, update, waitingCells,
         );
       });
     }
@@ -406,7 +406,7 @@ const connectToComm = (
     if (!lastExecutionHighlightsEnabled) {
       return;
     }
-    refreshNodeMapping(notebook);
+    rereadyNodeMapping(notebook);
     for (const [id] of Object.entries(cellsById)) {
       updateOneCellUI(id);
     }
@@ -420,27 +420,27 @@ const connectToComm = (
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
     } else if (msg.content.data['type'] === 'compute_exec_schedule') {
-      staleCells = new Set(msg.content.data['stale_cells'] as string[]);
-      freshCells = new Set(msg.content.data['fresh_cells'] as string[]);
-      newFreshCells = new Set([...newFreshCells, ...msg.content.data['new_fresh_cells'] as string[]]);
+      waitingCells = new Set(msg.content.data['waiting_cells'] as string[]);
+      readyCells = new Set(msg.content.data['ready_cells'] as string[]);
+      newReadyCells = new Set([...newReadyCells, ...msg.content.data['new_ready_cells'] as string[]]);
       forcedReactiveCells = new Set(
           [...forcedReactiveCells, ...msg.content.data['forced_reactive_cells'] as string[]]
       );
-      staleLinks = msg.content.data['stale_links'] as { [id: string]: string[] };
-      refresherLinks = msg.content.data['refresher_links'] as { [id: string]: string[] };
+      waiterLinks = msg.content.data['waiter_links'] as { [id: string]: string[] };
+      readyMakerLinks = msg.content.data['ready_maker_links'] as { [id: string]: string[] };
       cellPendingExecution = null;
       const exec_mode = msg.content.data['exec_mode'] as string;
       const flow_order = msg.content.data['flow_order'];
       const exec_schedule = msg.content.data['exec_schedule'];
       lastExecutionMode = exec_mode;
       lastExecutionHighlightsEnabled = msg.content.data['highlights_enabled'] as boolean;
-      executedReactiveFreshCells.add(msg.content.data['last_executed_cell_id'] as string);
+      executedReactiveReadyCells.add(msg.content.data['last_executed_cell_id'] as string);
       for (const cell of notebook.widgets) {
-        if (cell.model.type !== 'code' || executedReactiveFreshCells.has(cell.model.id)) {
+        if (cell.model.type !== 'code' || executedReactiveReadyCells.has(cell.model.id)) {
           continue;
         }
         if (!forcedReactiveCells.has(cell.model.id)) {
-          if (exec_mode !== 'reactive' || !newFreshCells.has(cell.model.id)) {
+          if (exec_mode !== 'reactive' || !newReadyCells.has(cell.model.id)) {
             continue;
           }
         }
@@ -459,7 +459,7 @@ const connectToComm = (
         }
       }
       if (cellPendingExecution === null) {
-        newFreshCells = new Set<string>();
+        newReadyCells = new Set<string>();
         forcedReactiveCells = new Set<string>();
         updateUI(notebook);
       } else {

@@ -17,11 +17,11 @@ _flow_fixture, run_cell_ = make_flow_fixture()
 
 
 def run_cell(
-    cell_content: str, cell_id: Optional[int] = None, fresh_are_reactive: bool = False
+    cell_content: str, cell_id: Optional[int] = None, ready_are_reactive: bool = False
 ) -> Tuple[int, Set[int]]:
     orig_mode = flow().mut_settings.exec_mode
     try:
-        if fresh_are_reactive:
+        if ready_are_reactive:
             flow().mut_settings.exec_mode = ExecutionMode.REACTIVE
         executed_cells = set()
         reactive_cells = set()
@@ -35,8 +35,8 @@ def run_cell(
                 cell_id = next(iter(executed_cells))
             next_content_to_run = None
             checker_result = flow().check_and_link_multiple_cells()
-            if fresh_are_reactive:
-                reactive_cells |= checker_result.new_fresh_cells
+            if ready_are_reactive:
+                reactive_cells |= checker_result.new_ready_cells
             else:
                 reactive_cells |= checker_result.forced_reactive_cells
             for reactive_cell_id in sorted(reactive_cells - executed_cells):
@@ -52,7 +52,7 @@ def run_cell(
 def run_reactively(
     cell_content: str, cell_id: Optional[int] = None
 ) -> Tuple[int, Set[int]]:
-    return run_cell(cell_content, cell_id=cell_id, fresh_are_reactive=True)
+    return run_cell(cell_content, cell_id=cell_id, ready_are_reactive=True)
 
 
 def test_mutate_one_list_entry():

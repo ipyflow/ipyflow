@@ -15,109 +15,109 @@ logger.setLevel(logging.WARNING)
 
 
 class FrontendCheckerResult(NamedTuple):
-    stale_cells: Set[CellId]
-    fresh_cells: Set[CellId]
-    new_fresh_cells: Set[CellId]
+    waiting_cells: Set[CellId]
+    ready_cells: Set[CellId]
+    new_ready_cells: Set[CellId]
     forced_reactive_cells: Set[CellId]
     typecheck_error_cells: Set[CellId]
     unsafe_order_cells: Dict[CellId, Set[ExecutedCodeCell]]
-    stale_links: Dict[CellId, Set[CellId]]
-    refresher_links: Dict[CellId, Set[CellId]]
+    waiter_links: Dict[CellId, Set[CellId]]
+    ready_maker_links: Dict[CellId, Set[CellId]]
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
 
     @classmethod
     def empty(cls):
         return cls(
-            stale_cells=set(),
-            fresh_cells=set(),
-            new_fresh_cells=set(),
+            waiting_cells=set(),
+            ready_cells=set(),
+            new_ready_cells=set(),
             forced_reactive_cells=set(),
             typecheck_error_cells=set(),
             unsafe_order_cells=defaultdict(set),
-            stale_links=defaultdict(set),
-            refresher_links=defaultdict(set),
+            waiter_links=defaultdict(set),
+            ready_maker_links=defaultdict(set),
             phantom_cell_info={},
         )
 
     def to_json(self) -> Dict[str, Any]:
         return {
-            # TODO: we should probably have separate fields for stale vs non-typechecking cells,
+            # TODO: we should probably have separate fields for waiting vs non-typechecking cells,
             #  or at least change the name to a more general "unsafe_cells" or equivalent
-            "stale_cells": list(self.stale_cells | self.typecheck_error_cells),
-            "fresh_cells": list(self.fresh_cells),
-            "new_fresh_cells": list(self.new_fresh_cells),
+            "waiting_cells": list(self.waiting_cells | self.typecheck_error_cells),
+            "ready_cells": list(self.ready_cells),
+            "new_ready_cells": list(self.new_ready_cells),
             "forced_reactive_cells": list(self.forced_reactive_cells),
-            "stale_links": {
+            "waiter_links": {
                 cell_id: list(linked_cell_ids)
-                for cell_id, linked_cell_ids in self.stale_links.items()
+                for cell_id, linked_cell_ids in self.waiter_links.items()
             },
-            "refresher_links": {
+            "ready_maker_links": {
                 cell_id: list(linked_cell_ids)
-                for cell_id, linked_cell_ids in self.refresher_links.items()
+                for cell_id, linked_cell_ids in self.ready_maker_links.items()
             },
         }
 
-    def _compute_stale_and_refresher_links(self) -> None:
-        stale_link_changes = True
-        # transitive closure up until we hit non-stale refresher cells
-        while stale_link_changes:
-            stale_link_changes = False
-            for stale_cell_id in self.stale_cells:
-                new_stale_links = set(self.stale_links[stale_cell_id])
-                original_length = len(new_stale_links)
-                for refresher_cell_id in self.stale_links[stale_cell_id]:
-                    if refresher_cell_id not in self.stale_cells:
+    def _compute_waiter_and_ready_maker_links(self) -> None:
+        waiter_link_changes = True
+        # transitive closure up until we hit non-waiting ready-making cells
+        while waiter_link_changes:
+            waiter_link_changes = False
+            for waiting_cell_id in self.waiting_cells:
+                new_waiter_links = set(self.waiter_links[waiting_cell_id])
+                original_length = len(new_waiter_links)
+                for ready_making_cell_id in self.waiter_links[waiting_cell_id]:
+                    if ready_making_cell_id not in self.waiting_cells:
                         continue
-                    new_stale_links |= self.stale_links[refresher_cell_id]
-                new_stale_links.discard(stale_cell_id)
-                stale_link_changes = stale_link_changes or original_length != len(
-                    new_stale_links
+                    new_waiter_links |= self.waiter_links[ready_making_cell_id]
+                new_waiter_links.discard(waiting_cell_id)
+                waiter_link_changes = waiter_link_changes or original_length != len(
+                    new_waiter_links
                 )
-                self.stale_links[stale_cell_id] = new_stale_links
-        for stale_cell_id in self.stale_cells:
-            self.stale_links[stale_cell_id] -= self.stale_cells
-            for refresher_cell_id in self.stale_links[stale_cell_id]:
-                self.refresher_links[refresher_cell_id].add(stale_cell_id)
+                self.waiter_links[waiting_cell_id] = new_waiter_links
+        for waiting_cell_id in self.waiting_cells:
+            self.waiter_links[waiting_cell_id] -= self.waiting_cells
+            for ready_making_cell_id in self.waiter_links[waiting_cell_id]:
+                self.ready_maker_links[ready_making_cell_id].add(waiting_cell_id)
 
-    def _compute_refresher_cells(
+    def _compute_ready_making_cells(
         self,
-        stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
+        waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
         last_executed_cell_id: Optional[CellId],
     ) -> None:
         flow_ = flow()
-        eligible_refresher_for_dag = self.fresh_cells | self.stale_cells
-        for stale_cell_id in self.stale_cells:
-            refresher_cell_ids: Set[CellId] = set()
+        eligible_ready_making_for_dag = self.ready_cells | self.waiting_cells
+        for waiting_cell_id in self.waiting_cells:
+            ready_making_cell_ids: Set[CellId] = set()
             if flow_.mut_settings.flow_order == ExecutionSchedule.DAG_BASED:
                 if flow_.mut_settings.dynamic_slicing_enabled:
-                    refresher_cell_ids |= (
-                        cells().from_id(stale_cell_id).dynamic_parent_ids
-                        & eligible_refresher_for_dag
+                    ready_making_cell_ids |= (
+                        cells().from_id(waiting_cell_id).dynamic_parent_ids
+                        & eligible_ready_making_for_dag
                     )
                 if flow_.mut_settings.static_slicing_enabled:
-                    refresher_cell_ids |= (
-                        cells().from_id(stale_cell_id).static_parent_ids
-                        & eligible_refresher_for_dag
+                    ready_making_cell_ids |= (
+                        cells().from_id(waiting_cell_id).static_parent_ids
+                        & eligible_ready_making_for_dag
                     )
             else:
-                stale_syms = stale_symbols_by_cell_id.get(stale_cell_id, set())
-                refresher_cell_ids = refresher_cell_ids.union(
+                waiting_syms = waiting_symbols_by_cell_id.get(waiting_cell_id, set())
+                ready_making_cell_ids = ready_making_cell_ids.union(
                     *(
-                        killing_cell_ids_for_symbol[stale_sym]
-                        for stale_sym in stale_syms
+                        killing_cell_ids_for_symbol[waiting_sym]
+                        for waiting_sym in waiting_syms
                     )
                 )
             if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
-                refresher_cell_ids = {
+                ready_making_cell_ids = {
                     cid
-                    for cid in refresher_cell_ids
+                    for cid in ready_making_cell_ids
                     if cells().from_id(cid).position
-                    < cells().from_id(stale_cell_id).position
+                    < cells().from_id(waiting_cell_id).position
                 }
             if last_executed_cell_id is not None:
-                refresher_cell_ids.discard(last_executed_cell_id)
-            self.stale_links[stale_cell_id] = refresher_cell_ids
+                ready_making_cell_ids.discard(last_executed_cell_id)
+            self.waiter_links[waiting_cell_id] = ready_making_cell_ids
 
     def _compute_reactive_cells_for_reactive_symbols(
         self, checker_results_by_cid: Dict[CellId, CheckerResult]
@@ -125,9 +125,9 @@ class FrontendCheckerResult(NamedTuple):
         flow_ = flow()
         if flow_.mut_settings.exec_mode == ExecutionMode.REACTIVE:
             # no need to do this computation if already in reactive mode, since
-            # everything that is new fresh is automatically considered reactive
+            # everything that is new ready is automatically considered reactive
             return
-        for cell_id in self.new_fresh_cells:
+        for cell_id in self.new_ready_cells:
             if cell_id not in checker_results_by_cid:
                 continue
             cell = cells().from_id(cell_id)
@@ -137,40 +137,42 @@ class FrontendCheckerResult(NamedTuple):
             if max_used_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 self.forced_reactive_cells.add(cell_id)
 
-    def _compute_dag_based_staleness(
+    def _compute_dag_based_waiters(
         self, cells_to_check: List[ExecutedCodeCell]
     ) -> None:
         flow_ = flow()
         if flow_.mut_settings.exec_schedule != ExecutionSchedule.DAG_BASED:
             return
-        prev_stale_cells: Set[CellId] = set()
+        prev_waiting_cells: Set[CellId] = set()
         while True:
             for cell in cells_to_check:
-                if cell.cell_id in self.stale_cells:
+                if cell.cell_id in self.waiting_cells:
                     continue
                 if flow_.mut_settings.dynamic_slicing_enabled:
-                    if cell.dynamic_parent_ids & (self.fresh_cells | self.stale_cells):
-                        self.stale_cells.add(cell.cell_id)
+                    if cell.dynamic_parent_ids & (
+                        self.ready_cells | self.waiting_cells
+                    ):
+                        self.waiting_cells.add(cell.cell_id)
                         continue
                 if flow_.mut_settings.static_slicing_enabled:
-                    if cell.static_parent_ids & (self.fresh_cells | self.stale_cells):
-                        self.stale_cells.add(cell.cell_id)
-            if prev_stale_cells == self.stale_cells:
+                    if cell.static_parent_ids & (self.ready_cells | self.waiting_cells):
+                        self.waiting_cells.add(cell.cell_id)
+            if prev_waiting_cells == self.waiting_cells:
                 break
-            prev_stale_cells = set(self.stale_cells)
-        self.fresh_cells.difference_update(self.stale_cells)
-        self.new_fresh_cells.difference_update(self.stale_cells)
-        for cell_id in self.stale_cells:
-            cells().from_id(cell_id).set_fresh(False)
+            prev_waiting_cells = set(self.waiting_cells)
+        self.ready_cells.difference_update(self.waiting_cells)
+        self.new_ready_cells.difference_update(self.waiting_cells)
+        for cell_id in self.waiting_cells:
+            cells().from_id(cell_id).set_ready(False)
 
-    def _compute_is_fresh(
+    def _compute_is_ready(
         self, cell: ExecutedCodeCell, checker_result: CheckerResult
     ) -> bool:
         flow_ = flow()
         cell_id = cell.cell_id
-        is_fresh = cell_id not in self.stale_cells
+        is_ready = cell_id not in self.waiting_cells
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
-            is_fresh = False
+            is_ready = False
             flow_order = flow_.mut_settings.flow_order
             if flow_.mut_settings.dynamic_slicing_enabled:
                 for par in cell.dynamic_parents:
@@ -180,9 +182,9 @@ class FrontendCheckerResult(NamedTuple):
                     ):
                         continue
                     if par.cell_ctr > max(cell.cell_ctr, flow_.min_timestamp):
-                        is_fresh = True
+                        is_ready = True
                         break
-            if not is_fresh and flow_.mut_settings.static_slicing_enabled:
+            if not is_ready and flow_.mut_settings.static_slicing_enabled:
                 for par in cell.static_parents:
                     if (
                         flow_order == flow_order.IN_ORDER
@@ -190,10 +192,10 @@ class FrontendCheckerResult(NamedTuple):
                     ):
                         continue
                     if par.cell_ctr > max(cell.cell_ctr, flow_.min_timestamp):
-                        is_fresh = True
+                        is_ready = True
                         break
         else:
-            is_fresh = is_fresh and (
+            is_ready = is_ready and (
                 cell.get_max_used_live_symbol_cell_counter(checker_result.live)
                 > max(cell.cell_ctr, flow_.min_timestamp)
             )
@@ -202,15 +204,15 @@ class FrontendCheckerResult(NamedTuple):
                 if dead_sym.timestamp.cell_num > max(
                     cell.cell_ctr, flow_.min_timestamp
                 ):
-                    is_fresh = True
-        return is_fresh
+                    is_ready = True
+        return is_ready
 
     def _check_one_cell(
         self,
         cell: ExecutedCodeCell,
         update_liveness_time_versions: bool,
         last_executed_cell_pos: int,
-        stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
+        waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
     ) -> Optional[CheckerResult]:
@@ -239,16 +241,16 @@ class FrontendCheckerResult(NamedTuple):
             ):
                 return checker_result
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
-            stale_symbols = {
+            waiting_symbols = {
                 sym.dsym
                 for sym in checker_result.live
-                if sym.is_stale_at_position(cell.position)
+                if sym.is_waiting_at_position(cell.position)
             }
         else:
-            stale_symbols = set()
-        if len(stale_symbols) > 0:
-            stale_symbols_by_cell_id[cell_id] = stale_symbols
-            self.stale_cells.add(cell_id)
+            waiting_symbols = set()
+        if len(waiting_symbols) > 0:
+            waiting_symbols_by_cell_id[cell_id] = waiting_symbols
+            self.waiting_cells.add(cell_id)
         if not checker_result.typechecks:
             self.typecheck_error_cells.add(cell_id)
         for dead_sym in checker_result.dead:
@@ -260,11 +262,11 @@ class FrontendCheckerResult(NamedTuple):
             )
             if len(phantom_cell_info_for_cell) > 0:
                 phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-        is_fresh = self._compute_is_fresh(cell, checker_result)
-        if is_fresh:
-            self.fresh_cells.add(cell_id)
-        if not cells().from_id(cell_id).set_fresh(is_fresh) and is_fresh:
-            self.new_fresh_cells.add(cell_id)
+        is_ready = self._compute_is_ready(cell, checker_result)
+        if is_ready:
+            self.ready_cells.add(cell_id)
+        if not cells().from_id(cell_id).set_ready(is_ready) and is_ready:
+            self.new_ready_cells.add(cell_id)
         return checker_result
 
     def _get_last_executed_pos_and_handle_reactive_tags(
@@ -288,7 +290,7 @@ class FrontendCheckerResult(NamedTuple):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> "FrontendCheckerResult":
         flow_ = flow()
-        stale_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
+        waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
         checker_results_by_cid: Dict[CellId, CheckerResult] = {}
@@ -303,7 +305,7 @@ class FrontendCheckerResult(NamedTuple):
                 cell,
                 update_liveness_time_versions,
                 last_executed_cell_pos,
-                stale_symbols_by_cell_id,
+                waiting_symbols_by_cell_id,
                 killing_cell_ids_for_symbol,
                 phantom_cell_info,
             )
@@ -311,18 +313,18 @@ class FrontendCheckerResult(NamedTuple):
                 checker_results_by_cid[cell.cell_id] = checker_result
             if (
                 flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
-                and cell.is_fresh
+                and cell.is_ready
             ):
                 # in the case of strict scheduling, don't bother checking
-                # anything else once we get to the first fresh cell
+                # anything else once we get to the first ready cell
                 break
 
-        self._compute_dag_based_staleness(cells_to_check)
+        self._compute_dag_based_waiters(cells_to_check)
         self._compute_reactive_cells_for_reactive_symbols(checker_results_by_cid)
-        self._compute_refresher_cells(
-            stale_symbols_by_cell_id,
+        self._compute_ready_making_cells(
+            waiting_symbols_by_cell_id,
             killing_cell_ids_for_symbol,
             last_executed_cell_id,
         )
-        self._compute_stale_and_refresher_links()
+        self._compute_waiter_and_ready_maker_links()
         return self

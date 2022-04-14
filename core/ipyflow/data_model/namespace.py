@@ -54,7 +54,7 @@ class Namespace(Scope):
         # this timestamp needs to be bumped in DataSymbol refresh()
         self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()
         self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
-        self.namespace_stale_symbols: Set[DataSymbol] = set()
+        self.namespace_waiting_symbols: Set[DataSymbol] = set()
 
     @property
     def is_namespace_scope(self):

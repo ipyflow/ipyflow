@@ -15,16 +15,16 @@ _flow_fixture, run_cell_ = make_flow_fixture(
 run_cell = run_cell_
 
 
-def stale_detected():
-    return flow().test_and_clear_stale_usage_detected()
+def waiter_detected():
+    return flow().test_and_clear_waiter_usage_detected()
 
 
 def assert_detected(msg=""):
-    assert_bool(stale_detected(), msg=msg)
+    assert_bool(waiter_detected(), msg=msg)
 
 
 def assert_not_detected(msg=""):
-    assert_bool(not stale_detected(), msg=msg)
+    assert_bool(not waiter_detected(), msg=msg)
 
 
 def lookup_symbols(val) -> Optional[Set[DataSymbol]]:

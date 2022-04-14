@@ -1,64 +1,64 @@
 :root {
-  --stale-color: rgb(254,0,82);
-  --refresher-color: rgb(0,197,158);
+  --waiting-color: rgb(254,0,82);
+  --ready-making-color: rgb(0,197,158);
 }
 
-.stale-cell .jp-InputCollapser {
-  border: 1px solid var(--stale-color);
+.waiting-cell .jp-InputCollapser {
+  border: 1px solid var(--waiting-color);
 }
 
-.stale-cell.jp-mod-selected .jp-Collapser-child {
-  background-color: var(--stale-color);
+.waiting-cell.jp-mod-selected .jp-Collapser-child {
+  background-color: var(--waiting-color);
 }
 
-.stale-cell .jp-Collapser:hover > .jp-Collapser-child {
-  background-color: var(--stale-color);
+.waiting-cell .jp-Collapser:hover > .jp-Collapser-child {
+  background-color: var(--waiting-color);
 }
 
-.jp-Collapser-child.linked-stale {
-  background-color: var(--stale-color);
+.jp-Collapser-child.linked-waiting {
+  background-color: var(--waiting-color);
   opacity: 0.6;
 }
 
-.refresher-cell .jp-InputCollapser {
-  border: 1px solid var(--refresher-color);
+.ready-making-cell .jp-InputCollapser {
+  border: 1px solid var(--ready-making-color);
 }
 
-.refresher-cell.jp-mod-selected .jp-Collapser-child {
-  background-color: var(--refresher-color);
+.ready-making-cell.jp-mod-selected .jp-Collapser-child {
+  background-color: var(--ready-making-color);
 }
 
-.refresher-cell .jp-Collapser:hover > .jp-Collapser-child {
-  background-color: var(--refresher-color);
+.ready-making-cell .jp-Collapser:hover > .jp-Collapser-child {
+  background-color: var(--ready-making-color);
 }
 
-.jp-Collapser-child.linked-refresher {
-  background-color: var(--refresher-color);
+.jp-Collapser-child.linked-ready-maker {
+  background-color: var(--ready-making-color);
   opacity: 0.6;
 }
 
 /* put input / output cells later since they should take precedence */
 
-.fresh-cell .jp-OutputCollapser {
-  border: 1px solid var(--stale-color);
+.ready-cell .jp-OutputCollapser {
+  border: 1px solid var(--waiting-color);
 }
 
-.fresh-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
-  background-color: var(--stale-color);
+.ready-cell.jp-mod-selected .jp-OutputCollapser .jp-Collapser-child {
+  background-color: var(--waiting-color);
 }
 
-.fresh-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
-  background-color: var(--stale-color);
+.ready-cell .jp-OutputCollapser:hover > .jp-Collapser-child {
+  background-color: var(--waiting-color);
 }
 
-.refresher-input-cell .jp-InputCollapser {
-  border: 1px solid var(--refresher-color);
+.ready-making-input-cell .jp-InputCollapser {
+  border: 1px solid var(--ready-making-color);
 }
 
-.refresher-input-cell.jp-mod-selected .jp-InputCollapser .jp-Collapser-child {
-  background-color: var(--refresher-color);
+.ready-making-input-cell.jp-mod-selected .jp-InputCollapser .jp-Collapser-child {
+  background-color: var(--ready-making-color);
 }
 
-.refresher-input-cell .jp-InputCollapser:hover > .jp-Collapser-child {
-  background-color: var(--refresher-color);
+.ready-making-input-cell .jp-InputCollapser:hover > .jp-Collapser-child {
+  background-color: var(--ready-making-color);
 }

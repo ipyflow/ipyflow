@@ -64,10 +64,10 @@ def test_simple():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {2}
-    assert response.fresh_cells == {1}
-    assert response.stale_links == {2: {1}}
-    assert response.refresher_links == {1: {2}}
+    assert response.waiting_cells == {2}
+    assert response.ready_cells == {1}
+    assert response.waiter_links == {2: {1}}
+    assert response.ready_maker_links == {1: {2}}
 
 
 def test_refresh_after_exception_fixed():
@@ -80,7 +80,7 @@ def test_refresh_after_exception_fixed():
     run_cell(cells[2], 2, ignore_exceptions=True)
     run_cell(cells[1], 1)
     response = flow().check_and_link_multiple_cells()
-    assert response.fresh_cells == {2}
+    assert response.ready_cells == {2}
 
 
 def test_refresh_after_val_changed():
@@ -92,7 +92,7 @@ def test_refresh_after_val_changed():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.fresh_cells == {2}
+    assert response.ready_cells == {2}
 
 
 def test_inner_mutation_considered_fresh():
@@ -105,8 +105,8 @@ def test_inner_mutation_considered_fresh():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2, 3}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2, 3}
 
 
 # @pytest.mark.parametrize("force_subscript_symbol_creation", [True, False])
@@ -144,33 +144,33 @@ def test_update_list_elem():
     run_all_cells(cells)
 
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set(), "got %s" % response.fresh_cells
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set(), "got %s" % response.ready_cells
 
     cells[4] = "x.inc()"
     run_cell(cells[4], 4)
 
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set(), "got %s" % response.stale_cells
-    assert response.fresh_cells == {2, 3}, "got %s" % response.fresh_cells
+    assert response.waiting_cells == set(), "got %s" % response.waiting_cells
+    assert response.ready_cells == {2, 3}, "got %s" % response.ready_cells
 
     cells[5] = "foo.inc()"
     run_cell(cells[5], 5)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set(), "got %s" % response.stale_cells
-    assert response.fresh_cells == {2, 3, 4}, "got %s" % response.fresh_cells
+    assert response.waiting_cells == set(), "got %s" % response.waiting_cells
+    assert response.ready_cells == {2, 3, 4}, "got %s" % response.ready_cells
 
     if force_subscript_symbol_creation:
         cells[6] = "lst[-1]"
         run_cell(cells[6], 6)
         response = flow().check_and_link_multiple_cells()
-        assert response.stale_cells == set()
-        assert response.fresh_cells == {2, 3, 4}, "got %s" % response.fresh_cells
+        assert response.waiting_cells == set()
+        assert response.ready_cells == {2, 3, 4}, "got %s" % response.ready_cells
 
     run_cell(cells[4], 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set(
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set(
         [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
     )
 
@@ -183,19 +183,19 @@ def test_no_freshness_for_alias_assignment_post_mutation():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
 
 
 def test_fresh_after_import():
     cells = {0: "x = np.random.random(10)", 1: "import numpy as np"}
     run_all_cells(cells, ignore_exceptions=True)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {0}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {0}
 
 
-def test_external_object_update_propagates_to_stale_namespace_symbols():
+def test_external_object_update_propagates_to_waiting_namespace_symbols():
     cells = {
         0: "import fakelib",
         1: "foo = fakelib.Foo()",
@@ -205,11 +205,11 @@ def test_external_object_update_propagates_to_stale_namespace_symbols():
         5: "x = 43",
         6: "foo = foo.set_x(10)",
     }
-    with override_settings(mark_stale_symbol_usages_unsafe=False):
+    with override_settings(mark_waiting_symbol_usages_unsafe=False):
         run_all_cells(cells)
         response = flow().check_and_link_multiple_cells()
-        assert response.stale_cells == set(), "got %s" % response.stale_cells
-        assert response.fresh_cells == {2, 4}
+        assert response.waiting_cells == set(), "got %s" % response.waiting_cells
+        assert response.ready_cells == {2, 4}
 
 
 def test_symbol_on_both_sides_of_assignment():
@@ -221,9 +221,9 @@ def test_symbol_on_both_sides_of_assignment():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {2}
-    assert response.fresh_cells == {1}
-    assert list(response.refresher_links.keys()) == [1]
+    assert response.waiting_cells == {2}
+    assert response.ready_cells == {1}
+    assert list(response.ready_maker_links.keys()) == [1]
 
 
 def test_updated_namespace_after_subscript_dep_removed():
@@ -235,21 +235,21 @@ def test_updated_namespace_after_subscript_dep_removed():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {2}
-    assert response.fresh_cells == {1}
+    assert response.waiting_cells == {2}
+    assert response.ready_cells == {1}
     cells[1] = "d = {5: 6}"
     run_cell(cells[1], 1)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2}
     run_cell(cells[2], 2)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell(cells[0], 0)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set(), "got %s" % response.fresh_cells
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set(), "got %s" % response.ready_cells
 
 
 def test_equal_list_update_does_induce_fresh_cell():
@@ -261,12 +261,12 @@ def test_equal_list_update_does_induce_fresh_cell():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2}
     run_cell('y = ("f",)', 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2, 3}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2, 3}
 
 
 def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UBUNTU_20_04_2_PYTHON_3_8_11():
@@ -278,12 +278,12 @@ def test_equal_list_update_does_induce_fresh_cell_LITERAL_WITH_F_IS_REUSED_ON_UB
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2}
     run_cell('y = ["f"]', 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set(), "got %s" % response.stale_cells
-    assert response.fresh_cells == {2, 3}
+    assert response.waiting_cells == set(), "got %s" % response.waiting_cells
+    assert response.ready_cells == {2, 3}
 
 
 def test_equal_dict_update_does_induce_fresh_cell():
@@ -295,12 +295,12 @@ def test_equal_dict_update_does_induce_fresh_cell():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2}, "got %s" % response.fresh_cells
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2}, "got %s" % response.ready_cells
     run_cell('y = {"foo": 99}', 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2, 3}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2, 3}
 
 
 def test_list_append():
@@ -312,12 +312,12 @@ def test_list_append():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell("lst[1] += 42", 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {2}
-    assert response.fresh_cells == {1}
+    assert response.waiting_cells == {2}
+    assert response.ready_cells == {1}
 
 
 def test_list_extend():
@@ -329,12 +329,12 @@ def test_list_extend():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell("lst[1] += 42", 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {2}
-    assert response.fresh_cells == {1}
+    assert response.waiting_cells == {2}
+    assert response.ready_cells == {1}
 
 
 def test_implicit_subscript_symbol_does_not_bump_ts():
@@ -345,8 +345,8 @@ def test_implicit_subscript_symbol_does_not_bump_ts():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
 
 
 def test_liveness_skipped_for_simple_assignment_involving_aliases():
@@ -357,12 +357,12 @@ def test_liveness_skipped_for_simple_assignment_involving_aliases():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell("lst = [1, 2, 3, 4]", 3)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {1, 2}, "got %s" % response.fresh_cells
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {1, 2}, "got %s" % response.ready_cells
 
 
 def test_incorrect_object_not_used_for_argument_symbols():
@@ -375,8 +375,8 @@ def test_incorrect_object_not_used_for_argument_symbols():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set(), "got %s" % response.fresh_cells
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set(), "got %s" % response.ready_cells
 
 
 def test_increment_by_same_amount():
@@ -387,12 +387,12 @@ def test_increment_by_same_amount():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell("x = 3", 0)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {2}
-    assert response.fresh_cells == {1}
+    assert response.waiting_cells == {2}
+    assert response.ready_cells == {1}
 
 
 def test_list_insert():
@@ -410,8 +410,8 @@ def test_list_insert():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {8}, "got %s" % response.stale_cells
-    assert response.fresh_cells == {4, 5, 6, 7}, "got %s" % response.fresh_cells
+    assert response.waiting_cells == {8}, "got %s" % response.waiting_cells
+    assert response.ready_cells == {4, 5, 6, 7}, "got %s" % response.ready_cells
 
 
 def _test_list_delete_helper(last_cell):
@@ -431,12 +431,12 @@ def _test_list_delete_helper(last_cell):
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == {10}
+    assert response.waiting_cells == {10}
     # TODO: ideally we would detect that lst[3] is the same after deleting
     #  and not consider cell 4 to be fresh
     # TODO: ideally cell 8 would be considered unsafe since the last entry
     #  no longer exists
-    assert response.fresh_cells == {4, 5, 6, 7, 9}, "got %s" % response.fresh_cells
+    assert response.ready_cells == {4, 5, 6, 7, 9}, "got %s" % response.ready_cells
 
 
 def test_list_delete():
@@ -459,12 +459,12 @@ def test_list_clear():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell("lst.clear()", 3)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2}
 
 
 def test_dict_clear():
@@ -475,12 +475,12 @@ def test_dict_clear():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell("d.clear()", 3)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {2}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {2}
 
 
 def test_adhoc_pandas_series_update():
@@ -492,12 +492,12 @@ def test_adhoc_pandas_series_update():
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == set()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()
     run_cell('df["foo"] = [8, 9]', 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.stale_cells == set()
-    assert response.fresh_cells == {3}
+    assert response.waiting_cells == set()
+    assert response.ready_cells == {3}
 
 
 def test_unsafe_order():
@@ -510,9 +510,9 @@ def test_unsafe_order():
         assert flow().out_of_order_usage_detected_counter is None
         cells().set_cell_positions({0: 0, 1: 1})
         response = flow().check_and_link_multiple_cells()
-        assert not response.stale_cells
-        assert not response.fresh_cells
-        assert not response.stale_links
-        assert not response.refresher_links
+        assert not response.waiting_cells
+        assert not response.ready_cells
+        assert not response.waiter_links
+        assert not response.ready_maker_links
         run_cell("x = y + 1", 0)
         assert flow().out_of_order_usage_detected_counter == 2

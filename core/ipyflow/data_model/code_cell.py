@@ -92,7 +92,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         self._cached_typecheck_result: Optional[bool] = (
             None if flow().settings.mark_typecheck_failures_unsafe else True
         )
-        self._fresh: bool = False
+        self._ready: bool = False
 
     @classmethod
     def clear(cls):
@@ -117,13 +117,13 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             self._used_cell_counters_by_live_symbol[sym].add(ctr)
 
     @property
-    def is_fresh(self) -> bool:
-        return self._fresh
+    def is_ready(self) -> bool:
+        return self._ready
 
-    def set_fresh(self, new_fresh: bool) -> bool:
-        old_fresh = self._fresh
-        self._fresh = new_fresh
-        return old_fresh
+    def set_ready(self, new_ready: bool) -> bool:
+        old_ready = self._ready
+        self._ready = new_ready
+        return old_ready
 
     def mark_as_reactive_for_tag(self, tag: str) -> None:
         self.reactive_tags.add(tag)

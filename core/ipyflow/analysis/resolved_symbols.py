@@ -52,10 +52,10 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         return self.next_atom is None
 
     @property
-    def is_recursive_reactive(self):
-        return self.atom.is_recursive_reactive or (
+    def is_cascading_reactive(self):
+        return self.atom.is_cascading_reactive or (
             self.is_live
-            and self.dsym.is_recursive_reactive_at_counter(
+            and self.dsym.is_cascading_reactive_at_counter(
                 self.liveness_timestamp.cell_num
             )
         )
@@ -66,7 +66,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
             return False
         return (
             self.atom.is_reactive
-            or self.is_recursive_reactive
+            or self.is_cascading_reactive
             or (self.is_live and self.dsym in flow().updated_deep_reactive_symbols)
         )
 

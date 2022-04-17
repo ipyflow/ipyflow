@@ -317,8 +317,8 @@ def get_live_symbols_and_cells_for_references(
                 if ts_to_use.is_initialized:
                     flow().add_static_data_dep(liveness_time, ts_to_use)
                     resolved.dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
-                if resolved.atom.is_recursive_reactive:
-                    resolved.dsym.recursive_reactive_cell_num = cell_ctr
+                if resolved.atom.is_cascading_reactive:
+                    resolved.dsym.cascading_reactive_cell_num = cell_ctr
             if resolved.is_called:
                 called_dsyms.add((resolved.dsym, live_symbol_ref.timestamp))
             if not resolved.is_unsafe:

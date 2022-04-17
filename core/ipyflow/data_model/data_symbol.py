@@ -115,7 +115,7 @@ class DataSymbol:
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()
-        self.recursive_reactive_cell_num = -1
+        self.cascading_reactive_cell_num = -1
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
         self.required_timestamp: Timestamp = self.timestamp
@@ -265,8 +265,8 @@ class DataSymbol:
                 "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
             )
 
-    def is_recursive_reactive_at_counter(self, ctr: int) -> bool:
-        return self.recursive_reactive_cell_num > ctr
+    def is_cascading_reactive_at_counter(self, ctr: int) -> bool:
+        return self.cascading_reactive_cell_num > ctr
 
     def get_top_level(self) -> Optional["DataSymbol"]:
         if not self.containing_scope.is_namespace_scope:
@@ -726,12 +726,12 @@ class DataSymbol:
             prev_cell = cells().current_cell().prev_cell
             prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
             if any(
-                dsym.is_recursive_reactive_at_counter(prev_cell_ctr)
+                dsym.is_cascading_reactive_at_counter(prev_cell_ctr)
                 for dsym in new_deps
             ):
                 bump_version = True
-                self.recursive_reactive_cell_num = flow().cell_counter()
-            elif self.recursive_reactive_cell_num == flow().cell_counter():
+                self.cascading_reactive_cell_num = flow().cell_counter()
+            elif self.cascading_reactive_cell_num == flow().cell_counter():
                 bump_version = True
             else:
                 bump_version = (
@@ -758,9 +758,9 @@ class DataSymbol:
             # pop pending class defs and update obj ref
             pending_class_ns = tracer().pending_class_namespaces.pop()
             pending_class_ns.update_obj_ref(self.obj)
-        # self.recursive_reactive_cell_num = max(
-        #     self.recursive_reactive_cell_num,
-        #     max((par.recursive_reactive_cell_num for par in self.parents), -1),
+        # self.cascading_reactive_cell_num = max(
+        #     self.cascading_reactive_cell_num,
+        #     max((par.cascading_reactive_cell_num for par in self.parents), -1),
         # )
 
     def update_usage_info(

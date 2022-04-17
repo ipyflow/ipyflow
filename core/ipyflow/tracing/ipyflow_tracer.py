@@ -76,7 +76,7 @@ ARG_MUTATION_EXCEPTED_MODULES = {
 reactive_spec = pyc.AugmentationSpec(
     aug_type=pyc.AugmentationType.prefix, token="$", replacement=""
 )
-recursive_reactive_spec = pyc.AugmentationSpec(
+cascading_reactive_spec = pyc.AugmentationSpec(
     aug_type=pyc.AugmentationType.prefix, token="$$", replacement=""
 )
 blocking_spec = pyc.AugmentationSpec(
@@ -138,9 +138,9 @@ class DataflowTracer(StackFrameManager):
             self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 reactive_spec
             ]
-            self.recursive_reactive_node_ids: Set[
+            self.cascading_reactive_node_ids: Set[
                 int
-            ] = self.augmented_node_ids_by_spec[recursive_reactive_spec]
+            ] = self.augmented_node_ids_by_spec[cascading_reactive_spec]
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 blocking_spec
             ]
@@ -209,7 +209,7 @@ class DataflowTracer(StackFrameManager):
 
     @property
     def syntax_augmentation_specs(self) -> List[pyc.AugmentationSpec]:
-        return [blocking_spec, recursive_reactive_spec, reactive_spec]
+        return [blocking_spec, cascading_reactive_spec, reactive_spec]
 
     @property
     def should_patch_meta_path(self) -> bool:

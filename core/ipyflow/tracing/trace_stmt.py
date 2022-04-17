@@ -99,8 +99,8 @@ class TraceStatement:
                 if resolved.is_reactive and not blocking_seen:
                     flow().updated_deep_reactive_symbols.add(resolved.dsym)
                     reactive_seen = True
-                    if resolved.is_recursive_reactive:
-                        resolved.dsym.recursive_reactive_cell_num = (
+                    if resolved.is_cascading_reactive:
+                        resolved.dsym.cascading_reactive_cell_num = (
                             flow().cell_counter()
                         )
                 if reactive_seen and not blocking_seen:

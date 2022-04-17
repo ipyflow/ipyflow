@@ -84,14 +84,14 @@ class Atom(CommonEqualityMixin):
         is_callpoint: bool = False,
         is_subscript: bool = False,
         is_reactive: bool = False,
-        is_recursive_reactive: bool = False,
+        is_cascading_reactive: bool = False,
         is_blocking: bool = False,
     ) -> None:
         self.value = value
         self.is_callpoint = is_callpoint
         self.is_subscript = is_subscript
         self.is_reactive = is_reactive
-        self.is_recursive_reactive = is_recursive_reactive
+        self.is_cascading_reactive = is_cascading_reactive
         self.is_blocking = is_blocking
 
     def nonreactive(self) -> "Atom":
@@ -100,7 +100,7 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=False,
-            is_recursive_reactive=self.is_recursive_reactive,
+            is_cascading_reactive=self.is_cascading_reactive,
             is_blocking=self.is_blocking,
         )
 
@@ -110,17 +110,17 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=True,
-            is_recursive_reactive=self.is_recursive_reactive,
+            is_cascading_reactive=self.is_cascading_reactive,
             is_blocking=False,
         )
 
-    def recursive_reactive(self) -> "Atom":
+    def cascading_reactive(self) -> "Atom":
         return self.__class__(
             self.value,
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=self.is_reactive,
-            is_recursive_reactive=True,
+            is_cascading_reactive=True,
             is_blocking=False,
         )
 
@@ -130,7 +130,7 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=False,
-            is_recursive_reactive=False,
+            is_cascading_reactive=False,
             is_blocking=True,
         )
 
@@ -141,7 +141,7 @@ class Atom(CommonEqualityMixin):
                 self.is_callpoint,
                 self.is_subscript,
                 self.is_reactive,
-                self.is_recursive_reactive,
+                self.is_cascading_reactive,
                 self.is_blocking,
             )
         )
@@ -187,7 +187,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
             Atom(
                 val,
                 is_reactive=id(node) in tracer().reactive_node_ids,
-                is_recursive_reactive=id(node) in tracer().recursive_reactive_node_ids,
+                is_cascading_reactive=id(node) in tracer().cascading_reactive_node_ids,
                 is_blocking=id(node) in tracer().blocking_node_ids,
                 **kwargs,
             )
@@ -302,7 +302,7 @@ class SymbolRef(CommonEqualityMixin):
         assert not (yield_in_reverse and not yield_all_intermediate_symbols)
         dsym, atom, next_atom = None, None, None
         reactive_seen = False
-        recursive_reactive_seen = False
+        cascading_reactive_seen = False
         blocking_seen = False
         if yield_in_reverse:
             gen: Iterable[Tuple["DataSymbol", Atom, Atom]] = [
@@ -320,8 +320,8 @@ class SymbolRef(CommonEqualityMixin):
             gen = scope.gen_data_symbols_for_attrsub_chain(self)
         for dsym, atom, next_atom in gen:
             reactive_seen = reactive_seen or atom.is_reactive
-            recursive_reactive_seen = (
-                recursive_reactive_seen or atom.is_recursive_reactive
+            cascading_reactive_seen = (
+                cascading_reactive_seen or atom.is_cascading_reactive
             )
             yield_all_intermediate_symbols = (
                 yield_all_intermediate_symbols or reactive_seen
@@ -330,11 +330,11 @@ class SymbolRef(CommonEqualityMixin):
                 if reactive_seen and not blocking_seen and not atom.is_reactive:
                     atom = atom.reactive()
                 if (
-                    recursive_reactive_seen
+                    cascading_reactive_seen
                     and not blocking_seen
-                    and not atom.is_recursive_reactive
+                    and not atom.is_cascading_reactive
                 ):
-                    atom = atom.recursive_reactive()
+                    atom = atom.cascading_reactive()
                 if blocking_seen and not atom.is_blocking:
                     atom = atom.blocking()
             if yield_all_intermediate_symbols:

@@ -133,6 +133,21 @@ def test_reactive_store_to_local_var_from_function_call():
     assert run_cell("f()")[1] == {4}
 
 
+def test_simple_cascading_reactive_load():
+    assert run_cell("x = 0")[1] == {1}
+    assert run_cell("y = $$x + 1")[1] == {2}
+    assert run_cell("logging.info(y)")[1] == {3}
+    assert run_cell("x = 42")[1] == {2, 3, 4}
+
+
+def test_simple_cascading_reactive_store():
+    assert run_cell("x = 0")[1] == {1}
+    assert run_cell("y = x + 1")[1] == {2}
+    assert run_cell("logging.info(y)")[1] == {3}
+    assert run_cell("$$x = 42")[1] == {2, 3, 4}
+    assert run_cell("$x = 43")[1] == {2, 7}
+
+
 if sys.version_info >= (3, 8):
 
     def test_reactive_attr_load():

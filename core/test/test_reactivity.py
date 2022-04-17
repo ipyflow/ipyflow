@@ -6,7 +6,7 @@ from typing import Optional, Set, Tuple
 from ipyflow.data_model.code_cell import cells
 from ipyflow.run_mode import ExecutionMode
 from ipyflow.singletons import flow
-from test.utils import make_flow_fixture
+from test.utils import make_flow_fixture, skipif_known_failing
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.ERROR)
@@ -146,6 +146,13 @@ def test_simple_cascading_reactive_store():
     assert run_cell("logging.info(y)")[1] == {3}
     assert run_cell("$$x = 42")[1] == {2, 3, 4}
     assert run_cell("$x = 43")[1] == {2, 7}
+
+
+@skipif_known_failing
+def test_namedexpr_reactive_store():
+    assert run_cell("x = 0")[1] == {1}
+    assert run_cell("y = x + 1")[1] == {2}
+    assert run_cell("if ($x := 1): pass")[1] == {2, 3}
 
 
 if sys.version_info >= (3, 8):

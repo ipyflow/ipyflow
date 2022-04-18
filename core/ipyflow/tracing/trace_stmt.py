@@ -337,9 +337,11 @@ class TraceStatement:
                 )
                 if isinstance(
                     self.stmt_node,
-                    (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef),
+                    (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef, ast.Import),
                 ):
                     self._handle_reactive_store(self.stmt_node)
+                elif isinstance(target, ast.AST):
+                    self._handle_reactive_store(target)
             except KeyError as ke:
                 # e.g., slices aren't implemented yet
                 # put logging behind flag to avoid noise to user

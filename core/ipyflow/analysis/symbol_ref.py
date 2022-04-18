@@ -167,6 +167,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
             ast.ClassDef,
             ast.FunctionDef,
             ast.AsyncFunctionDef,
+            ast.Import,
         ],
     ) -> "SymbolRef":
         self.visit(node)
@@ -178,7 +179,12 @@ class SymbolRefVisitor(ast.NodeVisitor):
     def _append_atom(
         self,
         node: Union[
-            ast.Name, ast.Attribute, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef
+            ast.Name,
+            ast.Attribute,
+            ast.ClassDef,
+            ast.FunctionDef,
+            ast.AsyncFunctionDef,
+            ast.Import,
         ],
         val: str,
         **kwargs,
@@ -247,6 +253,10 @@ class SymbolRefVisitor(ast.NodeVisitor):
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         self._append_atom(node, node.name)
 
+    def visit_Import(self, node: ast.Import):
+        for name in node.names:
+            self._append_atom(node, name.asname or name.name)
+
     def generic_visit(self, node) -> None:
         # raise ValueError('we should never get here: %s' % node)
         # give up
@@ -269,6 +279,7 @@ class SymbolRef(CommonEqualityMixin):
                 ast.ClassDef,
                 ast.FunctionDef,
                 ast.AsyncFunctionDef,
+                ast.Import,
             ),
         ):
             symbols = self._cached_symbol_ref_visitor(symbols).chain

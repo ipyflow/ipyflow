@@ -148,11 +148,51 @@ def test_simple_cascading_reactive_store():
     assert run_cell("$x = 43")[1] == {2, 7}
 
 
-@skipif_known_failing
 def test_namedexpr_reactive_store():
     assert run_cell("x = 0")[1] == {1}
     assert run_cell("y = x + 1")[1] == {2}
     assert run_cell("if ($x := 1): pass")[1] == {2, 3}
+
+
+def test_import_reactive_store():
+    assert (
+        run_cell(
+            """
+    try:
+        logging.info(ast)
+    except:
+        pass
+    """
+        )[1]
+        == {1}
+    )
+    assert run_cell("import $ast")[1] == {1, 2}
+
+
+def test_cascading_import():
+    assert (
+        run_cell(
+            """
+    try:
+        logging.info(ast)
+    except:
+        pass
+    """
+        )[1]
+        == {1}
+    )
+    assert (
+        run_cell(
+            """
+    try:
+        foo = ast.parse("bar")
+    except:
+        pass
+    """
+        )[1]
+        == {2}
+    )
+    assert run_cell("import $$ast")[1] == {1, 2, 3}
 
 
 if sys.version_info >= (3, 8):

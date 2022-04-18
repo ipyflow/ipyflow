@@ -148,12 +148,6 @@ def test_simple_cascading_reactive_store():
     assert run_cell("$x = 43")[1] == {2, 7}
 
 
-def test_namedexpr_reactive_store():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("y = x + 1")[1] == {2}
-    assert run_cell("if ($x := 1): pass")[1] == {2, 3}
-
-
 def test_import_reactive_store():
     assert (
         run_cell(
@@ -372,3 +366,9 @@ if sys.version_info >= (3, 8):
         )
         rerun = run_cell("x = 43")[1]
         assert rerun == {3, 6}, "got %s" % rerun
+
+
+    def test_namedexpr_reactive_store():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("y = x + 1")[1] == {2}
+        assert run_cell("if ($x := 1): pass")[1] == {2, 3}

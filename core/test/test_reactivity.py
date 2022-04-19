@@ -163,7 +163,6 @@ def test_import_reactive_store():
     assert run_cell("import $ast")[1] == {1, 2}
 
 
-@skipif_known_failing
 def test_cascading_import():
     assert (
         run_cell(

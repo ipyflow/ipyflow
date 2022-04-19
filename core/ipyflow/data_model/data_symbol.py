@@ -758,10 +758,6 @@ class DataSymbol:
             # pop pending class defs and update obj ref
             pending_class_ns = tracer().pending_class_namespaces.pop()
             pending_class_ns.update_obj_ref(self.obj)
-        # self.cascading_reactive_cell_num = max(
-        #     self.cascading_reactive_cell_num,
-        #     max((par.cascading_reactive_cell_num for par in self.parents), -1),
-        # )
 
     def update_usage_info(
         self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False

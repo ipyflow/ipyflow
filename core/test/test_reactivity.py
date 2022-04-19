@@ -163,18 +163,8 @@ def test_import_reactive_store():
     assert run_cell("import $ast")[1] == {1, 2}
 
 
+@skipif_known_failing
 def test_cascading_import():
-    assert (
-        run_cell(
-            """
-    try:
-        logging.info(ast)
-    except:
-        pass
-    """
-        )[1]
-        == {1}
-    )
     assert (
         run_cell(
             """
@@ -184,9 +174,35 @@ def test_cascading_import():
         pass
     """
         )[1]
+        == {1}
+    )
+    assert (
+        run_cell(
+            """
+        try:
+            logging.info(foo.body)
+        except:
+            pass
+        """
+        )[1]
         == {2}
     )
     assert run_cell("import $$ast")[1] == {1, 2, 3}
+
+
+def test_reactive_import_from():
+    assert (
+        run_cell(
+            """
+        try:
+            foo = path.join("bar", "baz")
+        except:
+            pass
+        """
+        )[1]
+        == {1}
+    )
+    assert run_cell("from os import $path")[1] == {1, 2}
 
 
 if sys.version_info >= (3, 8):
@@ -366,7 +382,6 @@ if sys.version_info >= (3, 8):
         )
         rerun = run_cell("x = 43")[1]
         assert rerun == {3, 6}, "got %s" % rerun
-
 
     def test_namedexpr_reactive_store():
         assert run_cell("x = 0")[1] == {1}

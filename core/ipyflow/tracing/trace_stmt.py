@@ -337,7 +337,13 @@ class TraceStatement:
                 )
                 if isinstance(
                     self.stmt_node,
-                    (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef, ast.Import),
+                    (
+                        ast.FunctionDef,
+                        ast.ClassDef,
+                        ast.AsyncFunctionDef,
+                        ast.Import,
+                        ast.ImportFrom,
+                    ),
                 ):
                     self._handle_reactive_store(self.stmt_node)
                 elif isinstance(target, ast.AST):

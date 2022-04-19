@@ -168,6 +168,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
             ast.FunctionDef,
             ast.AsyncFunctionDef,
             ast.Import,
+            ast.ImportFrom,
         ],
     ) -> "SymbolRef":
         self.visit(node)
@@ -185,6 +186,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
             ast.FunctionDef,
             ast.AsyncFunctionDef,
             ast.Import,
+            ast.ImportFrom,
         ],
         val: str,
         **kwargs,
@@ -257,6 +259,10 @@ class SymbolRefVisitor(ast.NodeVisitor):
         for name in node.names:
             self._append_atom(node, name.asname or name.name)
 
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        for name in node.names:
+            self._append_atom(node, name.asname or name.name)
+
     def generic_visit(self, node) -> None:
         # raise ValueError('we should never get here: %s' % node)
         # give up
@@ -280,6 +286,7 @@ class SymbolRef(CommonEqualityMixin):
                 ast.FunctionDef,
                 ast.AsyncFunctionDef,
                 ast.Import,
+                ast.ImportFrom,
             ),
         ):
             symbols = self._cached_symbol_ref_visitor(symbols).chain

@@ -46,7 +46,7 @@ def run_cell(
         return cell_id, executed_cells
     finally:
         flow().mut_settings.exec_mode = orig_mode
-        flow().reactivity_cleanup()
+        flow().handle_reactivity_cleanup()
 
 
 def run_reactively(

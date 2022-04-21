@@ -216,10 +216,6 @@ class NotebookFlow(singletons.NotebookFlow):
     def set_tags(self, tags: Tuple[str, ...]) -> None:
         self._tags = tags
 
-    def reactivity_cleanup(self) -> None:
-        for cell in cells().all_cells_most_recently_run_for_each_id():
-            cell.set_ready(False)
-
     def _comm_target(self, comm, open_msg) -> None:
         @comm.on_msg
         def _responder(msg):
@@ -244,40 +240,48 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle(self, request, comm=None) -> None:
         if request["type"] == "change_active_cell":
-            self.set_active_cell(request["active_cell_id"])
+            self.handle_change_active_cell(request)
         elif request["type"] == "compute_exec_schedule":
-            if self._active_cell_id is None:
-                self.set_active_cell(request.get("executed_cell_id", None))
-            last_cell_id = request.get("executed_cell_id", None)
-            order_index_by_id = request.get("order_index_by_cell_id", None)
-            cells_to_check = None
-            if order_index_by_id is not None:
-                cells().set_cell_positions(order_index_by_id)
-                cells_to_check = (
-                    cell
-                    for cell in (
-                        cells().from_id(cell_id) for cell_id in order_index_by_id
-                    )
-                    if cell is not None
-                )
-            self._recompute_ast_for_dirty_cells(request.get("content_by_cell_id", {}))
-            response = self.check_and_link_multiple_cells(
-                cells_to_check=cells_to_check, last_executed_cell_id=last_cell_id
-            ).to_json()
-            response["type"] = "compute_exec_schedule"
-            response["exec_mode"] = self.mut_settings.exec_mode.value
-            response["exec_schedule"] = self.mut_settings.exec_schedule.value
-            response["flow_order"] = self.mut_settings.flow_order.value
-            response["last_executed_cell_id"] = last_cell_id
-            response["highlights_enabled"] = self.mut_settings.highlights_enabled
-            if comm is not None:
-                comm.send(response)
+            self.handle_compute_exec_schedule(request)
         elif request["type"] == "reactivity_cleanup":
-            self.reactivity_cleanup()
+            self.handle_reactivity_cleanup()
         else:
             dbg_msg = "Unsupported request type for request %s" % request
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
+
+    def handle_change_active_cell(self, request):
+        self.set_active_cell(request["active_cell_id"])
+
+    def handle_compute_exec_schedule(self, request):
+        if self._active_cell_id is None:
+            self.set_active_cell(request.get("executed_cell_id", None))
+        last_cell_id = request.get("executed_cell_id", None)
+        order_index_by_id = request.get("order_index_by_cell_id", None)
+        cells_to_check = None
+        if order_index_by_id is not None:
+            cells().set_cell_positions(order_index_by_id)
+            cells_to_check = (
+                cell
+                for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)
+                if cell is not None
+            )
+        self._recompute_ast_for_dirty_cells(request.get("content_by_cell_id", {}))
+        response = self.check_and_link_multiple_cells(
+            cells_to_check=cells_to_check, last_executed_cell_id=last_cell_id
+        ).to_json()
+        response["type"] = "compute_exec_schedule"
+        response["exec_mode"] = self.mut_settings.exec_mode.value
+        response["exec_schedule"] = self.mut_settings.exec_schedule.value
+        response["flow_order"] = self.mut_settings.flow_order.value
+        response["last_executed_cell_id"] = last_cell_id
+        response["highlights_enabled"] = self.mut_settings.highlights_enabled
+        if comm is not None:
+            comm.send(response)
+
+    def handle_reactivity_cleanup(self) -> None:
+        for cell in cells().all_cells_most_recently_run_for_each_id():
+            cell.set_ready(False)
 
     def check_and_link_multiple_cells(
         self,

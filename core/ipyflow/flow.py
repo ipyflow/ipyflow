@@ -240,17 +240,20 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle(self, request, comm=None) -> None:
         if request["type"] == "change_active_cell":
-            self.handle_change_active_cell(request)
+            response = self.handle_change_active_cell(request)
         elif request["type"] == "compute_exec_schedule":
-            self.handle_compute_exec_schedule(request)
+            response = self.handle_compute_exec_schedule(request)
         elif request["type"] == "reactivity_cleanup":
-            self.handle_reactivity_cleanup()
+            response = self.handle_reactivity_cleanup(request)
         else:
             dbg_msg = "Unsupported request type for request %s" % request
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
+            return
+        if response is not None and comm is not None:
+            comm.send(response)
 
-    def handle_change_active_cell(self, request):
+    def handle_change_active_cell(self, request) -> None:
         self.set_active_cell(request["active_cell_id"])
 
     def handle_compute_exec_schedule(self, request):
@@ -276,10 +279,9 @@ class NotebookFlow(singletons.NotebookFlow):
         response["flow_order"] = self.mut_settings.flow_order.value
         response["last_executed_cell_id"] = last_cell_id
         response["highlights_enabled"] = self.mut_settings.highlights_enabled
-        if comm is not None:
-            comm.send(response)
+        return response
 
-    def handle_reactivity_cleanup(self) -> None:
+    def handle_reactivity_cleanup(self, _request) -> None:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
 

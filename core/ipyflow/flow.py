@@ -256,7 +256,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def handle_change_active_cell(self, request) -> None:
         self.set_active_cell(request["active_cell_id"])
 
-    def handle_compute_exec_schedule(self, request):
+    def handle_compute_exec_schedule(self, request) -> Dict[str, Any]:
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id", None))
         last_cell_id = request.get("executed_cell_id", None)
@@ -281,7 +281,7 @@ class NotebookFlow(singletons.NotebookFlow):
         response["highlights_enabled"] = self.mut_settings.highlights_enabled
         return response
 
-    def handle_reactivity_cleanup(self, _request) -> None:
+    def handle_reactivity_cleanup(self, _request=None) -> None:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
 

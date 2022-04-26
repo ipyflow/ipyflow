@@ -153,7 +153,7 @@ class CodeCellSlicingMixin:
     @staticmethod
     def _strip_tuple_parens(node: ast.AST, text: str) -> str:
         if (
-            isinstance(node, ast.Tuple)
+            isinstance(node, (ast.BinOp, ast.Tuple))
             and len(text) >= 2
             and text[0] == "("
             and text[-1] == ")"
@@ -202,11 +202,11 @@ class CodeCellSlicingMixin:
                 for ctr, stmts in stmts_by_cell_num.items()
             }
             for cell in cells:
-                ret[cell.cell_ctr] = cell.executed_content
+                ret[cell.cell_ctr] = cell.sanitized_content()
             return ret
         else:
             deps: Set[int] = _compute_slice_impl([cell.cell_ctr for cell in cells])
-            return {dep: cls.from_timestamp(dep).executed_content for dep in deps}
+            return {dep: cls.from_timestamp(dep).sanitized_content() for dep in deps}
 
     def compute_slice_stmts(  # type: ignore
         self: "ExecutedCodeCell",

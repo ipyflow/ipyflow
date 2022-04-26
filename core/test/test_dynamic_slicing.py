@@ -519,3 +519,23 @@ def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
         """
     ).strip()
     assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)
+
+
+def test_slice_with_reactive_modifiers():
+    run_cell("x = 0")
+    run_cell("y = $x + 1")
+    run_cell("logging.info($y)")
+    slice_text = make_slice_text(compute_unparsed_slice_stmts(3), blacken=True).strip()
+    expected = textwrap.dedent(
+        """
+        # Cell 1
+        x = 0
+        
+        # Cell 2
+        y = x + 1
+
+        # Cell 3
+        logging.info(y)
+        """
+    ).strip()
+    assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)

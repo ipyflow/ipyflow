@@ -112,6 +112,12 @@ let forcedReactiveCells: Set<string> = new Set();
 
 const cleanup = new Event('cleanup');
 
+const resetReactiveState = () => {
+  newReadyCells = new Set();
+  forcedReactiveCells = new Set();
+  executedReactiveReadyCells = new Set();
+};
+
 const getJpInputCollapser = (elem: HTMLElement) => {
   if (elem === null || elem === undefined) {
     return null;
@@ -176,7 +182,7 @@ const addWaitingOutputInteractions = (elem: HTMLElement, linkedInputClass: strin
 };
 
 
-const rereadyNodeMapping = (notebook: Notebook) => {
+const refreshNodeMapping = (notebook: Notebook) => {
   cellsById = {};
   orderIdxById = {};
 
@@ -275,9 +281,7 @@ const connectToComm = (
           readyCells = executedReactiveReadyCells;
           updateUI(notebook);
         }
-        newReadyCells = new Set<string>();
-        forcedReactiveCells = new Set<string>();
-        executedReactiveReadyCells = new Set<string>();
+        resetReactiveState();
         comm.send({
           type: 'reactivity_cleanup',
         });
@@ -334,7 +338,7 @@ const connectToComm = (
         activeCellModel._setDirty(true);
       }
     }
-    rereadyNodeMapping(notebook);
+    refreshNodeMapping(notebook);
     updateOneCellUI(activeCellId);
   };
   notebook.activeCellChanged.connect(onActiveCellChange);
@@ -406,7 +410,7 @@ const connectToComm = (
     if (!lastExecutionHighlightsEnabled) {
       return;
     }
-    rereadyNodeMapping(notebook);
+    refreshNodeMapping(notebook);
     for (const [id] of Object.entries(cellsById)) {
       updateOneCellUI(id);
     }
@@ -459,8 +463,7 @@ const connectToComm = (
         }
       }
       if (cellPendingExecution === null) {
-        newReadyCells = new Set<string>();
-        forcedReactiveCells = new Set<string>();
+        resetReactiveState();
         updateUI(notebook);
       } else {
         onActiveCellChange(notebook, cellPendingExecution);

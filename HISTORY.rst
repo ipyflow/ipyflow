@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.90 (2022-05-01)
+-------------------
+* Reactivity works for dirty cells;
+* Change scheduling nomenclature + line magics (safety -> flow);
+
 0.0.85 (2022-03-17)
 -------------------
 * Fixes for pyccolo 0.0.22 breaking changes;

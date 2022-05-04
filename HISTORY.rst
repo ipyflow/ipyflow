@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.91 (2022-05-04)
+-------------------
+* Cascading reactivity for namespace symbols;
+
 0.0.90 (2022-05-01)
 -------------------
 * Reactivity works for dirty cells;

@@ -100,9 +100,7 @@ class TraceStatement:
                     flow().updated_deep_reactive_symbols.add(resolved.dsym)
                     reactive_seen = True
                     if resolved.is_cascading_reactive:
-                        resolved.dsym.cascading_reactive_cell_num = (
-                            flow().cell_counter()
-                        )
+                        resolved.dsym.bump_cascading_reactive_cell_num()
                 if reactive_seen and not blocking_seen:
                     flow().updated_reactive_symbols.add(resolved.dsym)
                 if blocking_seen and resolved.dsym not in flow().updated_symbols:

@@ -253,10 +253,11 @@ class NotebookFlow(singletons.NotebookFlow):
         if response is not None and comm is not None:
             comm.send(response)
 
-    def handle_change_active_cell(self, request) -> None:
+    def handle_change_active_cell(self, request) -> Optional[Dict[str, Any]]:
         self.set_active_cell(request["active_cell_id"])
+        return None
 
-    def handle_compute_exec_schedule(self, request) -> Dict[str, Any]:
+    def handle_compute_exec_schedule(self, request) -> Optional[Dict[str, Any]]:
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id", None))
         last_cell_id = request.get("executed_cell_id", None)
@@ -281,9 +282,10 @@ class NotebookFlow(singletons.NotebookFlow):
         response["highlights_enabled"] = self.mut_settings.highlights_enabled
         return response
 
-    def handle_reactivity_cleanup(self, _request=None) -> None:
+    def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
+        return None
 
     def check_and_link_multiple_cells(
         self,

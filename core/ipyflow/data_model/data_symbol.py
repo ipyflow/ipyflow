@@ -115,7 +115,7 @@ class DataSymbol:
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()
-        self.cascading_reactive_cell_num = -1
+        self._cascading_reactive_cell_num = -1
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
         self.required_timestamp: Timestamp = self.timestamp
@@ -194,6 +194,25 @@ class DataSymbol:
         ts = self._timestamp
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
+
+    @property
+    def cascading_reactive_cell_num(self) -> int:
+        cell_num = self._cascading_reactive_cell_num
+        ns = self.namespace
+        return (
+            cell_num
+            if ns is None
+            else max(
+                cell_num,
+                ns.max_cascading_reactive_cell_num,
+            )
+        )
+
+    def bump_cascading_reactive_cell_num(self, ctr: Optional[int] = None) -> None:
+        self._cascading_reactive_cell_num = max(
+            self._cascading_reactive_cell_num,
+            flow().cell_counter() if ctr is None else ctr,
+        )
 
     @property
     def waiting_timestamp(self) -> int:
@@ -420,9 +439,7 @@ class DataSymbol:
             old_ns = flow().namespaces.get(self.cached_obj_id, None)
             if (
                 old_ns is not None
-                and (
-                    new_ns is None or not new_ns.max_descendent_timestamp.is_initialized
-                )
+                and new_ns is None
                 and old_ns.full_namespace_path == self.full_namespace_path
             ):
                 if new_ns is None:
@@ -722,22 +739,21 @@ class DataSymbol:
         should_preserve_timestamp = not mutated and self.should_preserve_timestamp(
             prev_obj
         )
+        prev_cell = cells().current_cell().prev_cell
+        prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
+        if any(
+            dsym.is_cascading_reactive_at_counter(prev_cell_ctr) for dsym in new_deps
+        ):
+            bump_version = refresh
+            self.bump_cascading_reactive_cell_num()
+        elif self.cascading_reactive_cell_num == flow().cell_counter():
+            bump_version = refresh
+        else:
+            bump_version = refresh and (
+                not should_preserve_timestamp
+                or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES
+            )
         if refresh:
-            prev_cell = cells().current_cell().prev_cell
-            prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
-            if any(
-                dsym.is_cascading_reactive_at_counter(prev_cell_ctr)
-                for dsym in new_deps
-            ):
-                bump_version = True
-                self.cascading_reactive_cell_num = flow().cell_counter()
-            elif self.cascading_reactive_cell_num == flow().cell_counter():
-                bump_version = True
-            else:
-                bump_version = (
-                    not should_preserve_timestamp
-                    or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES
-                )
             self.refresh(
                 bump_version=bump_version,
                 # rationale: if this is a mutation for which we have more precise information,

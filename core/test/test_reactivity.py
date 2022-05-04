@@ -386,3 +386,9 @@ if sys.version_info >= (3, 8):
         assert run_cell("x = 0")[1] == {1}
         assert run_cell("y = x + 1")[1] == {2}
         assert run_cell("if ($x := 1): pass")[1] == {2, 3}
+
+    def test_cascading_list_elt():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("lst = [$$x]")[1] == {2}
+        assert run_cell("logging.info(lst)")[1] == {3}
+        assert run_cell("x = 42")[1] == {2, 3, 4}

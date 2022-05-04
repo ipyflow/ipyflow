@@ -4,6 +4,7 @@ import sys
 
 from ipyflow.singletons import flow
 from pyccolo.extra_builtins import EMIT_EVENT
+
 from .utils import assert_bool, make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
@@ -2209,7 +2210,9 @@ def test_dict_2():
     run_cell("x = d[0] + 1")
     run_cell("d = {}; d[0] = 42")
     run_cell("logging.info(x)")
-    assert_detected("`x` has dependency on old value of `d[0]`")
+    assert_not_detected(
+        "`d` is an entirely new namespace so new d[0] is distinct from old"
+    )
 
 
 def test_default_dict():

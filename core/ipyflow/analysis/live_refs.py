@@ -344,11 +344,11 @@ def _compute_call_chain_live_symbols_and_cells(
             continue
         called_dsym, stmt_ctr = workitem
         # TODO: handle callable classes
-        if not called_dsym.is_function:
+        if called_dsym.func_def_stmt is None:
             continue
         seen.add(workitem)
         live_refs, _ = compute_live_dead_symbol_refs(
-            cast(ast.FunctionDef, called_dsym.stmt_node).body,
+            cast(ast.FunctionDef, called_dsym.func_def_stmt).body,
             init_killed=set(called_dsym.get_definition_args()),
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
@@ -358,16 +358,19 @@ def _compute_call_chain_live_symbols_and_cells(
             ):
                 if resolved.is_called:
                     worklist.append((resolved.dsym, stmt_ctr))
-                if resolved.dsym.is_globally_accessible:
-                    if not resolved.is_unsafe:
-                        live.add(resolved)
-                    if update_liveness_time_versions:
-                        ts_to_use = (
-                            resolved.dsym.timestamp
-                            if resolved.is_last
-                            else resolved.dsym.timestamp_excluding_ns_descendents
-                        )
-                        resolved.dsym.timestamp_by_liveness_time[used_time] = ts_to_use
+                if resolved.dsym.is_anonymous:
+                    continue
+                if not resolved.is_unsafe:
+                    live.add(resolved)
+                if not resolved.dsym.is_globally_accessible:
+                    continue
+                if update_liveness_time_versions:
+                    ts_to_use = (
+                        resolved.dsym.timestamp
+                        if resolved.is_last
+                        else resolved.dsym.timestamp_excluding_ns_descendents
+                    )
+                    resolved.dsym.timestamp_by_liveness_time[used_time] = ts_to_use
     return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
 
 

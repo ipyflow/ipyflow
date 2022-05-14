@@ -94,14 +94,12 @@ class DataSymbol:
         if refresh_cached_obj:
             self._refresh_cached_obj()
         self.containing_scope = containing_scope
+        self.call_scope: Optional[Scope] = None
+        self.func_def_stmt: Optional[ast.stmt] = None
         self.stmt_node = self.update_stmt_node(stmt_node)
         self._funcall_live_symbols = None
         self.parents: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
         self.children: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
-
-        self.call_scope: Optional[Scope] = None
-        if self.is_function:
-            self.call_scope = self.containing_scope.make_child_scope(self.name)
 
         # initialize at -1 for implicit since the corresponding piece of data could already be around,
         # and we don't want liveness checker to think this was newly created unless we
@@ -510,12 +508,15 @@ class DataSymbol:
     def update_stmt_node(self, stmt_node: Optional[ast.stmt]) -> Optional[ast.stmt]:
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
-        if self.is_function:
+        if self.is_function or (
+            stmt_node is not None and isinstance(stmt_node, ast.Lambda)
+        ):
             # TODO: in the case of lambdas, there will not necessarily be one
             #  symbol for a given statement. We need a more precise way to determine
             #  the symbol being called than by looking at the stmt in question.
             flow().statement_to_func_cell[id(stmt_node)] = self
             self.call_scope = self.containing_scope.make_child_scope(self.name)
+            self.func_def_stmt = stmt_node
         return stmt_node
 
     def _refresh_cached_obj(self) -> None:
@@ -525,30 +526,30 @@ class DataSymbol:
         self.cached_obj_type = self.obj_type
 
     def get_definition_args(self) -> List[str]:
-        assert self.is_function and isinstance(
-            self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        assert self.func_def_stmt is not None and isinstance(
+            self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
         )
         args = []
-        for arg in self.stmt_node.args.args + self.stmt_node.args.kwonlyargs:
+        for arg in self.func_def_stmt.args.args + self.func_def_stmt.args.kwonlyargs:
             args.append(arg.arg)
-        if self.stmt_node.args.vararg is not None:
-            args.append(self.stmt_node.args.vararg.arg)
-        if self.stmt_node.args.kwarg is not None:
-            args.append(self.stmt_node.args.kwarg.arg)
+        if self.func_def_stmt.args.vararg is not None:
+            args.append(self.func_def_stmt.args.vararg.arg)
+        if self.func_def_stmt.args.kwarg is not None:
+            args.append(self.func_def_stmt.args.kwarg.arg)
         return args
 
     def _match_call_args_with_definition_args(
         self,
     ) -> Generator[Tuple[str, List["DataSymbol"]], None, None]:
-        assert self.is_function and isinstance(
-            self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+        assert self.func_def_stmt is not None and isinstance(
+            self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
         )
         caller_node = self._get_calling_ast_node()
         if caller_node is None or not isinstance(caller_node, ast.Call):
             return
-        def_args = self.stmt_node.args.args
-        if len(self.stmt_node.args.defaults) > 0:
-            def_args = def_args[: -len(self.stmt_node.args.defaults)]
+        def_args = self.func_def_stmt.args.args
+        if len(self.func_def_stmt.args.defaults) > 0:
+            def_args = def_args[: -len(self.func_def_stmt.args.defaults)]
         if len(def_args) > 0 and def_args[0].arg == "self":
             # FIXME: this is bad and I should feel bad
             def_args = def_args[1:]
@@ -566,19 +567,21 @@ class DataSymbol:
             seen_keys.add(keyword_key)
             yield keyword_key, tracer().resolve_loaded_symbols(keyword_value)
         for arg_key, arg_value in zip(
-            self.stmt_node.args.args[-len(self.stmt_node.args.defaults) :],
-            self.stmt_node.args.defaults,
+            self.func_def_stmt.args.args[-len(self.func_def_stmt.args.defaults) :],
+            self.func_def_stmt.args.defaults,
         ):
             if arg_key.arg in seen_keys:
                 continue
             yield arg_key.arg, tracer().resolve_loaded_symbols(arg_value)
 
     def _get_calling_ast_node(self) -> Optional[ast.Call]:
-        if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        if self.func_def_stmt is not None and isinstance(
+            self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
             if self.name in ("__getitem__", "__setitem__", "__delitem__"):
                 # TODO: handle case where we're looking for a subscript for the calling node
                 return None
-            for decorator in self.stmt_node.decorator_list:
+            for decorator in self.func_def_stmt.decorator_list:
                 if isinstance(decorator, ast.Name) and decorator.id == "property":
                     # TODO: handle case where we're looking for an attribute for the calling node
                     return None
@@ -596,7 +599,7 @@ class DataSymbol:
         return caller_ast_node
 
     def create_symbols_for_call_args(self, call_frame: FrameType) -> None:
-        assert self.is_function
+        assert self.func_def_stmt is not None
         seen_def_args = set()
         logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
@@ -605,7 +608,7 @@ class DataSymbol:
                 def_arg,
                 call_frame.f_locals.get(def_arg),
                 deps,
-                self.stmt_node,
+                self.func_def_stmt,
                 propagate=False,
             )
             logger.info("def arg %s matched with deps %s", def_arg, deps)
@@ -613,7 +616,7 @@ class DataSymbol:
             if def_arg in seen_def_args:
                 continue
             self.call_scope.upsert_data_symbol_for_name(
-                def_arg, None, set(), self.stmt_node, propagate=False
+                def_arg, None, set(), self.func_def_stmt, propagate=False
             )
 
     @property
@@ -661,6 +664,9 @@ class DataSymbol:
         return False
 
     def is_waiting_at_position(self, pos: int, deep: bool = True) -> bool:
+        if not self.is_globally_accessible:
+            # TODO: understand the implications of this better
+            return False
         if deep:
             if not self.is_waiting:
                 return False
@@ -776,6 +782,10 @@ class DataSymbol:
             # pop pending class defs and update obj ref
             pending_class_ns = tracer().pending_class_namespaces.pop()
             pending_class_ns.update_obj_ref(self.obj)
+        for dep in new_deps:
+            if dep.obj is self.obj and dep.call_scope is not None:
+                self.call_scope = dep.call_scope
+                self.func_def_stmt = dep.func_def_stmt
 
     def update_usage_info(
         self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False

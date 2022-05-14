@@ -303,7 +303,7 @@ class DataflowTracer(StackFrameManager):
                         )
                         maybe_lambda_node = None
                         if maybe_lambda_sym is not None:
-                            maybe_lambda_node = maybe_lambda_sym.stmt_node
+                            maybe_lambda_node = maybe_lambda_sym.func_def_stmt
                         if (
                             inside_anonymous_call
                             and maybe_lambda_node is not None
@@ -1149,10 +1149,7 @@ class DataflowTracer(StackFrameManager):
             is_function_def=True,
             propagate=False,
         )
-        # FIXME: this is super brittle. We're passing in a stmt node to update the mapping from
-        #  stmt_node to function symbol, but simultaneously forcing the lambda symbol to hold
-        #  a reference to the lambda in order to help with symbol resolution later
-        sym.stmt_node = node
+        sym.func_def_stmt = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
 
     @pyc.register_raw_handler(pyc.after_stmt)

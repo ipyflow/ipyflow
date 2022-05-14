@@ -379,14 +379,15 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
                     resolved.dsym,
                     resolved.dsym.timestamp_excluding_ns_descendents.cell_num,
                 )
+        used_cells = {
+            resolved.dsym.timestamp.cell_num
+            if resolved.is_deep
+            else resolved.dsym.timestamp_excluding_ns_descendents.cell_num
+            for resolved in live_resolved_symbols
+        }
         return CheckerResult(
             live=live_resolved_symbols,
-            used_cells={
-                resolved.dsym.timestamp.cell_num
-                if resolved.is_deep
-                else resolved.dsym.timestamp_excluding_ns_descendents.cell_num
-                for resolved in live_resolved_symbols
-            },
+            used_cells=used_cells,
             live_cells=live_cells,
             dead=dead_symbols,
             typechecks=self._typechecks(live_cells, live_resolved_symbols),

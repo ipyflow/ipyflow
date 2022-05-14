@@ -393,7 +393,6 @@ if sys.version_info >= (3, 8):
         assert run_cell("logging.info(lst)")[1] == {3}
         assert run_cell("x = 42")[1] == {2, 3, 4}
 
-    @skipif_known_failing
     def test_nonlocal_reactive_ref():
         assert (
             run_cell(

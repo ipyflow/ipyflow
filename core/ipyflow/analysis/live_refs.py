@@ -362,8 +362,6 @@ def _compute_call_chain_live_symbols_and_cells(
                     continue
                 if not resolved.is_unsafe:
                     live.add(resolved)
-                if not resolved.dsym.is_globally_accessible:
-                    continue
                 if update_liveness_time_versions:
                     ts_to_use = (
                         resolved.dsym.timestamp

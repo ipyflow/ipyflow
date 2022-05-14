@@ -5,6 +5,7 @@ from collections import defaultdict
 from enum import Enum
 import logging
 import sys
+from types import FrameType
 from typing import (
     cast,
     TYPE_CHECKING,
@@ -572,7 +573,7 @@ class DataSymbol:
                 continue
             yield arg_key.arg, tracer().resolve_loaded_symbols(arg_value)
 
-    def _get_calling_ast_node(self) -> Optional[ast.AST]:
+    def _get_calling_ast_node(self) -> Optional[ast.Call]:
         if isinstance(self.stmt_node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if self.name in ("__getitem__", "__setitem__", "__delitem__"):
                 # TODO: handle case where we're looking for a subscript for the calling node
@@ -594,17 +595,18 @@ class DataSymbol:
             return None
         return caller_ast_node
 
-    def create_symbols_for_call_args(self) -> None:
+    def create_symbols_for_call_args(self, call_frame: FrameType) -> None:
         assert self.is_function
         seen_def_args = set()
         logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
             seen_def_args.add(def_arg)
-            # TODO: ideally we should try pass the actual objects to the DataSymbol ctor.
-            #  Will require matching the signature with the actual call,
-            #  which will be tricky I guess.
-            self.call_scope.upsert_data_symbol_for_name(
-                def_arg, None, deps, self.stmt_node, propagate=False
+            sym = self.call_scope.upsert_data_symbol_for_name(
+                def_arg,
+                call_frame.f_locals.get(def_arg),
+                deps,
+                self.stmt_node,
+                propagate=False,
             )
             logger.info("def arg %s matched with deps %s", def_arg, deps)
         for def_arg in self.get_definition_args():

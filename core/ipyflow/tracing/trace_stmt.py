@@ -50,7 +50,7 @@ class TraceStatement:
     def _contains_lval(self) -> bool:
         return stmt_contains_lval(self.stmt_node)
 
-    def get_post_call_scope(self) -> Scope:
+    def get_post_call_scope(self, call_frame: FrameType) -> Scope:
         old_scope = tracer().cur_frame_original_scope
         if isinstance(self.stmt_node, ast.ClassDef):
             # classes need a new scope before the ClassDef has finished executing,
@@ -78,7 +78,7 @@ class TraceStatement:
                 logger.warning(msg)
                 return old_scope
         if not self.finished:
-            func_sym.create_symbols_for_call_args()
+            func_sym.create_symbols_for_call_args(call_frame)
         return func_sym.call_scope
 
     @staticmethod

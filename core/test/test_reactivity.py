@@ -395,8 +395,9 @@ if sys.version_info >= (3, 8):
 
     @skipif_known_failing
     def test_nonlocal_reactive_ref():
-        assert run_cell(
-            """
+        assert (
+            run_cell(
+                """
             def foo():
                 x = 0
                 def bar():
@@ -407,7 +408,9 @@ if sys.version_info >= (3, 8):
                 return bar, baz
             bar, baz = foo()
             """
-        )[1] == {1}
+            )[1]
+            == {1}
+        )
         assert run_cell("logging.info(bar())")[1] == {2}
         rerun = run_cell("baz(42)")[1]
         assert rerun == {2, 3}, "got %s" % rerun

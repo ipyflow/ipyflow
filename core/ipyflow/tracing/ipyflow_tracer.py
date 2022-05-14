@@ -241,7 +241,7 @@ class DataflowTracer(StackFrameManager):
     def _handle_call_transition(self, trace_stmt: TraceStatement):
         # ensures we only handle del's and not delitem's
         self.node_id_to_saved_del_data.clear()
-        new_scope = trace_stmt.get_post_call_scope()
+        new_scope = trace_stmt.get_post_call_scope(trace_stmt.frame)
         with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda
             #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?

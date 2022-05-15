@@ -21,6 +21,9 @@ class FrontendCheckerResult(NamedTuple):
     forced_reactive_cells: Set[CellId]
     typecheck_error_cells: Set[CellId]
     unsafe_order_cells: Dict[CellId, Set[ExecutedCodeCell]]
+    unsafe_order_symbol_usage: Dict[
+        CellId, List[Tuple[str, Tuple[Tuple[int, int], Tuple[int, int]]]]
+    ]
     waiter_links: Dict[CellId, Set[CellId]]
     ready_maker_links: Dict[CellId, Set[CellId]]
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
@@ -34,6 +37,7 @@ class FrontendCheckerResult(NamedTuple):
             forced_reactive_cells=set(),
             typecheck_error_cells=set(),
             unsafe_order_cells=defaultdict(set),
+            unsafe_order_symbol_usage=defaultdict(list),
             waiter_links=defaultdict(set),
             ready_maker_links=defaultdict(set),
             phantom_cell_info={},
@@ -47,6 +51,11 @@ class FrontendCheckerResult(NamedTuple):
             "ready_cells": list(self.ready_cells),
             "new_ready_cells": list(self.new_ready_cells),
             "forced_reactive_cells": list(self.forced_reactive_cells),
+            "unsafe_order_cells": {
+                cell_id: list(unsafe_order_cells)
+                for cell_id, unsafe_order_cells in self.unsafe_order_cells.items()
+            },
+            "unsafe_order_symbol_usage": self.unsafe_order_symbol_usage,
             "waiter_links": {
                 cell_id: list(linked_cell_ids)
                 for cell_id, linked_cell_ids in self.waiter_links.items()
@@ -283,6 +292,44 @@ class FrontendCheckerResult(NamedTuple):
                 self.forced_reactive_cells.add(reactive_cell_id)
         return last_executed_cell.position
 
+    def _compute_unsafe_order_usages(
+        self, cells_to_check: List[ExecutedCodeCell]
+    ) -> None:
+        # FIXME: this will be slow for large notebooks; speed it up
+        #  or make it optional
+        cell_by_ctr: Dict[int, ExecutedCodeCell] = {
+            cell.cell_ctr: cell for cell in cells_to_check
+        }
+        for sym in flow().all_data_symbols():
+            if sym.is_anonymous:
+                continue
+            for used_ts, ts_when_used in sym.timestamp_by_used_time.items():
+                cell = cell_by_ctr.get(used_ts.cell_num, None)
+                if cell is None:
+                    continue
+                if cells().from_timestamp(ts_when_used).position <= cell.position:
+                    continue
+                used_node = sym.used_node_by_used_time.get(used_ts, None)
+                if used_node is None:
+                    continue
+                if not hasattr(used_node, "lineno"):
+                    continue
+                if not hasattr(used_node, "end_lineno"):
+                    continue
+                if not hasattr(used_node, "col_offset"):
+                    continue
+                if not hasattr(used_node, "end_col_offset"):
+                    continue
+                self.unsafe_order_symbol_usage[cell.cell_id].append(
+                    (
+                        sym.readable_name,
+                        (
+                            (used_node.lineno, used_node.col_offset),
+                            (used_node.end_lineno, used_node.end_col_offset),
+                        ),
+                    )
+                )
+
     def compute_frontend_checker_result(
         self,
         cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
@@ -327,4 +374,5 @@ class FrontendCheckerResult(NamedTuple):
             last_executed_cell_id,
         )
         self._compute_waiter_and_ready_maker_links()
+        self._compute_unsafe_order_usages(cells_to_check)
         return self

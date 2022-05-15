@@ -76,7 +76,7 @@ class DataSymbol:
         obj: Any,
         containing_scope: "Scope",
         stmt_node: Optional[ast.stmt] = None,
-        # TODO: also keep a reference to the target node?
+        symbol_node: Optional[ast.AST] = None,
         refresh_cached_obj: bool = False,
         implicit: bool = False,
     ) -> None:
@@ -97,6 +97,7 @@ class DataSymbol:
         self.call_scope: Optional[Scope] = None
         self.func_def_stmt: Optional[ast.stmt] = None
         self.stmt_node = self.update_stmt_node(stmt_node)
+        self.symbol_node = symbol_node
         self._funcall_live_symbols = None
         self.parents: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
         self.children: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
@@ -525,22 +526,23 @@ class DataSymbol:
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
 
-    def get_definition_args(self) -> List[str]:
+    def get_definition_args(self) -> List[ast.arg]:
         assert self.func_def_stmt is not None and isinstance(
             self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
         )
         args = []
         for arg in self.func_def_stmt.args.args + self.func_def_stmt.args.kwonlyargs:
-            args.append(arg.arg)
+            args.append(arg)
         if self.func_def_stmt.args.vararg is not None:
-            args.append(self.func_def_stmt.args.vararg.arg)
+            args.append(self.func_def_stmt.args.vararg)
         if self.func_def_stmt.args.kwarg is not None:
-            args.append(self.func_def_stmt.args.kwarg.arg)
+            args.append(self.func_def_stmt.args.kwarg)
         return args
 
     def _match_call_args_with_definition_args(
         self,
-    ) -> Generator[Tuple[str, List["DataSymbol"]], None, None]:
+    ) -> Generator[Tuple[ast.arg, List["DataSymbol"]], None, None]:
+        # TODO: handle posonlyargs, kwonlyargs
         assert self.func_def_stmt is not None and isinstance(
             self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
         )
@@ -558,21 +560,29 @@ class DataSymbol:
                 # give up
                 # TODO: handle this case
                 break
-            yield def_arg.arg, tracer().resolve_loaded_symbols(call_arg)
+            yield def_arg, tracer().resolve_loaded_symbols(call_arg)
         seen_keys = set()
+        kwarg_by_name = {
+            arg_key.arg: arg_key
+            for arg_key in self.func_def_stmt.args.args[
+                -len(self.func_def_stmt.args.defaults) :
+            ]
+        }
         for keyword in caller_node.keywords:
             keyword_key, keyword_value = keyword.arg, keyword.value
             if keyword_value is None:
                 continue
             seen_keys.add(keyword_key)
-            yield keyword_key, tracer().resolve_loaded_symbols(keyword_value)
+            yield kwarg_by_name[keyword_key], tracer().resolve_loaded_symbols(
+                keyword_value
+            )
         for arg_key, arg_value in zip(
             self.func_def_stmt.args.args[-len(self.func_def_stmt.args.defaults) :],
             self.func_def_stmt.args.defaults,
         ):
             if arg_key.arg in seen_keys:
                 continue
-            yield arg_key.arg, tracer().resolve_loaded_symbols(arg_value)
+            yield arg_key, tracer().resolve_loaded_symbols(arg_value)
 
     def _get_calling_ast_node(self) -> Optional[ast.Call]:
         if self.func_def_stmt is not None and isinstance(
@@ -603,20 +613,26 @@ class DataSymbol:
         seen_def_args = set()
         logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
-            seen_def_args.add(def_arg)
+            seen_def_args.add(def_arg.arg)
             sym = self.call_scope.upsert_data_symbol_for_name(
-                def_arg,
-                call_frame.f_locals.get(def_arg),
+                def_arg.arg,
+                call_frame.f_locals.get(def_arg.arg),
                 deps,
                 self.func_def_stmt,
                 propagate=False,
+                symbol_node=def_arg,
             )
             logger.info("def arg %s matched with deps %s", def_arg, deps)
         for def_arg in self.get_definition_args():
-            if def_arg in seen_def_args:
+            if def_arg.arg in seen_def_args:
                 continue
             self.call_scope.upsert_data_symbol_for_name(
-                def_arg, None, set(), self.func_def_stmt, propagate=False
+                def_arg.arg,
+                None,
+                set(),
+                self.func_def_stmt,
+                propagate=False,
+                symbol_node=def_arg,
             )
 
     @property

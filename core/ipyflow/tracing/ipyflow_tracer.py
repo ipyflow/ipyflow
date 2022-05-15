@@ -1148,6 +1148,7 @@ class DataflowTracer(StackFrameManager):
             self.prev_trace_stmt_in_cur_frame.stmt_node,
             is_function_def=True,
             propagate=False,
+            symbol_node=node,
         )
         sym.func_def_stmt = node
         self.node_id_to_loaded_symbols[lambda_node_id].append(sym)

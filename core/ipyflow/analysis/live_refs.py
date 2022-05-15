@@ -349,7 +349,7 @@ def _compute_call_chain_live_symbols_and_cells(
         seen.add(workitem)
         live_refs, _ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_dsym.func_def_stmt).body,
-            init_killed=set(called_dsym.get_definition_args()),
+            init_killed=set(arg.arg for arg in called_dsym.get_definition_args()),
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
         for symbol_ref in live_refs:

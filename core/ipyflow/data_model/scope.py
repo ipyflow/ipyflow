@@ -185,6 +185,7 @@ class Scope:
         obj: Any,
         deps: Iterable[DataSymbol],
         stmt_node: ast.stmt,
+        symbol_node: Optional[ast.AST] = None,
         overwrite: bool = True,
         is_subscript: bool = False,
         is_function_def: bool = False,
@@ -210,6 +211,7 @@ class Scope:
             deps,  # FIXME: this updates deps, which is super super hacky
             symbol_type,
             stmt_node,
+            symbol_node=symbol_node,
             implicit=implicit,
         )
         dsym.update_deps(
@@ -229,6 +231,7 @@ class Scope:
         deps: Set[DataSymbol],
         symbol_type: DataSymbolType,
         stmt_node: ast.stmt,
+        symbol_node: Optional[ast.AST] = None,
         implicit: bool = False,
     ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[Any]]:
         prev_obj = None
@@ -290,6 +293,7 @@ class Scope:
             obj,
             self,
             stmt_node=stmt_node,
+            symbol_node=symbol_node,
             refresh_cached_obj=False,
             implicit=implicit,
         )

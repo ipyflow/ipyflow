@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ast
 import logging
 from typing import TYPE_CHECKING, Iterable, NamedTuple, Optional, Union
 
@@ -44,6 +45,7 @@ class Timestamp(NamedTuple):
         cls,
         symbols: Union[Optional["DataSymbol"], Iterable[Optional["DataSymbol"]]],
         exclude_ns=False,
+        used_node: Optional[ast.AST] = None,
     ):
         if symbols is None:
             return
@@ -54,4 +56,6 @@ class Timestamp(NamedTuple):
         used_time = cls.current()
         for sym in symbols:  # type: ignore
             if sym is not None and not sym.is_anonymous:
-                sym.update_usage_info(used_time=used_time, exclude_ns=exclude_ns)
+                sym.update_usage_info(
+                    used_time=used_time, used_node=used_node, exclude_ns=exclude_ns
+                )

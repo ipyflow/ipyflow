@@ -248,5 +248,5 @@ def resolve_rval_symbols(
             node, cell_ctr=-1 if prev_cell is None else prev_cell.cell_ctr
         )
     if should_update_usage_info:
-        Timestamp.update_usage_info(rval_symbols)
+        Timestamp.update_usage_info(rval_symbols, used_node=node)
     return rval_symbols

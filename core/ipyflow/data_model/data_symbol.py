@@ -122,6 +122,7 @@ class DataSymbol:
 
         # for each usage of this dsym, the version that was used, if different from the timestamp of usage
         self.timestamp_by_used_time: Dict[Timestamp, Timestamp] = {}
+        self.used_node_by_used_time: Dict[Timestamp, ast.AST] = {}
         # History of definitions at time of liveness
         self.timestamp_by_liveness_time: Dict[Timestamp, Timestamp] = {}
         # All timestamps associated with this symbol
@@ -804,7 +805,10 @@ class DataSymbol:
                 self.func_def_stmt = dep.func_def_stmt
 
     def update_usage_info(
-        self, used_time: Optional[Timestamp] = None, exclude_ns: bool = False
+        self,
+        used_time: Optional[Timestamp] = None,
+        used_node: Optional[ast.AST] = None,
+        exclude_ns: bool = False,
     ) -> None:
         if used_time is None:
             used_time = Timestamp.current()
@@ -827,6 +831,8 @@ class DataSymbol:
         ):
             flow().add_dynamic_data_dep(used_time, ts_to_use)
             self.timestamp_by_used_time[used_time] = ts_to_use
+            if used_node is not None:
+                self.used_node_by_used_time[used_time] = used_node
 
     def refresh(
         self,

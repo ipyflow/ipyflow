@@ -152,6 +152,7 @@ class TraceStatement:
                 deps - excluded_deps,
                 self.stmt_node,
                 is_subscript=subscript_val,
+                symbol_node=target,
             )
             logger.info(
                 "sym %s upserted to scope %s has parents %s",
@@ -200,6 +201,7 @@ class TraceStatement:
             set(),
             self.stmt_node,
             is_subscript=is_subscript,
+            symbol_node=target,
         )
         self._handle_reactive_store(target.value)
 
@@ -332,6 +334,7 @@ class TraceStatement:
                     is_import=is_import,
                     class_scope=self.class_scope,
                     propagate=not isinstance(self.stmt_node, ast.For),
+                    symbol_node=target if isinstance(target, ast.AST) else None,
                 )
                 if isinstance(
                     self.stmt_node,

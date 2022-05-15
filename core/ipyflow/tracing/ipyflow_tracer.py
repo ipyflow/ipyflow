@@ -535,7 +535,7 @@ class DataflowTracer(StackFrameManager):
         return ns
 
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(
-        self, obj_attr_or_sub
+        self, obj_attr_or_sub: Any, node: ast.AST
     ) -> Optional[DataSymbol]:
         if self.saved_complex_symbol_load_data is None:
             return None
@@ -569,6 +569,7 @@ class DataflowTracer(StackFrameManager):
                 is_subscript=is_subscript,
                 propagate=is_default_dict,
                 implicit=not is_default_dict,
+                symbol_node=node,
             )
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
@@ -631,7 +632,7 @@ class DataflowTracer(StackFrameManager):
             for ref in subscript_live_refs
         )
 
-    @pyc.register_raw_handler(
+    @pyc.register_handler(
         (
             pyc.before_attribute_load,
             pyc.before_attribute_store,
@@ -645,7 +646,7 @@ class DataflowTracer(StackFrameManager):
     def attrsub_tracer(
         self,
         obj: Any,
-        node_id: NodeId,
+        node: Union[ast.Attribute, ast.Subscript],
         _frame_: FrameType,
         event: pyc.TraceEvent,
         *_,
@@ -655,14 +656,16 @@ class DataflowTracer(StackFrameManager):
         obj_name: Optional[str] = None,
         **__,
     ):
-        value_node_id = id(self.ast_node_by_id[node_id].value)  # type: ignore
+        value_node_id = id(node.value)
         if isinstance(self.ast_node_by_id[value_node_id], ast.Call):
             # clear the callpoint dependency
             self.node_id_to_loaded_symbols.pop(value_node_id, None)
         if obj is None or obj is get_ipython():
             return
         logger.warning("%s %s of obj %s", event, attr_or_subscript, obj)
-        sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
+        sym_for_obj = self._clear_info_and_maybe_lookup_or_create_complex_symbol(
+            obj, node
+        )
 
         # Resolve symbol if necessary
         if sym_for_obj is None and obj_name is not None:
@@ -749,6 +752,7 @@ class DataflowTracer(StackFrameManager):
                             is_anonymous=obj_name is None,
                             propagate=False,
                             implicit=True,
+                            symbol_node=node,
                         )
                     if sym_for_obj is not None:
                         assert self.top_level_node_id_for_chain is not None
@@ -852,14 +856,16 @@ class DataflowTracer(StackFrameManager):
         self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
 
     @pyc.register_raw_handler(pyc.after_load_complex_symbol)
-    def after_complex_symbol(self, obj: Any, *_, **__):
+    def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
         try:
             if not self.is_tracing_enabled:
                 return
             if self.first_obj_id_in_chain is None:
                 return
             assert self.top_level_node_id_for_chain is not None
-            loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(obj)
+            loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(
+                obj, self.ast_node_by_id[node_id]
+            )
             if loaded_sym is not None:
                 self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(
                     loaded_sym
@@ -909,6 +915,7 @@ class DataflowTracer(StackFrameManager):
                     set(),
                     self.prev_trace_stmt_in_cur_frame.stmt_node,
                     implicit=True,
+                    symbol_node=arg_node,
                 )
         mut_cand[-2].append(resolve_rval_symbols(arg_node))
         mut_cand[-1].append(arg_obj)

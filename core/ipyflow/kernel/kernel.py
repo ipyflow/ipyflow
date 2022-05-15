@@ -416,9 +416,14 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
             flow_._safety_precheck_cell(cell)
 
             used_out_of_order_counter = flow_.out_of_order_usage_detected_counter
-            if used_out_of_order_counter is not None and (cell_id, cell_content) != (
-                last_cell_id,
-                last_content,
+            if (
+                flow_.mut_settings.warn_out_of_order_usages
+                and used_out_of_order_counter is not None
+                and (cell_id, cell_content)
+                != (
+                    last_cell_id,
+                    last_content,
+                )
             ):
                 logger.warning(
                     "detected out of order usage of cell [%d]; showing previous output if any (run again to ignore force execution)",

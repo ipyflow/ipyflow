@@ -258,7 +258,9 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 ast_rewriter = DataflowTracer.instance().make_ast_rewriter(
                     module_id=self.cell_counter()
                 )
-                with self._syntax_transform_only_tracing_context(all_tracers, ast_rewriter=ast_rewriter):
+                with self._syntax_transform_only_tracing_context(
+                    all_tracers, ast_rewriter=ast_rewriter
+                ):
                     with ast_transformer_context([ast_rewriter]):
                         with self._patch_pyccolo_exec_eval():
                             yield

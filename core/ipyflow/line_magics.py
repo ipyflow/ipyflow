@@ -109,6 +109,9 @@ def make_line_magic(flow_: "NotebookFlow"):
         elif cmd.endswith("warn_ooo"):
             flow_.mut_settings.warn_out_of_order_usages = not cmd.startswith("no")
             return None
+        elif cmd == "syntax_transforms_only":
+            flow_.mut_settings.syntax_transforms_only = True
+            return None
         elif cmd in line_magic_names:
             warn(
                 f"We have a magic for {cmd}, but have not yet registered it",
@@ -156,6 +159,7 @@ def toggle_dataflow(line: str) -> Optional[str]:
     flow_ = flow()
     if line in ("enable", "on"):
         flow_.mut_settings.dataflow_enabled = True
+        flow_.mut_settings.syntax_transforms_only = False
         return "dataflow capture enabled"
     elif line in ("disable", "off"):
         flow_.mut_settings.dataflow_enabled = False

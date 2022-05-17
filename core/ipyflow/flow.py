@@ -58,6 +58,7 @@ class MutableNotebookSafetySettings:
     exec_schedule: ExecutionSchedule
     flow_order: FlowDirection
     warn_out_of_order_usages: bool
+    syntax_transforms_only: bool
 
 
 class NotebookFlow(singletons.NotebookFlow):
@@ -100,6 +101,7 @@ class NotebookFlow(singletons.NotebookFlow):
                     kwargs.pop("flow_direction", FlowDirection.ANY_ORDER)
                 ),
                 warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
+                syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
             )
         )
         # Note: explicitly adding the types helps PyCharm intellisense

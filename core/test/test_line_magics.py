@@ -180,3 +180,11 @@ def test_warn_out_of_order():
     assert flow().mut_settings.warn_out_of_order_usages
     run_cell("%flow no-warn-ooo")
     assert not flow().mut_settings.warn_out_of_order_usages
+
+
+def test_syntax_transforms_only():
+    assert not flow().mut_settings.syntax_transforms_only
+    run_cell("%flow syntax_transforms_only")
+    assert flow().mut_settings.syntax_transforms_only
+    run_cell("%flow on")
+    assert not flow().mut_settings.syntax_transforms_only

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.93 (2022-05-16)
+-------------------
+* Add line magic to run with syntax transforms only, and no tracing;
+
 0.0.92 (2022-05-16)
 -------------------
 * Properly pass call_scope and function definition nodes between aliasing symbols;

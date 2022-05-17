@@ -85,6 +85,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         ]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
+        self.syntax_transforms_only: bool = False
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
         if run_cell_func is None:
@@ -213,11 +214,26 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         return ast_rewriter, all_syntax_augmenters
 
     @contextmanager
+    def _syntax_transform_only_tracing_context(self, all_tracers, ast_rewriter=None):
+        ast_rewriter = ast_rewriter or DataflowTracer.instance().make_ast_rewriter(
+            module_id=self.cell_counter()
+        )
+        _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
+            tracers=all_tracers, ast_rewriter=ast_rewriter
+        )
+        with input_transformer_context(all_syntax_augmenters):
+            yield
+
+    @contextmanager
     def _tracing_context(self):
         self.before_enter_tracing_context()
 
         try:
             all_tracers = [tracer.instance() for tracer in self.registered_tracers]
+            if self.syntax_transforms_only:
+                with self._syntax_transform_only_tracing_context(all_tracers):
+                    yield
+                return
             if any(tracer.has_sys_trace_events for tracer in all_tracers):
                 if not any(
                     isinstance(tracer, StackFrameManager) for tracer in all_tracers
@@ -242,10 +258,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 ast_rewriter = DataflowTracer.instance().make_ast_rewriter(
                     module_id=self.cell_counter()
                 )
-                _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
-                    tracers=all_tracers, ast_rewriter=ast_rewriter
-                )
-                with input_transformer_context(all_syntax_augmenters):
+                with self._syntax_transform_only_tracing_context(all_tracers, ast_rewriter=ast_rewriter):
                     with ast_transformer_context([ast_rewriter]):
                         with self._patch_pyccolo_exec_eval():
                             yield
@@ -380,6 +393,7 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
         flow_.updated_symbols.clear()
         flow_.updated_reactive_symbols.clear()
         flow_.updated_deep_reactive_symbols.clear()
+        self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
 
     def should_trace(self) -> bool:
         return singletons.flow().mut_settings.dataflow_enabled

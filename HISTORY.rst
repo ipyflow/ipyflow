@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.92 (2022-05-16)
+-------------------
+* Properly pass call_scope and function definition nodes between aliasing symbols;
+
 0.0.91 (2022-05-04)
 -------------------
 * Cascading reactivity for namespace symbols;

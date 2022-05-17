@@ -106,6 +106,9 @@ def make_line_magic(flow_: "NotebookFlow"):
         elif cmd == "clear":
             flow_.min_timestamp = flow_.cell_counter()
             return None
+        elif cmd.endswith("warn_ooo"):
+            flow_.mut_settings.warn_out_of_order_usages = not cmd.startswith("no")
+            return None
         elif cmd in line_magic_names:
             warn(
                 f"We have a magic for {cmd}, but have not yet registered it",

@@ -172,3 +172,11 @@ def test_tags():
     assert cells().from_counter(1).tags == ()
     run_cell("%flow show-tags --cell 1")
     assert cells().current_cell().captured_output.stdout.strip() == "Cell has tags: ()"
+
+
+def test_warn_out_of_order():
+    assert not flow().mut_settings.warn_out_of_order_usages
+    run_cell("%flow warn-ooo")
+    assert flow().mut_settings.warn_out_of_order_usages
+    run_cell("%flow no-warn-ooo")
+    assert not flow().mut_settings.warn_out_of_order_usages

@@ -34,8 +34,8 @@
   },
   "devDependencies": {
     "@types/webpack-env": "^1.16.0",
-    "@typescript-eslint/eslint-plugin": "^2.25.0",
-    "@typescript-eslint/parser": "^2.25.0",
+    "@typescript-eslint/eslint-plugin": "^5.25.0",
+    "@typescript-eslint/parser": "^5.25.0",
     "css-loader": "^5.2.4",
     "eslint": "^7.32.0",
     "eslint-config-prettier": "^6.15.0",

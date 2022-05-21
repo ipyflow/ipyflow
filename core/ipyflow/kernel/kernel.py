@@ -373,7 +373,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         return ZMQKernel
 
 
-class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
+class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
     def after_init_class(self) -> None:
         NotebookFlow.instance(use_comm=True)
 
@@ -486,4 +486,4 @@ class DataflowKernelBase(singletons.DataflowKernel, PyccoloKernelMixin):
             flow_.set_exception_raised_during_execution(e)
 
 
-SafeKernel = DataflowKernelBase.make_zmq_kernel_class("SafeKernel")
+IPyflowKernel = IPyflowKernelBase.make_zmq_kernel_class("IPyflowKernel")

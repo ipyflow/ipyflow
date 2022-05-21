@@ -8,7 +8,7 @@ from IPython import get_ipython
 import pytest
 
 from ipyflow.data_model.code_cell import cells
-from ipyflow.kernel.kernel import DataflowKernelBase
+from ipyflow.kernel.kernel import IPyflowKernelBase
 from ipyflow.run_mode import FlowRunMode
 from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import flow
@@ -62,8 +62,8 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        DataflowKernelBase.clear_instance()
-        DataflowKernelBase.instance(
+        IPyflowKernelBase.clear_instance()
+        IPyflowKernelBase.instance(
             store_history=False,
         )
         NotebookFlow.clear_instance()
@@ -84,7 +84,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         else:
             yield
         # ensure each test didn't give failures during ast transformation
-        DataflowKernelBase.instance().cleanup_tracers()
+        IPyflowKernelBase.instance().cleanup_tracers()
         exc = flow().set_exception_raised_during_execution(None)
         if exc is not None:
             raise exc

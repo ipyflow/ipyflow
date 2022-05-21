@@ -5,7 +5,7 @@ import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
-    from ipyflow.kernel.kernel import DataflowKernelBase as DataflowKernelInstance
+    from ipyflow.kernel.kernel import IPyflowKernelBase as IPyflowKernelInstance
     from ipyflow.flow import NotebookFlow as NotebookFlowInstance
     from ipyflow.tracing.ipyflow_tracer import DataflowTracer as TracerInstance
 
@@ -20,7 +20,7 @@ class NotebookFlow(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
-class DataflowKernel(SingletonConfigurable):
+class IPyflowKernel(SingletonConfigurable):
     pass
 
 
@@ -28,9 +28,9 @@ class SingletonBaseTracer(pyc.BaseTracer):
     pass
 
 
-def kernel() -> "DataflowKernelInstance":
-    assert DataflowKernel.initialized()
-    return DataflowKernel.instance()
+def kernel() -> "IPyflowKernelInstance":
+    assert IPyflowKernel.initialized()
+    return IPyflowKernel.instance()
 
 
 def flow() -> "NotebookFlowInstance":

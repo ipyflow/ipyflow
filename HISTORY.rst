@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.94 (2022-05-21)
+0.0.95 (2022-05-21)
 -------------------
 * Add optional capability for linting unsafe order usages;
 

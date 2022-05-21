@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.94 (2022-05-21)
+-------------------
+* Add optional capability for linting unsafe order usages;
+
 0.0.93 (2022-05-16)
 -------------------
 * Add line magic to run with syntax transforms only, and no tracing;

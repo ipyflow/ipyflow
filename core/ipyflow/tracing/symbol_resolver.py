@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
-from typing import List, Optional, Set, Union
+from typing import Iterable, List, Optional, Set, Union
 
 from ipyflow.analysis.live_refs import static_resolve_rvals
 from ipyflow.analysis.symbol_ref import resolve_slice_to_constant
@@ -24,18 +24,27 @@ logger.setLevel(logging.WARNING)
 class ResolveRvalSymbols(
     SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
 ):
-    def __init__(self):
+    def __init__(self, update_usage_info: bool) -> None:
         self.symbols: List[Optional[DataSymbol]] = []
+        self.update_usage_info = update_usage_info
 
     def __call__(self, node: ast.AST) -> Set[DataSymbol]:
         self.visit(node)
         return {sym for sym in self.symbols if sym is not None}
 
-    def _push_symbols(self):
-        return self.push_attributes(symbols=[])
+    def _push_symbols(self, **kwargs):
+        return self.push_attributes(symbols=[], **kwargs)
+
+    def _update_usage_info(
+        self, symbols: Iterable[DataSymbol], used_node: ast.AST
+    ) -> None:
+        if self.update_usage_info:
+            Timestamp.update_usage_info(symbols, used_node=used_node)
 
     def visit_Name(self, node: ast.Name):
-        self.symbols.extend(tracer().resolve_loaded_symbols(node))
+        resolved = tracer().resolve_loaded_symbols(node)
+        self._update_usage_info(resolved, node)
+        self.symbols.extend(resolved)
 
     def visit_Tuple(self, node: ast.Tuple):
         self.visit_List_or_Tuple(node)
@@ -52,6 +61,7 @@ class ResolveRvalSymbols(
             self.generic_visit(node.values)
         else:
             self.symbols.extend(resolved)
+            self._update_usage_info(resolved, node)
 
     def visit_List_or_Tuple(self, node: Union[ast.List, ast.Tuple]):
         resolved = tracer().resolve_loaded_symbols(node)
@@ -61,6 +71,7 @@ class ResolveRvalSymbols(
             self.generic_visit(node.elts)
         else:
             self.symbols.extend(resolved)
+            self._update_usage_info(resolved, node)
 
     def visit_AugAssign_or_AnnAssign(self, node):
         self.visit(node.value)
@@ -74,8 +85,12 @@ class ResolveRvalSymbols(
     def visit_Call(self, node):
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             self.visit(node.func)
-        self.symbols.extend(tracer().resolve_loaded_symbols(node.func))
-        self.symbols.extend(tracer().resolve_loaded_symbols(node))
+        resolved = tracer().resolve_loaded_symbols(node.func)
+        self._update_usage_info(resolved, node.func)
+        self.symbols.extend(resolved)
+        resolved = tracer().resolve_loaded_symbols(node)
+        self._update_usage_info(resolved, node)
+        self.symbols.extend(resolved)
         self.generic_visit([node.args, node.keywords])
 
     def _get_attr_or_subscript_namespace(
@@ -94,6 +109,7 @@ class ResolveRvalSymbols(
         symbols = tracer().resolve_loaded_symbols(node)
         if len(symbols) > 0:
             self.symbols.extend(symbols)
+            self._update_usage_info(symbols, node)
             return
         # TODO: this path lacks coverage
         try:
@@ -105,6 +121,7 @@ class ResolveRvalSymbols(
             )
             if dsym is not None:
                 self.symbols.append(dsym)
+                self._update_usage_info([dsym], node)
         except Exception:
             logger.exception(
                 "Exception occurred while resolving node %s", ast.dump(node)
@@ -114,6 +131,7 @@ class ResolveRvalSymbols(
         if isinstance(node.value, ast.Call):
             self.visit(node.value)
         symbols = tracer().resolve_loaded_symbols(node)
+        self._update_usage_info(symbols, node)
         with self._push_symbols():
             # add slice to RHS to avoid propagating to it
             self.visit(node.slice)
@@ -146,6 +164,7 @@ class ResolveRvalSymbols(
                     dsym = None
             if dsym is not None:
                 self.symbols.append(dsym)
+                self._update_usage_info([dsym], node)
         except Exception:
             logger.exception(
                 "Exception occurred while resolving node %s", ast.dump(node)
@@ -173,25 +192,26 @@ class ResolveRvalSymbols(
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
     def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node):
-        to_append = set()
         for gen in node.generators:
+            to_append = set()
             if isinstance(gen, ast.comprehension):
                 with self._push_symbols():
                     self.visit(gen.iter)
                     self.visit(gen.ifs)
                     to_append |= set(self.symbols)
-                with self._push_symbols():
+                with self._push_symbols(update_usage_info=False):
                     self.visit(gen.target)
                     discard_set = set(self.symbols)
             else:
-                with self._push_symbols():
+                with self._push_symbols(update_usage_info=False):
                     self.visit(gen)
                     discard_set = set(self.symbols)
-            to_append -= discard_set
-        self.symbols.extend(to_append - discard_set)
+            self.symbols.extend(to_append - discard_set)
 
     def visit_arg(self, node: ast.arg):
-        self.symbols.extend(tracer().resolve_loaded_symbols(node.arg))
+        resolved = tracer().resolve_loaded_symbols(node.arg)
+        self._update_usage_info(resolved, node)
+        self.symbols.extend(resolved)
 
     def visit_For(self, node: ast.For):
         # skip body -- will have dummy since this visitor works line-by-line
@@ -227,7 +247,9 @@ class ResolveRvalSymbols(
     def visit_ExceptHandler(self, node: ast.ExceptHandler):
         # important: this needs to skip the body
         if node.type is not None:
-            self.symbols.extend(tracer().resolve_loaded_symbols(node.type))
+            resolved = tracer().resolve_loaded_symbols(node.type)
+            self._update_usage_info(resolved, node.type)
+            self.symbols.extend(resolved)
 
     def visit_Import(self, node: ast.Import):
         pass
@@ -241,12 +263,12 @@ def resolve_rval_symbols(
 ) -> Set[DataSymbol]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
-    rval_symbols = ResolveRvalSymbols()(node)
+    rval_symbols = ResolveRvalSymbols(should_update_usage_info)(node)
     if len(rval_symbols) == 0:
         prev_cell = cells().current_cell().prev_cell
         rval_symbols = static_resolve_rvals(
             node, cell_ctr=-1 if prev_cell is None else prev_cell.cell_ctr
         )
-    if should_update_usage_info:
-        Timestamp.update_usage_info(rval_symbols, used_node=node)
+        if should_update_usage_info:
+            Timestamp.update_usage_info(rval_symbols, used_node=node)
     return rval_symbols

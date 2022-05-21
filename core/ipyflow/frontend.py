@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ast
 import logging
 from collections import defaultdict
 from typing import Any, Dict, List, Iterable, NamedTuple, Optional, Set, Tuple
@@ -14,6 +15,19 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+def _make_range_from_node(node: ast.AST) -> Dict[str, Any]:
+    return {
+        "start": {
+            "line": node.lineno - 1,
+            "character": node.col_offset,
+        },
+        "end": {
+            "line": node.end_lineno - 1,
+            "character": node.end_col_offset,
+        },
+    }
+
+
 class FrontendCheckerResult(NamedTuple):
     waiting_cells: Set[CellId]
     ready_cells: Set[CellId]
@@ -21,9 +35,7 @@ class FrontendCheckerResult(NamedTuple):
     forced_reactive_cells: Set[CellId]
     typecheck_error_cells: Set[CellId]
     unsafe_order_cells: Dict[CellId, Set[ExecutedCodeCell]]
-    unsafe_order_symbol_usage: Dict[
-        CellId, List[Tuple[str, Tuple[Tuple[int, int], Tuple[int, int]]]]
-    ]
+    unsafe_order_symbol_usage: Dict[CellId, List[Dict[str, Any]]]
     waiter_links: Dict[CellId, Set[CellId]]
     ready_maker_links: Dict[CellId, Set[CellId]]
     phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
@@ -310,24 +322,21 @@ class FrontendCheckerResult(NamedTuple):
                 if cells().from_timestamp(ts_when_used).position <= cell.position:
                     continue
                 used_node = sym.used_node_by_used_time.get(used_ts, None)
-                if used_node is None:
-                    continue
-                if not hasattr(used_node, "lineno"):
-                    continue
-                if not hasattr(used_node, "end_lineno"):
-                    continue
-                if not hasattr(used_node, "col_offset"):
-                    continue
-                if not hasattr(used_node, "end_col_offset"):
+                if used_node is None or not all(
+                    hasattr(used_node, pos_attr)
+                    for pos_attr in (
+                        "lineno",
+                        "end_lineno",
+                        "col_offset",
+                        "end_col_offset",
+                    )
+                ):
                     continue
                 self.unsafe_order_symbol_usage[cell.cell_id].append(
-                    (
-                        sym.readable_name,
-                        (
-                            (used_node.lineno, used_node.col_offset),
-                            (used_node.end_lineno, used_node.end_col_offset),
-                        ),
-                    )
+                    {
+                        "name": sym.readable_name,
+                        "range": _make_range_from_node(used_node),
+                    },
                 )
 
     def compute_frontend_checker_result(

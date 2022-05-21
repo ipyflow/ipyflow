@@ -182,6 +182,14 @@ def test_warn_out_of_order():
     assert not flow().mut_settings.warn_out_of_order_usages
 
 
+def test_lint_out_of_order():
+    assert not flow().mut_settings.lint_out_of_order_usages
+    run_cell("%flow lint-ooo")
+    assert flow().mut_settings.lint_out_of_order_usages
+    run_cell("%flow no-lint-ooo")
+    assert not flow().mut_settings.lint_out_of_order_usages
+
+
 def test_syntax_transforms_only():
     assert not flow().mut_settings.syntax_transforms_only
     run_cell("%flow syntax_transforms_only")

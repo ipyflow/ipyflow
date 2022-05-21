@@ -109,6 +109,9 @@ def make_line_magic(flow_: "NotebookFlow"):
         elif cmd.endswith("warn_ooo"):
             flow_.mut_settings.warn_out_of_order_usages = not cmd.startswith("no")
             return None
+        elif cmd.endswith("lint_ooo"):
+            flow_.mut_settings.lint_out_of_order_usages = not cmd.startswith("no")
+            return None
         elif cmd == "syntax_transforms_only":
             flow_.mut_settings.syntax_transforms_only = True
             return None

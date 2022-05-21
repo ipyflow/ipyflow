@@ -383,5 +383,6 @@ class FrontendCheckerResult(NamedTuple):
             last_executed_cell_id,
         )
         self._compute_waiter_and_ready_maker_links()
-        self._compute_unsafe_order_usages(cells_to_check)
+        if flow_.mut_settings.lint_out_of_order_usages:
+            self._compute_unsafe_order_usages(cells_to_check)
         return self

@@ -336,7 +336,7 @@ class FrontendCheckerResult(NamedTuple):
                     {
                         "name": sym.readable_name,
                         "range": _make_range_from_node(used_node),
-                        "last_updated_cell": used_ts.cell_num,
+                        "last_updated_cell": ts_when_used.cell_num,
                     },
                 )
 

@@ -803,6 +803,11 @@ class DataSymbol:
             if dep.obj is self.obj and dep.call_scope is not None:
                 self.call_scope = dep.call_scope
                 self.func_def_stmt = dep.func_def_stmt
+        ns = self.namespace
+        if ns is not None and ns.scope_name == "self" and isinstance(self.name, str):
+            # fixup namespace name if necessary
+            # can happen if symbol for 'self' was created in a previous __init__
+            ns.scope_name = self.name
 
     def update_usage_info(
         self,

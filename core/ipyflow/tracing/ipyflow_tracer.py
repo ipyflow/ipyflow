@@ -11,6 +11,7 @@ import pyccolo as pyc
 from IPython import get_ipython
 
 from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
+from ipyflow.api.lift import lift as api_lift
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
@@ -193,6 +194,7 @@ class DataflowTracer(StackFrameManager):
 
             self.lexical_call_stack: pyc.TraceStack = self.make_stack()
             with self.lexical_call_stack.register_stack_state():
+                self.cur_function: Optional[Any] = None
                 self.num_args_seen = 0
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
@@ -884,8 +886,12 @@ class DataflowTracer(StackFrameManager):
         try:
             mut_cand = self.lexical_call_stack.get_field("mutation_candidate")
         except IndexError:
-            return
+            mut_cand = None
         if mut_cand is None:
+            if self.cur_function is api_lift:
+                resolved = resolve_rval_symbols(arg_node)
+                if len(resolved) > 0:
+                    return next(iter(resolved))
             return
 
         if (
@@ -956,7 +962,7 @@ class DataflowTracer(StackFrameManager):
             self._save_mutation_candidate(obj, method_name, obj_name=obj_name)
         self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():
-            pass
+            self.cur_function = function_or_method
         self.active_scope = self.cur_frame_original_scope
 
     @pyc.register_raw_handler((pyc.before_function_body, pyc.before_lambda_body))

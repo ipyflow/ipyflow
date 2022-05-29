@@ -4,7 +4,7 @@ import astunparse
 import black
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Dict, List, Set, Type
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow
@@ -86,7 +86,7 @@ def _graph_union(
     return graph
 
 
-def _compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCounter]:
+def compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCounter]:
     assert len(seeds) > 0
     dependencies: Set[TimestampOrCounter] = set()
     timestamp_to_ts_deps: Dict[
@@ -176,6 +176,16 @@ class CodeCellSlicingMixin:
             return astunparse.unparse(stmt)
 
     @classmethod
+    def get_stmt_text(  # type: ignore
+        cls: Type["ExecutedCodeCell"],
+        stmts_by_cell_num: Dict[int, List[ast.stmt]],
+    ) -> Dict[int, str]:
+        return {
+            ctr: "\n".join(cls._unparse(stmt).strip() for stmt in stmts)
+            for ctr, stmts in stmts_by_cell_num.items()
+        }
+
+    @classmethod
     def compute_slice_for_cells(  # type: ignore
         cls: Type["ExecutedCodeCell"],
         cells: Set["ExecutedCodeCell"],
@@ -197,15 +207,12 @@ class CodeCellSlicingMixin:
             stmts_by_cell_num = cls.compute_slice_stmts_for_cells(cells)
             for cell in cells:
                 stmts_by_cell_num.pop(cell.cell_ctr, None)
-            ret = {
-                ctr: "\n".join(cls._unparse(stmt).strip() for stmt in stmts)
-                for ctr, stmts in stmts_by_cell_num.items()
-            }
+            ret = cls.get_stmt_text(stmts_by_cell_num)
             for cell in cells:
                 ret[cell.cell_ctr] = cell.sanitized_content()
             return ret
         else:
-            deps: Set[int] = _compute_slice_impl([cell.cell_ctr for cell in cells])
+            deps: Set[int] = compute_slice_impl([cell.cell_ctr for cell in cells])
             return {dep: cls.from_timestamp(dep).sanitized_content() for dep in deps}
 
     def compute_slice_stmts(  # type: ignore
@@ -214,16 +221,14 @@ class CodeCellSlicingMixin:
         return self.compute_slice_stmts_for_cells({self})
 
     @classmethod
-    def compute_slice_stmts_for_cells(  # type: ignore
+    def compute_slice_stmts_for_timestamps(  # type: ignore
         cls: Type["ExecutedCodeCell"],
-        cells: Set["ExecutedCodeCell"],
+        timestamps: Set[Timestamp],
+        cells: Optional[Set["ExecutedCodeCell"]] = None,
     ) -> Dict[int, List[ast.stmt]]:
-        deps_stmt: Set[Timestamp] = _compute_slice_impl(
-            [Timestamp(cell.cell_ctr, -1) for cell in cells]
-        )
         stmts_by_cell_num = defaultdict(list)
         seen_stmt_ids = set()
-        for ts in sorted(deps_stmt):
+        for ts in sorted(timestamps):
             stmt = cls.from_timestamp(ts.cell_num).to_ast().body[ts.stmt_num]
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
@@ -231,6 +236,16 @@ class CodeCellSlicingMixin:
             seen_stmt_ids.add(stmt_id)
             if stmt is not None:
                 stmts_by_cell_num[ts.cell_num].append(stmt)
-        for cell in cells:
+        for cell in cells or []:
             stmts_by_cell_num[cell.cell_ctr] = list(cell.to_ast().body)
         return dict(stmts_by_cell_num)
+
+    @classmethod
+    def compute_slice_stmts_for_cells(  # type: ignore
+        cls: Type["ExecutedCodeCell"],
+        cells: Set["ExecutedCodeCell"],
+    ) -> Dict[int, List[ast.stmt]]:
+        deps_stmt: Set[Timestamp] = compute_slice_impl(
+            [Timestamp(cell.cell_ctr, -1) for cell in cells]
+        )
+        return cls.compute_slice_stmts_for_timestamps(deps_stmt, cells=cells)

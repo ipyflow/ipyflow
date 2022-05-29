@@ -25,6 +25,7 @@ except ImportError:
     numpy = None
 from pyccolo.extra_builtins import EMIT_EVENT
 
+from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
 from ipyflow.data_model import sizing
 from ipyflow.data_model.annotation_utils import (
     get_type_annotation,
@@ -195,6 +196,15 @@ class DataSymbol:
         ts = self._timestamp
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
+
+    def get_code(self) -> str:
+        ts = self.timestamp
+        if ts.cell_num == -1:
+            ts = Timestamp(self.defined_cell_num, ts.stmt_num)
+        ts_deps = compute_slice_impl([ts])
+        stmts_by_cell_num = ExecutedCodeCell.compute_slice_stmts_for_timestamps(ts_deps)
+        stmt_text_by_cell_num = ExecutedCodeCell.get_stmt_text(stmts_by_cell_num)
+        return make_slice_text(stmt_text_by_cell_num, blacken=True)
 
     @property
     def cascading_reactive_cell_num(self) -> int:

@@ -878,7 +878,7 @@ class DataflowTracer(StackFrameManager):
             self.top_level_node_id_for_chain = None
             self.active_scope = self.cur_frame_original_scope
 
-    @pyc.register_raw_handler(pyc.argument)
+    @pyc.register_raw_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1

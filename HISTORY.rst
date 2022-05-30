@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.97 (2022-05-30)
+-------------------
+* Add api package with 'lift' function for resolving argument to DataSymbol;
+* Fixes for pyccolo 0.0.28 breaking changes;
+
 0.0.96 (2022-05-22)
 -------------------
 * Add optional capability for linting unsafe order usages;

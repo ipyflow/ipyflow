@@ -197,7 +197,7 @@ class DataSymbol:
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
-    def get_code(self) -> str:
+    def code(self) -> str:
         ts = self.timestamp
         if ts.cell_num == -1:
             ts = Timestamp(self.defined_cell_num, ts.stmt_num)

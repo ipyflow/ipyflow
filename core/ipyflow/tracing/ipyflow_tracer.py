@@ -878,22 +878,27 @@ class DataflowTracer(StackFrameManager):
             self.top_level_node_id_for_chain = None
             self.active_scope = self.cur_frame_original_scope
 
+    @pyc.register_handler(pyc.after_argument)
+    @pyc.skip_when_tracing_disabled
+    def handle_lift_argument(self, _arg_obj: Any, arg_node: ast.AST, *_, **__):
+        if self.cur_function is not api_lift:
+            return
+        resolved = resolve_rval_symbols(arg_node)
+        if len(resolved) == 1:
+            return next(iter(resolved))
+        else:
+            return pyc.Null
+
     @pyc.register_raw_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1
-        arg_node = self.ast_node_by_id.get(arg_node_id, None)
         try:
             mut_cand = self.lexical_call_stack.get_field("mutation_candidate")
         except IndexError:
-            mut_cand = None
-        if mut_cand is None:
-            if self.cur_function is api_lift:
-                resolved = resolve_rval_symbols(arg_node)
-                if len(resolved) > 0:
-                    return next(iter(resolved))
             return
-
+        if mut_cand is None:
+            return
         if (
             isinstance(mut_cand[1], (ListInsert, ListPop, ListRemove))
             and mut_cand[1].pos is None
@@ -911,6 +916,7 @@ class DataflowTracer(StackFrameManager):
             except:
                 pass
 
+        arg_node = self.ast_node_by_id.get(arg_node_id, None)
         if isinstance(arg_node, ast.Name):
             assert self.active_scope is self.cur_frame_original_scope
             arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)

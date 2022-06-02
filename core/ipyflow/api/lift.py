@@ -11,6 +11,6 @@ def lift(sym: Any) -> DataSymbol:
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
-    if not isinstance(sym, DataSymbol):
+    if sym is None or not isinstance(sym, DataSymbol):
         raise ValueError("unable to lookup metadata for symbol")
     return cast(DataSymbol, sym)

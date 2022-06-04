@@ -359,6 +359,8 @@ class TraceStatement:
                     )
                 # if flow().is_test:
                 #     raise ke
+            except ImportError:
+                raise
             except Exception as e:
                 logger.warning("exception while handling store: %s", e)
                 if flow().is_test:

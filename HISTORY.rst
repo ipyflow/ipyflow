@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.100 (2022-06-06)
+0.0.101 (2022-06-06)
 -------------------
 * stdout / stderr tee utilities delegate non-critical attributes;
 

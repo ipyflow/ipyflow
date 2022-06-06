@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.100 (2022-06-06)
+-------------------
+* stdout / stderr tee utilities delegate non-critical attributes;
+
 0.0.99 (2022-06-06)
 -------------------
 * Fix serialization bug that prevented in-order semantics from working properly;

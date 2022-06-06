@@ -272,7 +272,13 @@ class NotebookFlow(singletons.NotebookFlow):
             return
         response = handler(request)
         if response is not None and comm is not None:
-            comm.send(response)
+            try:
+                comm.send(response)
+            except TypeError as e:
+                raise Exception(
+                    "unable to serialize response for request of type %s"
+                    % request["type"]
+                ) from e
 
     def handle_change_active_cell(self, request) -> Optional[Dict[str, Any]]:
         self.set_active_cell(request["active_cell_id"])

@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.98 (2022-06-05)
+-------------------
+* Add ability to register custom comm handlers;
+* Fix lazy import ImportError issue (possibly manifesting on cinder);
+
 0.0.97 (2022-05-30)
 -------------------
 * Add api package with 'lift' function for resolving argument to DataSymbol;

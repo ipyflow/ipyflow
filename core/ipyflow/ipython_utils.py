@@ -79,6 +79,10 @@ class Tee:
         self.out1 = out1
         self.out2 = out2
 
+    def __getattr__(self, item):
+        # delegate to the first output stream
+        return self.out1.item
+
     def write(self, data):
         self.out1.write(data)
         self.out2.write(data)
@@ -93,6 +97,10 @@ class TeeDisplayHook:
         self.disp1 = disp1
         self.disp2 = disp2
 
+    def __getattr__(self, item):
+        # delegate to the first display hook
+        return self.out1.item
+
     def __call__(self, result=None):
         self.disp1(result=result)
         self.disp2(result=result)
@@ -102,6 +110,10 @@ class TeeDisplayPublisher:
     def __init__(self, pub1, pub2):
         self.pub1 = pub1
         self.pub2 = pub2
+
+    def __getattr__(self, item):
+        # delegate to the first publisher
+        return self.out1.item
 
     def publish(self, *args, **kwargs):
         self.pub1.publish(*args, **kwargs)

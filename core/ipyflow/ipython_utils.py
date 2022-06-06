@@ -80,6 +80,8 @@ class Tee:
         self.out2 = out2
 
     def __getattr__(self, item):
+        if item in ("out1", "out2"):
+            raise AttributeError()
         # delegate to the first output stream
         return self.out1.item
 
@@ -98,6 +100,8 @@ class TeeDisplayHook:
         self.disp2 = disp2
 
     def __getattr__(self, item):
+        if item in ("disp1", "disp2"):
+            raise AttributeError()
         # delegate to the first display hook
         return self.out1.item
 
@@ -112,8 +116,10 @@ class TeeDisplayPublisher:
         self.pub2 = pub2
 
     def __getattr__(self, item):
+        if item in ("pub1", "pub2"):
+            raise AttributeError()
         # delegate to the first publisher
-        return self.out1.item
+        return self.pub1.item
 
     def publish(self, *args, **kwargs):
         self.pub1.publish(*args, **kwargs)

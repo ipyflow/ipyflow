@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.99 (2022-06-06)
+-------------------
+* Fix serialization bug that prevented in-order semantics from working properly;
+
 0.0.98 (2022-06-05)
 -------------------
 * Add ability to register custom comm handlers;

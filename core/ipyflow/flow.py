@@ -6,6 +6,7 @@ from types import FrameType
 from typing import (
     cast,
     Any,
+    Callable,
     Dict,
     Iterable,
     NamedTuple,
@@ -134,6 +135,14 @@ class NotebookFlow(singletons.NotebookFlow):
         self._tags: Tuple[str, ...] = ()
         self.last_executed_content: Optional[str] = None
         self.last_executed_cell_id: Optional[CellId] = None
+        self._comm_handlers: Dict[
+            str, Callable[[Dict[str, Any], Optional[Dict[str, Any]]]]
+        ] = {}
+        self.register_comm_handler("change_active_cell", self.handle_change_active_cell)
+        self.register_comm_handler(
+            "compute_exec_schedule", self.handle_compute_exec_schedule
+        )
+        self.register_comm_handler("reactivity_cleanup", self.handle_reactivity_cleanup)
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -244,18 +253,24 @@ class NotebookFlow(singletons.NotebookFlow):
             except SyntaxError:
                 cell.current_content = prev_content
 
-    def handle(self, request, comm=None) -> None:
-        if request["type"] == "change_active_cell":
-            response = self.handle_change_active_cell(request)
-        elif request["type"] == "compute_exec_schedule":
-            response = self.handle_compute_exec_schedule(request)
-        elif request["type"] == "reactivity_cleanup":
-            response = self.handle_reactivity_cleanup(request)
-        else:
+    def register_comm_handler(
+        self,
+        msg_type: str,
+        handler: Callable[[Dict[str, Any]], Optional[Dict[str, Any]]],
+        overwrite: bool = False,
+    ) -> None:
+        if msg_type in self._comm_handlers and not overwrite:
+            raise ValueError("handler already registered for msg type of %s" % msg_type)
+        self._comm_handlers[msg_type] = handler
+
+    def handle(self, request: Dict[str, Any], comm=None) -> None:
+        handler = self._comm_handlers.get(request["type"], None)
+        if handler is None:
             dbg_msg = "Unsupported request type for request %s" % request
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
             return
+        response = handler(request)
         if response is not None and comm is not None:
             comm.send(response)
 

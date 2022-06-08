@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.103 (2022-06-08)
+-------------------
+* add get_code magic;
+
 0.0.102 (2022-06-06)
 -------------------
 * stdout / stderr tee utilities delegate non-critical attributes;

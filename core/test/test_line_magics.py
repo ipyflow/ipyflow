@@ -70,6 +70,16 @@ def test_show_deps_show_waiting():
     ), ("got %s" % cell9.captured_output)
 
 
+def test_get_code():
+    run_cell("x = 0")
+    run_cell("y = x + 1")
+    run_cell("%flow get_code y")
+    cell3 = cells().from_id(3)
+    assert (
+        cell3.captured_output.stdout.strip() == "# Cell 1\nx = 0\n\n# Cell 2\ny = x + 1"
+    ), ("got %s" % cell3.captured_output)
+
+
 def test_enable_disable_trace_messages():
     assert not flow().trace_messages_enabled
     run_cell("%flow trace_messages enable")

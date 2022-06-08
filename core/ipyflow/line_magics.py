@@ -35,9 +35,11 @@ _USAGE = """Options:
 [enable|disable]
     - Toggle dataflow capture. On by default.
 
-[deps|show_deps|show_dependencies] <symbol_1>, <symbol_2> ...: 
-    - This will print out the dependencies for given symbols.
-      Multiple symbols should be separated with commas.
+[deps|show_deps|show_dependencies] <symbol>: 
+    - This will print out the dependencies for given symbol.
+
+[code|get_code] <symbol>: 
+    - This will print the backward slice for the given symbol.
 
 [waiting|show_waiting]: 
     - This will print out all the global variables that are waiting for newer dependencies. 
@@ -72,6 +74,8 @@ def make_line_magic(flow_: "NotebookFlow"):
             return toggle_dataflow(cmd)
         elif cmd in ("deps", "show_deps", "show_dependency", "show_dependencies"):
             return show_deps(line)
+        elif cmd in ("code", "get_code"):
+            return get_code(line)
         elif cmd in ("waiting", "show_waiting"):
             return show_waiting(line)
         elif cmd == "trace_messages":
@@ -172,45 +176,63 @@ def toggle_dataflow(line: str) -> Optional[str]:
         return None
 
 
-def show_deps(symbols: str) -> Optional[str]:
-    usage = "Usage: %flow show_[deps|dependencies] <symbol_1>[, <symbol_2> ...]"
-    if len(symbols) == 0:
+def show_deps(symbol_str: str) -> Optional[str]:
+    usage = "Usage: %flow show_[deps|dependencies] <symbol>"
+    if len(symbol_str) == 0:
         warn(usage)
         return None
     try:
-        node = cast(ast.Expr, ast.parse(symbols).body[0]).value
+        node = cast(ast.Expr, ast.parse(symbol_str).body[0]).value
     except SyntaxError:
-        warn(f"Could not find symbol metadata for {symbols}")
+        warn(f"Could not parse symbols from string {symbol_str.strip()}")
         return None
-    if isinstance(node, ast.Tuple):
-        unresolved_symbols = node.elts
-    else:
-        unresolved_symbols = [node]
+    if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
+        warn(usage)
+        return None
     statements = []
-    for unresolved in unresolved_symbols:
-        dsyms = resolve_rval_symbols(unresolved, should_update_usage_info=False)
-        if len(dsyms) == 0:
-            warn(
-                f"Could not find symbol metadata for {astunparse.unparse(unresolved).strip()}",
-            )
-        for dsym in dsyms:
-            parents = {par for par in dsym.parents if par.is_user_accessible}
-            children = {child for child in dsym.children if child.is_user_accessible}
-            dsym_extra_info = f"defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}"
-            if dsym.required_timestamp.is_initialized:
-                dsym_extra_info += f"; required: {dsym.required_timestamp.cell_num}"
-            statements.append(
-                "Symbol {} ({}) is dependent on {} and is a parent of {}".format(
-                    dsym.full_namespace_path,
-                    dsym_extra_info,
-                    parents or "nothing",
-                    children or "nothing",
-                )
-            )
-    if len(statements) == 0:
+    dsyms = resolve_rval_symbols(node, should_update_usage_info=False)
+    if len(dsyms) == 0:
+        warn(
+            f"Could not find symbol metadata for {symbol_str.strip()}",
+        )
         return None
-    else:
-        return "\n".join(statements)
+    for dsym in dsyms:
+        parents = {par for par in dsym.parents if par.is_user_accessible}
+        children = {child for child in dsym.children if child.is_user_accessible}
+        dsym_extra_info = f"defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}"
+        if dsym.required_timestamp.is_initialized:
+            dsym_extra_info += f"; required: {dsym.required_timestamp.cell_num}"
+        statements.append(
+            "Symbol {} ({}) is dependent on {} and is a parent of {}".format(
+                dsym.full_namespace_path,
+                dsym_extra_info,
+                parents or "nothing",
+                children or "nothing",
+            )
+        )
+    return "\n".join(statements)
+
+
+def get_code(symbol_str: str) -> Optional[str]:
+    usage = "Usage: %flow [get_]code <symbol>"
+    if len(symbol_str) == 0:
+        warn(usage)
+        return None
+    try:
+        node = cast(ast.Expr, ast.parse(symbol_str).body[0]).value
+    except SyntaxError:
+        warn(f"Could not parse symbols from string {symbol_str.strip()}")
+        return None
+    if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
+        warn(usage)
+        return None
+    dsyms = resolve_rval_symbols(node, should_update_usage_info=False)
+    if len(dsyms) != 1:
+        warn(
+            f"Could not find unique symbol metadata for {symbol_str.strip()}",
+        )
+        return None
+    return next(iter(dsyms)).code()
 
 
 def show_waiting(line_: str) -> Optional[str]:

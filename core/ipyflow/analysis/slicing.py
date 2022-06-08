@@ -140,7 +140,10 @@ def make_slice_text(slice: Dict[int, str], blacken: bool = True) -> str:
         f"# Cell {cell_num}\n" + content for cell_num, content in sorted(slice.items())
     )
     if blacken:
-        slice_text = black.format_str(slice_text, mode=black.FileMode())
+        try:
+            slice_text = black.format_str(slice_text, mode=black.FileMode())
+        except Exception as e:
+            logger.info("call to black failed with exception: %s", e)
     return slice_text
 
 

@@ -1,13 +1,18 @@
 History
 =======
 
+0.0.104 (2022-06-09)
+-------------------
+* Make in_order semantics the default;
+* Model unexecuted cells as well as executed ones;
+
 0.0.103 (2022-06-08)
 -------------------
-* add get_code magic;
+* Add get_code magic;
 
 0.0.102 (2022-06-06)
 -------------------
-* stdout / stderr tee utilities delegate non-critical attributes;
+* Stdout / stderr tee utilities delegate non-critical attributes;
 
 0.0.99 (2022-06-06)
 -------------------

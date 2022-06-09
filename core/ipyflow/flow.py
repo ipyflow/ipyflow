@@ -18,7 +18,7 @@ from typing import (
 import pyccolo as pyc
 from IPython import get_ipython
 
-from ipyflow.data_model.code_cell import cells, ExecutedCodeCell
+from ipyflow.data_model.code_cell import cells, CodeCell
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
@@ -100,7 +100,7 @@ class NotebookFlow(singletons.NotebookFlow):
                     kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
                 ),
                 flow_order=FlowDirection(
-                    kwargs.pop("flow_direction", FlowDirection.ANY_ORDER)
+                    kwargs.pop("flow_direction", FlowDirection.IN_ORDER)
                 ),
                 warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
                 lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
@@ -239,6 +239,15 @@ class NotebookFlow(singletons.NotebookFlow):
 
         comm.send({"type": "establish"})
 
+    def _create_untracked_cells_for_content(
+        self, content_by_cell_id: Dict[CellId, str]
+    ):
+        for cell_id, content in content_by_cell_id.items():
+            cell = cells().from_id(cell_id)
+            if cell is not None:
+                continue
+            cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
+
     def _recompute_ast_for_dirty_cells(self, content_by_cell_id: Dict[CellId, str]):
         for cell_id, content in content_by_cell_id.items():
             if cell_id == self.last_executed_cell_id:
@@ -288,16 +297,30 @@ class NotebookFlow(singletons.NotebookFlow):
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id", None))
         last_cell_id = request.get("executed_cell_id", None)
-        order_index_by_id = request.get("order_index_by_cell_id", None)
+        cell_metadata_by_id = request.get("cell_metadata_by_id", None)
         cells_to_check = None
-        if order_index_by_id is not None:
+        if cell_metadata_by_id is not None:
+            cell_metadata_by_id = {
+                cell_id: metadata
+                for cell_id, metadata in cell_metadata_by_id.items()
+                if metadata["type"] == "code"
+            }
+            order_index_by_id = {
+                cell_id: metadata["index"]
+                for cell_id, metadata in cell_metadata_by_id.items()
+            }
+            content_by_cell_id = {
+                cell_id: metadata["content"]
+                for cell_id, metadata in cell_metadata_by_id.items()
+            }
+            self._create_untracked_cells_for_content(content_by_cell_id)
             cells().set_cell_positions(order_index_by_id)
             cells_to_check = (
                 cell
                 for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)
                 if cell is not None
             )
-        self._recompute_ast_for_dirty_cells(request.get("content_by_cell_id", {}))
+            self._recompute_ast_for_dirty_cells(content_by_cell_id)
         response = self.check_and_link_multiple_cells(
             cells_to_check=cells_to_check, last_executed_cell_id=last_cell_id
         ).to_json()
@@ -316,7 +339,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def check_and_link_multiple_cells(
         self,
-        cells_to_check: Optional[Iterable[ExecutedCodeCell]] = None,
+        cells_to_check: Optional[Iterable[CodeCell]] = None,
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
@@ -332,7 +355,7 @@ class NotebookFlow(singletons.NotebookFlow):
             last_executed_cell_id=last_executed_cell_id,
         )
 
-    def _safety_precheck_cell(self, cell: ExecutedCodeCell) -> None:
+    def _safety_precheck_cell(self, cell: CodeCell) -> None:
         checker_result = self.check_and_link_multiple_cells(
             cells_to_check=[cell],
             update_liveness_time_versions=self.mut_settings.static_slicing_enabled,

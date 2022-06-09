@@ -110,15 +110,21 @@ const clearCellState = (Jupyter: any) => {
     });
 };
 
-const gatherCellContentsById = (Jupyter: any) => {
-    const content_by_cell_id: {[id: string]: string} = {};
-    Jupyter.notebook.get_cells().forEach((cell: any) => {
+const gatherCellMetadataById = (Jupyter: any) => {
+    const cell_metadata_by_id: {[id: string]: {
+        index: number, content: string, type: string
+    }} = {};
+    Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
         if (cell.cell_type !== 'code') {
             return;
         }
-        content_by_cell_id[cell.cell_id] = cell.get_text();
+        cell_metadata_by_id[cell.cell_id] = {
+            index: idx,
+            content: cell.get_text(),
+            type: cell.cell_type,
+        };
     });
-    return content_by_cell_id;
+    return cell_metadata_by_id;
 }
 
 const connectToComm = (Jupyter: any) => {
@@ -132,7 +138,7 @@ const connectToComm = (Jupyter: any) => {
         comm.send({
             type: 'compute_exec_schedule',
             executed_cell_id: data.cell.cell_id,
-            content_by_cell_id: gatherCellContentsById(Jupyter)
+            cell_metadata_by_id: gatherCellMetadataById(Jupyter)
         });
     };
     const onSelect = (evt: any, data: {cell: any}) => {
@@ -229,7 +235,7 @@ const connectToComm = (Jupyter: any) => {
     });
     comm.send({
         type: 'compute_exec_schedule',
-        content_by_cell_id: gatherCellContentsById(Jupyter)
+        cell_metadata_by_id: gatherCellMetadataById(Jupyter)
     });
     return () => {
         clearCellState(Jupyter);

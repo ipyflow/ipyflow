@@ -9,7 +9,7 @@ import pytest
 
 from ipyflow.data_model.code_cell import cells
 from ipyflow.kernel.kernel import IPyflowKernelBase
-from ipyflow.run_mode import FlowRunMode
+from ipyflow.run_mode import FlowDirection, FlowRunMode
 from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import flow
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
@@ -59,6 +59,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         "import logging",
     ] + kwargs.pop("setup_cells", [])
     extra_fixture = kwargs.pop("extra_fixture", None)
+    flow_direction = kwargs.pop("flow_direction", FlowDirection.ANY_ORDER)
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
@@ -70,6 +71,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         NotebookFlow.instance(
             cell_magic_name="_SAFETY_CELL_MAGIC",
             test_context=test_context,
+            flow_direction=flow_direction,
             **kwargs,
         )
         DataflowTracer.clear_instance()

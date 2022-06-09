@@ -56,18 +56,18 @@ class CheckerResult(NamedTuple):
     typechecks: bool  # whether the cell typechecks successfully
 
 
-def cells() -> Type["ExecutedCodeCell"]:
-    return ExecutedCodeCell
+def cells() -> Type["CodeCell"]:
+    return CodeCell
 
 
-class ExecutedCodeCell(CodeCellSlicingMixin):
-    _current_cell_by_cell_id: Dict[CellId, "ExecutedCodeCell"] = {}
-    _cell_by_cell_ctr: Dict[int, "ExecutedCodeCell"] = {}
+class CodeCell(CodeCellSlicingMixin):
+    _current_cell_by_cell_id: Dict[CellId, "CodeCell"] = {}
+    _cell_by_cell_ctr: Dict[int, "CodeCell"] = {}
     _cell_counter: int = 0
     _position_by_cell_id: Dict[CellId, int] = {}
-    _cells_by_tag: Dict[str, Set["ExecutedCodeCell"]] = defaultdict(set)
+    _cells_by_tag: Dict[str, Set["CodeCell"]] = defaultdict(set)
     _reactive_cells_by_tag: Dict[str, Set[CellId]] = defaultdict(set)
-    _override_current_cell: Optional["ExecutedCodeCell"] = None
+    _override_current_cell: Optional["CodeCell"] = None
 
     def __init__(
         self,
@@ -75,11 +75,11 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         cell_ctr: int,
         content: str,
         tags: Tuple[str, ...],
-        prev_cell: Optional["ExecutedCodeCell"] = None,
+        prev_cell: Optional["CodeCell"] = None,
     ) -> None:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
-        self.history: List[int] = [cell_ctr]
+        self.history: List[int] = [cell_ctr] if cell_ctr > -1 else []
         self.executed_content: str = content
         self.current_content: str = content
         self.last_ast_content: Optional[str] = None
@@ -123,6 +123,10 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
             self._used_cell_counters_by_live_symbol[sym].add(ctr)
 
     @property
+    def is_executed(self) -> bool:
+        return self.cell_ctr > -1
+
+    @property
     def is_ready(self) -> bool:
         return self._ready
 
@@ -139,16 +143,16 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     def get_reactive_ids_for_tag(cls, tag: str) -> Set[CellId]:
         return cls._reactive_cells_by_tag.get(tag, set())
 
-    def add_dynamic_parent(self, parent: Union["ExecutedCodeCell", CellId]) -> None:
-        pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
+    def add_dynamic_parent(self, parent: Union["CodeCell", CellId]) -> None:
+        pid = parent.cell_id if isinstance(parent, CodeCell) else parent
         if pid == self.cell_id or pid in self._dynamic_children:
             return
         self._dynamic_parents.add(pid)
         parent = self.from_id(pid)
         parent._dynamic_children.add(self.cell_id)
 
-    def add_static_parent(self, parent: Union["ExecutedCodeCell", CellId]) -> None:
-        pid = parent.cell_id if isinstance(parent, ExecutedCodeCell) else parent
+    def add_static_parent(self, parent: Union["CodeCell", CellId]) -> None:
+        pid = parent.cell_id if isinstance(parent, CodeCell) else parent
         if pid == self.cell_id or pid in self._static_children:
             return
         self._static_parents.add(pid)
@@ -156,22 +160,22 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         parent._static_children.add(self.cell_id)
 
     @property
-    def dynamic_parents(self) -> Generator["ExecutedCodeCell", None, None]:
+    def dynamic_parents(self) -> Generator["CodeCell", None, None]:
         for pid in self._dynamic_parents:
             yield self.from_id(pid)
 
     @property
-    def dynamic_children(self) -> Generator["ExecutedCodeCell", None, None]:
+    def dynamic_children(self) -> Generator["CodeCell", None, None]:
         for cid in self._dynamic_children:
             yield self.from_id(cid)
 
     @property
-    def static_parents(self) -> Generator["ExecutedCodeCell", None, None]:
+    def static_parents(self) -> Generator["CodeCell", None, None]:
         for pid in self._static_parents:
             yield self.from_id(pid)
 
     @property
-    def static_children(self) -> Generator["ExecutedCodeCell", None, None]:
+    def static_children(self) -> Generator["CodeCell", None, None]:
         for cid in self._static_children:
             yield self.from_id(cid)
 
@@ -198,13 +202,19 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         cell_id: CellId,
         content: str,
         tags: Tuple[str, ...],
+        bump_cell_counter: bool = True,
         validate_ipython_counter: bool = True,
-    ) -> "ExecutedCodeCell":
-        cls._cell_counter += 1
-        cell_ctr = cls._cell_counter
-        if validate_ipython_counter:
-            assert cell_ctr == ipy_cell_counter()
+    ) -> "CodeCell":
+        if bump_cell_counter:
+            cls._cell_counter += 1
+            cell_ctr = cls._cell_counter
+            if validate_ipython_counter:
+                assert cell_ctr == ipy_cell_counter()
+        else:
+            cell_ctr = -1
         prev_cell = cls.from_id(cell_id)
+        if cell_ctr == -1:
+            assert prev_cell is None
         if prev_cell is not None:
             tags = tuple(set(tags) | set(prev_cell.tags))
         cell = cls(cell_id, cell_ctr, content, tags, prev_cell=prev_cell)
@@ -218,7 +228,8 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
                 cls._reactive_cells_by_tag[tag].discard(prev_cell.cell_id)
         for tag in tags:
             cls._cells_by_tag[tag].add(cell)
-        cls._cell_by_cell_ctr[cell_ctr] = cell
+        if cell_ctr > -1:
+            cls._cell_by_cell_ctr[cell_ctr] = cell
         prev_cell_ctr = None if prev_cell is None else prev_cell.cell_ctr
         if prev_cell_ctr is None or cell_ctr > prev_cell_ctr:
             cls._current_cell_by_cell_id[cell_id] = cell
@@ -256,26 +267,26 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
     @classmethod
     def all_cells_most_recently_run_for_each_id(
         cls,
-    ) -> Generator["ExecutedCodeCell", None, None]:
+    ) -> Generator["CodeCell", None, None]:
         yield from cls._current_cell_by_cell_id.values()
 
     @classmethod
-    def from_counter(cls, ctr: int) -> "ExecutedCodeCell":
+    def from_counter(cls, ctr: int) -> "CodeCell":
         return cls._cell_by_cell_ctr[ctr]
 
     @classmethod
-    def from_timestamp(cls, ts: TimestampOrCounter) -> "ExecutedCodeCell":
+    def from_timestamp(cls, ts: TimestampOrCounter) -> "CodeCell":
         if isinstance(ts, Timestamp):
             return cls.from_counter(ts.cell_num)
         else:
             return cls.from_counter(ts)
 
     @classmethod
-    def from_id(cls, cell_id: CellId) -> Optional["ExecutedCodeCell"]:
+    def from_id(cls, cell_id: CellId) -> Optional["CodeCell"]:
         return cls._current_cell_by_cell_id.get(cell_id, None)
 
     @classmethod
-    def from_tag(cls, tag: str) -> Set["ExecutedCodeCell"]:
+    def from_tag(cls, tag: str) -> Set["CodeCell"]:
         return cls._cells_by_tag.get(tag, set())
 
     def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
@@ -326,7 +337,7 @@ class ExecutedCodeCell(CodeCellSlicingMixin):
         return self._current_cell_by_cell_id.get(self.cell_id, None) is self
 
     @classmethod
-    def current_cell(cls) -> "ExecutedCodeCell":
+    def current_cell(cls) -> "CodeCell":
         return cls._override_current_cell or cls._cell_by_cell_ctr[cls._cell_counter]
 
     def get_max_used_live_symbol_cell_counter(

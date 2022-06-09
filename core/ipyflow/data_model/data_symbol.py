@@ -31,7 +31,7 @@ from ipyflow.data_model.annotation_utils import (
     get_type_annotation,
     make_annotation_string,
 )
-from ipyflow.data_model.code_cell import ExecutedCodeCell, cells
+from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.update_protocol import UpdateProtocol
 from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
@@ -133,8 +133,8 @@ class DataSymbol:
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
 
         # cells where this symbol was live
-        self.cells_where_deep_live: Set[ExecutedCodeCell] = set()
-        self.cells_where_shallow_live: Set[ExecutedCodeCell] = set()
+        self.cells_where_deep_live: Set[CodeCell] = set()
+        self.cells_where_shallow_live: Set[CodeCell] = set()
 
         self._last_computed_waiting_cache_ts: int = -1
         self._is_waiting_at_position_cache: Dict[Tuple[int, bool], bool] = {}
@@ -160,7 +160,7 @@ class DataSymbol:
                 ns.scope_name = self.name
 
     @property
-    def cells_where_live(self) -> Set[ExecutedCodeCell]:
+    def cells_where_live(self) -> Set[CodeCell]:
         return self.cells_where_deep_live | self.cells_where_shallow_live
 
     def __repr__(self) -> str:
@@ -202,8 +202,8 @@ class DataSymbol:
         if ts.cell_num == -1:
             ts = Timestamp(self.defined_cell_num, ts.stmt_num)
         ts_deps = compute_slice_impl([ts])
-        stmts_by_cell_num = ExecutedCodeCell.compute_slice_stmts_for_timestamps(ts_deps)
-        stmt_text_by_cell_num = ExecutedCodeCell.get_stmt_text(stmts_by_cell_num)
+        stmts_by_cell_num = CodeCell.compute_slice_stmts_for_timestamps(ts_deps)
+        stmt_text_by_cell_num = CodeCell.get_stmt_text(stmts_by_cell_num)
         return make_slice_text(stmt_text_by_cell_num, blacken=True)
 
     @property

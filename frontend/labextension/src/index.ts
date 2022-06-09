@@ -257,11 +257,15 @@ const connectToComm = (
     if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
-    const order_index_by_cell_id: {[id: string]: number} = {};
-    const content_by_cell_id: {[id: string]: string} = {};
+    const cell_metadata_by_id: {[id: string]: {
+      index: number, content: string, type: string
+    }} = {};
     notebook.widgets.forEach((itercell, idx) => {
-      order_index_by_cell_id[itercell.model.id] = idx;
-      content_by_cell_id[itercell.model.id] = itercell.model.value.text;
+      cell_metadata_by_id[itercell.model.id] = {
+        index: idx,
+        content: itercell.model.value.text,
+        type: itercell.model.type,
+      }
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(readyClass);
         itercell.node.classList.remove(readyMakingInputClass);
@@ -270,8 +274,7 @@ const connectToComm = (
     const payload = {
       type: 'compute_exec_schedule',
       executed_cell_id: cell.id,
-      order_index_by_cell_id: order_index_by_cell_id,
-      content_by_cell_id: content_by_cell_id,
+      cell_metadata_by_id,
     };
     comm.send(payload).done.then(() => {
       if (cellPendingExecution !== null) {

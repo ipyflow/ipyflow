@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.106 (2022-06-10)
+-------------------
+* Make cascading reactivity also work for not-yet-executed cells;
+
 0.0.105 (2022-06-09)
 -------------------
 * Treat cells with non-resolvable live refs as waiting;

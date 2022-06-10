@@ -132,6 +132,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._exception_raised_during_execution: Optional[Exception] = None
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
+        self.min_cascading_reactive_cell_num = -1
         self._tags: Tuple[str, ...] = ()
         self.last_executed_content: Optional[str] = None
         self.last_executed_cell_id: Optional[CellId] = None
@@ -335,6 +336,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
+        self.min_cascading_reactive_cell_num = self.cell_counter()
         return None
 
     def check_and_link_multiple_cells(

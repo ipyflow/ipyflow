@@ -296,7 +296,9 @@ class DataSymbol:
             )
 
     def is_cascading_reactive_at_counter(self, ctr: int) -> bool:
-        return self.cascading_reactive_cell_num > ctr
+        return self.cascading_reactive_cell_num > max(
+            ctr, flow().min_cascading_reactive_cell_num
+        )
 
     def get_top_level(self) -> Optional["DataSymbol"]:
         if not self.containing_scope.is_namespace_scope:

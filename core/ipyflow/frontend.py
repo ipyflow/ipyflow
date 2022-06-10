@@ -263,10 +263,13 @@ class FrontendCheckerResult(NamedTuple):
                 for sym in checker_result.live
                 if sym.is_waiting_at_position(cell.position)
             }
+            unresolved_live_refs = checker_result.unresolved_live_refs
         else:
             waiting_symbols = set()
+            unresolved_live_refs = set()
         if len(waiting_symbols) > 0:
             waiting_symbols_by_cell_id[cell_id] = waiting_symbols
+        if len(waiting_symbols) > 0 or len(unresolved_live_refs) > 0:
             self.waiting_cells.add(cell_id)
         if not checker_result.typechecks:
             self.typecheck_error_cells.add(cell_id)

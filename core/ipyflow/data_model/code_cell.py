@@ -29,6 +29,7 @@ from ipyflow.analysis.live_refs import (
     compute_live_dead_symbol_refs,
     get_symbols_for_references,
     get_live_symbols_and_cells_for_references,
+    LiveSymbolRef,
 )
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.data_model.timestamp import Timestamp
@@ -50,6 +51,7 @@ _NB_MAGIC_PATTERN = re.compile(r"(^%|^!|^cd |\?$)")
 
 class CheckerResult(NamedTuple):
     live: Set[ResolvedDataSymbol]  # all live symbols in the cell
+    unresolved_live_refs: Set[LiveSymbolRef]  # any live symbol we couldn't resolve
     used_cells: Set[int]  # last updated timestamps of the live symbols
     live_cells: Set[int]  # cells that define a symbol that was called in the cell
     dead: Set["DataSymbol"]  # symbols that are definitely assigned to
@@ -368,7 +370,11 @@ class CodeCell(CodeCellSlicingMixin):
         live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(
             self.to_ast(), scope=flow().global_scope
         )
-        live_resolved_symbols, live_cells = get_live_symbols_and_cells_for_references(
+        (
+            live_resolved_symbols,
+            live_cells,
+            unresolved_live_refs,
+        ) = get_live_symbols_and_cells_for_references(
             live_symbol_refs,
             flow().global_scope,
             self.cell_ctr,
@@ -398,6 +404,7 @@ class CodeCell(CodeCellSlicingMixin):
         }
         return CheckerResult(
             live=live_resolved_symbols,
+            unresolved_live_refs=unresolved_live_refs,
             used_cells=used_cells,
             live_cells=live_cells,
             dead=dead_symbols,

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.105 (2022-06-09)
+-------------------
+* Treat cells with non-resolvable live refs as waiting;
+
 0.0.104 (2022-06-09)
 -------------------
 * Make in_order semantics the default;

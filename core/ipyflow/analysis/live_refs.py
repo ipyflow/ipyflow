@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import builtins
 import logging
 import sys
 from typing import cast, TYPE_CHECKING, Iterable, List, Optional, Set, Tuple, Union
@@ -63,9 +64,6 @@ class ComputeLiveSymbolRefs(
     def attrsub_context(self, inside=True):
         return self.push_attributes(_inside_attrsub=inside, _skip_simple_names=inside)
 
-    def args_context(self):
-        return self.push_attributes(_skip_simple_names=False)
-
     def _add_attrsub_to_live_if_eligible(self, ref: SymbolRef) -> None:
         if ref.nonreactive() in self.dead:
             return
@@ -79,7 +77,7 @@ class ComputeLiveSymbolRefs(
                 or SymbolRef(Atom(leading_atom.value, is_callpoint=False)) in self.dead
             ):
                 return
-        self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
+            self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 
     # the idea behind this one is that we don't treat a symbol as dead
     # if it is used on the RHS of an assignment
@@ -185,8 +183,9 @@ class ComputeLiveSymbolRefs(
             self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
 
     def visit_Tuple_or_List(self, node: Union[ast.List, ast.Tuple]) -> None:
-        for elt in node.elts:
-            self.visit(elt)
+        with self.attrsub_context(False):
+            for elt in node.elts:
+                self.visit(elt)
 
     def visit_List(self, node: ast.List) -> None:
         self.visit_Tuple_or_List(node)
@@ -209,7 +208,7 @@ class ComputeLiveSymbolRefs(
         self.dead.add(SymbolRef(node))
 
     def visit_Call(self, node: ast.Call) -> None:
-        with self.args_context():
+        with self.attrsub_context(False):
             self.generic_visit(node.args)
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
@@ -296,16 +295,24 @@ def get_live_symbols_and_cells_for_references(
     scope: "Scope",
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
-) -> Tuple[Set[ResolvedDataSymbol], Set[int]]:
+) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
     live_symbols: Set[ResolvedDataSymbol] = set()
+    unresolved_live_refs: Set[LiveSymbolRef] = set()
     called_dsyms: Set[Tuple["DataSymbol", int]] = set()
     for live_symbol_ref in symbol_refs:
+        chain = live_symbol_ref.ref.chain
+        if len(chain) >= 1:
+            atom = chain[0].value
+            did_resolve = isinstance(atom, str) and hasattr(builtins, atom)
+        else:
+            did_resolve = False
         for resolved in live_symbol_ref.gen_resolved_symbols(
             scope,
             only_yield_final_symbol=False,
             yield_all_intermediate_symbols=True,
             cell_ctr=cell_ctr,
         ):
+            did_resolve = True
             if update_liveness_time_versions:
                 ts_to_use = (
                     resolved.dsym.timestamp
@@ -323,21 +330,29 @@ def get_live_symbols_and_cells_for_references(
                 called_dsyms.add((resolved.dsym, live_symbol_ref.timestamp))
             if not resolved.is_unsafe:
                 live_symbols.add(resolved)
-    live_from_calls, live_cells = _compute_call_chain_live_symbols_and_cells(
+        if not did_resolve:
+            unresolved_live_refs.add(live_symbol_ref)
+    (
+        live_from_calls,
+        live_cells,
+        unresolved_from_calls,
+    ) = _compute_call_chain_live_symbols_and_cells(
         called_dsyms, cell_ctr, update_liveness_time_versions
     )
     live_symbols |= live_from_calls
-    return live_symbols, live_cells
+    unresolved_live_refs |= unresolved_from_calls
+    return live_symbols, live_cells, unresolved_live_refs
 
 
 def _compute_call_chain_live_symbols_and_cells(
     live_with_stmt_ctr: Set[Tuple["DataSymbol", int]],
     cell_ctr: int,
     update_liveness_time_versions: bool,
-) -> Tuple[Set[ResolvedDataSymbol], Set[int]]:
+) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
     seen = set()
     worklist = list(live_with_stmt_ctr)
     live: Set[ResolvedDataSymbol] = set()
+    unresolved: Set[LiveSymbolRef] = set()
     while len(worklist) > 0:
         workitem = worklist.pop()
         if workitem in seen:
@@ -347,15 +362,25 @@ def _compute_call_chain_live_symbols_and_cells(
         if called_dsym.func_def_stmt is None:
             continue
         seen.add(workitem)
+        init_killed = {arg.arg for arg in called_dsym.get_definition_args()}
         live_refs, _ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_dsym.func_def_stmt).body,
-            init_killed=set(arg.arg for arg in called_dsym.get_definition_args()),
+            init_killed=init_killed,
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
         for symbol_ref in live_refs:
+            chain = symbol_ref.ref.chain
+            if len(chain) >= 1:
+                atom = chain[0].value
+                did_resolve = isinstance(atom, str) and (
+                    atom in init_killed or hasattr(builtins, atom)
+                )
+            else:
+                did_resolve = False
             for resolved in symbol_ref.gen_resolved_symbols(
                 called_dsym.call_scope, only_yield_final_symbol=False
             ):
+                did_resolve = True
                 if resolved.is_called:
                     worklist.append((resolved.dsym, stmt_ctr))
                 if resolved.dsym.is_anonymous:
@@ -369,7 +394,9 @@ def _compute_call_chain_live_symbols_and_cells(
                         else resolved.dsym.timestamp_excluding_ns_descendents
                     )
                     resolved.dsym.timestamp_by_liveness_time[used_time] = ts_to_use
-    return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}
+            if not did_resolve:
+                unresolved.add(symbol_ref)
+    return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}, unresolved
 
 
 def compute_live_dead_symbol_refs(

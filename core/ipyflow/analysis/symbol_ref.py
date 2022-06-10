@@ -171,7 +171,10 @@ class SymbolRefVisitor(ast.NodeVisitor):
             ast.ImportFrom,
         ],
     ) -> "SymbolRef":
-        self.visit(node)
+        try:
+            self.visit(node)
+        except ValueError:
+            self.symbol_chain.clear()
         self.symbol_chain.reverse()
         ret = SymbolRef(self.symbol_chain)
         self.symbol_chain = []
@@ -262,6 +265,30 @@ class SymbolRefVisitor(ast.NodeVisitor):
     def visit_ImportFrom(self, node: ast.ImportFrom):
         for name in node.names:
             self._append_atom(node, name.asname or name.name)
+
+    def visit_Constant(self, node):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_Dict(self, node: ast.Dict):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_List(self, node: ast.List):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_JoinedStr(self, node: ast.JoinedStr):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_Num(self, node: ast.Num):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_Set(self, node: ast.Set):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_Str(self, node: ast.Str):
+        raise ValueError("ref cannot contain literals in chain")
+
+    def visit_Tuple(self, node: ast.Tuple):
+        raise ValueError("ref cannot contain literals in chain")
 
     def generic_visit(self, node) -> None:
         # raise ValueError('we should never get here: %s' % node)
@@ -373,6 +400,12 @@ class LiveSymbolRef(CommonEqualityMixin):
     def __hash__(self) -> int:
         return hash((self.ref, self.timestamp))
 
+    def __str__(self) -> str:
+        return f"<live:{self.ref}@{self.timestamp}>"
+
+    def __repr__(self) -> str:
+        return str(self)
+
     def gen_resolved_symbols(
         self,
         scope: "Scope",
@@ -391,6 +424,3 @@ class LiveSymbolRef(CommonEqualityMixin):
             if blocking_seen and not resolved_sym.is_blocking:
                 resolved_sym.atom = resolved_sym.atom.blocking()
             yield resolved_sym
-
-    def __str__(self):
-        return str(self.ref)

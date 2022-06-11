@@ -18,6 +18,7 @@ from typing import (
 import pyccolo as pyc
 from IPython import get_ipython
 
+from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.data_model.code_cell import cells, CodeCell
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
@@ -146,6 +147,7 @@ class NotebookFlow(singletons.NotebookFlow):
             "compute_exec_schedule", self.handle_compute_exec_schedule
         )
         self.register_comm_handler("reactivity_cleanup", self.handle_reactivity_cleanup)
+        self.register_comm_handler("refresh_symbols", self.handle_refresh_symbols)
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -354,6 +356,15 @@ class NotebookFlow(singletons.NotebookFlow):
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
         self.min_cascading_reactive_cell_num = self.cell_counter()
+        return None
+
+    def handle_refresh_symbols(self, request) -> Optional[Dict[str, Any]]:
+        for symbol_str in request.get("symbols", []):
+            symbol_ref = SymbolRef.from_string(symbol_str)
+            for resolved in symbol_ref.gen_resolved_symbols(
+                self.global_scope, only_yield_final_symbol=True
+            ):
+                resolved.dsym.refresh()
         return None
 
     def check_and_link_multiple_cells(

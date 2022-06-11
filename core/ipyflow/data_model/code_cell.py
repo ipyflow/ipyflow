@@ -383,7 +383,8 @@ class CodeCell(CodeCellSlicingMixin):
     def _get_live_dead_symbol_refs(
         self, update_liveness_time_versions: bool
     ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], bool]:
-        live_symbol_refs, dead_symbol_refs = set(), set()
+        live_symbol_refs: Set[LiveSymbolRef] = set()
+        dead_symbol_refs: Set[SymbolRef] = set()
         if self.override_live_refs is None and self.override_dead_refs is None:
             live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(
                 self.to_ast(), scope=flow().global_scope

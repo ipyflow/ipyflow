@@ -215,8 +215,10 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         return ast_rewriter, all_syntax_augmenters
 
     @contextmanager
-    def _syntax_transform_only_tracing_context(self, all_tracers, ast_rewriter=None):
-        if self.syntax_transforms_enabled:
+    def _syntax_transform_only_tracing_context(
+        self, syntax_transforms_enabled: bool, all_tracers, ast_rewriter=None
+    ):
+        if syntax_transforms_enabled:
             ast_rewriter = ast_rewriter or DataflowTracer.instance().make_ast_rewriter(
                 module_id=self.cell_counter()
             )
@@ -229,13 +231,15 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             yield
 
     @contextmanager
-    def _tracing_context(self):
+    def _tracing_context(self, syntax_transforms_enabled: bool):
         self.before_enter_tracing_context()
 
         try:
             all_tracers = [tracer.instance() for tracer in self.registered_tracers]
             if self.syntax_transforms_only:
-                with self._syntax_transform_only_tracing_context(all_tracers):
+                with self._syntax_transform_only_tracing_context(
+                    syntax_transforms_enabled, all_tracers
+                ):
                     yield
                 return
             if any(tracer.has_sys_trace_events for tracer in all_tracers):
@@ -263,7 +267,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                     module_id=self.cell_counter()
                 )
                 with self._syntax_transform_only_tracing_context(
-                    all_tracers, ast_rewriter=ast_rewriter
+                    syntax_transforms_enabled, all_tracers, ast_rewriter=ast_rewriter
                 ):
                     with ast_transformer_context([ast_rewriter]):
                         with self._patch_pyccolo_exec_eval():
@@ -287,7 +291,11 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
             try:
-                with self._tracing_context() if self.should_trace() else suppress():
+                with self._tracing_context(
+                    self.syntax_transforms_enabled
+                    # disable syntax transforms for cell magics
+                    and not cell_content.strip().startswith("%%")
+                ) if self.should_trace() else suppress():
                     if is_async:
                         ret = await run_cell_func(cell_content)  # pragma: no cover
                     else:

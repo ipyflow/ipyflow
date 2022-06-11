@@ -2,6 +2,7 @@
 from collections import defaultdict
 from dataclasses import dataclass
 import logging
+import textwrap
 from types import FrameType
 from typing import (
     cast,
@@ -148,6 +149,9 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self.register_comm_handler("reactivity_cleanup", self.handle_reactivity_cleanup)
         self.register_comm_handler("refresh_symbols", self.handle_refresh_symbols)
+        self.register_comm_handler(
+            "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
+        )
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -293,8 +297,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 comm.send(response)
             except TypeError as e:
                 raise Exception(
-                    "unable to serialize response for request of type %s"
-                    % request_type
+                    "unable to serialize response for request of type %s" % request_type
                 ) from e
 
     def handle_change_active_cell(self, request) -> Optional[Dict[str, Any]]:
@@ -368,6 +371,24 @@ class NotebookFlow(singletons.NotebookFlow):
                 self.global_scope, only_yield_final_symbol=True
             ):
                 resolved.dsym.refresh()
+        return None
+
+    def handle_register_dynamic_comm_handler(self, request) -> Optional[Dict[str, Any]]:
+        handler_msg_type = request.get("msg_type", None)
+        handler_str = request.get("handler", None)
+        if handler_msg_type is None or handler_str is None:
+            return None
+        handler_str = handler_str.strip()
+        handler_str = textwrap.indent(textwrap.dedent(handler_str).strip(), " " * 4)
+        handler_fun_name = f"_X5ix_{handler_msg_type}_handler"
+        handler_str = f"def {handler_fun_name}(self, request):\n{handler_str}"
+        exec(handler_str, globals())
+        handler = globals().pop(handler_fun_name, None)
+        self.register_comm_handler(
+            handler_msg_type,
+            lambda request_: handler(self, request_),
+            overwrite=request.get("overwrite", False),
+        )
         return None
 
     def check_and_link_multiple_cells(

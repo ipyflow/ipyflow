@@ -15,6 +15,7 @@ from IPython import get_ipython
 from IPython.core.magic import register_line_magic
 
 from ipyflow.analysis.slicing import make_slice_text
+from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
@@ -195,28 +196,23 @@ def show_deps(symbol_str: str) -> Optional[str]:
     if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
         warn(usage)
         return None
-    statements = []
-    dsyms = resolve_rval_symbols(node, should_update_usage_info=False)
-    if len(dsyms) == 0:
+    dsym = SymbolRef.resolve(symbol_str)
+    if dsym is None:
         warn(
             f"Could not find symbol metadata for {symbol_str.strip()}",
         )
         return None
-    for dsym in dsyms:
-        parents = {par for par in dsym.parents if par.is_user_accessible}
-        children = {child for child in dsym.children if child.is_user_accessible}
-        dsym_extra_info = f"defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}"
-        if dsym.required_timestamp.is_initialized:
-            dsym_extra_info += f"; required: {dsym.required_timestamp.cell_num}"
-        statements.append(
-            "Symbol {} ({}) is dependent on {} and is a parent of {}".format(
-                dsym.full_namespace_path,
-                dsym_extra_info,
-                parents or "nothing",
-                children or "nothing",
-            )
-        )
-    return "\n".join(statements)
+    parents = {par for par in dsym.parents if par.is_user_accessible}
+    children = {child for child in dsym.children if child.is_user_accessible}
+    dsym_extra_info = f"defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}"
+    if dsym.required_timestamp.is_initialized:
+        dsym_extra_info += f"; required: {dsym.required_timestamp.cell_num}"
+    return "Symbol {} ({}) is dependent on {} and is a parent of {}".format(
+        dsym.full_namespace_path,
+        dsym_extra_info,
+        parents or "nothing",
+        children or "nothing",
+    )
 
 
 def get_code(symbol_str: str) -> Optional[str]:
@@ -232,13 +228,13 @@ def get_code(symbol_str: str) -> Optional[str]:
     if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
         warn(usage)
         return None
-    dsyms = resolve_rval_symbols(node, should_update_usage_info=False)
-    if len(dsyms) != 1:
+    dsym = SymbolRef.resolve(symbol_str)
+    if dsym is None:
         warn(
             f"Could not find unique symbol metadata for {symbol_str.strip()}",
         )
         return None
-    return next(iter(dsyms)).code()
+    return dsym.code()
 
 
 def show_waiting(line_: str) -> Optional[str]:

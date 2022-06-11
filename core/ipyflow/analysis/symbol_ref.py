@@ -16,7 +16,7 @@ from typing import (
 
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.singletons import tracer
+from ipyflow.singletons import flow, tracer
 from ipyflow.utils.ast_utils import subscript_to_slice
 from ipyflow.utils import CommonEqualityMixin
 from ipyflow.types import SupportedIndexType
@@ -327,6 +327,15 @@ class SymbolRef(CommonEqualityMixin):
     def from_string(cls, symbol_str: str) -> "SymbolRef":
         return cls(ast.parse(symbol_str, mode="eval").body)
 
+    @classmethod
+    def resolve(cls, symbol_str: str) -> Optional["DataSymbol"]:
+        ref = cls.from_string(symbol_str)
+        for resolved in ref.gen_resolved_symbols(
+            flow().global_scope, only_yield_final_symbol=True, yield_in_reverse=False
+        ):
+            return resolved.dsym
+        return None
+
     def __hash__(self) -> int:
         return hash(self.chain)
 
@@ -404,6 +413,10 @@ class LiveSymbolRef(CommonEqualityMixin):
     @classmethod
     def from_string(cls, symbol_str: str) -> "LiveSymbolRef":
         return cls(SymbolRef.from_string(symbol_str), -1)
+
+    @staticmethod
+    def resolve(symbol_str: str) -> Optional["DataSymbol"]:
+        return SymbolRef.resolve(symbol_str)
 
     def __hash__(self) -> int:
         return hash((self.ref, self.timestamp))

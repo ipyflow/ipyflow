@@ -101,6 +101,7 @@ let readyMakerLinks: {[id: string]: string[]} = {}
 let activeCell: Cell<ICellModel> = null;
 let activeCellId: string = null;
 let cellsById: {[id: string]: HTMLElement} = {};
+let cellModelsById: {[id: string]: ICellModel} = {};
 let orderIdxById: {[id: string]: number} = {};
 let cellPendingExecution: CodeCell = null;
 
@@ -184,10 +185,12 @@ const addWaitingOutputInteractions = (elem: HTMLElement, linkedInputClass: strin
 
 const refreshNodeMapping = (notebook: Notebook) => {
   cellsById = {};
+  cellModelsById = {};
   orderIdxById = {};
 
   notebook.widgets.forEach((cell, idx) => {
     cellsById[cell.model.id] = cell.node;
+    cellModelsById[cell.model.id] = cell.model;
     orderIdxById[cell.model.id] = idx;
   });
 }
@@ -357,6 +360,14 @@ const connectToComm = (
   ];
 
   const updateOneCellUI = (id: string) => {
+    const model = cellModelsById[id];
+    if (model.type !== 'code') {
+      return;
+    }
+    const codeModel = model as ICodeCellModel;
+    if (codeModel.executionCount == null) {
+      return;
+    }
     const elem = cellsById[id];
     if (waitingCells.has(id)) {
       elem.classList.add(waitingClass);

@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
+_RESOLVER_EXCEPTIONS = ("get_ipython", "run_line_magic", "run_cell_magic")
+
+
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(
     SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
@@ -303,7 +306,9 @@ def get_live_symbols_and_cells_for_references(
         chain = live_symbol_ref.ref.chain
         if len(chain) >= 1:
             atom = chain[0].value
-            did_resolve = isinstance(atom, str) and hasattr(builtins, atom)
+            did_resolve = isinstance(atom, str) and (
+                hasattr(builtins, atom) or atom in _RESOLVER_EXCEPTIONS
+            )
         else:
             did_resolve = False
         for resolved in live_symbol_ref.gen_resolved_symbols(
@@ -373,7 +378,9 @@ def _compute_call_chain_live_symbols_and_cells(
             if len(chain) >= 1:
                 atom = chain[0].value
                 did_resolve = isinstance(atom, str) and (
-                    atom in init_killed or hasattr(builtins, atom)
+                    atom in init_killed
+                    or hasattr(builtins, atom)
+                    or atom in _RESOLVER_EXCEPTIONS
                 )
             else:
                 did_resolve = False

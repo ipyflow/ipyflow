@@ -278,20 +278,23 @@ class NotebookFlow(singletons.NotebookFlow):
         self._comm_handlers[msg_type] = handler
 
     def handle(self, request: Dict[str, Any], comm=None) -> None:
-        handler = self._comm_handlers.get(request["type"], None)
+        request_type = request["type"]
+        handler = self._comm_handlers.get(request_type, None)
         if handler is None:
             dbg_msg = "Unsupported request type for request %s" % request
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
             return
         response = handler(request)
-        if response is not None and comm is not None:
+        if comm is not None:
+            if response is None:
+                response = {"type": request_type}
             try:
                 comm.send(response)
             except TypeError as e:
                 raise Exception(
                     "unable to serialize response for request of type %s"
-                    % request["type"]
+                    % request_type
                 ) from e
 
     def handle_change_active_cell(self, request) -> Optional[Dict[str, Any]]:

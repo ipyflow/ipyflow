@@ -85,6 +85,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         ]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
+        self.syntax_transforms_enabled: bool = True
         self.syntax_transforms_only: bool = False
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
@@ -215,12 +216,15 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
     @contextmanager
     def _syntax_transform_only_tracing_context(self, all_tracers, ast_rewriter=None):
-        ast_rewriter = ast_rewriter or DataflowTracer.instance().make_ast_rewriter(
-            module_id=self.cell_counter()
-        )
-        _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
-            tracers=all_tracers, ast_rewriter=ast_rewriter
-        )
+        if self.syntax_transforms_enabled:
+            ast_rewriter = ast_rewriter or DataflowTracer.instance().make_ast_rewriter(
+                module_id=self.cell_counter()
+            )
+            _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
+                tracers=all_tracers, ast_rewriter=ast_rewriter
+            )
+        else:
+            all_syntax_augmenters = []
         with input_transformer_context(all_syntax_augmenters):
             yield
 
@@ -395,6 +399,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         flow_.updated_symbols.clear()
         flow_.updated_reactive_symbols.clear()
         flow_.updated_deep_reactive_symbols.clear()
+        self.syntax_transforms_enabled = flow_.mut_settings.syntax_transforms_enabled
         self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
 
     def should_trace(self) -> bool:

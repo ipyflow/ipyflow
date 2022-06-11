@@ -200,6 +200,16 @@ def test_lint_out_of_order():
     assert not flow().mut_settings.lint_out_of_order_usages
 
 
+def test_syntax_transforms_enabled():
+    assert flow().mut_settings.syntax_transforms_enabled
+    run_cell("%flow syntax_transforms foo")
+    assert flow().mut_settings.syntax_transforms_enabled
+    run_cell("%flow syntax_transforms off")
+    assert not flow().mut_settings.syntax_transforms_enabled
+    run_cell("%flow syntax_transforms on")
+    assert flow().mut_settings.syntax_transforms_enabled
+
+
 def test_syntax_transforms_only():
     assert not flow().mut_settings.syntax_transforms_only
     run_cell("%flow syntax_transforms_only")

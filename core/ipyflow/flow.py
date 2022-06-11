@@ -60,6 +60,7 @@ class MutableNotebookSafetySettings:
     flow_order: FlowDirection
     warn_out_of_order_usages: bool
     lint_out_of_order_usages: bool
+    syntax_transforms_enabled: bool
     syntax_transforms_only: bool
 
 
@@ -104,6 +105,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 ),
                 warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
                 lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
+                syntax_transforms_enabled=kwargs.pop("syntax_transforms_enabled", True),
                 syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
             )
         )

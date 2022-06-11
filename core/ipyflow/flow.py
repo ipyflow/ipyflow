@@ -307,6 +307,8 @@ class NotebookFlow(singletons.NotebookFlow):
                 cell_id: metadata
                 for cell_id, metadata in cell_metadata_by_id.items()
                 if metadata["type"] == "code"
+                or metadata.get("override_live_refs", None)
+                or metadata.get("override_dead_refs", None)
             }
             order_index_by_id = {
                 cell_id: metadata["index"]
@@ -316,8 +318,21 @@ class NotebookFlow(singletons.NotebookFlow):
                 cell_id: metadata["content"]
                 for cell_id, metadata in cell_metadata_by_id.items()
             }
+            override_live_refs_by_cell_id = {
+                cell_id: metadata["override_live_refs"]
+                for cell_id, metadata in cell_metadata_by_id.items()
+                if metadata.get("override_live_refs", None)
+            }
+            override_dead_refs_by_cell_id = {
+                cell_id: metadata["override_dead_refs"]
+                for cell_id, metadata in cell_metadata_by_id.items()
+                if metadata.get("override_dead_refs", None)
+            }
             self._create_untracked_cells_for_content(content_by_cell_id)
             cells().set_cell_positions(order_index_by_id)
+            cells().set_override_refs(
+                override_live_refs_by_cell_id, override_dead_refs_by_cell_id
+            )
             cells_to_check = (
                 cell
                 for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)

@@ -30,6 +30,7 @@ from ipyflow.analysis.live_refs import (
     get_symbols_for_references,
     get_live_symbols_and_cells_for_references,
     LiveSymbolRef,
+    SymbolRef,
 )
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.data_model.timestamp import Timestamp
@@ -88,6 +89,8 @@ class CodeCell(CodeCellSlicingMixin):
         self.captured_output: Optional[CapturedIO] = None
         self.tags: Tuple[str, ...] = tags
         self.prev_cell = prev_cell
+        self.override_live_refs: Optional[List[str]] = None
+        self.override_dead_refs: Optional[List[str]] = None
         self.reactive_tags: Set[str] = set()
         self._dynamic_parents: Set[CellId] = set()
         self._dynamic_children: Set[CellId] = set()
@@ -242,6 +245,19 @@ class CodeCell(CodeCellSlicingMixin):
         cls._position_by_cell_id = order_index_by_cell_id
 
     @classmethod
+    def set_override_refs(
+        cls,
+        override_live_refs_by_cell_id: Dict[CellId, List[str]],
+        override_dead_refs_by_cell_id: Dict[CellId, List[str]],
+    ):
+        for cell_id, override_live_refs in override_live_refs_by_cell_id.items():
+            cell = cls.from_id(cell_id)
+            cell.override_live_refs = override_live_refs
+        for cell_id, override_dead_refs in override_dead_refs_by_cell_id.items():
+            cell = cls.from_id(cell_id)
+            cell.override_dead_refs = override_dead_refs
+
+    @classmethod
     @contextmanager
     def _override_position_index_for_current_flow_semantics(
         cls,
@@ -364,12 +380,34 @@ class CodeCell(CodeCellSlicingMixin):
                         max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
             return max_used_cell_ctr
 
+    def _get_live_dead_symbol_refs(
+        self, update_liveness_time_versions: bool
+    ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], bool]:
+        live_symbol_refs, dead_symbol_refs = set(), set()
+        if self.override_live_refs is None and self.override_dead_refs is None:
+            live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(
+                self.to_ast(), scope=flow().global_scope
+            )
+        else:
+            if self.override_live_refs is not None:
+                live_symbol_refs = {
+                    LiveSymbolRef.from_string(ref) for ref in self.override_live_refs
+                }
+            if self.override_dead_refs is not None:
+                dead_symbol_refs = {
+                    SymbolRef.from_string(ref) for ref in self.override_dead_refs
+                }
+            update_liveness_time_versions = False
+        return live_symbol_refs, dead_symbol_refs, update_liveness_time_versions
+
     def check_and_resolve_symbols(
         self, update_liveness_time_versions: bool = False
     ) -> CheckerResult:
-        live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(
-            self.to_ast(), scope=flow().global_scope
-        )
+        (
+            live_symbol_refs,
+            dead_symbol_refs,
+            update_liveness_time_versions,
+        ) = self._get_live_dead_symbol_refs(update_liveness_time_versions)
         (
             live_resolved_symbols,
             live_cells,
@@ -450,6 +488,9 @@ class CodeCell(CodeCellSlicingMixin):
     ) -> bool:
         if self._cached_typecheck_result is not None:
             return self._cached_typecheck_result
+        if self.override_live_refs is not None:
+            # assume it typechecks in this case
+            return True
         typecheck_slice = self._build_typecheck_slice(live_cell_ctrs, live_symbols)
         try:
             # TODO: parse the output in order to pass up to the user

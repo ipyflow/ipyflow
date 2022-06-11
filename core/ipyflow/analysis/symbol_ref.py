@@ -323,6 +323,10 @@ class SymbolRef(CommonEqualityMixin):
             symbols = [symbols]
         self.chain: Tuple[Atom, ...] = tuple(symbols)
 
+    @classmethod
+    def from_string(cls, symbol_str: str) -> "SymbolRef":
+        return cls(ast.parse(symbol_str, mode="eval").body)
+
     def __hash__(self) -> int:
         return hash(self.chain)
 
@@ -396,6 +400,10 @@ class LiveSymbolRef(CommonEqualityMixin):
     def __init__(self, ref: SymbolRef, timestamp: int) -> None:
         self.ref = ref
         self.timestamp = timestamp
+
+    @classmethod
+    def from_string(cls, symbol_str: str) -> "LiveSymbolRef":
+        return cls(SymbolRef.from_string(symbol_str), -1)
 
     def __hash__(self) -> int:
         return hash((self.ref, self.timestamp))

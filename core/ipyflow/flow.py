@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
-from collections import defaultdict
-from dataclasses import dataclass
+import ast
 import logging
 import textwrap
+from collections import defaultdict
+from dataclasses import dataclass
 from types import FrameType
 from typing import (
     cast,
@@ -149,6 +150,7 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self.register_comm_handler("reactivity_cleanup", self.handle_reactivity_cleanup)
         self.register_comm_handler("refresh_symbols", self.handle_refresh_symbols)
+        self.register_comm_handler("upsert_symbol", self.handle_upsert_symbol)
         self.register_comm_handler(
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
         )
@@ -371,6 +373,15 @@ class NotebookFlow(singletons.NotebookFlow):
                 self.global_scope, only_yield_final_symbol=True
             ):
                 resolved.dsym.refresh()
+        return None
+
+    def handle_upsert_symbol(self, request) -> Optional[Dict[str, Any]]:
+        symbol_name = request["symbol"]
+        deps = request.get("deps", set())
+        obj = get_ipython().user_global_ns.get(symbol_name, None)
+        self.global_scope.upsert_data_symbol_for_name(
+            symbol_name, obj, deps, ast.parse("pass").body[0]
+        )
         return None
 
     def handle_register_dynamic_comm_handler(self, request) -> Optional[Dict[str, Any]]:

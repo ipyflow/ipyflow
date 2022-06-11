@@ -412,7 +412,7 @@ class LiveSymbolRef(CommonEqualityMixin):
 
     @classmethod
     def from_string(cls, symbol_str: str) -> "LiveSymbolRef":
-        return cls(SymbolRef.from_string(symbol_str), -1)
+        return cls(SymbolRef.from_string(symbol_str), 0)
 
     @staticmethod
     def resolve(symbol_str: str) -> Optional["DataSymbol"]:

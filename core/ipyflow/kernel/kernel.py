@@ -407,14 +407,14 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         flow_.updated_symbols.clear()
         flow_.updated_reactive_symbols.clear()
         flow_.updated_deep_reactive_symbols.clear()
-        self.syntax_transforms_enabled = flow_.mut_settings.syntax_transforms_enabled
-        self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
 
     def should_trace(self) -> bool:
         return singletons.flow().mut_settings.dataflow_enabled
 
     def before_execute(self, cell_content: str) -> Optional[str]:
         flow_ = singletons.flow()
+        self.syntax_transforms_enabled = flow_.mut_settings.syntax_transforms_enabled
+        self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
         flow_.test_and_clear_waiter_usage_detected()
         flow_.test_and_clear_out_of_order_usage_detected_counter()
         if flow_._saved_debug_message is not None:  # pragma: no cover

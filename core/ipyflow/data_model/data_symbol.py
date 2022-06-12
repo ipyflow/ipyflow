@@ -402,9 +402,13 @@ class DataSymbol:
         return (
             self.is_globally_accessible
             and not self.is_anonymous
+            and not self.is_garbage
             and not (
                 self.containing_namespace is not None
-                and self.containing_namespace.is_anonymous
+                and (
+                    self.containing_namespace.is_anonymous
+                    or self.containing_namespace.is_garbage
+                )
             )
         )
 

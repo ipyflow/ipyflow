@@ -1,6 +1,16 @@
 History
 =======
 
+0.0.107 (2022-06-11)
+-------------------
+* Add comm handler for refresh symbols;
+* Add comm handler for upserting symbol;
+* Add comm handler for registering dynamic comm handlers;
+* Make comm handlers all send at least an ack response;
+* Disable syntax transforms for magic cells;
+* Allow syntax transforms to be toggled via a magic;
+# Exclude garbage symbols from user-accessible;
+
 0.0.106 (2022-06-10)
 -------------------
 * Make cascading reactivity also work for not-yet-executed cells;

@@ -291,7 +291,13 @@ class NotebookFlow(singletons.NotebookFlow):
             logger.error(dbg_msg)
             self._saved_debug_message = dbg_msg
             return
-        response = handler(request)
+        try:
+            response = handler(request)
+        except Exception as e:
+            response = {
+                "type": request_type,
+                "error": str(e),
+            }
         if comm is not None:
             if response is None:
                 response = {"type": request_type}
@@ -377,10 +383,22 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_upsert_symbol(self, request) -> Optional[Dict[str, Any]]:
         symbol_name = request["symbol"]
-        deps = request.get("deps", set())
-        obj = get_ipython().user_global_ns.get(symbol_name, None)
+        user_globals = get_ipython().user_global_ns
+        if symbol_name not in user_globals:
+            return None
+        dep_symbols = set()
+        for dep in request.get("deps", []):
+            dep_sym = SymbolRef.resolve(dep)
+            if dep_sym is not None:
+                dep_symbols.add(dep_sym)
+        obj = user_globals.get(symbol_name)
+        prev_sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(
+            symbol_name
+        )
+        if prev_sym.obj is obj:
+            return None
         self.global_scope.upsert_data_symbol_for_name(
-            symbol_name, obj, deps, ast.parse("pass").body[0]
+            symbol_name, obj, dep_symbols, ast.parse("pass").body[0]
         )
         return None
 

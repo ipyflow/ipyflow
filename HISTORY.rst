@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.107 (2022-06-11)
+0.0.108 (2022-06-12)
 -------------------
 * Add comm handler for refresh symbols;
 * Add comm handler for upserting symbol;

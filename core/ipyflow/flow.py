@@ -395,7 +395,7 @@ class NotebookFlow(singletons.NotebookFlow):
         prev_sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(
             symbol_name
         )
-        if prev_sym.obj is obj:
+        if prev_sym is not None and prev_sym.obj is obj:
             return None
         self.global_scope.upsert_data_symbol_for_name(
             symbol_name, obj, dep_symbols, ast.parse("pass").body[0]

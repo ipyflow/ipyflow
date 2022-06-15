@@ -130,8 +130,10 @@ class TeeDisplayPublisher:
         self.pub2.clear_output(*args, **kwargs)
 
     def set_parent(self, *args, **kwargs):
-        self.pub1.set_parent(*args, **kwargs)
-        self.pub2.set_parent(*args, **kwargs)
+        if hasattr(self.pub1, "set_parent"):
+            self.pub1.set_parent(*args, **kwargs)
+        if hasattr(self.pub2, "set_parent"):
+            self.pub2.set_parent(*args, **kwargs)
 
 
 class capture_output_tee:

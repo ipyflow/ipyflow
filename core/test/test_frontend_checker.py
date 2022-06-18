@@ -2,13 +2,13 @@
 import logging
 from contextlib import contextmanager
 from dataclasses import asdict
+from test.utils import make_flow_fixture, skipif_known_failing
 from typing import Dict
 
 from ipyflow.data_model.code_cell import cells
+from ipyflow.flow import MutableNotebookSafetySettings, NotebookSafetySettings
 from ipyflow.run_mode import FlowDirection
-from ipyflow.flow import NotebookSafetySettings, MutableNotebookSafetySettings
 from ipyflow.singletons import flow
-from test.utils import make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 

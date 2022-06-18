@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import Set, Tuple
 
-
 METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN: Set[Tuple[int, str]] = set()
 METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = set()
 

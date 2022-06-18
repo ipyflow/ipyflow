@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from typing import Any, cast
+
 from ipyflow.data_model.data_symbol import DataSymbol
 
 

@@ -2,7 +2,7 @@
 import ast
 import logging
 from types import FrameType
-from typing import cast, List, Optional, Set, Union
+from typing import List, Optional, Set, Union, cast
 
 import ipyflow.tracing.mutation_event as me
 from ipyflow.analysis.symbol_edges import get_symbol_edges
@@ -15,7 +15,6 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
-
 
 try:
     import pandas

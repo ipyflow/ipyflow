@@ -10,8 +10,8 @@ from typing import (
     List,
     Optional,
     Sequence,
-    Tuple,
     Set,
+    Tuple,
 )
 
 from ipyflow.data_model.data_symbol import DataSymbol
@@ -19,7 +19,6 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow
 from ipyflow.types import SupportedIndexType
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

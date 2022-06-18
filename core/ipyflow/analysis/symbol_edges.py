@@ -9,7 +9,6 @@ from ipyflow.analysis.mixins import (
     VisitListsMixin,
 )
 
-
 logger = logging.getLogger(__name__)
 
 

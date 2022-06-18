@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 import logging
+from test.utils import assert_bool, make_flow_fixture, skipif_known_failing
 from typing import Optional, Set
 
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
-from test.utils import assert_bool, make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 

@@ -4,7 +4,7 @@ import logging
 import symtable
 from collections import defaultdict
 from types import FrameType
-from typing import cast, Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 import astunparse
 import pyccolo as pyc
@@ -18,27 +18,26 @@ from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import FlowRunMode
-from ipyflow.singletons import flow, SingletonBaseTracer
+from ipyflow.singletons import SingletonBaseTracer, flow
+from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.mutation_event import (
     ArgMutate,
     ListInsert,
     ListPop,
     ListRemove,
     MutatingMethodEventNotYetImplemented,
+    MutationEvent,
     StandardMutation,
     resolve_mutating_method,
 )
 from ipyflow.tracing.mutation_special_cases import (
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
+    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
 )
-from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.trace_stmt import TraceStatement
-from ipyflow.tracing.mutation_event import MutationEvent
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import SupportedIndexType
-
 
 AttrSubVal = SupportedIndexType
 NodeId = int

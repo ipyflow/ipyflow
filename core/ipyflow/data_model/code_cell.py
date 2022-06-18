@@ -7,7 +7,6 @@ import subprocess
 from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
-    cast,
     TYPE_CHECKING,
     Callable,
     Dict,
@@ -20,23 +19,25 @@ from typing import (
     Tuple,
     Type,
     Union,
+    cast,
 )
 
 import pyccolo as pyc
 
-from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.live_refs import (
-    compute_live_dead_symbol_refs,
-    get_symbols_for_references,
-    get_live_symbols_and_cells_for_references,
     LiveSymbolRef,
     SymbolRef,
+    compute_live_dead_symbol_refs,
+    get_live_symbols_and_cells_for_references,
+    get_symbols_for_references,
 )
+from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.ipython_utils import CapturedIO, cell_counter as ipy_cell_counter
+from ipyflow.ipython_utils import CapturedIO
+from ipyflow.ipython_utils import cell_counter as ipy_cell_counter
 from ipyflow.run_mode import FlowDirection
-from ipyflow.singletons import kernel, flow
+from ipyflow.singletons import flow, kernel
 from ipyflow.types import CellId, TimestampOrCounter
 
 if TYPE_CHECKING:

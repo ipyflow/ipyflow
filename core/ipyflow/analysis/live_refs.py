@@ -3,15 +3,15 @@ import ast
 import builtins
 import logging
 import sys
-from typing import cast, TYPE_CHECKING, Iterable, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple, Union, cast
 
-from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
-from ipyflow.analysis.symbol_ref import LiveSymbolRef, SymbolRef, Atom
 from ipyflow.analysis.mixins import (
     SaveOffAttributesMixin,
     SkipUnboundArgsMixin,
     VisitListsMixin,
 )
+from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
+from ipyflow.analysis.symbol_ref import Atom, LiveSymbolRef, SymbolRef
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import flow, tracer

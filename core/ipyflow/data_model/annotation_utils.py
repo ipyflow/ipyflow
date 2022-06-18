@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import typing
-from typing import Any, List, Iterable
+from typing import Any, Iterable, List
 
 _PRIMITIVE_TYPES = {int, float, str, type(None)}
 _CONTAINER_TYPES = {

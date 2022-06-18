@@ -2,12 +2,12 @@
 import functools
 import logging
 import textwrap
+from test.utils import make_flow_fixture
 from typing import Dict
 
 from ipyflow.analysis.slicing import make_slice_text
 from ipyflow.data_model.code_cell import cells
 from ipyflow.singletons import flow
-from test.utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 

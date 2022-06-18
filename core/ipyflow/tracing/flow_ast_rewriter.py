@@ -4,10 +4,10 @@ import logging
 import traceback
 from typing import cast
 
-from ipyflow.singletons import flow
-from ipyflow.data_model.code_cell import cells
 from pyccolo import AstRewriter
 
+from ipyflow.data_model.code_cell import cells
+from ipyflow.singletons import flow
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

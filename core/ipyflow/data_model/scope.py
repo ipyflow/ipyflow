@@ -4,7 +4,6 @@ import inspect
 import logging
 import symtable
 from typing import (
-    cast,
     TYPE_CHECKING,
     Any,
     Dict,
@@ -14,11 +13,12 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    cast,
 )
 
 from IPython import get_ipython
 
-from ipyflow.analysis.symbol_ref import SymbolRef, Atom
+from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.data_symbol import DataSymbol, DataSymbolType
 from ipyflow.singletons import tracer
 from ipyflow.types import SupportedIndexType

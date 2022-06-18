@@ -4,9 +4,9 @@ import textwrap
 
 from pyccolo.expr_rewriter import ExprRewriter
 from pyccolo.trace_events import TraceEvent
+
 from ipyflow.singletons import tracer
 from ipyflow.utils import KeyDict
-
 
 PROGRAM = textwrap.dedent(
     """

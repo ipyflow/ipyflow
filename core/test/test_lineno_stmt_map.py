@@ -3,11 +3,12 @@ import ast
 import textwrap
 from typing import Dict
 
-from ipyflow.singletons import tracer
 from pyccolo.ast_bookkeeping import BookkeepingVisitor
 from pyccolo.stmt_mapper import StatementMapper
-from .utils import make_flow_fixture
 
+from ipyflow.singletons import tracer
+
+from .utils import make_flow_fixture
 
 _flow_fixture, _ = make_flow_fixture()
 

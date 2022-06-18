@@ -1,4 +1,5 @@
 from typing import Tuple, TypeVar, Union
+
 from ipyflow.data_model.timestamp import Timestamp
 
 CellId = Union[str, int]

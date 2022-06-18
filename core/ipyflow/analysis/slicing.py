@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 import ast
-import astunparse
-import black
 import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type
+
+import astunparse
+import black
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow

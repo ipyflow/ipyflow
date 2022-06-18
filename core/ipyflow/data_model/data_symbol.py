@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 import ast
 import builtins
-from collections import defaultdict
-from enum import Enum
 import logging
 import sys
+from collections import defaultdict
+from enum import Enum
 from types import FrameType
 from typing import (
-    cast,
     TYPE_CHECKING,
     Any,
     Dict,
@@ -17,6 +16,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    cast,
 )
 
 try:
@@ -40,8 +40,8 @@ from ipyflow.types import SupportedIndexType
 
 if TYPE_CHECKING:
     # avoid circular imports
-    from ipyflow.data_model.scope import Scope
     from ipyflow.data_model.namespace import Namespace
+    from ipyflow.data_model.scope import Scope
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)

@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
+import argparse
 import json
 import os
 import platform
 import sys
-import argparse
 
-from jupyter_client.kernelspec import KernelSpecManager
 from IPython.utils.tempdir import TemporaryDirectory
+from jupyter_client.kernelspec import KernelSpecManager
 
 PACKAGE = __package__.split(".")[0]
 DISPLAY_NAME = f"Python 3 ({PACKAGE})"

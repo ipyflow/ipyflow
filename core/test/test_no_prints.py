@@ -8,7 +8,6 @@ import os
 
 import ipyflow
 
-
 join = os.path.join
 root = join(os.curdir, ipyflow.__name__)
 

@@ -5,8 +5,8 @@ import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
-    from ipyflow.kernel.kernel import IPyflowKernelBase as IPyflowKernelInstance
     from ipyflow.flow import NotebookFlow as NotebookFlowInstance
+    from ipyflow.kernel.kernel import IPyflowKernelBase as IPyflowKernelInstance
     from ipyflow.tracing.ipyflow_tracer import DataflowTracer as TracerInstance
 
 

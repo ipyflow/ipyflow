@@ -4,18 +4,17 @@ import logging
 from typing import Iterable, List, Optional, Set, Union
 
 from ipyflow.analysis.live_refs import static_resolve_rvals
-from ipyflow.analysis.symbol_ref import resolve_slice_to_constant
 from ipyflow.analysis.mixins import (
     SaveOffAttributesMixin,
     SkipUnboundArgsMixin,
     VisitListsMixin,
 )
+from ipyflow.analysis.symbol_ref import resolve_slice_to_constant
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

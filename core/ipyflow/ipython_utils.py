@@ -9,7 +9,6 @@ from typing import Callable, List, Optional
 from IPython import get_ipython
 from IPython.utils.capture import CapturedIO
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
@@ -146,9 +145,9 @@ class capture_output_tee:
         self.shell = None
 
     def __enter__(self):
-        from IPython.core.getipython import get_ipython
-        from IPython.core.displaypub import CapturingDisplayPublisher
         from IPython.core.displayhook import CapturingDisplayHook
+        from IPython.core.displaypub import CapturingDisplayPublisher
+        from IPython.core.getipython import get_ipython
 
         self.sys_stdout = sys.stdout
         self.sys_stderr = sys.stderr

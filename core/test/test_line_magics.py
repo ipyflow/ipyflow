@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 import textwrap
+from test.utils import make_flow_fixture
 
 from ipyflow.data_model.code_cell import cells
-
 from ipyflow.line_magics import _USAGE
-from ipyflow.run_mode import FlowDirection, ExecutionMode, ExecutionSchedule
-from ipyflow.singletons import kernel, flow
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
+from ipyflow.singletons import flow, kernel
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
-from test.utils import make_flow_fixture
 
 # Reset dependency graph before each test
 _flow_fixture, run_cell_ = make_flow_fixture()

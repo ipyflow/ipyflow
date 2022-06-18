@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import ast
 
-from ipyflow.analysis.symbol_ref import SymbolRef, Atom
-from .utils import make_flow_fixture
+from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 
+from .utils import make_flow_fixture
 
 _flow_fixture, _ = make_flow_fixture()
 

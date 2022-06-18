@@ -4,13 +4,13 @@ import sys
 import textwrap
 from typing import Any, Tuple
 
-from IPython import get_ipython
 import pytest
+from IPython import get_ipython
 
 from ipyflow.data_model.code_cell import cells
+from ipyflow.flow import NotebookFlow
 from ipyflow.kernel.kernel import IPyflowKernelBase
 from ipyflow.run_mode import FlowDirection, FlowRunMode
-from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import flow
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 

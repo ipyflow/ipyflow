@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 import logging
+from test.utils import make_flow_fixture
 
 from ipyflow.singletons import flow
-from test.utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 

@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 import re
 from typing import List, Set
-from ipyflow.tracing.ipyflow_tracer import reactive_spec
+
 from pyccolo.syntax_augmentation import (
-    AugmentationType,
-    AugmentationSpec,
     AUGMENTED_SYNTAX_REGEX_TEMPLATE,
+    AugmentationSpec,
+    AugmentationType,
     replace_tokens_and_get_augmented_positions,
 )
+
 from ipyflow.singletons import tracer
+from ipyflow.tracing.ipyflow_tracer import reactive_spec
+
 from .utils import make_flow_fixture
 
 _flow_fixture, run_cell = make_flow_fixture()

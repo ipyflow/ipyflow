@@ -2,7 +2,6 @@
 import ast
 import logging
 from typing import (
-    cast,
     TYPE_CHECKING,
     Any,
     Generator,
@@ -12,14 +11,15 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    cast,
 )
 
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
-from ipyflow.utils.ast_utils import subscript_to_slice
-from ipyflow.utils import CommonEqualityMixin
 from ipyflow.types import SupportedIndexType
+from ipyflow.utils import CommonEqualityMixin
+from ipyflow.utils.ast_utils import subscript_to_slice
 
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol, Scope

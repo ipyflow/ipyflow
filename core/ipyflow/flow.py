@@ -5,23 +5,14 @@ import textwrap
 from collections import defaultdict
 from dataclasses import dataclass
 from types import FrameType
-from typing import (
-    cast,
-    Any,
-    Callable,
-    Dict,
-    Iterable,
-    NamedTuple,
-    Set,
-    Optional,
-    Tuple,
-)
+from typing import Any, Callable, Dict, Iterable, NamedTuple, Optional, Set, Tuple, cast
 
 import pyccolo as pyc
 from IPython import get_ipython
 
+from ipyflow import singletons
 from ipyflow.analysis.symbol_ref import SymbolRef
-from ipyflow.data_model.code_cell import cells, CodeCell
+from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
@@ -34,7 +25,6 @@ from ipyflow.run_mode import (
     FlowDirection,
     FlowRunMode,
 )
-from ipyflow import singletons
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.types import CellId, SupportedIndexType
 

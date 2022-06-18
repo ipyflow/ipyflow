@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 import logging
 import sys
+from test.utils import make_flow_fixture, skipif_known_failing
 from typing import Optional, Set, Tuple
 
 from ipyflow.data_model.code_cell import cells
 from ipyflow.run_mode import ExecutionMode
 from ipyflow.singletons import flow
-from test.utils import make_flow_fixture, skipif_known_failing
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.ERROR)

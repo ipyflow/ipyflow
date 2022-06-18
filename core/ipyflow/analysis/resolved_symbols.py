@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
-from typing import cast, TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, cast
+
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import ExecutionMode
 from ipyflow.singletons import flow

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 import argparse
 import ast
-import astunparse
 import inspect
 import json
 import logging
 import re
 import shlex
 import sys
-from typing import cast, TYPE_CHECKING, Iterable, Optional, Type
+from typing import TYPE_CHECKING, Iterable, Optional, Type, cast
 
+import astunparse
 import pyccolo as pyc
 from IPython import get_ipython
 from IPython.core.magic import register_line_magic
@@ -19,10 +19,9 @@ from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
-from ipyflow.run_mode import FlowDirection, ExecutionMode, ExecutionSchedule
-from ipyflow.singletons import kernel, flow
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
+from ipyflow.singletons import flow, kernel
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
-
 
 if TYPE_CHECKING:
     from ipyflow.flow import NotebookFlow

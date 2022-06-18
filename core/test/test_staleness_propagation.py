@@ -2,8 +2,9 @@
 import logging
 import sys
 
-from ipyflow.singletons import flow
 from pyccolo.extra_builtins import EMIT_EVENT
+
+from ipyflow.singletons import flow
 
 from .utils import assert_bool, make_flow_fixture, skipif_known_failing
 

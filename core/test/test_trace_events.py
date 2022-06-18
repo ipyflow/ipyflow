@@ -7,13 +7,13 @@ from typing import List, Set, Union
 
 import hypothesis.strategies as st
 from hypothesis import example, given, settings
+from pyccolo import TraceEvent
 
 from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import tracer
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
-from pyccolo import TraceEvent
-from .utils import make_flow_fixture, skipif_known_failing
 
+from .utils import make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.INFO)
 

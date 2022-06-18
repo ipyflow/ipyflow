@@ -3,7 +3,7 @@ import asyncio
 import inspect
 import logging
 from contextlib import contextmanager, suppress
-from typing import Callable, List, Generator, NamedTuple, Optional, Tuple, Type
+from typing import Callable, Generator, List, NamedTuple, Optional, Tuple, Type
 
 import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
@@ -11,6 +11,7 @@ from IPython.core.magic import register_cell_magic
 
 from ipyflow import singletons
 from ipyflow.data_model.code_cell import cells
+from ipyflow.flow import NotebookFlow
 from ipyflow.ipython_utils import (
     ast_transformer_context,
     capture_output_tee,
@@ -18,15 +19,13 @@ from ipyflow.ipython_utils import (
     run_cell,
     save_number_of_currently_executing_cell,
 )
-from ipyflow.flow import NotebookFlow
+from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
-    ModuleIniter,
     DataflowTracer,
+    ModuleIniter,
     StackFrameManager,
 )
-from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.version import __version__
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

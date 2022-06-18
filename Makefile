@@ -17,9 +17,11 @@ deploy: version build
 	./scripts/deploy.sh
 
 black:
+	isort ./core
 	./scripts/blacken.sh
 
 blackcheck:
+	isort ./core --check-only
 	./scripts/blacken.sh --check
 
 typecheck:

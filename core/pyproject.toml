@@ -1,8 +1,8 @@
 [build-system]
 requires = [
-    "setuptools >= 48",
-    "wheel >= 0.30.0",
-    "setuptools-git-versioning",
+    'setuptools >= 48',
+    'wheel >= 0.30.0',
+    'setuptools-git-versioning',
 ]
 build-backend = 'setuptools.build_meta'
 
@@ -13,6 +13,14 @@ enabled = true
 line-length = 88
 target-version = ['py39']
 extend-exclude = '(^/versioneer|_version)\.py'
+
+[tool.isort]
+profile = 'black'
+extend_skip_glob = [
+    '**/versioneer.py',
+    '**/_version.py',
+    '**/setup.py',
+]
 
 [tool.pytest.ini_options]
 markers = ['integration: mark a test as an integration test.']

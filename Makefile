@@ -35,6 +35,7 @@ coverage:
 	rm -f .coverage
 	rm -rf htmlcov
 	./scripts/runtests.sh --coverage
+	mv core/.coverage .
 	coverage html
 	coverage report
 

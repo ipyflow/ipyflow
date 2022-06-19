@@ -7,5 +7,7 @@ if [ "$1" == "ui" ]; then
     ./run_tests.py
     popd
 else
-    env PYTHONPATH="./core" ipython3 --quick --no-banner --quiet --colors=NoColor --simple-prompt ./scripts/test_runner.py -- $@
+    pushd core
+    env PYTHONPATH="." ipython3 --quick --no-banner --quiet --colors=NoColor --simple-prompt ../scripts/test_runner.py -- $@
+    popd
 fi

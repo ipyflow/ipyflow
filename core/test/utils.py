@@ -55,7 +55,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
     test_context = kwargs.pop("test_context", True)
     setup_cells = [
         "import sys",
-        'sys.path.append("./core/test")',
+        'sys.path.append("./test")',
         "import logging",
     ] + kwargs.pop("setup_cells", [])
     extra_fixture = kwargs.pop("extra_fixture", None)

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean black blackcheck build deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel nbext
+.PHONY: clean black blackcheck imports build deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel nbext
 
 clean:
 	rm -rf __pycache__ core/__pycache__ build/ core/build/ core/dist/ dist/ ipyflow.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
@@ -23,6 +23,10 @@ black:
 blackcheck:
 	isort ./core --check-only
 	./scripts/blacken.sh --check
+
+imports:
+	pycln ./core
+	isort ./core
 
 typecheck:
 	./scripts/typecheck.sh

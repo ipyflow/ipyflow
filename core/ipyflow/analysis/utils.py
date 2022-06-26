@@ -2,10 +2,6 @@
 import ast
 import logging
 import sys
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from typing import Set, Tuple
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

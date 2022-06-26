@@ -3,13 +3,11 @@ import argparse
 import ast
 import inspect
 import json
-import logging
 import re
 import shlex
 import sys
 from typing import TYPE_CHECKING, Iterable, Optional, Type, cast
 
-import astunparse
 import pyccolo as pyc
 from IPython import get_ipython
 from IPython.core.magic import register_line_magic

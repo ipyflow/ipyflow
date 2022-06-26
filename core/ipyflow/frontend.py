@@ -2,7 +2,7 @@
 import ast
 import logging
 from collections import defaultdict
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set
 
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol

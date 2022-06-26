@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import ast
-import inspect
 import logging
 import symtable
 from typing import (
@@ -9,14 +8,11 @@ from typing import (
     Dict,
     Generator,
     Iterable,
-    Mapping,
     Optional,
     Set,
     Tuple,
     cast,
 )
-
-from IPython import get_ipython
 
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.data_symbol import DataSymbol, DataSymbolType

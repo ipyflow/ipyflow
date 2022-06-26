@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-from typing import Any, Mapping, Sequence
 
 
 class KeyDict(dict):

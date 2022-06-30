@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Any, Dict, List, Set, Tuple, Union
 
-MAX_SIZE = 10 ** 5
+MAX_SIZE = 10**5
 
 """
 This module helps us detect if it will be too expensive to perform

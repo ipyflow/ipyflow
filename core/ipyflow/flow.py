@@ -132,7 +132,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.last_executed_content: Optional[str] = None
         self.last_executed_cell_id: Optional[CellId] = None
         self._comm_handlers: Dict[
-            str, Callable[[Dict[str, Any], Optional[Dict[str, Any]]]]
+            str, Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]
         ] = {}
         self.register_comm_handler("change_active_cell", self.handle_change_active_cell)
         self.register_comm_handler(

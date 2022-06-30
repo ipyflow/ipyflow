@@ -140,7 +140,9 @@ class FrontendCheckerResult(NamedTuple):
             self.waiter_links[waiting_cell_id] = ready_making_cell_ids
 
     def _compute_reactive_cells_for_reactive_symbols(
-        self, checker_results_by_cid: Dict[CellId, CheckerResult]
+        self,
+        checker_results_by_cid: Dict[CellId, CheckerResult],
+        last_executed_cell_pos: int,
     ) -> None:
         flow_ = flow()
         if flow_.mut_settings.exec_mode == ExecutionMode.REACTIVE:
@@ -151,6 +153,12 @@ class FrontendCheckerResult(NamedTuple):
             if cell_id not in checker_results_by_cid:
                 continue
             cell = cells().from_id(cell_id)
+            if (
+                flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
+                and cell.position < last_executed_cell_pos
+            ):
+                # prevent this cell from being reactive if it appears before the last executed cell
+                continue
             max_used_ctr = cell.get_max_used_live_symbol_cell_counter(
                 checker_results_by_cid[cell_id].live, filter_to_reactive=True
             )
@@ -250,12 +258,6 @@ class FrontendCheckerResult(NamedTuple):
                 updated_cell = cells().from_timestamp(live_sym.timestamp)
                 if updated_cell.position > cell.position:
                     self.unsafe_order_cells[cell_id].add(updated_cell)
-        if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
-            if (
-                last_executed_cell_pos is not None
-                and cell.position <= last_executed_cell_pos
-            ):
-                return checker_result
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
             waiting_symbols = {
                 sym.dsym
@@ -284,6 +286,14 @@ class FrontendCheckerResult(NamedTuple):
         is_ready = self._compute_is_ready(cell, checker_result)
         if is_ready:
             self.ready_cells.add(cell_id)
+        if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
+            if (
+                last_executed_cell_pos is not None
+                and cell.position <= last_executed_cell_pos
+            ):
+                # prevent this cell from being considered as newly ready so that
+                # it is not reactively executed
+                return checker_result
         if not cells().from_id(cell_id).set_ready(is_ready) and is_ready:
             self.new_ready_cells.add(cell_id)
         return checker_result
@@ -373,7 +383,9 @@ class FrontendCheckerResult(NamedTuple):
                 break
 
         self._compute_dag_based_waiters(cells_to_check)
-        self._compute_reactive_cells_for_reactive_symbols(checker_results_by_cid)
+        self._compute_reactive_cells_for_reactive_symbols(
+            checker_results_by_cid, last_executed_cell_pos
+        )
         self._compute_ready_making_cells(
             waiting_symbols_by_cell_id,
             killing_cell_ids_for_symbol,

@@ -1,2 +1,3 @@
 include README.md HISTORY.rst requirements.txt
 include core/ipyflow/resources/**
+include core/ipyflow/_version.py

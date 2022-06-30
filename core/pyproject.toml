@@ -17,6 +17,7 @@ extend-exclude = '(^/versioneer|_version)\.py'
 [tool.isort]
 profile = 'black'
 extend_skip_glob = [
+    '**/ipyflow/__init__.py',
     '**/versioneer.py',
     '**/_version.py',
     '**/setup.py',

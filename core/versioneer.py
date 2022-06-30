@@ -547,11 +547,18 @@ def versions_from_parentdir(parentdir_prefix, root, verbose):
     rootdirs = []
 
     for _ in range(3):
-        dirname = os.path.basename(root)
-        if dirname.startswith(parentdir_prefix):
-            return {"version": dirname[len(parentdir_prefix):],
-                    "full-revisionid": None,
-                    "dirty": False, "error": None, "date": None}
+        for dirname in [os.path.basename(root)] + os.listdir(root):
+            if dirname.startswith(parentdir_prefix):
+                components = dirname[len(parentdir_prefix):].split(".")
+                components = [
+                    comp for comp in components
+                    if all(c.isdigit() for c in comp)
+                ]
+                if len(components) == 0:
+                    continue
+                return {"version": ".".join(components),
+                        "full-revisionid": None,
+                        "dirty": False, "error": None, "date": None}
         rootdirs.append(root)
         root = os.path.dirname(root)  # up a level
 
@@ -1357,11 +1364,11 @@ def versions_from_parentdir(parentdir_prefix, root, verbose):
     rootdirs = []
 
     for _ in range(3):
-        dirname = os.path.basename(root)
-        if dirname.startswith(parentdir_prefix):
-            return {"version": dirname[len(parentdir_prefix):],
-                    "full-revisionid": None,
-                    "dirty": False, "error": None, "date": None}
+        for dirname in [os.path.basename(root)] + os.listdir(root):
+            if dirname.startswith(parentdir_prefix):
+                return {"version": dirname[len(parentdir_prefix):],
+                        "full-revisionid": None,
+                        "dirty": False, "error": None, "date": None}
         rootdirs.append(root)
         root = os.path.dirname(root)  # up a level
 

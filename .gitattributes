@@ -1,2 +1,1 @@
-nbsafety/_version.py export-subst
-ipyflow_full_stub/_version.py export-subst
+core/ipyflow/_version.py export-subst

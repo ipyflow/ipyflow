@@ -548,13 +548,17 @@ def versions_from_parentdir(parentdir_prefix, root, verbose):
 
     for _ in range(3):
         for dirname in [os.path.basename(root)] + os.listdir(root):
-            if dirname.startswith(parentdir_prefix):
-                components = dirname[len(parentdir_prefix):].split(".")
+            dirname = dirname.replace("-", "_")
+            for prefix in [parentdir_prefix, ""]:
+                prefix = prefix.replace("-", "_")
+                if not dirname.startswith(prefix):
+                    continue
+                components = dirname[len(prefix):].split(".")
                 components = [
                     comp for comp in components
                     if all(c.isdigit() for c in comp)
                 ]
-                if len(components) == 0:
+                if len(components) <= 1:
                     continue
                 return {"version": ".".join(components),
                         "full-revisionid": None,

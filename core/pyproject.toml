@@ -12,7 +12,7 @@ enabled = true
 [tool.black]
 line-length = 88
 target-version = ['py39']
-extend-exclude = '(^/versioneer|_version)\.py'
+extend-exclude = '(^/ipyflow/__init__|^/versioneer|_version)\.py'
 
 [tool.isort]
 profile = 'black'

@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.111 (2022-06-30)
+-------------------
+* Fix some versioneer issues;
+* Fix a bug related to readiness for in-order semantics;
+
 0.0.109 (2022-06-14)
 -------------------
 * Add comm handler for refresh symbols;

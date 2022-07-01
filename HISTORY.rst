@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.112 (2022-06-30)
+-------------------
+* Keep ipyflow and ipyflow-core versions in lock-step;
+
 0.0.111 (2022-06-30)
 -------------------
 * Fix some versioneer issues;

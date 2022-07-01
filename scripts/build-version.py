@@ -23,6 +23,10 @@ def main(args):
             package_json['version'] = version
             with open(package_dot_json, 'w') as f:
                 f.write(json.dumps(package_json, indent=2))
+    with open('./requirements.txt.in', 'r') as f:
+        template = f.read()
+    with open('./requirements.txt', 'w') as f:
+        f.write(template.format(version=version))
     return 0
 
 

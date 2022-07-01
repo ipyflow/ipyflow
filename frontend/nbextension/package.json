@@ -1,6 +1,6 @@
 {
   "name": "jupyter-ipyflow",
-  "version": "0.0.111",
+  "version": "0.0.112",
   "description": "Jupyter notebook extension for ipyflow user interface",
   "keywords": [
     "jupyter",

@@ -547,10 +547,10 @@ def versions_from_parentdir(parentdir_prefix, root, verbose):
     rootdirs = []
 
     for _ in range(3):
-        for dirname in [os.path.basename(root)] + os.listdir(root):
-            dirname = dirname.replace("-", "_")
-            for prefix in [parentdir_prefix, ""]:
-                prefix = prefix.replace("-", "_")
+        for prefix in [parentdir_prefix, ""]:
+            prefix = prefix.replace("-", "_")
+            for dirname in [os.path.basename(root)] + os.listdir(root):
+                dirname = dirname.replace("-", "_")
                 if not dirname.startswith(prefix):
                     continue
                 components = dirname[len(prefix):].split(".")

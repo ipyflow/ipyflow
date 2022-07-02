@@ -44,8 +44,8 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440"
     cfg.tag_prefix = ""
-    cfg.parentdir_prefix = "ipyflow-"
-    cfg.versionfile_source = "core/ipyflow/_version.py"
+    cfg.parentdir_prefix = "ipyflow_core-"
+    cfg.versionfile_source = "ipyflow/_version.py"
     cfg.verbose = False
     return cfg
 
@@ -122,10 +122,10 @@ def versions_from_parentdir(parentdir_prefix, root, verbose):
     rootdirs = []
 
     for _ in range(3):
-        for dirname in [os.path.basename(root)] + os.listdir(root):
-            dirname = dirname.replace("-", "_")
-            for prefix in [parentdir_prefix, ""]:
-                prefix = prefix.replace("-", "_")
+        for prefix in [parentdir_prefix, ""]:
+            prefix = prefix.replace("-", "_")
+            for dirname in [os.path.basename(root)] + os.listdir(root):
+                dirname = dirname.replace("-", "_")
                 if not dirname.startswith(prefix):
                     continue
                 components = dirname[len(prefix):].split(".")

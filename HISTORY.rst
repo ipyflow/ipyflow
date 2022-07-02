@@ -1,9 +1,9 @@
 History
 =======
 
-0.0.113 (2022-07-01)
+0.0.114 (2022-07-02)
 -------------------
-* Fix another versioneer issue;
+* Fix more versioneer issues;
 
 0.0.112 (2022-06-30)
 -------------------

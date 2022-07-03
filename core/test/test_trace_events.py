@@ -35,7 +35,7 @@ def patched_emit_event_fixture():
         self, evt: Union[str, TraceEvent], node_id: int, frame: FrameType, **kwargs
     ):
         event = evt if isinstance(evt, TraceEvent) else TraceEvent(evt)
-        if frame.f_code.co_filename.startswith("<ipython-input"):
+        if frame is not None and frame.f_code.co_filename.startswith("<ipython-input"):
             is_traced_lambda = frame.f_code.co_name == "<traced_lambda>"
             if not (
                 (

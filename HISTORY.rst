@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.117 (2022-07-03)
+-------------------
+* Misc bugfixes;
+
 0.0.116 (2022-07-02)
 -------------------
 * Bump pyccolo to a version with perf improvements for imports;

@@ -132,8 +132,8 @@ class DataSymbol:
         self.cells_where_deep_live: Set[CodeCell] = set()
         self.cells_where_shallow_live: Set[CodeCell] = set()
 
-        self._last_computed_waiting_cache_ts: int = -1
-        self._is_waiting_at_position_cache: Dict[Tuple[int, bool], bool] = {}
+        self._last_computed_ready_or_waiting_cache_ts: int = -1
+        self._is_ready_or_waiting_at_position_cache: Dict[Tuple[int, bool], bool] = {}
 
         # if implicitly created when tracing non-store-context ast nodes
         self._implicit = implicit
@@ -667,7 +667,7 @@ class DataSymbol:
             return False
         return self.waiting_timestamp < self.required_timestamp.cell_num
 
-    def _is_waiting_at_position_impl(self, pos: int, deep: bool) -> bool:
+    def _is_ready_or_waiting_at_position_impl(self, pos: int, deep: bool) -> bool:
         for par, timestamps in self.parents.items():
             for ts in timestamps:
                 dep_introduced_pos = cells().from_timestamp(ts).position
@@ -677,7 +677,7 @@ class DataSymbol:
                     if cells().from_timestamp(updated_ts).position > dep_introduced_pos:
                         continue
                     if updated_ts.cell_num > ts.cell_num or par.is_waiting_at_position(
-                        ts.cell_num
+                        dep_introduced_pos
                     ):
                         # logger.error("sym: %s", self)
                         # logger.error("pos: %s", pos)
@@ -694,9 +694,6 @@ class DataSymbol:
         return False
 
     def is_waiting_at_position(self, pos: int, deep: bool = True) -> bool:
-        if not self.is_globally_accessible:
-            # TODO: understand the implications of this better
-            return False
         if deep:
             if not self.is_waiting:
                 return False
@@ -705,13 +702,13 @@ class DataSymbol:
                 return False
         if flow().mut_settings.flow_order == FlowDirection.ANY_ORDER:
             return True
-        if cells().exec_counter() > self._last_computed_waiting_cache_ts:
-            self._is_waiting_at_position_cache.clear()
-            self._last_computed_waiting_cache_ts = cells().exec_counter()
-        if (pos, deep) in self._is_waiting_at_position_cache:
-            return self._is_waiting_at_position_cache[pos, deep]
-        is_waiting = self._is_waiting_at_position_impl(pos, deep)
-        self._is_waiting_at_position_cache[pos, deep] = is_waiting
+        if cells().exec_counter() > self._last_computed_ready_or_waiting_cache_ts:
+            self._is_ready_or_waiting_at_position_cache.clear()
+            self._last_computed_ready_or_waiting_cache_ts = cells().exec_counter()
+        if (pos, deep) in self._is_ready_or_waiting_at_position_cache:
+            return self._is_ready_or_waiting_at_position_cache[pos, deep]
+        is_waiting = self._is_ready_or_waiting_at_position_impl(pos, deep)
+        self._is_ready_or_waiting_at_position_cache[pos, deep] = is_waiting
         return is_waiting
 
     def should_mark_waiting(self, updated_dep):

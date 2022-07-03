@@ -31,9 +31,9 @@ from ipyflow.tracing.mutation_event import (
     resolve_mutating_method,
 )
 from ipyflow.tracing.mutation_special_cases import (
-    register_module_mutation_exceptions,
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
+    register_module_mutation_exceptions,
 )
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.trace_stmt import TraceStatement

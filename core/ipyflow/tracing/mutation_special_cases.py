@@ -5,7 +5,9 @@ from typing import Dict, List, Set, Tuple
 
 METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN: Set[Tuple[int, str]] = set()
 # time is already imported
-METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = {(id(time), "sleep")}
+METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = {
+    (id(time), "sleep")
+}
 
 
 _METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN_RAW: Dict[str, List[str]] = {

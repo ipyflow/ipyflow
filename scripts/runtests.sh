@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 # ref: https://github.com/ipython/ipython/issues/9752
 
 if [ "$1" == "ui" ]; then

@@ -1282,6 +1282,22 @@ def test_numpy_subscripting():
     assert_detected("y depends on stale x[3]")
 
 
+def test_tracing_reactivated_after_import():
+    run_cell("x = 0")
+    run_cell(
+        """
+        def test():
+            import numpy
+            y = x + 1
+            return y
+        """
+    )
+    run_cell("y = test()")
+    run_cell("x = 42")
+    run_cell("logging.info(y)")
+    assert_detected("y depends on stale x")
+
+
 def test_dict_subscripting():
     run_cell('d = {"foo": "bar", 0: "bat"}')
     run_cell("x = 7")

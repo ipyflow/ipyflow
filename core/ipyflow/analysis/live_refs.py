@@ -41,7 +41,7 @@ class ComputeLiveSymbolRefs(
         if init_killed is None:
             self.dead: Set[SymbolRef] = set()
         else:
-            self.dead = cast("Set[SymbolRef]", init_killed)
+            self.dead = {SymbolRef.from_string(killed) for killed in init_killed}
         # TODO: use the ast context instead of hacking our own (e.g. ast.Load(), ast.Store(), etc.)
         self._in_kill_context = False
         self._inside_attrsub = False

@@ -467,12 +467,14 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         return None
 
     def _handle_output(self) -> None:
+        flow_ = singletons.flow()
         prev_cell = None
         cell = cells().current_cell()
         if len(cell.history) >= 2:
             prev_cell = cells().from_timestamp(cell.history[-2])
         if (
-            singletons.flow().out_of_order_usage_detected_counter
+            flow_.mut_settings.warn_out_of_order_usages
+            and flow_.out_of_order_usage_detected_counter is not None
             and prev_cell is not None
             and prev_cell.captured_output is not None
         ):

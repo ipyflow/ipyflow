@@ -143,7 +143,8 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         ):
             return True
         if (
-            not isinstance(self.dsym.obj, (dict, list, tuple))
+            not self.atom.is_callpoint
+            and not isinstance(self.dsym.obj, (dict, list, tuple))
             and isinstance(self.next_atom.value, str)
             and (
                 # the first check guards against properties; hasattr actually executes code for those if called

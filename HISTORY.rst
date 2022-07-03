@@ -1,8 +1,10 @@
 History
 =======
 
-0.0.114 (2022-07-02)
+0.0.116 (2022-07-02)
 -------------------
+* Bump pyccolo to a version with perf improvements for imports;
+* Lazily import mutation special case modules;
 * Fix more versioneer issues;
 
 0.0.112 (2022-06-30)

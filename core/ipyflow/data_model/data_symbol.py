@@ -19,10 +19,6 @@ from typing import (
     cast,
 )
 
-try:
-    import numpy
-except ImportError:
-    numpy = None
 from pyccolo.extra_builtins import EMIT_EVENT
 
 from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
@@ -383,6 +379,7 @@ class DataSymbol:
     def is_new_garbage(self) -> bool:
         if self._tombstone:
             return False
+        numpy = sys.modules.get("numpy", None)
         if (
             numpy is not None
             and self.containing_namespace is not None

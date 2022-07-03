@@ -3,7 +3,7 @@ import ast
 import logging
 import symtable
 from collections import defaultdict
-from types import FrameType
+from types import FrameType, ModuleType
 from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 import astunparse
@@ -31,6 +31,7 @@ from ipyflow.tracing.mutation_event import (
     resolve_mutating_method,
 )
 from ipyflow.tracing.mutation_special_cases import (
+    register_module_mutation_exceptions,
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
 )
@@ -91,6 +92,10 @@ class ModuleIniter(pyc.BaseTracer):
         for tracer in pyc._TRACER_STACK:
             tracer._tracing_enabled_files.add(frame.f_code.co_filename)
 
+    @property
+    def should_patch_meta_path(self) -> bool:
+        return False
+
 
 class StackFrameManager(SingletonBaseTracer):
     def __init__(self, *args, **kwargs):
@@ -121,6 +126,10 @@ class StackFrameManager(SingletonBaseTracer):
                 assert self.call_depth >= 0
             if self.call_depth == 0:
                 return pyc.SkipAll
+
+    @property
+    def should_patch_meta_path(self) -> bool:
+        return False
 
 
 class DataflowTracer(StackFrameManager):
@@ -214,7 +223,7 @@ class DataflowTracer(StackFrameManager):
 
     @property
     def should_patch_meta_path(self) -> bool:
-        return False
+        return True
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter
@@ -575,6 +584,10 @@ class DataflowTracer(StackFrameManager):
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
         return data_sym
+
+    @pyc.register_raw_handler(pyc.after_import)
+    def after_import(self, *_, module: ModuleType, **__):
+        register_module_mutation_exceptions(module)
 
     @pyc.register_raw_handler(
         (

@@ -27,15 +27,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-def _try_get_pandas():
-    pandas = None
-    try:
-        import pandas
-    except ImportError:
-        pass
-    return pandas
-
-
 class Scope:
     GLOBAL_SCOPE_NAME = "<module>"
 

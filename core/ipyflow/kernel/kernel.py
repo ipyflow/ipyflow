@@ -69,6 +69,10 @@ class OutputRecorder(pyc.BaseTracer):
     def init_module(self, *_, **__):
         self.capture_output = self.capture_output_tee.__enter__()
 
+    @property
+    def should_patch_meta_path(self) -> bool:
+        return False
+
 
 class PyccoloKernelMixin(PyccoloKernelHooks):
     def __init__(self, **kwargs):
@@ -255,9 +259,11 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 [self._patch_tracer_filters(tracer) for tracer in all_tracers]
             ):
                 if len(self.tracer_cleanup_callbacks) == 0:
-                    for tracer in all_tracers:
+                    for idx, tracer in enumerate(all_tracers):
                         self.tracer_cleanup_callbacks.append(
-                            tracer.tracing_non_context()
+                            tracer.tracing_non_context(
+                                do_patch_meta_path=idx == len(all_tracers) - 1
+                            )
                         )
                 else:
                     for tracer in all_tracers:

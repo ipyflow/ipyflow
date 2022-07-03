@@ -1,41 +1,36 @@
 # -*- coding: utf-8 -*-
-from typing import Set, Tuple
+import time
+from types import ModuleType
+from typing import Dict, List, Set, Tuple
 
 METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN: Set[Tuple[int, str]] = set()
-METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = set()
+# time is already imported
+METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN: Set[Tuple[int, str]] = {(id(time), "sleep")}
 
-try:
-    import time
 
-    time_id = id(time)
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((time_id, "sleep"))
-except ImportError:
-    pass
+_METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN_RAW: Dict[str, List[str]] = {
+    "pylab": ["figure"],
+    "matplotlib.pyplot": ["figure"],
+}
 
-try:
-    import pylab
 
-    pylab_id = id(pylab)
-    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN.add((pylab_id, "figure"))
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((pylab_id, "show"))
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((pylab_id, "plot"))
-except ImportError:
-    pass
+_METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN_RAW: Dict[str, List[str]] = {
+    "pylab": ["show", "plot"],
+    "matplotlib.pyplot": ["show", "plot"],
+    "d2l.torch": ["plot"],
+}
 
-try:
-    import matplotlib.pyplot as plt
 
-    plt_id = id(plt)
-    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN.add((plt_id, "figure"))
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((plt_id, "show"))
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((plt_id, "plot"))
-except ImportError:
-    pass
-
-try:
-    import d2l.torch as d2l
-
-    d2l_id = id(d2l)
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN.add((d2l_id, "plot"))
-except ImportError:
-    pass
+def register_module_mutation_exceptions(module: ModuleType) -> None:
+    for raw, registered in [
+        (
+            _METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN_RAW,
+            METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
+        ),
+        (
+            _METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN_RAW,
+            METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
+        ),
+    ]:
+        for excepted_method in raw.get(module.__name__, []):
+            registered.add((id(module), excepted_method))

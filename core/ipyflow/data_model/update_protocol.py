@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import sys
 from typing import TYPE_CHECKING, Generator, Iterable, Set
 
 from ipyflow.data_model.timestamp import Timestamp
@@ -64,9 +65,8 @@ class UpdateProtocol:
             self._propagate_waiting_to_deps(dsym, skip_seen_check=True)
 
     def _maybe_get_adhoc_pandas_updated_syms(self):
-        try:
-            import pandas
-        except ImportError:
+        pandas = sys.modules.get("pandas", None)
+        if pandas is None:
             return set()
 
         if self.updated_sym.obj is None or not isinstance(

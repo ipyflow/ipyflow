@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+import sys
 from types import FrameType
 from typing import List, Optional, Set, Union, cast
 
@@ -15,12 +16,6 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
-
-try:
-    import pandas
-except ImportError:
-    pandas = None
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -136,6 +131,7 @@ class TraceStatement:
             #     raise ke
             return
         subscript_vals_to_use = [is_subscript]
+        pandas = sys.modules.get("pandas", None)
         if pandas is not None and scope.is_namespace_scope:
             namespace = cast(Namespace, scope)
             if (

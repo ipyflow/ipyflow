@@ -1,0 +1,16 @@
+# -*- coding: utf-8 -*-
+from ipyflow.annotations import Handler
+from ipyflow.tracing.mutation_event import (
+    ListAppend,
+    ListExtend,
+    ListInsert,
+    ListPop,
+    ListRemove,
+)
+
+class list:
+    def append(self, arg) -> Handler[ListAppend[self, arg]]: ...
+    def extend(self, args) -> Handler[ListExtend[self, args]]: ...
+    def insert(self, pos, arg) -> Handler[ListInsert[self, pos, arg]]: ...
+    def remove(self, arg) -> Handler[ListRemove[self, arg]]: ...
+    def pop(self, pos) -> Handler[ListPop[self, pos]]: ...

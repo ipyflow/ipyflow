@@ -4,12 +4,11 @@ from ipyflow.annotations import (
     FileSystem,
     Mutated,
     Parents,
-    SymbolCreateOrLookup,
     SymbolUpserted,
     handler_for,
 )
 
-def open(file, *_, **__) -> SymbolCreateOrLookup[FileSystem[file]]: ...
+def open(file, *_, **__) -> SymbolUpserted[Parents[FileSystem[file]]]: ...
 
 class IOBase:
 
@@ -24,3 +23,7 @@ class IOBase:
 
     @handler_for("close", "readline", "readlines", "seek")
     def reader_method(self) -> Mutated[self]: ...
+
+    """"""
+
+    def __enter__(self) -> SymbolUpserted[Parents[self]]: ...

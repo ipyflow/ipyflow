@@ -28,13 +28,6 @@ class SideEffect:
     """
 
 
-class SymbolCreateOrLookup(SideEffect):
-    """
-    Stub for indicating that a symbol is created as a side effect.
-    If already exists, it is just looped up.
-    """
-
-
 class SymbolUpserted(SideEffect):
     """
     Stub for indicating that a value is upserted as a side effect.

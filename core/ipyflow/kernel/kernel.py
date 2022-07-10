@@ -3,7 +3,16 @@ import asyncio
 import inspect
 import logging
 from contextlib import contextmanager, suppress
-from typing import Callable, Generator, List, NamedTuple, Optional, Tuple, Type
+from typing import (
+    Callable,
+    ContextManager,
+    Generator,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Type,
+)
 
 import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
@@ -49,6 +58,9 @@ class PyccoloKernelHooks:
         ...
 
     def should_trace(self) -> bool:
+        ...
+
+    def inner_tracing_context(self) -> ContextManager[None]:
         ...
 
     def after_execute(self, cell_content: str) -> None:
@@ -276,7 +288,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 ):
                     with ast_transformer_context([ast_rewriter]):
                         with self._patch_pyccolo_exec_eval():
-                            yield
+                            with self.inner_tracing_context():
+                                yield
                 if self.tracer_cleanup_pending:
                     self.cleanup_tracers()
                 else:
@@ -412,6 +425,11 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         flow_.updated_symbols.clear()
         flow_.updated_reactive_symbols.clear()
         flow_.updated_deep_reactive_symbols.clear()
+
+    @contextmanager
+    def inner_tracing_context(self) -> Generator[None, None, None]:
+        singletons.flow().init_virtual_symbols()
+        yield
 
     def should_trace(self) -> bool:
         return singletons.flow().mut_settings.dataflow_enabled

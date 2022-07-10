@@ -109,6 +109,8 @@ class NotebookFlow(singletons.NotebookFlow):
         self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.global_scope: Scope = Scope()
+        self.virtual_symbols: Scope = Scope()
+        self._virtual_symbols_inited: bool = False
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_reactive_symbols: Set[DataSymbol] = set()
         self.updated_deep_reactive_symbols: Set[DataSymbol] = set()
@@ -148,6 +150,15 @@ class NotebookFlow(singletons.NotebookFlow):
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
             )
+
+    def init_virtual_symbols(self) -> None:
+        if self._virtual_symbols_inited:
+            return
+        self.fs: Namespace = Namespace(Namespace.FILE_SYSTEM, "fs")
+        self.display_sym = self.virtual_symbols.upsert_data_symbol_for_name(
+            "display", DataSymbol.DISPLAY
+        )
+        self._virtual_symbols_inited = True
 
     @property
     def is_develop(self) -> bool:

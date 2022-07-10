@@ -2,6 +2,11 @@
 """
 Tools describing how non-notebook code affects dataflow
 """
+import abc
+from typing import Set
+
+from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.singletons import flow
 
 
 def handler_for(*methods):
@@ -59,16 +64,26 @@ class Handler(SideEffect):
     pass
 
 
-class SymbolMatcher:
+class SymbolMatcher(abc.ABC):
     """
     Indicates that the annotation matches a symbol
     """
+
+    @abc.abstractmethod
+    def matches(self, sym: DataSymbol) -> bool:
+        pass
 
 
 class AllOf(SymbolMatcher):
     """
     Indicates all of the subscripted matchers should match.
     """
+
+    def __init__(self, matchers: List[SymbolMatcher]):
+        self.matchers = matchers
+
+    def matches(self, sym: DataSymbol) -> bool:
+        return all(matcher.matches(sym) for matcher in self.matchers)
 
 
 class AnyOf(SymbolMatcher):
@@ -77,13 +92,23 @@ class AnyOf(SymbolMatcher):
     If multiple match, the first wins.
     """
 
+    def __init__(self, matchers: List[SymbolMatcher]):
+        self.matchers = matchers
+
+    def matches(self, sym: DataSymbol) -> bool:
+        for matcher in self.matchers:
+            if matcher.matches(sym):
+                return True
+        return False
+
 
 class Display(SymbolMatcher):
     """
     Stub for referencing that a value represents stdout / stderr / display contents.
     """
 
-    pass
+    def matches(self, sym: DataSymbol) -> bool:
+        return flow().display_sym is sym
 
 
 class FileSystem(SymbolMatcher):
@@ -91,7 +116,11 @@ class FileSystem(SymbolMatcher):
     Stub for referencing that a value represents file system contents.
     """
 
-    pass
+    def __init__(self, fname: str) -> None:
+        self.fname = fname
+
+    def matches(self, sym: DataSymbol) -> bool:
+        return sym.name == self.fname and sym.containing_namespace is flow().fs
 
 
 class Children(SymbolMatcher):
@@ -99,7 +128,15 @@ class Children(SymbolMatcher):
     Stub for referencing that an argument's subscripted values depend on it.
     """
 
-    pass
+    def __init__(self, children: Set[DataSymbol], exact: bool) -> None:
+        self.children = children
+        self.exact = exact
+
+    def matches(self, sym: DataSymbol) -> bool:
+        if self.exact:
+            return sym.children == self.children
+        else:
+            return sym.children <= self.children
 
 
 class Parents(SymbolMatcher):
@@ -107,4 +144,12 @@ class Parents(SymbolMatcher):
     Stub for referencing that an argument depends on the subscripted values.
     """
 
-    pass
+    def __init__(self, parents: Set[DataSymbol], exact: bool) -> None:
+        self.parents = parents
+        self.exact = exact
+
+    def matches(self, sym: DataSymbol) -> bool:
+        if self.exact:
+            return sym.parents == self.parents
+        else:
+            return sym.parents <= self.parents

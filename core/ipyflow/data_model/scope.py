@@ -170,8 +170,8 @@ class Scope:
         self,
         name: SupportedIndexType,
         obj: Any,
-        deps: Iterable[DataSymbol],
-        stmt_node: ast.stmt,
+        deps: Optional[Iterable[DataSymbol]] = None,
+        stmt_node: Optional[ast.stmt] = None,
         symbol_node: Optional[ast.AST] = None,
         overwrite: bool = True,
         is_subscript: bool = False,
@@ -191,7 +191,9 @@ class Scope:
             is_anonymous=is_anonymous,
             class_scope=class_scope,
         )
-        deps = set(deps)  # make a copy since we mutate it (see below fixme)
+        deps = set(
+            [] if deps is None else deps
+        )  # make a copy since we mutate it (see below fixme)
         dsym, prev_dsym, prev_obj = self._upsert_data_symbol_for_name_inner(
             name,
             obj,
@@ -217,7 +219,7 @@ class Scope:
         obj: Any,
         deps: Set[DataSymbol],
         symbol_type: DataSymbolType,
-        stmt_node: ast.stmt,
+        stmt_node: Optional[ast.stmt] = None,
         symbol_node: Optional[ast.AST] = None,
         implicit: bool = False,
     ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[Any]]:

@@ -56,6 +56,9 @@ class DataSymbol:
 
     NULL = object()
 
+    # object for virtual display symbol
+    DISPLAY = object()
+
     IMMUTABLE_TYPES = {
         bytes,
         bytearray,

@@ -29,6 +29,9 @@ class Namespace(Scope):
 
     PENDING_CLASS_PLACEHOLDER = object()
 
+    # special object for virtually representing the file system
+    FILE_SYSTEM: Dict[str, None] = dict()
+
     # TODO: support (multiple) inheritance by allowing
     #  Namespaces from classes to clone their parent class's Namespaces
     def __init__(self, obj: Any, *args, **kwargs) -> None:

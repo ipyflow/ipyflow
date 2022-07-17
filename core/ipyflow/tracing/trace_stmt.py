@@ -5,7 +5,6 @@ import sys
 from types import FrameType
 from typing import List, Optional, Set, Union, cast
 
-import ipyflow.tracing.mutation_event as me
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
@@ -361,78 +360,6 @@ class TraceStatement:
                 if flow().is_test:
                     raise e
 
-    # TODO: put this logic in each respective MutationEvent itself
-    def _handle_specific_mutation_type(
-        self,
-        mutation_event: me.MutationEvent,
-        mutated_obj_id: int,
-        mutation_upsert_deps: Set[DataSymbol],
-    ) -> None:
-        namespace_scope = flow().namespaces.get(mutated_obj_id, None)
-        mutated_sym = flow().get_first_full_symbol(mutated_obj_id)
-        if mutated_sym is None:
-            return
-        mutated_obj = mutated_sym.obj
-        if isinstance(mutation_event, (me.ListAppend, me.ListExtend)):
-            for upsert_pos in range(
-                mutation_event.orig_len
-                if isinstance(mutation_event, me.ListExtend)
-                else len(mutated_obj) - 1,
-                len(mutated_obj),
-            ):
-                if namespace_scope is None:
-                    namespace_scope = Namespace(
-                        mutated_obj,
-                        mutated_sym.name,
-                        parent_scope=mutated_sym.containing_scope,
-                    )
-                logger.info(
-                    "upsert %s to %s with deps %s",
-                    len(mutated_obj) - 1,
-                    namespace_scope,
-                    mutation_upsert_deps,
-                )
-                namespace_scope.upsert_data_symbol_for_name(
-                    upsert_pos,
-                    mutated_obj[upsert_pos],
-                    mutation_upsert_deps,
-                    self.stmt_node,
-                    overwrite=False,
-                    is_subscript=True,
-                    propagate=False,
-                )
-        elif isinstance(mutation_event, me.ListInsert):
-            assert mutated_obj is namespace_scope.obj
-            namespace_scope.shuffle_symbols_upward_from(mutation_event.pos)
-            namespace_scope.upsert_data_symbol_for_name(
-                mutation_event.pos,
-                mutated_obj[mutation_event.pos],
-                mutation_upsert_deps,
-                self.stmt_node,
-                overwrite=False,
-                is_subscript=True,
-                propagate=True,
-            )
-        elif (
-            isinstance(mutation_event, (me.ListPop, me.ListRemove))
-            and mutation_event.pos is not None
-        ):
-            assert mutated_obj is namespace_scope.obj
-            namespace_scope.delete_data_symbol_for_name(
-                mutation_event.pos, is_subscript=True
-            )
-        elif isinstance(mutation_event, me.NamespaceClear):
-            for name in sorted(
-                (
-                    dsym.name
-                    for dsym in namespace_scope.all_data_symbols_this_indentation(
-                        exclude_class=True, is_subscript=True
-                    )
-                ),
-                reverse=True,
-            ):
-                namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
-
     def handle_dependencies(self) -> None:
         for (
             mutated_obj_id,
@@ -447,43 +374,9 @@ class TraceStatement:
                 mutation_arg_dsyms,
                 mutation_arg_objs,
             )
-            Timestamp.update_usage_info(mutation_arg_dsyms)
-            if isinstance(mutation_event, me.ArgMutate):
-                for mutated_sym in mutation_arg_dsyms:
-                    if mutated_sym is None or mutated_sym.is_anonymous:
-                        continue
-                    # TODO: happens when module mutates args
-                    #  should we add module as a dep in this case?
-                    mutated_sym.update_deps(set(), overwrite=False, mutated=True)
-                continue
-
-            # NOTE: this next block is necessary to ensure that we add the argument as a namespace child
-            # of the mutated symbol. This helps to avoid propagating through to dependency children that are
-            # themselves namespace children.
-            should_propagate = True
-            if not isinstance(
-                mutation_event,
-                (me.MutatingMethodEventNotYetImplemented, me.StandardMutation),
-            ):
-                should_propagate = False
-                mutation_upsert_deps: Set[DataSymbol] = set()
-                if isinstance(mutation_event, (me.ListAppend, me.ListInsert)):
-                    mutation_arg_dsyms, mutation_upsert_deps = (
-                        mutation_upsert_deps,
-                        mutation_arg_dsyms,
-                    )
-                self._handle_specific_mutation_type(
-                    mutation_event, mutated_obj_id, mutation_upsert_deps
-                )
-            Timestamp.update_usage_info(flow().aliases[mutated_obj_id])
-            for mutated_sym in flow().aliases[mutated_obj_id]:
-                mutated_sym.update_deps(
-                    mutation_arg_dsyms,
-                    overwrite=False,
-                    mutated=True,
-                    propagate_to_namespace_descendents=should_propagate,
-                    refresh=should_propagate,
-                )
+            mutation_event.handle(
+                mutated_obj_id, mutation_arg_dsyms, mutation_arg_objs, self.stmt_node
+            )
         if self._contains_lval():
             self._make_lval_data_symbols()
         elif isinstance(self.stmt_node, ast.Delete):

@@ -19,17 +19,17 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import FlowRunMode
 from ipyflow.singletons import SingletonBaseTracer, flow
-from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
-from ipyflow.tracing.mutation_event import (
+from ipyflow.tracing.external_call_handler import (
     ArgMutate,
+    ExternalCallHandler,
     ListInsert,
     ListPop,
     ListRemove,
     MutatingMethodEventNotYetImplemented,
-    MutationEvent,
     StandardMutation,
     resolve_mutating_method,
 )
+from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.mutation_special_cases import (
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
@@ -45,11 +45,11 @@ NodeId = int
 ObjId = int
 MutationCandidate = Tuple[
     Tuple[Any, Optional[str], Optional[str]],
-    MutationEvent,
+    ExternalCallHandler,
     List[Set[DataSymbol]],
     List[Any],
 ]
-Mutation = Tuple[int, MutationEvent, Set[DataSymbol], List[Any]]
+Mutation = Tuple[int, ExternalCallHandler, Set[DataSymbol], List[Any]]
 SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
@@ -913,20 +913,9 @@ class DataflowTracer(StackFrameManager):
             return
         if (
             isinstance(mut_cand[1], (ListInsert, ListPop, ListRemove))
-            and mut_cand[1].pos is None
             and self.num_args_seen == 1
         ):
-            try:
-                if isinstance(mut_cand[1], ListRemove):
-                    mut_obj = mut_cand[0][0]
-                    for i in range(len(mut_obj)):
-                        if mut_obj[i] == arg_obj:
-                            mut_cand[1].pos = i
-                            break
-                else:
-                    mut_cand[1].pos = arg_obj
-            except:
-                pass
+            mut_cand[1].process_arg(arg_obj)
 
         arg_node = self.ast_node_by_id.get(arg_node_id, None)
         if isinstance(arg_node, ast.Name):
@@ -969,6 +958,7 @@ class DataflowTracer(StackFrameManager):
                 *_,
                 obj_name,
             ) = self.saved_complex_symbol_load_data
+        # TODO: check if `function_or_method` has been registered as requiring a custom side effect
         if obj is not None and is_subscript is not None:
             if is_subscript:
                 # TODO: need to do this also for chained calls, e.g. f()()

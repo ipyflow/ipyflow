@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExternalCallHandler:
-    def __init__(self, obj: Any = None, method_or_function: Any = None) -> None:
+    def __init__(self, _obj: Any = None, _method_or_function: Any = None) -> None:
         pass
 
     def process_arg(self, arg: Any) -> None:
@@ -44,8 +44,9 @@ class ExternalCallHandler:
                     arg_dsyms,
                 )
             self._handle_specific_mutation_type(obj_id, mutation_upsert_deps, stmt_node)
-        Timestamp.update_usage_info(flow().aliases[obj_id])
-        for mutated_sym in flow().aliases[obj_id]:
+        mutated_syms = flow().aliases.get(obj_id, set())
+        Timestamp.update_usage_info(mutated_syms)
+        for mutated_sym in mutated_syms:
             mutated_sym.update_deps(
                 arg_dsyms,
                 overwrite=False,
@@ -60,9 +61,11 @@ class ExternalCallHandler:
         mutation_upsert_deps: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
-        namespace_scope = flow().namespaces.get(mutated_obj_id, None)
         mutated_sym = flow().get_first_full_symbol(mutated_obj_id)
         if mutated_sym is None:
+            return
+        namespace = mutated_sym.namespace
+        if namespace is None:
             return
         mutated_obj = mutated_sym.obj
         if isinstance(self, (ListAppend, ListExtend)):
@@ -70,22 +73,13 @@ class ExternalCallHandler:
                 self.orig_len if isinstance(self, ListExtend) else len(mutated_obj) - 1,
                 len(mutated_obj),
             ):
-                if namespace_scope is None:
-                    # FIXME: importing at top gives circular import error
-                    from ipyflow.data_model.namespace import Namespace
-
-                    namespace_scope = Namespace(
-                        mutated_obj,
-                        mutated_sym.name,
-                        parent_scope=mutated_sym.containing_scope,
-                    )
                 logger.info(
                     "upsert %s to %s with deps %s",
                     len(mutated_obj) - 1,
-                    namespace_scope,
+                    namespace,
                     mutation_upsert_deps,
                 )
-                namespace_scope.upsert_data_symbol_for_name(
+                namespace.upsert_data_symbol_for_name(
                     upsert_pos,
                     mutated_obj[upsert_pos],
                     mutation_upsert_deps,
@@ -95,9 +89,9 @@ class ExternalCallHandler:
                     propagate=False,
                 )
         elif isinstance(self, ListInsert):
-            assert mutated_obj is namespace_scope.obj
-            namespace_scope.shuffle_symbols_upward_from(self.insert_pos)
-            namespace_scope.upsert_data_symbol_for_name(
+            assert mutated_obj is namespace.obj
+            namespace.shuffle_symbols_upward_from(self.insert_pos)
+            namespace.upsert_data_symbol_for_name(
                 self.insert_pos,
                 mutated_obj[self.insert_pos],
                 mutation_upsert_deps,
@@ -107,21 +101,19 @@ class ExternalCallHandler:
                 propagate=True,
             )
         elif isinstance(self, (ListPop, ListRemove)) and self.remove_pos is not None:
-            assert mutated_obj is namespace_scope.obj
-            namespace_scope.delete_data_symbol_for_name(
-                self.remove_pos, is_subscript=True
-            )
+            assert mutated_obj is namespace.obj
+            namespace.delete_data_symbol_for_name(self.remove_pos, is_subscript=True)
         elif isinstance(self, NamespaceClear):
             for name in sorted(
                 (
                     dsym.name
-                    for dsym in namespace_scope.all_data_symbols_this_indentation(
+                    for dsym in namespace.all_data_symbols_this_indentation(
                         exclude_class=True, is_subscript=True
                     )
                 ),
                 reverse=True,
             ):
-                namespace_scope.delete_data_symbol_for_name(name, is_subscript=True)
+                namespace.delete_data_symbol_for_name(name, is_subscript=True)
 
 
 class StandardMutation(ExternalCallHandler):

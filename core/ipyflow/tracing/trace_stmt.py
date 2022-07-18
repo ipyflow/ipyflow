@@ -374,7 +374,7 @@ class TraceStatement:
                 mutation_arg_dsyms,
                 mutation_arg_objs,
             )
-            mutation_event.handle(
+            mutation_event._handle_impl(
                 mutated_obj_id, mutation_arg_dsyms, mutation_arg_objs, self.stmt_node
             )
         if self._contains_lval():

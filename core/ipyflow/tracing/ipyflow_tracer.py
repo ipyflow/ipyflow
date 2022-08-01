@@ -27,7 +27,7 @@ from ipyflow.tracing.external_call_handler import (
     ListRemove,
     MutatingMethodEventNotYetImplemented,
     StandardMutation,
-    resolve_mutating_method,
+    resolve_external_call,
 )
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.mutation_special_cases import (
@@ -43,13 +43,13 @@ from ipyflow.types import SupportedIndexType
 AttrSubVal = SupportedIndexType
 NodeId = int
 ObjId = int
-MutationCandidate = Tuple[
+ExternalCallCandidate = Tuple[
     Tuple[Any, Optional[str], Optional[str]],
     ExternalCallHandler,
     List[Set[DataSymbol]],
     List[Any],
 ]
-Mutation = Tuple[int, ExternalCallHandler, Set[DataSymbol], List[Any]]
+ExternalCall = Tuple[int, ExternalCallHandler, Set[DataSymbol], List[Any]]
 SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
@@ -188,7 +188,7 @@ class DataflowTracer(StackFrameManager):
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
-            self.mutations: List[Mutation] = []
+            self.external_calls: List[ExternalCall] = []
             self.saved_assign_rhs_obj: Optional[Any] = None
             # this one gets set regardless of whether tracing enabled
             self.next_stmt_node_id: Optional[NodeId] = None
@@ -210,7 +210,7 @@ class DataflowTracer(StackFrameManager):
                     SavedComplexSymbolLoadData
                 ] = None
                 self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
-                self.mutation_candidate: Optional[MutationCandidate] = None
+                self.external_call_candidate: Optional[ExternalCallCandidate] = None
 
                 self.lexical_literal_stack: pyc.TraceStack = self.make_stack()
                 with self.lexical_literal_stack.register_stack_state():
@@ -230,8 +230,8 @@ class DataflowTracer(StackFrameManager):
 
     # TODO: use stack mechanism to automate this?
     def after_stmt_reset_hook(self) -> None:
-        self.mutations.clear()
-        self.mutation_candidate = None
+        self.external_calls.clear()
+        self.external_call_candidate = None
         self.active_scope = self.cur_frame_original_scope
         self.first_obj_id_in_chain = None
         self.top_level_node_id_for_chain = None
@@ -776,16 +776,16 @@ class DataflowTracer(StackFrameManager):
         finally:
             self.active_scope = scope
 
-    def _process_possible_mutation(self, retval: Any) -> None:
-        if self.mutation_candidate is None:
+    def _process_possible_external_call(self, retval: Any) -> None:
+        if self.external_call_candidate is None:
             return
         (
             (obj, obj_name, method_name),
-            mutation_event,
+            external_call,
             recorded_arg_dsyms,
             recorded_arg_objs,
-        ) = self.mutation_candidate
-        self.mutation_candidate = None
+        ) = self.external_call_candidate
+        self.external_call_candidate = None
         if obj is logging or isinstance(obj, logging.Logger):
             # ignore calls to logging.whatever(...)
             return
@@ -799,7 +799,7 @@ class DataflowTracer(StackFrameManager):
             obj_type = type(obj)
         is_excepted_mutation = False
         is_excepted_non_mutation = False
-        if isinstance(mutation_event, StandardMutation):
+        if isinstance(external_call, StandardMutation):
             # only look for exceptions for standard mutations; other cases are handled elsewhere
             if retval is not None and id(retval) != obj_id:
                 # doesn't look like something we can trace, but it also
@@ -828,7 +828,7 @@ class DataflowTracer(StackFrameManager):
                     return
         arg_dsyms: Set[DataSymbol] = set()
         arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
-        if isinstance(mutation_event, StandardMutation):
+        if isinstance(external_call, StandardMutation):
             try:
                 top_level_sym = flow().get_first_full_symbol(self.first_obj_id_in_chain)
                 if (
@@ -864,10 +864,12 @@ class DataflowTracer(StackFrameManager):
                                     if mutated_dsym in dsym.parents
                                 }
                             )
-                        mutation_event = ArgMutate()
+                        external_call = ArgMutate()
             except:
                 pass
-        self.mutations.append((obj_id, mutation_event, arg_dsyms, recorded_arg_objs))
+        self.external_calls.append(
+            (obj_id, external_call, arg_dsyms, recorded_arg_objs)
+        )
 
     @pyc.register_raw_handler(pyc.after_load_complex_symbol)
     def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
@@ -906,16 +908,16 @@ class DataflowTracer(StackFrameManager):
     def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
         self.num_args_seen += 1
         try:
-            mut_cand = self.lexical_call_stack.get_field("mutation_candidate")
+            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
         except IndexError:
             return
-        if mut_cand is None:
+        if ext_call_cand is None:
             return
         if (
-            isinstance(mut_cand[1], (ListInsert, ListPop, ListRemove))
+            isinstance(ext_call_cand[1], (ListInsert, ListPop, ListRemove))
             and self.num_args_seen == 1
         ):
-            mut_cand[1].process_arg(arg_obj)
+            ext_call_cand[1].process_arg(arg_obj)
 
         arg_node = self.ast_node_by_id.get(arg_node_id, None)
         if isinstance(arg_node, ast.Name):
@@ -930,18 +932,23 @@ class DataflowTracer(StackFrameManager):
                     implicit=True,
                     symbol_node=arg_node,
                 )
-        mut_cand[-2].append(resolve_rval_symbols(arg_node))
-        mut_cand[-1].append(arg_obj)
+        ext_call_cand[-2].append(resolve_rval_symbols(arg_node))
+        ext_call_cand[-1].append(arg_obj)
 
-    def _save_mutation_candidate(
+    def _save_external_call_candidate(
         self, obj: Any, method_name: Optional[str], obj_name: Optional[str] = None
     ) -> None:
-        mutation_event = resolve_mutating_method(obj, method_name)
-        if mutation_event is None or isinstance(
-            mutation_event, MutatingMethodEventNotYetImplemented
+        external_call = resolve_external_call(obj, method_name)
+        if external_call is None or isinstance(
+            external_call, MutatingMethodEventNotYetImplemented
         ):
-            mutation_event = StandardMutation()
-        self.mutation_candidate = ((obj, obj_name, method_name), mutation_event, [], [])
+            external_call = StandardMutation()
+        self.external_call_candidate = (
+            (obj, obj_name, method_name),
+            external_call,
+            [],
+            [],
+        )
 
     @pyc.register_raw_handler(pyc.before_call)
     @pyc.skip_when_tracing_disabled
@@ -967,7 +974,7 @@ class DataflowTracer(StackFrameManager):
                 assert isinstance(attr_or_subscript, str)
                 method_name = attr_or_subscript
                 # method_name should match ast_by_id[function_or_method].func.id
-            self._save_mutation_candidate(obj, method_name, obj_name=obj_name)
+            self._save_external_call_candidate(obj, method_name, obj_name=obj_name)
         self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():
             self.cur_function = function_or_method
@@ -1012,7 +1019,7 @@ class DataflowTracer(StackFrameManager):
             # skip / give up if tracing was recently reenabled
             self.lexical_call_stack.pop()
         self.prev_node_id_in_cur_frame_lexical = None
-        self._process_possible_mutation(retval)
+        self._process_possible_external_call(retval)
 
         if not self.is_tracing_enabled:
             self._enable_tracing()

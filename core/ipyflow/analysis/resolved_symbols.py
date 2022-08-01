@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional, cast
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import ExecutionMode
 from ipyflow.singletons import flow
-from ipyflow.tracing.external_call_handler import resolve_mutating_method
+from ipyflow.tracing.external_call_handler import resolve_external_call
 from ipyflow.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
@@ -114,7 +114,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         if not self.next_atom.is_callpoint:
             return False
         return (
-            resolve_mutating_method(self.dsym.obj, cast(str, self.next_atom.value))
+            resolve_external_call(self.dsym.obj, cast(str, self.next_atom.value))
             is not None
         )
 

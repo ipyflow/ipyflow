@@ -269,13 +269,13 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Type[ExternalCallHandler]] = {
 }
 
 
-def resolve_mutating_method(
+def resolve_external_call(
     obj: Any, method: Optional[str]
 ) -> Optional[ExternalCallHandler]:
     if method is None:
         return None
     method_obj = getattr(type(obj), method, None)
-    mutation_type = _METHOD_TO_EVENT_TYPE.get(method_obj, None)
-    if mutation_type is None:
+    external_call_type = _METHOD_TO_EVENT_TYPE.get(method_obj, None)
+    if external_call_type is None:
         return None
-    return mutation_type(obj, method_obj)
+    return external_call_type(obj, method_obj)

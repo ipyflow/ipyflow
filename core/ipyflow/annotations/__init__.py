@@ -54,7 +54,7 @@ class Handler(SideEffect):
     the handler in the return value annotation.
 
     Example:
-        from ipyflow.tracing.mutation_event import ListAppend
+        from ipyflow.tracing.external_call_handler import ListAppend
         ...
         class list:
             def append(self, value) -> Handler[ListAppend]:

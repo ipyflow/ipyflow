@@ -362,20 +362,23 @@ class TraceStatement:
 
     def handle_dependencies(self) -> None:
         for (
-            mutated_obj_id,
-            mutation_event,
-            mutation_arg_dsyms,
-            mutation_arg_objs,
-        ) in tracer().mutations:
+            caller_obj_id,
+            external_call,
+            external_call_arg_dsyms,
+            external_call_arg_objs,
+        ) in tracer().external_calls:
             logger.info(
-                "mutation %s %s %s %s",
-                mutated_obj_id,
-                mutation_event,
-                mutation_arg_dsyms,
-                mutation_arg_objs,
+                "external call %s %s %s %s",
+                caller_obj_id,
+                external_call,
+                external_call_arg_dsyms,
+                external_call_arg_objs,
             )
-            mutation_event._handle_impl(
-                mutated_obj_id, mutation_arg_dsyms, mutation_arg_objs, self.stmt_node
+            external_call._handle_impl(
+                caller_obj_id,
+                external_call_arg_dsyms,
+                external_call_arg_objs,
+                self.stmt_node,
             )
         if self._contains_lval():
             self._make_lval_data_symbols()

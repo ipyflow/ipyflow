@@ -9,6 +9,7 @@ from ipyflow.singletons import flow
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol
     from ipyflow.data_model.namespace import Namespace
+    from ipyflow.tracing.ipyflow_tracer import ExternalCallArgument
 
 
 logger = logging.getLogger(__name__)
@@ -24,12 +25,13 @@ class ExternalCallHandler:
     def _handle_impl(
         self,
         obj_id: int,
-        arg_dsyms: Set["DataSymbol"],
-        arg_objs: List[Any],
+        args: List["ExternalCallArgument"],
         stmt_node: ast.stmt,
     ) -> None:
+        arg_dsyms: Set["DataSymbol"] = set()
+        arg_dsyms = arg_dsyms.union(*(arg[1] for arg in args))
         Timestamp.update_usage_info(arg_dsyms)
-        self.handle(obj_id, arg_dsyms, arg_objs, stmt_node)
+        self.handle(obj_id, args, arg_dsyms, stmt_node)
 
     def _mutate_caller(
         self, obj_id: int, arg_dsyms: Set["DataSymbol"], should_propagate: bool
@@ -48,11 +50,15 @@ class ExternalCallHandler:
     def handle(
         self,
         obj_id: int,
+        args: List["ExternalCallArgument"],
         arg_dsyms: Set["DataSymbol"],
-        arg_objs: List[Any],
         stmt_node: ast.stmt,
     ) -> None:
-        self._mutate_caller(obj_id, arg_dsyms, should_propagate=True)
+        self._mutate_caller(
+            obj_id,
+            arg_dsyms,
+            should_propagate=True,
+        )
 
 
 class StandardMutation(ExternalCallHandler):
@@ -63,6 +69,7 @@ class ListMethod(ExternalCallHandler):
     def handle_namespace(
         self,
         namespace: "Namespace",
+        args: List["ExternalCallArgument"],
         arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
@@ -78,15 +85,15 @@ class ListMethod(ExternalCallHandler):
     def handle(
         self,
         obj_id: int,
+        args: List["ExternalCallArgument"],
         arg_dsyms: Set["DataSymbol"],
-        arg_objs: List[Any],
         stmt_node: ast.stmt,
     ) -> None:
         mutated_sym = flow().get_first_full_symbol(obj_id)
         if mutated_sym is not None:
             namespace = mutated_sym.namespace
             if namespace is not None:
-                self.handle_namespace(namespace, arg_dsyms, stmt_node)
+                self.handle_namespace(namespace, args, arg_dsyms, stmt_node)
         self.handle_mutate_caller(obj_id, arg_dsyms)
 
 
@@ -97,6 +104,7 @@ class ListExtend(ListMethod):
     def handle_namespace(
         self,
         namespace: "Namespace",
+        args: List["ExternalCallArgument"],
         arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
@@ -135,16 +143,23 @@ class ListInsert(ListMethod):
     def handle_namespace(
         self,
         namespace: "Namespace",
-        arg_dsyms: Set["DataSymbol"],
+        args: List["ExternalCallArgument"],
+        _arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
-        if self.insert_pos is None:
+        if self.insert_pos is None or len(args) < 2:
+            return
+        inserted_arg_obj, inserted_arg_dsyms = args[1]
+        inserted_syms = {
+            sym for sym in inserted_arg_dsyms if sym.obj is inserted_arg_obj
+        }
+        if len(inserted_syms) > 1:
             return
         namespace.shuffle_symbols_upward_from(self.insert_pos)
         namespace.upsert_data_symbol_for_name(
             self.insert_pos,
             namespace.obj[self.insert_pos],
-            arg_dsyms,
+            inserted_syms,
             stmt_node,
             overwrite=False,
             is_subscript=True,
@@ -170,6 +185,7 @@ class ListRemove(ListMethod):
     def handle_namespace(
         self,
         namespace: "Namespace",
+        _args: List["ExternalCallArgument"],
         _arg_dsyms: Set["DataSymbol"],
         _stmt_node: ast.stmt,
     ) -> None:
@@ -203,8 +219,8 @@ class NamespaceClear(ExternalCallHandler):
     def handle(
         self,
         obj_id: int,
-        arg_dsyms: Set["DataSymbol"],
-        arg_objs: List[Any],
+        _args: List["ExternalCallArgument"],
+        _arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
         mutated_sym = flow().get_first_full_symbol(obj_id)
@@ -233,8 +249,8 @@ class ArgMutate(ExternalCallHandler):
     def handle(
         self,
         obj_id: int,
+        _args: List["ExternalCallArgument"],
         arg_dsyms: Set["DataSymbol"],
-        arg_objs: List[Any],
         stmt_node: ast.stmt,
     ) -> None:
         for mutated_sym in arg_dsyms:

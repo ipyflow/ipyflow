@@ -364,20 +364,17 @@ class TraceStatement:
         for (
             caller_obj_id,
             external_call,
-            external_call_arg_dsyms,
-            external_call_arg_objs,
+            external_call_args,
         ) in tracer().external_calls:
             logger.info(
                 "external call %s %s %s %s",
                 caller_obj_id,
                 external_call,
-                external_call_arg_dsyms,
-                external_call_arg_objs,
+                external_call_args,
             )
             external_call._handle_impl(
                 caller_obj_id,
-                external_call_arg_dsyms,
-                external_call_arg_objs,
+                external_call_args,
                 self.stmt_node,
             )
         if self._contains_lval():

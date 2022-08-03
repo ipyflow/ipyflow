@@ -43,13 +43,13 @@ from ipyflow.types import SupportedIndexType
 AttrSubVal = SupportedIndexType
 NodeId = int
 ObjId = int
+ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
 ExternalCallCandidate = Tuple[
     Tuple[Any, Optional[str], Optional[str]],
     ExternalCallHandler,
-    List[Set[DataSymbol]],
-    List[Any],
+    List[ExternalCallArgument],
 ]
-ExternalCall = Tuple[int, ExternalCallHandler, Set[DataSymbol], List[Any]]
+ExternalCall = Tuple[int, ExternalCallHandler, List[ExternalCallArgument]]
 SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
@@ -782,8 +782,7 @@ class DataflowTracer(StackFrameManager):
         (
             (obj, obj_name, method_name),
             external_call,
-            recorded_arg_dsyms,
-            recorded_arg_objs,
+            recorded_args,
         ) = self.external_call_candidate
         self.external_call_candidate = None
         if obj is logging or isinstance(obj, logging.Logger):
@@ -826,8 +825,6 @@ class DataflowTracer(StackFrameManager):
                     # the calling obj looks like something that we can trace;
                     # no need to process the call as a possible mutation
                     return
-        arg_dsyms: Set[DataSymbol] = set()
-        arg_dsyms = arg_dsyms.union(*recorded_arg_dsyms)
         if isinstance(external_call, StandardMutation):
             try:
                 top_level_sym = flow().get_first_full_symbol(self.first_obj_id_in_chain)
@@ -838,12 +835,11 @@ class DataflowTracer(StackFrameManager):
                     # TODO: should it be the other way around?
                     #  i.e. allow-list for arg mutations, starting with np.random.seed?
                     mutated_dsym = None
-                    if len(recorded_arg_dsyms) > 0:
-                        first_arg_dsyms = list(recorded_arg_dsyms[0])
+                    if len(recorded_args) > 0:
                         first_arg_dsyms = [
-                            dsym
-                            for dsym in first_arg_dsyms
-                            if dsym.obj is recorded_arg_objs[0]
+                            sym
+                            for sym in recorded_args[0][1]
+                            if sym.obj is recorded_args[0][0]
                         ]
                         if len(first_arg_dsyms) == 1:
                             mutated_dsym = first_arg_dsyms[0]
@@ -854,22 +850,18 @@ class DataflowTracer(StackFrameManager):
                                 mutated_dsym = None
                     if mutated_dsym is not None:
                         # only make this an arg mutation event if it looks like there's an arg to mutate
-                        arg_dsyms = {mutated_dsym}
+                        filtered_args = [(mutated_dsym.obj, {mutated_dsym})]
                         # just consider the first one mutated unless other args depend on it
-                        for other_recorded_arg_dsyms in recorded_arg_dsyms[1:]:
-                            arg_dsyms.update(
-                                {
-                                    dsym
-                                    for dsym in other_recorded_arg_dsyms
-                                    if mutated_dsym in dsym.parents
-                                }
-                            )
+                        for obj, dsyms in recorded_args[1:]:
+                            filtered_dsyms = {
+                                dsym for dsym in dsyms if mutated_dsym in dsym.parents
+                            }
+                            filtered_args.append((obj, filtered_dsyms))
+                        recorded_args = filtered_args
                         external_call = ArgMutate()
             except:
                 pass
-        self.external_calls.append(
-            (obj_id, external_call, arg_dsyms, recorded_arg_objs)
-        )
+        self.external_calls.append((obj_id, external_call, recorded_args))
 
     @pyc.register_raw_handler(pyc.after_load_complex_symbol)
     def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
@@ -932,8 +924,7 @@ class DataflowTracer(StackFrameManager):
                     implicit=True,
                     symbol_node=arg_node,
                 )
-        ext_call_cand[-2].append(resolve_rval_symbols(arg_node))
-        ext_call_cand[-1].append(arg_obj)
+        ext_call_cand[-1].append((arg_obj, resolve_rval_symbols(arg_node)))
 
     def _save_external_call_candidate(
         self, obj: Any, method_name: Optional[str], obj_name: Optional[str] = None
@@ -946,7 +937,6 @@ class DataflowTracer(StackFrameManager):
         self.external_call_candidate = (
             (obj, obj_name, method_name),
             external_call,
-            [],
             [],
         )
 

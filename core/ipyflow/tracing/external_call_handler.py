@@ -286,11 +286,14 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Type[ExternalCallHandler]] = {
 
 
 def resolve_external_call(
-    obj: Any, method: Optional[str]
+    obj: Optional[Any], function_or_method: Optional[Any], method: Optional[str]
 ) -> Optional[ExternalCallHandler]:
-    if method is None:
+    if obj is None:
+        method_obj = function_or_method
+    elif method is None:
         return None
-    method_obj = getattr(type(obj), method, None)
+    else:
+        method_obj = getattr(type(obj), method, None)
     external_call_type = _METHOD_TO_EVENT_TYPE.get(method_obj, None)
     if external_call_type is None:
         return None

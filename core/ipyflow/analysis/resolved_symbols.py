@@ -114,7 +114,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         if not self.next_atom.is_callpoint:
             return False
         return (
-            resolve_external_call(self.dsym.obj, cast(str, self.next_atom.value))
+            resolve_external_call(self.dsym.obj, None, cast(str, self.next_atom.value))
             is not None
         )
 

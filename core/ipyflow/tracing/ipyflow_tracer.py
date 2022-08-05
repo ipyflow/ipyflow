@@ -45,7 +45,7 @@ NodeId = int
 ObjId = int
 ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
 ExternalCallCandidate = Tuple[
-    Tuple[Any, Optional[str], Optional[str]],
+    Tuple[Optional[Any], Optional[str], Any, Optional[str]],
     ExternalCallHandler,
     List[ExternalCallArgument],
 ]
@@ -780,7 +780,7 @@ class DataflowTracer(StackFrameManager):
         if self.external_call_candidate is None:
             return
         (
-            (obj, obj_name, method_name),
+            (obj, obj_name, function_or_method, method_name),
             external_call,
             recorded_args,
         ) = self.external_call_candidate
@@ -927,15 +927,19 @@ class DataflowTracer(StackFrameManager):
         ext_call_cand[-1].append((arg_obj, resolve_rval_symbols(arg_node)))
 
     def _save_external_call_candidate(
-        self, obj: Any, method_name: Optional[str], obj_name: Optional[str] = None
+        self,
+        obj: Optional[Any],
+        function_or_method: Any,
+        method_name: Optional[str],
+        obj_name: Optional[str] = None,
     ) -> None:
-        external_call = resolve_external_call(obj, method_name)
+        external_call = resolve_external_call(obj, function_or_method, method_name)
         if external_call is None or isinstance(
             external_call, MutatingMethodEventNotYetImplemented
         ):
             external_call = StandardMutation()
         self.external_call_candidate = (
-            (obj, obj_name, method_name),
+            (obj, obj_name, function_or_method, method_name),
             external_call,
             [],
         )
@@ -956,15 +960,18 @@ class DataflowTracer(StackFrameManager):
                 obj_name,
             ) = self.saved_complex_symbol_load_data
         # TODO: check if `function_or_method` has been registered as requiring a custom side effect
-        if obj is not None and is_subscript is not None:
-            if is_subscript:
-                # TODO: need to do this also for chained calls, e.g. f()()
-                method_name = None
-            else:
-                assert isinstance(attr_or_subscript, str)
-                method_name = attr_or_subscript
-                # method_name should match ast_by_id[function_or_method].func.id
-            self._save_external_call_candidate(obj, method_name, obj_name=obj_name)
+        if is_subscript:
+            # TODO: need to do this also for chained calls, e.g. f()()
+            method_name = None
+        elif obj is None:
+            method_name = None
+        else:
+            assert isinstance(attr_or_subscript, str)
+            method_name = attr_or_subscript
+            # method_name should match ast_by_id[function_or_method].func.id
+        self._save_external_call_candidate(
+            obj, function_or_method, method_name, obj_name=obj_name
+        )
         self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():
             self.cur_function = function_or_method

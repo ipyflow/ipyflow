@@ -84,7 +84,7 @@ class StandardMutation(ExternalCallHandler):
         arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
-        if self.retval is not None:
+        if self.retval is not None and obj_id != id(self.retval):
             return
         self._mutate_caller(
             obj_id,

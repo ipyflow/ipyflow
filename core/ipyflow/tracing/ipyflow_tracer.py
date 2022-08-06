@@ -26,6 +26,7 @@ from ipyflow.tracing.external_call_handler import (
     ListPop,
     ListRemove,
     MutatingMethodEventNotYetImplemented,
+    NoopCallHandler,
     StandardMutation,
     resolve_external_call,
 )
@@ -46,10 +47,9 @@ ObjId = int
 ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
 ExternalCallCandidate = Tuple[
     Tuple[Optional[Any], Optional[str], Any, Optional[str]],
-    ExternalCallHandler,
     List[ExternalCallArgument],
 ]
-ExternalCall = Tuple[int, ExternalCallHandler, List[ExternalCallArgument]]
+ExternalCall = Tuple[Optional[int], ExternalCallHandler, List[ExternalCallArgument]]
 SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
@@ -189,6 +189,7 @@ class DataflowTracer(StackFrameManager):
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
             self.external_calls: List[ExternalCall] = []
+            self.is_external_call_pending_return: bool = False
             self.saved_assign_rhs_obj: Optional[Any] = None
             # this one gets set regardless of whether tracing enabled
             self.next_stmt_node_id: Optional[NodeId] = None
@@ -203,6 +204,7 @@ class DataflowTracer(StackFrameManager):
             self.lexical_call_stack: pyc.TraceStack = self.make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.cur_function: Optional[Any] = None
+                self.last_arg_seen: bool = False
                 self.num_args_seen = 0
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
@@ -244,6 +246,7 @@ class DataflowTracer(StackFrameManager):
         flow().updated_symbols |= self.this_stmt_updated_symbols
         self.this_stmt_updated_symbols.clear()
         self._seen_functions_ids.clear()
+        self.is_external_call_pending_return = False
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -776,92 +779,92 @@ class DataflowTracer(StackFrameManager):
         finally:
             self.active_scope = scope
 
-    def _process_possible_external_call(self, retval: Any) -> None:
-        if self.external_call_candidate is None:
-            return
-        (
-            (obj, obj_name, function_or_method, method_name),
-            external_call,
-            recorded_args,
-        ) = self.external_call_candidate
-        self.external_call_candidate = None
-        if obj is logging or isinstance(obj, logging.Logger):
-            # ignore calls to logging.whatever(...)
-            return
-        obj_type = None
-        obj_id = id(obj)
-        if obj_id in flow().aliases:
-            aliases = flow().aliases[obj_id]
-            if len(aliases) > 0:
-                obj_type = next(iter(aliases)).obj_type
-        if obj_type is None:
-            obj_type = type(obj)
-        is_excepted_mutation = False
-        is_excepted_non_mutation = False
-        if isinstance(external_call, StandardMutation):
-            # only look for exceptions for standard mutations; other cases are handled elsewhere
-            if retval is not None and id(retval) != obj_id:
-                # doesn't look like something we can trace, but it also
-                # doesn't look like something that mutates the caller, since
-                # the return value is not None and it's not the caller object
-                if (
-                    obj_id,
-                    method_name,
-                ) in METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN:
-                    is_excepted_mutation = True
-                else:
-                    return
-            if not is_excepted_mutation:
-                if retval is None:
-                    is_excepted_non_mutation = (
-                        obj_id,
-                        method_name,
-                    ) in METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN
-                if (
-                    is_excepted_non_mutation
-                    or obj_type is None
-                    or id(obj_type) in flow().aliases
-                ):
-                    # the calling obj looks like something that we can trace;
-                    # no need to process the call as a possible mutation
-                    return
-        if isinstance(external_call, StandardMutation):
-            try:
-                top_level_sym = flow().get_first_full_symbol(self.first_obj_id_in_chain)
-                if (
-                    top_level_sym.is_import
-                    and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES
-                ):
-                    # TODO: should it be the other way around?
-                    #  i.e. allow-list for arg mutations, starting with np.random.seed?
-                    mutated_dsym = None
-                    if len(recorded_args) > 0:
-                        first_arg_dsyms = [
-                            sym
-                            for sym in recorded_args[0][1]
-                            if sym.obj is recorded_args[0][0]
-                        ]
-                        if len(first_arg_dsyms) == 1:
-                            mutated_dsym = first_arg_dsyms[0]
-                            if mutated_dsym.obj_type in DataSymbol.IMMUTABLE_TYPES:
-                                mutated_dsym = None
-                            elif mutated_dsym.obj_type in {list, set, dict}:
-                                # assume module code won't mutate these primitive containers
-                                mutated_dsym = None
-                    if mutated_dsym is not None:
-                        # only make this an arg mutation event if it looks like there's an arg to mutate
-                        filtered_args = [(mutated_dsym.obj, {mutated_dsym})]
-                        # just consider the first one mutated unless other args depend on it
-                        for obj, dsyms in recorded_args[1:]:
-                            filtered_dsyms = {
-                                dsym for dsym in dsyms if mutated_dsym in dsym.parents
-                            }
-                            filtered_args.append((obj, filtered_dsyms))
-                        recorded_args = filtered_args
-                        external_call = ArgMutate()
-            except:
-                pass
-        self.external_calls.append((obj_id, external_call, recorded_args))
+    # def _process_possible_external_call(self, retval: Any) -> None:
+    #     if self.external_call_candidate is None:
+    #         return
+    #     (
+    #         (obj, obj_name, function_or_method, method_name),
+    #         external_call,
+    #         recorded_args,
+    #     ) = self.external_call_candidate
+    #     self.external_call_candidate = None
+    #     if obj is logging or isinstance(obj, logging.Logger):
+    #         # ignore calls to logging.whatever(...)
+    #         return
+    #     obj_type = None
+    #     obj_id = id(obj)
+    #     if obj_id in flow().aliases:
+    #         aliases = flow().aliases[obj_id]
+    #         if len(aliases) > 0:
+    #             obj_type = next(iter(aliases)).obj_type
+    #     if obj_type is None:
+    #         obj_type = type(obj)
+    #     is_excepted_mutation = False
+    #     is_excepted_non_mutation = False
+    #     if isinstance(external_call, StandardMutation):
+    #         # only look for exceptions for standard mutations; other cases are handled elsewhere
+    #         if retval is not None and id(retval) != obj_id:
+    #             # doesn't look like something we can trace, but it also
+    #             # doesn't look like something that mutates the caller, since
+    #             # the return value is not None and it's not the caller object
+    #             if (
+    #                 obj_id,
+    #                 method_name,
+    #             ) in METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN:
+    #                 is_excepted_mutation = True
+    #             else:
+    #                 return
+    #         if not is_excepted_mutation:
+    #             if retval is None:
+    #                 is_excepted_non_mutation = (
+    #                     obj_id,
+    #                     method_name,
+    #                 ) in METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN
+    #             if (
+    #                 is_excepted_non_mutation
+    #                 or obj_type is None
+    #                 or id(obj_type) in flow().aliases
+    #             ):
+    #                 # the calling obj looks like something that we can trace;
+    #                 # no need to process the call as a possible mutation
+    #                 return
+    #     if isinstance(external_call, StandardMutation):
+    #         try:
+    #             top_level_sym = flow().get_first_full_symbol(self.first_obj_id_in_chain)
+    #             if (
+    #                 top_level_sym.is_import
+    #                 and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES
+    #             ):
+    #                 # TODO: should it be the other way around?
+    #                 #  i.e. allow-list for arg mutations, starting with np.random.seed?
+    #                 mutated_dsym = None
+    #                 if len(recorded_args) > 0:
+    #                     first_arg_dsyms = [
+    #                         sym
+    #                         for sym in recorded_args[0][1]
+    #                         if sym.obj is recorded_args[0][0]
+    #                     ]
+    #                     if len(first_arg_dsyms) == 1:
+    #                         mutated_dsym = first_arg_dsyms[0]
+    #                         if mutated_dsym.obj_type in DataSymbol.IMMUTABLE_TYPES:
+    #                             mutated_dsym = None
+    #                         elif mutated_dsym.obj_type in {list, set, dict}:
+    #                             # assume module code won't mutate these primitive containers
+    #                             mutated_dsym = None
+    #                 if mutated_dsym is not None:
+    #                     # only make this an arg mutation event if it looks like there's an arg to mutate
+    #                     filtered_args = [(mutated_dsym.obj, {mutated_dsym})]
+    #                     # just consider the first one mutated unless other args depend on it
+    #                     for obj, dsyms in recorded_args[1:]:
+    #                         filtered_dsyms = {
+    #                             dsym for dsym in dsyms if mutated_dsym in dsym.parents
+    #                         }
+    #                         filtered_args.append((obj, filtered_dsyms))
+    #                     recorded_args = filtered_args
+    #                     external_call = ArgMutate()
+    #         except:
+    #             pass
+    #     self.external_calls.append((obj_id, external_call, recorded_args))
 
     @pyc.register_raw_handler(pyc.after_load_complex_symbol)
     def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
@@ -895,21 +898,49 @@ class DataflowTracer(StackFrameManager):
         else:
             return pyc.Null
 
-    @pyc.register_raw_handler(pyc.after_argument)
-    @pyc.skip_when_tracing_disabled
-    def argument(self, arg_obj: Any, arg_node_id: int, *_, **__):
-        self.num_args_seen += 1
+    def _resolve_external_call(self) -> None:
         try:
             ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
         except IndexError:
             return
         if ext_call_cand is None:
             return
-        if (
-            isinstance(ext_call_cand[1], (ListInsert, ListPop, ListRemove))
-            and self.num_args_seen == 1
+        (
+            obj,
+            obj_name,
+            function_or_method,
+            method_name,
+        ), external_call_args = ext_call_cand
+        external_call = resolve_external_call(obj, function_or_method, method_name)
+        if external_call is None or isinstance(
+            external_call, MutatingMethodEventNotYetImplemented
         ):
-            ext_call_cand[1].process_arg(arg_obj)
+            external_call = StandardMutation()
+        elif isinstance(external_call, NoopCallHandler):
+            return
+        for arg_obj, _ in external_call_args:
+            external_call.process_arg(arg_obj)
+        self.external_calls.append(
+            (None if obj is None else id(obj), external_call, external_call_args)
+        )
+        self.is_external_call_pending_return = True
+
+    @pyc.register_raw_handler(pyc.after_argument)
+    @pyc.skip_when_tracing_disabled
+    def argument(self, arg_obj: Any, arg_node_id: int, *_, is_last: bool, **__):
+        self.num_args_seen += 1
+        self.last_arg_seen = is_last
+        try:
+            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
+        except IndexError:
+            return
+        if ext_call_cand is None:
+            return
+        # if (
+        #     isinstance(ext_call_cand[1], (ListInsert, ListPop, ListRemove))
+        #     and self.num_args_seen == 1
+        # ):
+        #     ext_call_cand[1].process_arg(arg_obj)
 
         arg_node = self.ast_node_by_id.get(arg_node_id, None)
         if isinstance(arg_node, ast.Name):
@@ -925,6 +956,8 @@ class DataflowTracer(StackFrameManager):
                     symbol_node=arg_node,
                 )
         ext_call_cand[-1].append((arg_obj, resolve_rval_symbols(arg_node)))
+        if is_last:
+            self._resolve_external_call()
 
     def _save_external_call_candidate(
         self,
@@ -933,30 +966,30 @@ class DataflowTracer(StackFrameManager):
         method_name: Optional[str],
         obj_name: Optional[str] = None,
     ) -> None:
-        external_call = resolve_external_call(obj, function_or_method, method_name)
-        if external_call is None or isinstance(
-            external_call, MutatingMethodEventNotYetImplemented
-        ):
-            external_call = StandardMutation()
+        # external_call = resolve_external_call(obj, function_or_method, method_name)
+        # if external_call is None or isinstance(
+        #     external_call, MutatingMethodEventNotYetImplemented
+        # ):
+        #     external_call = StandardMutation()
         self.external_call_candidate = (
             (obj, obj_name, function_or_method, method_name),
-            external_call,
             [],
         )
 
-    @pyc.register_raw_handler(pyc.before_call)
+    @pyc.before_call
     @pyc.skip_when_tracing_disabled
-    def before_call(self, function_or_method, *_, **__):
+    def before_call(self, function_or_method, node: ast.Call, *_, **__):
         if self.saved_complex_symbol_load_data is None:
             obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
         else:
             # TODO: this will cause errors if we add more fields
+            _ignored: Any
             (
-                _,
+                _namespace,
                 obj,
                 attr_or_subscript,
                 is_subscript,
-                *_,
+                *_ignored,
                 obj_name,
             ) = self.saved_complex_symbol_load_data
         # TODO: check if `function_or_method` has been registered as requiring a custom side effect
@@ -976,6 +1009,8 @@ class DataflowTracer(StackFrameManager):
         with self.lexical_call_stack.push():
             self.cur_function = function_or_method
         self.active_scope = self.cur_frame_original_scope
+        if len(node.args) + len(node.keywords) == 0:
+            self._resolve_external_call()
 
     @pyc.register_raw_handler((pyc.before_function_body, pyc.before_lambda_body))
     def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
@@ -1016,7 +1051,10 @@ class DataflowTracer(StackFrameManager):
             # skip / give up if tracing was recently reenabled
             self.lexical_call_stack.pop()
         self.prev_node_id_in_cur_frame_lexical = None
-        self._process_possible_external_call(retval)
+        if self.is_external_call_pending_return:
+            self.is_external_call_pending_return = False
+            self.external_calls[-1][1].process_return(retval)
+        # self._process_possible_external_call(retval)
 
         if not self.is_tracing_enabled:
             self._enable_tracing()

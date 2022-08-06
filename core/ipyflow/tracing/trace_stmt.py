@@ -367,7 +367,7 @@ class TraceStatement:
             external_call_args,
         ) in tracer().external_calls:
             logger.info(
-                "external call %s %s %s %s",
+                "external call %s %s %s",
                 caller_obj_id,
                 external_call,
                 external_call_args,

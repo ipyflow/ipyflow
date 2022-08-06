@@ -16,10 +16,18 @@ logger = logging.getLogger(__name__)
 
 
 class ExternalCallHandler:
+    def __new__(cls, *args, **kwargs):
+        if cls is ExternalCallHandler:
+            raise TypeError(f"only children of '{cls.__name__}' may be instantiated")
+        return object.__new__(cls)
+
     def __init__(self, _obj: Any = None, _method_or_function: Any = None) -> None:
         pass
 
     def process_arg(self, arg: Any) -> None:
+        pass
+
+    def process_return(self, retval: Any) -> None:
         pass
 
     def _handle_impl(
@@ -54,6 +62,30 @@ class ExternalCallHandler:
         arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
+        pass
+
+
+class NoopCallHandler(ExternalCallHandler):
+    pass
+
+
+class StandardMutation(ExternalCallHandler):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.retval = None
+
+    def process_return(self, retval: Any) -> None:
+        self.retval = retval
+
+    def handle(
+        self,
+        obj_id: int,
+        args: List["ExternalCallArgument"],
+        arg_dsyms: Set["DataSymbol"],
+        stmt_node: ast.stmt,
+    ) -> None:
+        if self.retval is not None:
+            return
         self._mutate_caller(
             obj_id,
             arg_dsyms,
@@ -61,8 +93,51 @@ class ExternalCallHandler:
         )
 
 
-class StandardMutation(ExternalCallHandler):
+class NamespaceClear(StandardMutation):
+    def handle(
+        self,
+        obj_id: int,
+        args: List["ExternalCallArgument"],
+        arg_dsyms: Set["DataSymbol"],
+        stmt_node: ast.stmt,
+    ) -> None:
+        super().handle(obj_id, args, arg_dsyms, stmt_node)
+        mutated_sym = flow().get_first_full_symbol(obj_id)
+        if mutated_sym is None:
+            return
+        namespace = mutated_sym.namespace
+        if namespace is None:
+            return
+        for name in sorted(
+            (
+                dsym.name
+                for dsym in namespace.all_data_symbols_this_indentation(
+                    exclude_class=True, is_subscript=True
+                )
+            ),
+            reverse=True,
+        ):
+            namespace.delete_data_symbol_for_name(name, is_subscript=True)
+
+
+class MutatingMethodEventNotYetImplemented(ExternalCallHandler):
     pass
+
+
+class ArgMutate(ExternalCallHandler):
+    def handle(
+        self,
+        obj_id: int,
+        _args: List["ExternalCallArgument"],
+        arg_dsyms: Set["DataSymbol"],
+        stmt_node: ast.stmt,
+    ) -> None:
+        for mutated_sym in arg_dsyms:
+            if mutated_sym is None or mutated_sym.is_anonymous:
+                continue
+            # TODO: happens when module mutates args
+            #  should we add module as a dep in this case?
+            mutated_sym.update_deps(set(), overwrite=False, mutated=True)
 
 
 class ListMethod(ExternalCallHandler):
@@ -215,53 +290,8 @@ class ListPop(ListRemove):
         self.remove_pos = pop_pos
 
 
-class NamespaceClear(ExternalCallHandler):
-    def handle(
-        self,
-        obj_id: int,
-        _args: List["ExternalCallArgument"],
-        _arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
-        mutated_sym = flow().get_first_full_symbol(obj_id)
-        if mutated_sym is None:
-            return
-        namespace = mutated_sym.namespace
-        if namespace is None:
-            return
-        for name in sorted(
-            (
-                dsym.name
-                for dsym in namespace.all_data_symbols_this_indentation(
-                    exclude_class=True, is_subscript=True
-                )
-            ),
-            reverse=True,
-        ):
-            namespace.delete_data_symbol_for_name(name, is_subscript=True)
-
-
-class MutatingMethodEventNotYetImplemented(ExternalCallHandler):
-    pass
-
-
-class ArgMutate(ExternalCallHandler):
-    def handle(
-        self,
-        obj_id: int,
-        _args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
-        for mutated_sym in arg_dsyms:
-            if mutated_sym is None or mutated_sym.is_anonymous:
-                continue
-            # TODO: happens when module mutates args
-            #  should we add module as a dep in this case?
-            mutated_sym.update_deps(set(), overwrite=False, mutated=True)
-
-
-_METHOD_TO_EVENT_TYPE: Dict[Any, Type[ExternalCallHandler]] = {
+_METHOD_TO_EVENT_TYPE: Dict[Any, Optional[Type[ExternalCallHandler]]] = {
+    list.__getitem__: NoopCallHandler,
     list.append: ListAppend,
     list.clear: NamespaceClear,
     list.extend: ListExtend,
@@ -286,9 +316,16 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Type[ExternalCallHandler]] = {
 
 
 def resolve_external_call(
-    obj: Optional[Any], function_or_method: Optional[Any], method: Optional[str]
+    obj: Optional[Any],
+    function_or_method: Optional[Any],
+    method: Optional[str],
 ) -> Optional[ExternalCallHandler]:
-    if obj is None:
+    if obj is logging or isinstance(obj, logging.Logger):
+        return NoopCallHandler()
+    elif obj is not None and id(type(obj)) in flow().aliases:
+        return NoopCallHandler()
+    # TODO: handle case where it's a function defined in-notebook
+    elif obj is None:
         method_obj = function_or_method
     elif method is None:
         return None

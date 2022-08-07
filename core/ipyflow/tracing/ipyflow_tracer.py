@@ -34,7 +34,7 @@ from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.mutation_special_cases import (
     METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
     METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
-    register_module_mutation_exceptions,
+    register_module_external_call_handlers,
 )
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.trace_stmt import TraceStatement
@@ -204,7 +204,6 @@ class DataflowTracer(StackFrameManager):
             self.lexical_call_stack: pyc.TraceStack = self.make_stack()
             with self.lexical_call_stack.register_stack_state():
                 self.cur_function: Optional[Any] = None
-                self.last_arg_seen: bool = False
                 self.num_args_seen = 0
                 self.first_obj_id_in_chain: Optional[ObjId] = None
                 self.top_level_node_id_for_chain: Optional[NodeId] = None
@@ -590,7 +589,7 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_import)
     def after_import(self, *_, module: ModuleType, **__):
-        register_module_mutation_exceptions(module)
+        register_module_external_call_handlers(module)
 
     @pyc.register_raw_handler(
         (
@@ -911,15 +910,15 @@ class DataflowTracer(StackFrameManager):
             function_or_method,
             method_name,
         ), external_call_args = ext_call_cand
-        external_call = resolve_external_call(obj, function_or_method, method_name)
+        external_call = resolve_external_call(
+            obj, function_or_method, method_name, external_call_args
+        )
         if external_call is None or isinstance(
             external_call, MutatingMethodEventNotYetImplemented
         ):
             external_call = StandardMutation()
         elif isinstance(external_call, NoopCallHandler):
             return
-        for arg_obj, _ in external_call_args:
-            external_call.process_arg(arg_obj)
         self.external_calls.append(
             (None if obj is None else id(obj), external_call, external_call_args)
         )
@@ -929,7 +928,6 @@ class DataflowTracer(StackFrameManager):
     @pyc.skip_when_tracing_disabled
     def argument(self, arg_obj: Any, arg_node_id: int, *_, is_last: bool, **__):
         self.num_args_seen += 1
-        self.last_arg_seen = is_last
         try:
             ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
         except IndexError:

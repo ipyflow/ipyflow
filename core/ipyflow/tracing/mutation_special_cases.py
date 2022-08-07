@@ -23,7 +23,7 @@ _METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN_RAW: Dict[str, List[str]] = {
 }
 
 
-def register_module_mutation_exceptions(module: ModuleType) -> None:
+def register_module_external_call_handlers(module: ModuleType) -> None:
     for raw, registered in [
         (
             _METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN_RAW,

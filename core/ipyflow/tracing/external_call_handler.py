@@ -27,6 +27,10 @@ class ExternalCallHandler:
     def process_arg(self, arg: Any) -> None:
         pass
 
+    def process_args(self, args: List["ExternalCallArgument"]) -> None:
+        for arg_obj, _ in args:
+            self.process_arg(arg_obj)
+
     def process_return(self, retval: Any) -> None:
         pass
 
@@ -315,7 +319,7 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Optional[Type[ExternalCallHandler]]] = {
 }
 
 
-def resolve_external_call(
+def _resolve_external_call_simple(
     obj: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],
@@ -335,3 +339,15 @@ def resolve_external_call(
     if external_call_type is None:
         return None
     return external_call_type(obj, method_obj)
+
+
+def resolve_external_call(
+    obj: Optional[Any],
+    function_or_method: Optional[Any],
+    method: Optional[str],
+    external_call_args: List["ExternalCallArgument"],
+) -> Optional[ExternalCallHandler]:
+    ext_call = _resolve_external_call_simple(obj, function_or_method, method)
+    if ext_call is not None and not isinstance(ext_call, NoopCallHandler):
+        ext_call.process_args(external_call_args)
+    return ext_call

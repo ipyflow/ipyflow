@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type
 
 from ipyflow.data_model.timestamp import Timestamp
@@ -342,6 +343,7 @@ def _resolve_external_call_simple(
 
 
 def resolve_external_call(
+    module: Optional[ModuleType],
     obj: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],

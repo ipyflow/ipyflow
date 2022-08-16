@@ -2,6 +2,7 @@
 import ast
 import logging
 import symtable
+import sys
 from collections import defaultdict
 from types import FrameType, ModuleType
 from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
@@ -46,7 +47,7 @@ NodeId = int
 ObjId = int
 ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
 ExternalCallCandidate = Tuple[
-    Tuple[Optional[Any], Optional[str], Any, Optional[str]],
+    Tuple[Optional[ModuleType], Optional[Any], Optional[str], Any, Optional[str]],
     List[ExternalCallArgument],
 ]
 ExternalCall = Tuple[Optional[int], ExternalCallHandler, List[ExternalCallArgument]]
@@ -778,6 +779,150 @@ class DataflowTracer(StackFrameManager):
         finally:
             self.active_scope = scope
 
+    @pyc.register_raw_handler(pyc.after_load_complex_symbol)
+    def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
+        try:
+            if not self.is_tracing_enabled:
+                return
+            if self.first_obj_id_in_chain is None:
+                return
+            assert self.top_level_node_id_for_chain is not None
+            loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(
+                obj, self.ast_node_by_id[node_id]
+            )
+            if loaded_sym is not None:
+                self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(
+                    loaded_sym
+                )
+        finally:
+            self.saved_complex_symbol_load_data = None
+            self.first_obj_id_in_chain = None
+            self.top_level_node_id_for_chain = None
+            self.active_scope = self.cur_frame_original_scope
+
+    @pyc.register_handler(pyc.after_argument)
+    @pyc.skip_when_tracing_disabled
+    def handle_lift_argument(self, _arg_obj: Any, arg_node: ast.AST, *_, **__):
+        if self.cur_function is not api_lift:
+            return
+        resolved = resolve_rval_symbols(arg_node)
+        if len(resolved) == 1:
+            return next(iter(resolved))
+        else:
+            return pyc.Null
+
+    def _resolve_external_call(self) -> None:
+        try:
+            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
+        except IndexError:
+            return
+        if ext_call_cand is None:
+            return
+        (
+            module,
+            obj,
+            obj_name,
+            function_or_method,
+            method_name,
+        ), external_call_args = ext_call_cand
+        external_call = resolve_external_call(
+            module, obj, function_or_method, method_name, external_call_args
+        )
+        if external_call is None or isinstance(
+            external_call, MutatingMethodEventNotYetImplemented
+        ):
+            external_call = StandardMutation()
+        elif isinstance(external_call, NoopCallHandler):
+            return
+        self.external_calls.append(
+            (None if obj is None else id(obj), external_call, external_call_args)
+        )
+        self.is_external_call_pending_return = True
+
+    @pyc.register_raw_handler(pyc.after_argument)
+    @pyc.skip_when_tracing_disabled
+    def argument(self, arg_obj: Any, arg_node_id: int, *_, is_last: bool, **__):
+        self.num_args_seen += 1
+        try:
+            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
+        except IndexError:
+            return
+        if ext_call_cand is None:
+            return
+        arg_node = self.ast_node_by_id.get(arg_node_id, None)
+        if isinstance(arg_node, ast.Name):
+            assert self.active_scope is self.cur_frame_original_scope
+            arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
+            if arg_dsym is None:
+                self.active_scope.upsert_data_symbol_for_name(
+                    arg_node.id,
+                    arg_obj,
+                    set(),
+                    self.prev_trace_stmt_in_cur_frame.stmt_node,
+                    implicit=True,
+                    symbol_node=arg_node,
+                )
+        ext_call_cand[-1].append((arg_obj, resolve_rval_symbols(arg_node)))
+        if is_last:
+            self._resolve_external_call()
+
+    def _save_external_call_candidate(
+        self,
+        module: Optional[ModuleType],
+        obj: Optional[Any],
+        function_or_method: Any,
+        method_name: Optional[str],
+        obj_name: Optional[str] = None,
+    ) -> None:
+        self.external_call_candidate = (
+            (module, obj, obj_name, function_or_method, method_name),
+            [],
+        )
+
+    @pyc.before_call
+    @pyc.skip_when_tracing_disabled
+    def before_call(self, function_or_method, node: ast.Call, *_, **__):
+        if self.saved_complex_symbol_load_data is None:
+            obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
+        else:
+            # TODO: this will cause errors if we add more fields
+            _ignored: Any
+            (
+                _namespace,
+                obj,
+                attr_or_subscript,
+                is_subscript,
+                *_ignored,
+                obj_name,
+            ) = self.saved_complex_symbol_load_data
+        # TODO: check if `function_or_method` has been registered as requiring a custom side effect
+        if is_subscript:
+            # TODO: need to do this also for chained calls, e.g. f()()
+            method_name = None
+        elif obj is None:
+            method_name = None
+        else:
+            assert isinstance(attr_or_subscript, str)
+            method_name = attr_or_subscript
+            # method_name should match ast_by_id[function_or_method].func.id
+        module = sys.modules.get(getattr(function_or_method, "__module__", None))
+        self._save_external_call_candidate(
+            module, obj, function_or_method, method_name, obj_name=obj_name
+        )
+        self.saved_complex_symbol_load_data = None
+        with self.lexical_call_stack.push():
+            self.cur_function = function_or_method
+        self.active_scope = self.cur_frame_original_scope
+        if len(node.args) + len(node.keywords) == 0:
+            self._resolve_external_call()
+
+    @pyc.register_raw_handler((pyc.before_function_body, pyc.before_lambda_body))
+    def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
+        ret = self.is_tracing_enabled and function_id not in self._seen_functions_ids
+        if ret:
+            self._seen_functions_ids.add(function_id)
+        return ret
+
     # def _process_possible_external_call(self, retval: Any) -> None:
     #     if self.external_call_candidate is None:
     #         return
@@ -864,158 +1009,6 @@ class DataflowTracer(StackFrameManager):
     #         except:
     #             pass
     #     self.external_calls.append((obj_id, external_call, recorded_args))
-
-    @pyc.register_raw_handler(pyc.after_load_complex_symbol)
-    def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
-        try:
-            if not self.is_tracing_enabled:
-                return
-            if self.first_obj_id_in_chain is None:
-                return
-            assert self.top_level_node_id_for_chain is not None
-            loaded_sym = self._clear_info_and_maybe_lookup_or_create_complex_symbol(
-                obj, self.ast_node_by_id[node_id]
-            )
-            if loaded_sym is not None:
-                self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(
-                    loaded_sym
-                )
-        finally:
-            self.saved_complex_symbol_load_data = None
-            self.first_obj_id_in_chain = None
-            self.top_level_node_id_for_chain = None
-            self.active_scope = self.cur_frame_original_scope
-
-    @pyc.register_handler(pyc.after_argument)
-    @pyc.skip_when_tracing_disabled
-    def handle_lift_argument(self, _arg_obj: Any, arg_node: ast.AST, *_, **__):
-        if self.cur_function is not api_lift:
-            return
-        resolved = resolve_rval_symbols(arg_node)
-        if len(resolved) == 1:
-            return next(iter(resolved))
-        else:
-            return pyc.Null
-
-    def _resolve_external_call(self) -> None:
-        try:
-            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
-        except IndexError:
-            return
-        if ext_call_cand is None:
-            return
-        (
-            obj,
-            obj_name,
-            function_or_method,
-            method_name,
-        ), external_call_args = ext_call_cand
-        external_call = resolve_external_call(
-            obj, function_or_method, method_name, external_call_args
-        )
-        if external_call is None or isinstance(
-            external_call, MutatingMethodEventNotYetImplemented
-        ):
-            external_call = StandardMutation()
-        elif isinstance(external_call, NoopCallHandler):
-            return
-        self.external_calls.append(
-            (None if obj is None else id(obj), external_call, external_call_args)
-        )
-        self.is_external_call_pending_return = True
-
-    @pyc.register_raw_handler(pyc.after_argument)
-    @pyc.skip_when_tracing_disabled
-    def argument(self, arg_obj: Any, arg_node_id: int, *_, is_last: bool, **__):
-        self.num_args_seen += 1
-        try:
-            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
-        except IndexError:
-            return
-        if ext_call_cand is None:
-            return
-        # if (
-        #     isinstance(ext_call_cand[1], (ListInsert, ListPop, ListRemove))
-        #     and self.num_args_seen == 1
-        # ):
-        #     ext_call_cand[1].process_arg(arg_obj)
-
-        arg_node = self.ast_node_by_id.get(arg_node_id, None)
-        if isinstance(arg_node, ast.Name):
-            assert self.active_scope is self.cur_frame_original_scope
-            arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
-            if arg_dsym is None:
-                self.active_scope.upsert_data_symbol_for_name(
-                    arg_node.id,
-                    arg_obj,
-                    set(),
-                    self.prev_trace_stmt_in_cur_frame.stmt_node,
-                    implicit=True,
-                    symbol_node=arg_node,
-                )
-        ext_call_cand[-1].append((arg_obj, resolve_rval_symbols(arg_node)))
-        if is_last:
-            self._resolve_external_call()
-
-    def _save_external_call_candidate(
-        self,
-        obj: Optional[Any],
-        function_or_method: Any,
-        method_name: Optional[str],
-        obj_name: Optional[str] = None,
-    ) -> None:
-        # external_call = resolve_external_call(obj, function_or_method, method_name)
-        # if external_call is None or isinstance(
-        #     external_call, MutatingMethodEventNotYetImplemented
-        # ):
-        #     external_call = StandardMutation()
-        self.external_call_candidate = (
-            (obj, obj_name, function_or_method, method_name),
-            [],
-        )
-
-    @pyc.before_call
-    @pyc.skip_when_tracing_disabled
-    def before_call(self, function_or_method, node: ast.Call, *_, **__):
-        if self.saved_complex_symbol_load_data is None:
-            obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
-        else:
-            # TODO: this will cause errors if we add more fields
-            _ignored: Any
-            (
-                _namespace,
-                obj,
-                attr_or_subscript,
-                is_subscript,
-                *_ignored,
-                obj_name,
-            ) = self.saved_complex_symbol_load_data
-        # TODO: check if `function_or_method` has been registered as requiring a custom side effect
-        if is_subscript:
-            # TODO: need to do this also for chained calls, e.g. f()()
-            method_name = None
-        elif obj is None:
-            method_name = None
-        else:
-            assert isinstance(attr_or_subscript, str)
-            method_name = attr_or_subscript
-            # method_name should match ast_by_id[function_or_method].func.id
-        self._save_external_call_candidate(
-            obj, function_or_method, method_name, obj_name=obj_name
-        )
-        self.saved_complex_symbol_load_data = None
-        with self.lexical_call_stack.push():
-            self.cur_function = function_or_method
-        self.active_scope = self.cur_frame_original_scope
-        if len(node.args) + len(node.keywords) == 0:
-            self._resolve_external_call()
-
-    @pyc.register_raw_handler((pyc.before_function_body, pyc.before_lambda_body))
-    def before_function_body(self, _obj: Any, function_id: NodeId, *_, **__):
-        ret = self.is_tracing_enabled and function_id not in self._seen_functions_ids
-        if ret:
-            self._seen_functions_ids.add(function_id)
-        return ret
 
     @pyc.register_raw_handler(pyc.after_call)
     def after_call(

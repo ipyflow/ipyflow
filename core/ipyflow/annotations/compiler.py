@@ -3,7 +3,7 @@
 Compiles the annotations in .pyi files into handlers for library code.
 """
 import ast
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, List, Tuple
 
 
 def compile_function_handler(func: ast.FunctionDef) -> Callable:
@@ -17,7 +17,8 @@ def compile_class_handler(cls: ast.ClassDef):
     pass
 
 
-def get_module_from_decorators(decorators: List[ast.Call]) -> Optional[str]:
+def get_modules_from_decorators(decorators: List[ast.Call]) -> List[str]:
+    modules = []
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
             continue
@@ -28,10 +29,10 @@ def get_module_from_decorators(decorators: List[ast.Call]) -> Optional[str]:
             or len(decorator.args) != 1
         ):
             continue
-        arg = decorator.args[0]
-        if isinstance(arg, ast.Str):
-            return arg.s
-    return None
+        for arg in decorator.args:
+            if isinstance(arg, ast.Str):
+                modules.append(arg.s)
+    return modules
 
 
 def compile(
@@ -45,7 +46,7 @@ def compile(
     for node in ast.parse(source).body:
         if not isinstance(node, (ast.ClassDef, ast.FunctionDef)):
             continue
-        module = get_module_from_decorators(node.decorator_list) or fname
+        modules = get_modules_from_decorators(node.decorator_list) or [fname]
         if isinstance(node, ast.ClassDef):
             pass
         elif isinstance(node, ast.FunctionDef):

@@ -3,6 +3,7 @@
 Compiles the annotations in .pyi files into handlers for library code.
 """
 import ast
+from collections import defaultdict
 from typing import Callable, Dict, List, Tuple
 
 
@@ -13,7 +14,7 @@ def compile_function_handler(func: ast.FunctionDef) -> Callable:
     pass
 
 
-def compile_class_handler(cls: ast.ClassDef):
+def compile_class_handler(cls: ast.ClassDef) -> List[Callable]:
     pass
 
 
@@ -35,19 +36,47 @@ def get_modules_from_decorators(decorators: List[ast.Call]) -> List[str]:
     return modules
 
 
-def compile(
-    fname: str,
-) -> Dict[str, Tuple[Dict[str, Callable], Dict[str, Dict[str, Callable]]]]:
+def get_specs_by_module(
+    filenames: List[str],
+) -> Tuple[Dict[str, List[ast.ClassDef]], Dict[str, List[ast.FunctionDef]]]:
     """
     Compiles the annotations in .pyi files into handlers for library code.
     """
-    with open(fname, "r") as f:
-        source = f.read()
-    for node in ast.parse(source).body:
-        if not isinstance(node, (ast.ClassDef, ast.FunctionDef)):
-            continue
-        modules = get_modules_from_decorators(node.decorator_list) or [fname]
-        if isinstance(node, ast.ClassDef):
-            pass
-        elif isinstance(node, ast.FunctionDef):
-            pass
+    if isinstance(filenames, str):
+        filenames = [filenames]
+    classes_by_module = defaultdict(list)
+    functions_by_module = defaultdict(list)
+    for fname in filenames:
+        with open(fname, "r") as f:
+            source = f.read()
+        for node in ast.parse(source).body:
+            if not isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+                continue
+            for module in get_modules_from_decorators(node.decorator_list) or [
+                os.path.splitext(fname)[0]
+            ]:
+                if isinstance(node, ast.ClassDef):
+                    classes_by_module[module].append(node)
+                elif isinstance(node, ast.FunctionDef):
+                    functions_by_module[module].append(node)
+    return classes_by_module, functions_by_module
+
+
+def compile_module_classes(
+    classes_by_module: Dict[str, List[ast.ClassDef]],
+) -> Dict[str, Dict[str, List[Callable]]]:
+    class_handlers_by_module = defaultdict(dict)
+    for module, classes in classes_by_module.items():
+        for clazz in classes:
+            class_handlers_by_module[module][clazz.name] = compile_class_handler(clazz)
+    return class_handlers_by_module
+
+
+def compile_module_functions(
+    functions_by_module: Dict[str, List[ast.FunctionDef]],
+) -> Dict[str, List[Callable]]:
+    function_handlers_by_module = defaultdict(list)
+    for module, functions in functions_by_module.items():
+        for func in functions:
+            function_handlers_by_module[module].append(compile_function_handler(func))
+    return function_handlers_by_module

@@ -3,12 +3,15 @@
 Compiles the annotations in .pyi files into handlers for library code.
 """
 import ast
+import os
 from collections import defaultdict
 from typing import Dict, List, Tuple, Type
 
-from ipflow.utils.ast_utils import subscript_to_slice
-
-from ipyflow.tracing.external_call_handler import ExternalCallHandler, NoopCallHandler
+from ipyflow.tracing.external_call_handler import (
+    ExternalCallHandler,
+    external_call_handler_by_name,
+)
+from ipyflow.utils.ast_utils import subscript_to_slice
 
 
 def compile_function_handler(func: ast.FunctionDef) -> Type[ExternalCallHandler]:
@@ -21,10 +24,10 @@ def compile_function_handler(func: ast.FunctionDef) -> Type[ExternalCallHandler]
             f"unable to handle null return type when trying to compile {func.name}"
         )
     if isinstance(ret, ast.Name):
-        if ret.id == "NoopCallHandler":
-            return NoopCallHandler
-        else:
+        handler_type = external_call_handler_by_name.get(ret.id, None)
+        if handler_type is None:
             raise ValueError(f"No known handler for return type {ret}")
+        return handler_type
     elif isinstance(ret, ast.Subscript):
         sub_value = ret.value
         slice_value = subscript_to_slice(ret)
@@ -52,7 +55,7 @@ def compile_class_handler(cls: ast.ClassDef) -> List[Type[ExternalCallHandler]]:
     return handlers
 
 
-def get_modules_from_decorators(decorators: List[ast.Call]) -> List[str]:
+def get_modules_from_decorators(decorators: List[ast.expr]) -> List[str]:
     modules = []
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
@@ -110,5 +113,5 @@ def compile_functions(
 ) -> List[Type[ExternalCallHandler]]:
     function_handlers = []
     for func in functions:
-        function_handlers[module].append(compile_function_handler(func))
+        function_handlers.append(compile_function_handler(func))
     return function_handlers

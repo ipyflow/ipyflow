@@ -3,13 +3,14 @@
 Tools describing how non-notebook code affects dataflow
 """
 import abc
-from typing import Set
+from typing import List, Set
 
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
+from ipyflow.tracing.external_call_handler import ExternalCallHandler
 
 
-def handler_for(*methods):
+def handler_for(*_methods):
     """
     Just a marker decorator to indicate that the handler is used for functions / methods
     named differently from the decorated function / method
@@ -17,7 +18,7 @@ def handler_for(*methods):
     pass
 
 
-def module(module):
+def module(*_modules):
     """
     Just a marker decorator indicating that the class / function belongs to the
     module indicated in the parameter, as opposed to the one indicated by the file name
@@ -26,39 +27,18 @@ def module(module):
     pass
 
 
-class SideEffect:
-    """
-    Stub for return annotation that indicates a side effect. Side effects
-    can be comprised of a single action or multiple side effects.
-    """
+__module__ = None  # again; just a marker
 
 
-class SymbolUpserted(SideEffect):
+class SymbolUpserted(ExternalCallHandler):
     """
     Stub for indicating that a value is upserted as a side effect.
     """
 
 
-class Mutated(SideEffect):
+class Mutated(ExternalCallHandler):
     """
     Stub for indicating that a value is mutated as a side effect.
-    """
-
-    pass
-
-
-class Handler(SideEffect):
-    """
-    Stub for referencing more complex handlers than what can
-    be represented just by annotations. To use, reference
-    the handler in the return value annotation.
-
-    Example:
-        from ipyflow.tracing.external_call_handler import ListAppend
-        ...
-        class list:
-            def append(self, value) -> Handler[ListAppend]:
-                ...
     """
 
     pass
@@ -134,9 +114,9 @@ class Children(SymbolMatcher):
 
     def matches(self, sym: DataSymbol) -> bool:
         if self.exact:
-            return sym.children == self.children
+            return sym.children.keys() == self.children
         else:
-            return sym.children <= self.children
+            return sym.children.keys() <= self.children
 
 
 class Parents(SymbolMatcher):
@@ -150,6 +130,6 @@ class Parents(SymbolMatcher):
 
     def matches(self, sym: DataSymbol) -> bool:
         if self.exact:
-            return sym.parents == self.parents
+            return sym.parents.keys() == self.parents
         else:
-            return sym.parents <= self.parents
+            return sym.parents.keys() <= self.parents

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from ipyflow.annotations import Mutated
+from ipyflow.annotations import Mutated, __module__, module
 from ipyflow.tracing.external_call_handler import NoopCallHandler
 
 @module("matplotlib.pyplot", "pylab", "d2l.torch")

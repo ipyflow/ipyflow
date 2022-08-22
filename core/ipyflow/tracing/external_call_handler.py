@@ -25,6 +25,9 @@ class ExternalCallHandler:
     def __init__(self, _obj: Any = None, _method_or_function: Any = None) -> None:
         pass
 
+    def __init_subclass__(cls):
+        external_call_handler_by_name[cls.__name__] = cls
+
     def process_arg(self, arg: Any) -> None:
         pass
 
@@ -68,6 +71,9 @@ class ExternalCallHandler:
         stmt_node: ast.stmt,
     ) -> None:
         pass
+
+
+external_call_handler_by_name: Dict[str, Type[ExternalCallHandler]] = {}
 
 
 class NoopCallHandler(ExternalCallHandler):

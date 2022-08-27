@@ -361,22 +361,12 @@ class TraceStatement:
                     raise e
 
     def handle_dependencies(self) -> None:
-        for (
-            caller_obj_id,
-            external_call,
-            external_call_args,
-        ) in tracer().external_calls:
+        for external_call in tracer().external_calls:
             logger.info(
                 "external call %s %s %s",
-                caller_obj_id,
                 external_call,
-                external_call_args,
             )
-            external_call._handle_impl(
-                caller_obj_id,
-                external_call_args,
-                self.stmt_node,
-            )
+            external_call._handle_impl(self.stmt_node)
         if self._contains_lval():
             self._make_lval_data_symbols()
         elif isinstance(self.stmt_node, ast.Delete):

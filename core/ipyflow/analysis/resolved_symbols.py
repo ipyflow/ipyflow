@@ -118,7 +118,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
             self.dsym.obj,
             None,
             cast(str, self.next_atom.value),
-            [],
+            use_standard_default=False,
         )
         return ext_call is not None and not isinstance(ext_call, NoopCallHandler)
 

@@ -17,13 +17,25 @@ logger = logging.getLogger(__name__)
 
 
 class ExternalCallHandler:
+    not_yet_defined = object()
+
     def __new__(cls, *args, **kwargs):
         if cls is ExternalCallHandler:
             raise TypeError(f"only children of '{cls.__name__}' may be instantiated")
         return object.__new__(cls)
 
-    def __init__(self, _obj: Any = None, _method_or_function: Any = None) -> None:
-        pass
+    def __init__(
+        self,
+        *,
+        module: Optional[ModuleType] = None,
+        obj: Any = None,
+        function_or_method: Any = None,
+    ) -> None:
+        self.module = module
+        self.obj = obj
+        self.function_or_method = function_or_method
+        self.args: List["ExternalCallArgument"] = []
+        self.return_value: Any = self.not_yet_defined
 
     def __init_subclass__(cls):
         external_call_handler_by_name[cls.__name__] = cls
@@ -31,23 +43,27 @@ class ExternalCallHandler:
     def process_arg(self, arg: Any) -> None:
         pass
 
-    def process_args(self, args: List["ExternalCallArgument"]) -> None:
-        for arg_obj, _ in args:
-            self.process_arg(arg_obj)
+    def _process_arg_impl(self, arg: "ExternalCallArgument") -> None:
+        self.args.append(arg)
+        self.process_arg(arg[0])
 
-    def process_return(self, retval: Any) -> None:
-        pass
+    def process_args(self, args: List["ExternalCallArgument"]) -> None:
+        for arg in args:
+            self._process_arg_impl(arg)
+
+    def process_return(self, return_value: Any) -> None:
+        self.return_value = return_value
 
     def _handle_impl(
         self,
-        obj_id: int,
-        args: List["ExternalCallArgument"],
         stmt_node: ast.stmt,
     ) -> None:
         arg_dsyms: Set["DataSymbol"] = set()
-        arg_dsyms = arg_dsyms.union(*(arg[1] for arg in args))
+        arg_dsyms = arg_dsyms.union(*(arg[1] for arg in self.args))
         Timestamp.update_usage_info(arg_dsyms)
-        self.handle(obj_id, args, arg_dsyms, stmt_node)
+        self.handle(
+            None if self.obj is None else id(self.obj), self.args, arg_dsyms, stmt_node
+        )
 
     def _mutate_caller(
         self, obj_id: int, arg_dsyms: Set["DataSymbol"], should_propagate: bool
@@ -81,13 +97,6 @@ class NoopCallHandler(ExternalCallHandler):
 
 
 class StandardMutation(ExternalCallHandler):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.retval = None
-
-    def process_return(self, retval: Any) -> None:
-        self.retval = retval
-
     def handle(
         self,
         obj_id: int,
@@ -95,7 +104,7 @@ class StandardMutation(ExternalCallHandler):
         arg_dsyms: Set["DataSymbol"],
         stmt_node: ast.stmt,
     ) -> None:
-        if self.retval is not None and obj_id != id(self.retval):
+        if self.return_value is not None and obj_id != id(self.return_value):
             return
         self._mutate_caller(
             obj_id,
@@ -184,8 +193,9 @@ class ListMethod(ExternalCallHandler):
 
 
 class ListExtend(ListMethod):
-    def __init__(self, lst: List[Any], *_) -> None:
-        self.orig_len = len(lst)
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.orig_len = len(self.obj)
 
     def handle_namespace(
         self,
@@ -223,7 +233,8 @@ class ListAppend(ListExtend):
 
 
 class ListInsert(ListMethod):
-    def __init__(self, *_) -> None:
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.insert_pos: Optional[int] = None
 
     def handle_namespace(
@@ -264,8 +275,8 @@ class ListInsert(ListMethod):
 
 
 class ListRemove(ListMethod):
-    def __init__(self, lst: List[Any], *_) -> None:
-        self.lst = lst
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.remove_pos: Optional[int] = None
 
     def handle_namespace(
@@ -281,7 +292,7 @@ class ListRemove(ListMethod):
 
     def process_arg(self, remove_val: Any) -> None:
         try:
-            self.remove_pos = self.lst.index(remove_val)
+            self.remove_pos = self.obj.index(remove_val)
         except ValueError:
             pass
 
@@ -294,7 +305,8 @@ class ListRemove(ListMethod):
 
 
 class ListPop(ListRemove):
-    def __init__(self, *_) -> None:
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
         self.remove_pos: Optional[int] = None
 
     def process_arg(self, pop_pos: int) -> None:
@@ -327,9 +339,11 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Optional[Type[ExternalCallHandler]]] = {
 
 
 def _resolve_external_call_simple(
+    module: Optional[ModuleType],
     obj: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],
+    use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
     if obj is logging or isinstance(obj, logging.Logger):
         return NoopCallHandler()
@@ -344,8 +358,11 @@ def _resolve_external_call_simple(
         method_obj = getattr(type(obj), method, None)
     external_call_type = _METHOD_TO_EVENT_TYPE.get(method_obj, None)
     if external_call_type is None:
-        return None
-    return external_call_type(obj, method_obj)
+        if use_standard_default:
+            external_call_type = StandardMutation
+        else:
+            return None
+    return external_call_type(module=module, obj=obj, function_or_method=method_obj)
 
 
 def resolve_external_call(
@@ -353,9 +370,12 @@ def resolve_external_call(
     obj: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],
-    external_call_args: List["ExternalCallArgument"],
+    use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
-    ext_call = _resolve_external_call_simple(obj, function_or_method, method)
-    if ext_call is not None and not isinstance(ext_call, NoopCallHandler):
-        ext_call.process_args(external_call_args)
-    return ext_call
+    return _resolve_external_call_simple(
+        module,
+        obj,
+        function_or_method,
+        method,
+        use_standard_default=use_standard_default,
+    )

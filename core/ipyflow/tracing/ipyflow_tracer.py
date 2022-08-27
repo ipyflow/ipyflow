@@ -21,11 +21,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import FlowRunMode
 from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_call_handler import (
-    ArgMutate,
     ExternalCallHandler,
-    ListInsert,
-    ListPop,
-    ListRemove,
     MutatingMethodEventNotYetImplemented,
     NoopCallHandler,
     StandardMutation,
@@ -33,8 +29,6 @@ from ipyflow.tracing.external_call_handler import (
 )
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.mutation_special_cases import (
-    METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN,
-    METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN,
     register_module_external_call_handlers,
 )
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
@@ -46,11 +40,6 @@ AttrSubVal = SupportedIndexType
 NodeId = int
 ObjId = int
 ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
-ExternalCallCandidate = Tuple[
-    Tuple[Optional[ModuleType], Optional[Any], Optional[str], Any, Optional[str]],
-    List[ExternalCallArgument],
-]
-ExternalCall = Tuple[Optional[int], ExternalCallHandler, List[ExternalCallArgument]]
 SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
@@ -189,7 +178,7 @@ class DataflowTracer(StackFrameManager):
             # everything here should be copyable
             self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
-            self.external_calls: List[ExternalCall] = []
+            self.external_calls: List[ExternalCallHandler] = []
             self.is_external_call_pending_return: bool = False
             self.saved_assign_rhs_obj: Optional[Any] = None
             # this one gets set regardless of whether tracing enabled
@@ -212,7 +201,7 @@ class DataflowTracer(StackFrameManager):
                     SavedComplexSymbolLoadData
                 ] = None
                 self.prev_node_id_in_cur_frame_lexical: Optional[NodeId] = None
-                self.external_call_candidate: Optional[ExternalCallCandidate] = None
+                self.external_call_candidate: Optional[ExternalCallHandler] = None
 
                 self.lexical_literal_stack: pyc.TraceStack = self.make_stack()
                 with self.lexical_literal_stack.register_stack_state():
@@ -813,30 +802,16 @@ class DataflowTracer(StackFrameManager):
 
     def _resolve_external_call(self) -> None:
         try:
-            ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
+            external_call = self.lexical_call_stack.get_field("external_call_candidate")
         except IndexError:
             return
-        if ext_call_cand is None:
-            return
-        (
-            module,
-            obj,
-            obj_name,
-            function_or_method,
-            method_name,
-        ), external_call_args = ext_call_cand
-        external_call = resolve_external_call(
-            module, obj, function_or_method, method_name, external_call_args
-        )
         if external_call is None or isinstance(
             external_call, MutatingMethodEventNotYetImplemented
         ):
             external_call = StandardMutation()
         elif isinstance(external_call, NoopCallHandler):
             return
-        self.external_calls.append(
-            (None if obj is None else id(obj), external_call, external_call_args)
-        )
+        self.external_calls.append(external_call)
         self.is_external_call_pending_return = True
 
     @pyc.register_raw_handler(pyc.after_argument)
@@ -862,7 +837,7 @@ class DataflowTracer(StackFrameManager):
                     implicit=True,
                     symbol_node=arg_node,
                 )
-        ext_call_cand[-1].append((arg_obj, resolve_rval_symbols(arg_node)))
+        ext_call_cand._process_arg_impl((arg_obj, resolve_rval_symbols(arg_node)))
         if is_last:
             self._resolve_external_call()
 
@@ -872,11 +847,9 @@ class DataflowTracer(StackFrameManager):
         obj: Optional[Any],
         function_or_method: Any,
         method_name: Optional[str],
-        obj_name: Optional[str] = None,
     ) -> None:
-        self.external_call_candidate = (
-            (module, obj, obj_name, function_or_method, method_name),
-            [],
+        self.external_call_candidate = resolve_external_call(
+            module, obj, function_or_method, method_name
         )
 
     @pyc.before_call
@@ -906,9 +879,7 @@ class DataflowTracer(StackFrameManager):
             method_name = attr_or_subscript
             # method_name should match ast_by_id[function_or_method].func.id
         module = sys.modules.get(getattr(function_or_method, "__module__", None))
-        self._save_external_call_candidate(
-            module, obj, function_or_method, method_name, obj_name=obj_name
-        )
+        self._save_external_call_candidate(module, obj, function_or_method, method_name)
         self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():
             self.cur_function = function_or_method
@@ -1044,7 +1015,7 @@ class DataflowTracer(StackFrameManager):
         self.prev_node_id_in_cur_frame_lexical = None
         if self.is_external_call_pending_return:
             self.is_external_call_pending_return = False
-            self.external_calls[-1][1].process_return(retval)
+            self.external_calls[-1].process_return(retval)
         # self._process_possible_external_call(retval)
 
         if not self.is_tracing_enabled:

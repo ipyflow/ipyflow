@@ -168,9 +168,6 @@ class ListMethod(ExternalCallHandler):
     def handle_namespace(self, namespace: "Namespace") -> None:
         pass
 
-    def handle_mutate_caller(self) -> None:
-        pass
-
     def handle(self) -> None:
         caller_self_obj_id = self.caller_self_obj_id
         mutated_sym = flow().get_first_full_symbol(caller_self_obj_id)
@@ -178,7 +175,7 @@ class ListMethod(ExternalCallHandler):
             namespace = mutated_sym.namespace
             if namespace is not None:
                 self.handle_namespace(namespace)
-        self.handle_mutate_caller()
+        self._mutate_caller(should_propagate=False)
 
 
 class ListExtend(ListMethod):
@@ -198,13 +195,9 @@ class ListExtend(ListMethod):
                 propagate=False,
             )
 
-    def handle_mutate_caller(self) -> None:
-        self._mutate_caller(should_propagate=False)
-
 
 class ListAppend(ListExtend):
-    def handle_mutate_caller(self) -> None:
-        self._mutate_caller(False)
+    pass
 
 
 class ListInsert(ListMethod):
@@ -230,9 +223,6 @@ class ListInsert(ListMethod):
             propagate=True,
         )
 
-    def handle_mutate_caller(self) -> None:
-        self._mutate_caller(should_propagate=False)
-
     def process_arg(self, insert_pos: int) -> None:
         self.insert_pos = insert_pos
 
@@ -250,9 +240,6 @@ class ListRemove(ListMethod):
             self.remove_pos = self.caller_self.index(remove_val)
         except ValueError:
             pass
-
-    def handle_mutate_caller(self) -> None:
-        self._mutate_caller(should_propagate=False)
 
 
 class ListPop(ListRemove):

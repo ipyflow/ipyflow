@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ast
 import logging
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type
@@ -17,11 +18,40 @@ logger = logging.getLogger(__name__)
 
 class ExternalCallHandler:
     not_yet_defined = object()
+    module: Optional[ModuleType] = None
+    caller_self: Any = None
+    function_or_method: Any = None
+    args: List["ExternalCallArgument"] = None
+    _arg_dsyms: Optional[Set["DataSymbol"]] = None
+    return_value: Any = not_yet_defined
+    stmt_node: ast.stmt = None
 
     def __new__(cls, *args, **kwargs):
         if cls is ExternalCallHandler:
             raise TypeError(f"only children of '{cls.__name__}' may be instantiated")
         return object.__new__(cls)
+
+    @classmethod
+    def create(cls, **kwargs) -> "ExternalCallHandler":
+        module = kwargs.pop("module", None)
+        caller_self = kwargs.pop("caller_self", None)
+        function_or_method = kwargs.pop("function_or_method", None)
+        return cls(
+            module=module,
+            caller_self=caller_self,
+            function_or_method=function_or_method,
+        )._initialize_impl(**kwargs)
+
+    def _initialize_impl(self, **kwargs) -> "ExternalCallHandler":
+        ret = self
+        for cls in self.__class__.mro():
+            if not hasattr(cls, "initialize"):
+                break
+            ret = cls.initialize(ret, **kwargs) or ret  # type: ignore
+        return ret
+
+    def initialize(self, **_) -> Optional["ExternalCallHandler"]:
+        return self
 
     def __init__(
         self,
@@ -93,9 +123,7 @@ class NoopCallHandler(ExternalCallHandler):
 
 
 class StandardMutation(ExternalCallHandler):
-    def handle(
-        self,
-    ) -> None:
+    def handle(self) -> None:
         if self.return_value is not None and self.caller_self is not self.return_value:
             return
         self._mutate_caller(should_propagate=True)
@@ -154,8 +182,9 @@ class ListMethod(ExternalCallHandler):
 
 
 class ListExtend(ListMethod):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    orig_len: int = None
+
+    def initialize(self, **kwargs) -> None:
         self.orig_len = len(self.caller_self)
 
     def handle_namespace(self, namespace: "Namespace") -> None:
@@ -179,9 +208,7 @@ class ListAppend(ListExtend):
 
 
 class ListInsert(ListMethod):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.insert_pos: Optional[int] = None
+    insert_pos: Optional[int] = None
 
     def handle_namespace(self, namespace: "Namespace") -> None:
         if self.insert_pos is None or len(self.args) < 2:
@@ -211,9 +238,7 @@ class ListInsert(ListMethod):
 
 
 class ListRemove(ListMethod):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.remove_pos: Optional[int] = None
+    remove_pos: Optional[int] = None
 
     def handle_namespace(self, namespace: "Namespace") -> None:
         if self.remove_pos is None:
@@ -231,10 +256,6 @@ class ListRemove(ListMethod):
 
 
 class ListPop(ListRemove):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.remove_pos: Optional[int] = None
-
     def process_arg(self, pop_pos: int) -> None:
         self.remove_pos = pop_pos
 
@@ -288,7 +309,7 @@ def _resolve_external_call_simple(
             external_call_type = StandardMutation
         else:
             return None
-    return external_call_type(
+    return external_call_type.create(
         module=module, caller_self=caller_self, function_or_method=method_caller_self
     )
 

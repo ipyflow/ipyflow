@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-import ast
 import logging
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type
 
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.singletons import flow
+from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol
@@ -28,17 +27,29 @@ class ExternalCallHandler:
         self,
         *,
         module: Optional[ModuleType] = None,
-        obj: Any = None,
+        caller_self: Any = None,
         function_or_method: Any = None,
     ) -> None:
         self.module = module
-        self.obj = obj
+        self.caller_self = caller_self
         self.function_or_method = function_or_method
         self.args: List["ExternalCallArgument"] = []
+        self._arg_dsyms: Optional[Set["DataSymbol"]] = None
         self.return_value: Any = self.not_yet_defined
+        self.stmt_node = tracer().prev_trace_stmt_in_cur_frame.stmt_node
 
     def __init_subclass__(cls):
         external_call_handler_by_name[cls.__name__] = cls
+
+    @property
+    def caller_self_obj_id(self) -> Optional[int]:
+        return None if self.caller_self is None else id(self.caller_self)
+
+    @property
+    def arg_dsyms(self) -> Set["DataSymbol"]:
+        if self._arg_dsyms is None:
+            self._arg_dsyms = set().union(*(arg[1] for arg in self.args))
+        return self._arg_dsyms
 
     def process_arg(self, arg: Any) -> None:
         pass
@@ -54,38 +65,23 @@ class ExternalCallHandler:
     def process_return(self, return_value: Any) -> None:
         self.return_value = return_value
 
-    def _handle_impl(
-        self,
-        stmt_node: ast.stmt,
-    ) -> None:
-        arg_dsyms: Set["DataSymbol"] = set()
-        arg_dsyms = arg_dsyms.union(*(arg[1] for arg in self.args))
-        Timestamp.update_usage_info(arg_dsyms)
-        self.handle(
-            None if self.obj is None else id(self.obj), self.args, arg_dsyms, stmt_node
-        )
+    def _handle_impl(self) -> None:
+        Timestamp.update_usage_info(self.arg_dsyms)
+        self.handle()
 
-    def _mutate_caller(
-        self, obj_id: int, arg_dsyms: Set["DataSymbol"], should_propagate: bool
-    ) -> None:
-        mutated_syms = flow().aliases.get(obj_id, set())
+    def _mutate_caller(self, should_propagate: bool) -> None:
+        mutated_syms = flow().aliases.get(self.caller_self_obj_id, set())
         Timestamp.update_usage_info(mutated_syms)
         for mutated_sym in mutated_syms:
             mutated_sym.update_deps(
-                arg_dsyms,
+                self.arg_dsyms,
                 overwrite=False,
                 mutated=True,
                 propagate_to_namespace_descendents=should_propagate,
                 refresh=should_propagate,
             )
 
-    def handle(
-        self,
-        obj_id: int,
-        args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
+    def handle(self) -> None:
         pass
 
 
@@ -99,30 +95,16 @@ class NoopCallHandler(ExternalCallHandler):
 class StandardMutation(ExternalCallHandler):
     def handle(
         self,
-        obj_id: int,
-        args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
     ) -> None:
-        if self.return_value is not None and obj_id != id(self.return_value):
+        if self.return_value is not None and self.caller_self is not self.return_value:
             return
-        self._mutate_caller(
-            obj_id,
-            arg_dsyms,
-            should_propagate=True,
-        )
+        self._mutate_caller(should_propagate=True)
 
 
 class NamespaceClear(StandardMutation):
-    def handle(
-        self,
-        obj_id: int,
-        args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
-        super().handle(obj_id, args, arg_dsyms, stmt_node)
-        mutated_sym = flow().get_first_full_symbol(obj_id)
+    def handle(self) -> None:
+        super().handle()
+        mutated_sym = flow().get_first_full_symbol(self.caller_self_obj_id)
         if mutated_sym is None:
             return
         namespace = mutated_sym.namespace
@@ -145,14 +127,8 @@ class MutatingMethodEventNotYetImplemented(ExternalCallHandler):
 
 
 class ArgMutate(ExternalCallHandler):
-    def handle(
-        self,
-        obj_id: int,
-        _args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
-        for mutated_sym in arg_dsyms:
+    def handle(self) -> None:
+        for mutated_sym in self.arg_dsyms:
             if mutated_sym is None or mutated_sym.is_anonymous:
                 continue
             # TODO: happens when module mutates args
@@ -161,75 +137,45 @@ class ArgMutate(ExternalCallHandler):
 
 
 class ListMethod(ExternalCallHandler):
-    def handle_namespace(
-        self,
-        namespace: "Namespace",
-        args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
+    def handle_namespace(self, namespace: "Namespace") -> None:
         pass
 
-    def handle_mutate_caller(
-        self,
-        obj_id: int,
-        arg_dsyms: Set["DataSymbol"],
-    ) -> None:
+    def handle_mutate_caller(self) -> None:
         pass
 
-    def handle(
-        self,
-        obj_id: int,
-        args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
-        mutated_sym = flow().get_first_full_symbol(obj_id)
+    def handle(self) -> None:
+        caller_self_obj_id = self.caller_self_obj_id
+        mutated_sym = flow().get_first_full_symbol(caller_self_obj_id)
         if mutated_sym is not None:
             namespace = mutated_sym.namespace
             if namespace is not None:
-                self.handle_namespace(namespace, args, arg_dsyms, stmt_node)
-        self.handle_mutate_caller(obj_id, arg_dsyms)
+                self.handle_namespace(namespace)
+        self.handle_mutate_caller()
 
 
 class ListExtend(ListMethod):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self.orig_len = len(self.obj)
+        self.orig_len = len(self.caller_self)
 
-    def handle_namespace(
-        self,
-        namespace: "Namespace",
-        args: List["ExternalCallArgument"],
-        arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
+    def handle_namespace(self, namespace: "Namespace") -> None:
         for upsert_pos in range(self.orig_len, len(namespace.obj)):
             namespace.upsert_data_symbol_for_name(
                 upsert_pos,
                 namespace.obj[upsert_pos],
-                arg_dsyms,
-                stmt_node,
+                self.arg_dsyms,
                 overwrite=False,
                 is_subscript=True,
                 propagate=False,
             )
 
-    def handle_mutate_caller(
-        self,
-        obj_id: int,
-        arg_dsyms: Set["DataSymbol"],
-    ) -> None:
-        self._mutate_caller(obj_id, arg_dsyms, should_propagate=False)
+    def handle_mutate_caller(self) -> None:
+        self._mutate_caller(should_propagate=False)
 
 
 class ListAppend(ListExtend):
-    def handle_mutate_caller(
-        self,
-        obj_id: int,
-        _arg_dsyms: Set["DataSymbol"],
-    ) -> None:
-        self._mutate_caller(obj_id, set(), False)
+    def handle_mutate_caller(self) -> None:
+        self._mutate_caller(False)
 
 
 class ListInsert(ListMethod):
@@ -237,16 +183,10 @@ class ListInsert(ListMethod):
         super().__init__(*args, **kwargs)
         self.insert_pos: Optional[int] = None
 
-    def handle_namespace(
-        self,
-        namespace: "Namespace",
-        args: List["ExternalCallArgument"],
-        _arg_dsyms: Set["DataSymbol"],
-        stmt_node: ast.stmt,
-    ) -> None:
-        if self.insert_pos is None or len(args) < 2:
+    def handle_namespace(self, namespace: "Namespace") -> None:
+        if self.insert_pos is None or len(self.args) < 2:
             return
-        inserted_arg_obj, inserted_arg_dsyms = args[1]
+        inserted_arg_obj, inserted_arg_dsyms = self.args[1]
         inserted_syms = {
             sym for sym in inserted_arg_dsyms if sym.obj is inserted_arg_obj
         }
@@ -257,18 +197,14 @@ class ListInsert(ListMethod):
             self.insert_pos,
             namespace.obj[self.insert_pos],
             inserted_syms,
-            stmt_node,
+            self.stmt_node,
             overwrite=False,
             is_subscript=True,
             propagate=True,
         )
 
-    def handle_mutate_caller(
-        self,
-        obj_id: int,
-        _arg_dsyms: Set["DataSymbol"],
-    ) -> None:
-        self._mutate_caller(obj_id, set(), should_propagate=False)
+    def handle_mutate_caller(self) -> None:
+        self._mutate_caller(should_propagate=False)
 
     def process_arg(self, insert_pos: int) -> None:
         self.insert_pos = insert_pos
@@ -279,29 +215,19 @@ class ListRemove(ListMethod):
         super().__init__(*args, **kwargs)
         self.remove_pos: Optional[int] = None
 
-    def handle_namespace(
-        self,
-        namespace: "Namespace",
-        _args: List["ExternalCallArgument"],
-        _arg_dsyms: Set["DataSymbol"],
-        _stmt_node: ast.stmt,
-    ) -> None:
+    def handle_namespace(self, namespace: "Namespace") -> None:
         if self.remove_pos is None:
             return
         namespace.delete_data_symbol_for_name(self.remove_pos, is_subscript=True)
 
     def process_arg(self, remove_val: Any) -> None:
         try:
-            self.remove_pos = self.obj.index(remove_val)
+            self.remove_pos = self.caller_self.index(remove_val)
         except ValueError:
             pass
 
-    def handle_mutate_caller(
-        self,
-        obj_id: int,
-        arg_dsyms: Set["DataSymbol"],
-    ) -> None:
-        self._mutate_caller(obj_id, arg_dsyms, should_propagate=False)
+    def handle_mutate_caller(self) -> None:
+        self._mutate_caller(should_propagate=False)
 
 
 class ListPop(ListRemove):
@@ -340,41 +266,43 @@ _METHOD_TO_EVENT_TYPE: Dict[Any, Optional[Type[ExternalCallHandler]]] = {
 
 def _resolve_external_call_simple(
     module: Optional[ModuleType],
-    obj: Optional[Any],
+    caller_self: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],
     use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
-    if obj is logging or isinstance(obj, logging.Logger):
+    if caller_self is logging or isinstance(caller_self, logging.Logger):
         return NoopCallHandler()
-    elif obj is not None and id(type(obj)) in flow().aliases:
+    elif caller_self is not None and id(type(caller_self)) in flow().aliases:
         return NoopCallHandler()
     # TODO: handle case where it's a function defined in-notebook
-    elif obj is None:
-        method_obj = function_or_method
+    elif caller_self is None:
+        method_caller_self = function_or_method
     elif method is None:
         return None
     else:
-        method_obj = getattr(type(obj), method, None)
-    external_call_type = _METHOD_TO_EVENT_TYPE.get(method_obj, None)
+        method_caller_self = getattr(type(caller_self), method, None)
+    external_call_type = _METHOD_TO_EVENT_TYPE.get(method_caller_self, None)
     if external_call_type is None:
         if use_standard_default:
             external_call_type = StandardMutation
         else:
             return None
-    return external_call_type(module=module, obj=obj, function_or_method=method_obj)
+    return external_call_type(
+        module=module, caller_self=caller_self, function_or_method=method_caller_self
+    )
 
 
 def resolve_external_call(
     module: Optional[ModuleType],
-    obj: Optional[Any],
+    caller_self: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],
     use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
     return _resolve_external_call_simple(
         module,
-        obj,
+        caller_self,
         function_or_method,
         method,
         use_standard_default=use_standard_default,

@@ -99,8 +99,11 @@ class ExternalCallHandler:
         Timestamp.update_usage_info(self.arg_dsyms)
         self.handle()
 
-    def _mutate_caller(self, should_propagate: bool) -> None:
-        mutated_syms = flow().aliases.get(self.caller_self_obj_id, set())
+    def mutate_caller(self, should_propagate: bool) -> None:
+        self.mutate_aliases(self.caller_self_obj_id, should_propagate)
+
+    def mutate_aliases(self, obj_id: Optional[int], should_propagate: bool) -> None:
+        mutated_syms = flow().aliases.get(obj_id, set())
         Timestamp.update_usage_info(mutated_syms)
         for mutated_sym in mutated_syms:
             mutated_sym.update_deps(
@@ -126,7 +129,7 @@ class StandardMutation(ExternalCallHandler):
     def handle(self) -> None:
         if self.return_value is not None and self.caller_self is not self.return_value:
             return
-        self._mutate_caller(should_propagate=True)
+        self.mutate_caller(should_propagate=True)
 
 
 class NamespaceClear(StandardMutation):
@@ -175,7 +178,7 @@ class ListMethod(ExternalCallHandler):
             namespace = mutated_sym.namespace
             if namespace is not None:
                 self.handle_namespace(namespace)
-        self._mutate_caller(should_propagate=False)
+        self.mutate_caller(should_propagate=False)
 
 
 class ListExtend(ListMethod):

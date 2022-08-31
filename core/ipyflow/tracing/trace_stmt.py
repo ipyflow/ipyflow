@@ -362,7 +362,7 @@ class TraceStatement:
 
     def handle_dependencies(self) -> None:
         for external_call in tracer().external_calls:
-            logger.error("external call %s", external_call.args)
+            logger.info("external call: %s", external_call)
             external_call._handle_impl()
         if self._contains_lval():
             self._make_lval_data_symbols()

@@ -12,6 +12,7 @@ import pyccolo as pyc
 from IPython import get_ipython
 
 from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
+from ipyflow.annotations.compiler import compile_and_register_handlers_for_module
 from ipyflow.api.lift import lift as api_lift
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
@@ -579,7 +580,8 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_import)
     def after_import(self, *_, module: ModuleType, **__):
-        register_module_external_call_handlers(module)
+        register_module_external_call_handlers(module)  # TODO: delete this one
+        compile_and_register_handlers_for_module(module)
 
     @pyc.register_raw_handler(
         (

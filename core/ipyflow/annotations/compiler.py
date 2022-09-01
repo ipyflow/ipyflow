@@ -3,15 +3,24 @@
 Compiles the annotations in .pyi files into handlers for library code.
 """
 import ast
+import logging
 import os
-from collections import defaultdict
-from typing import Dict, List, Tuple, Type
+import sys
+from types import ModuleType
+from typing import Dict, List, Type
 
 from ipyflow.tracing.external_call_handler import (
+    REGISTERED_HANDLER_BY_FUNCTION,
     ExternalCallHandler,
     external_call_handler_by_name,
 )
 from ipyflow.utils.ast_utils import subscript_to_slice
+
+logger = logging.getLogger(__name__)
+
+
+REGISTERED_CLASS_SPECS: Dict[str, List[ast.ClassDef]] = {}
+REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
 
 
 def compile_function_handler(func: ast.FunctionDef) -> Type[ExternalCallHandler]:
@@ -46,12 +55,19 @@ def compile_function_handler(func: ast.FunctionDef) -> Type[ExternalCallHandler]
         )
 
 
-def compile_class_handler(cls: ast.ClassDef) -> List[Type[ExternalCallHandler]]:
-    handlers = []
+def compile_class_handler(cls: ast.ClassDef) -> Dict[str, Type[ExternalCallHandler]]:
+    handlers = {}
     for func in cls.body:
         if not isinstance(func, ast.FunctionDef):
             continue
-        handlers.append(compile_function_handler(func))
+        try:
+            handlers[func.name] = compile_function_handler(func)
+        except (ValueError, TypeError):
+            # logger.exception(
+            #     "exception while trying to compile handler for %s in class %s"
+            #     % (func.name, cls.name)
+            # )
+            continue
     return handlers
 
 
@@ -73,35 +89,9 @@ def get_modules_from_decorators(decorators: List[ast.expr]) -> List[str]:
     return modules
 
 
-def get_specs_by_module(
-    filenames: List[str],
-) -> Tuple[Dict[str, List[ast.ClassDef]], Dict[str, List[ast.FunctionDef]]]:
-    """
-    Transforms the annotations in .pyi files into specs for later compilation into handlers for library code.
-    """
-    if isinstance(filenames, str):
-        filenames = [filenames]
-    classes_by_module = defaultdict(list)
-    functions_by_module = defaultdict(list)
-    for fname in filenames:
-        with open(fname, "r") as f:
-            source = f.read()
-        for node in ast.parse(source).body:
-            if not isinstance(node, (ast.ClassDef, ast.FunctionDef)):
-                continue
-            for module in get_modules_from_decorators(node.decorator_list) or [
-                os.path.splitext(fname)[0]
-            ]:
-                if isinstance(node, ast.ClassDef):
-                    classes_by_module[module].append(node)
-                elif isinstance(node, ast.FunctionDef):
-                    functions_by_module[module].append(node)
-    return classes_by_module, functions_by_module
-
-
 def compile_classes(
     classes: List[ast.ClassDef],
-) -> Dict[str, List[Type[ExternalCallHandler]]]:
+) -> Dict[str, Dict[str, Type[ExternalCallHandler]]]:
     handlers_by_class = {}
     for clazz in classes:
         handlers_by_class[clazz.name] = compile_class_handler(clazz)
@@ -110,8 +100,68 @@ def compile_classes(
 
 def compile_functions(
     functions: List[ast.FunctionDef],
-) -> List[Type[ExternalCallHandler]]:
-    function_handlers = []
+) -> Dict[str, Type[ExternalCallHandler]]:
+    function_handlers = {}
     for func in functions:
-        function_handlers.append(compile_function_handler(func))
+        try:
+            function_handlers[func.name] = compile_function_handler(func)
+        except (ValueError, TypeError):
+            # logger.exception(
+            #     "exception while trying to compile handler for %s" % func.name
+            # )
+            continue
     return function_handlers
+
+
+def register_annotations_file(filename: str) -> None:
+    """
+    Transforms the annotations in .pyi files into specs for later compilation into handlers for library code.
+    """
+    with open(filename, "r") as f:
+        source = f.read()
+    for node in ast.parse(source).body:
+        if not isinstance(node, (ast.ClassDef, ast.FunctionDef)):
+            continue
+        for module in get_modules_from_decorators(node.decorator_list) or [
+            os.path.splitext(os.path.basename(filename))[0]
+        ]:
+            if isinstance(node, ast.ClassDef):
+                REGISTERED_CLASS_SPECS.setdefault(module, []).append(node)
+            elif isinstance(node, ast.FunctionDef):
+                REGISTERED_FUNCTION_SPECS.setdefault(module, []).append(node)
+
+
+def compile_and_register_handlers_for_module(module: ModuleType) -> None:
+    compiled_class_handlers = compile_classes(
+        REGISTERED_CLASS_SPECS.get(module.__name__, [])
+    )
+    compiled_function_handlers = compile_functions(
+        REGISTERED_FUNCTION_SPECS.get(module.__name__, [])
+    )
+    for classname, compiled_class_method_handlers in compiled_class_handlers.items():
+        clazz = getattr(module, classname, None)
+        if clazz is None:
+            continue
+        for method_name, handler in compiled_class_method_handlers.items():
+            method_function = getattr(clazz, method_name, None)
+            if method_function is not None:
+                REGISTERED_HANDLER_BY_FUNCTION[method_function] = handler
+    for function_name, handler in compiled_function_handlers.items():
+        function = getattr(module, function_name, None)
+        if function is not None:
+            REGISTERED_HANDLER_BY_FUNCTION[function] = handler
+
+
+def register_annotations_directory(dirname: str) -> None:
+    annotation_files = []
+    for filename in os.listdir(dirname):
+        if os.path.splitext(filename)[1] == ".pyi":
+            annotation_files.append(filename)
+            register_annotations_file(os.path.join(dirname, filename))
+    for filename in annotation_files:
+        module = sys.modules.get(os.path.splitext(filename)[0])
+        if module is not None:
+            compile_and_register_handlers_for_module(module)
+
+
+register_annotations_directory(os.path.dirname(__file__))

@@ -2,7 +2,7 @@
 import ast
 import logging
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Type
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Type
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
@@ -119,6 +119,7 @@ class ExternalCallHandler:
 
 
 external_call_handler_by_name: Dict[str, Type[ExternalCallHandler]] = {}
+REGISTERED_HANDLER_BY_FUNCTION: Dict[Callable, Type[ExternalCallHandler]] = {}
 
 
 class NoopCallHandler(ExternalCallHandler):
@@ -250,31 +251,6 @@ class ListPop(ListRemove):
         self.remove_pos = pop_pos
 
 
-_METHOD_TO_EVENT_TYPE: Dict[Any, Optional[Type[ExternalCallHandler]]] = {
-    list.__getitem__: NoopCallHandler,
-    list.append: ListAppend,
-    list.clear: NamespaceClear,
-    list.extend: ListExtend,
-    list.insert: ListInsert,
-    list.pop: ListPop,
-    list.remove: ListRemove,
-    list.sort: MutatingMethodEventNotYetImplemented,
-    dict.clear: NamespaceClear,
-    dict.pop: MutatingMethodEventNotYetImplemented,
-    dict.popitem: MutatingMethodEventNotYetImplemented,
-    dict.setdefault: MutatingMethodEventNotYetImplemented,
-    dict.update: MutatingMethodEventNotYetImplemented,
-    set.clear: MutatingMethodEventNotYetImplemented,
-    set.difference_update: MutatingMethodEventNotYetImplemented,
-    set.discard: MutatingMethodEventNotYetImplemented,
-    set.intersection_update: MutatingMethodEventNotYetImplemented,
-    set.pop: MutatingMethodEventNotYetImplemented,
-    set.remove: MutatingMethodEventNotYetImplemented,
-    set.symmetric_difference_update: MutatingMethodEventNotYetImplemented,
-    set.update: MutatingMethodEventNotYetImplemented,
-}
-
-
 def _resolve_external_call_simple(
     module: Optional[ModuleType],
     caller_self: Optional[Any],
@@ -293,7 +269,7 @@ def _resolve_external_call_simple(
         return None
     else:
         method_caller_self = getattr(type(caller_self), method, None)
-    external_call_type = _METHOD_TO_EVENT_TYPE.get(method_caller_self, None)
+    external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(method_caller_self, None)
     if external_call_type is None:
         if use_standard_default:
             external_call_type = StandardMutation

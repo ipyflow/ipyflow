@@ -2,7 +2,6 @@
 import ast
 import logging
 import textwrap
-from collections import defaultdict
 from dataclasses import dataclass
 from types import FrameType
 from typing import Any, Callable, Dict, Iterable, NamedTuple, Optional, Set, Tuple, cast
@@ -107,8 +106,8 @@ class NotebookFlow(singletons.NotebookFlow):
         self.namespaces: Dict[int, Namespace] = {}
         # TODO: wrap this in something that clears the dict entry when the set is 0 length
         self.aliases: Dict[int, Set[DataSymbol]] = {}
-        self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
-        self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
+        self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
+        self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
         self.global_scope: Scope = Scope()
         self.virtual_symbols: Scope = Scope()
         self._virtual_symbols_inited: bool = False
@@ -189,11 +188,11 @@ class NotebookFlow(singletons.NotebookFlow):
         return cells().exec_counter()
 
     def add_dynamic_data_dep(self, child: Timestamp, parent: Timestamp):
-        self.dynamic_data_deps[child].add(parent)
+        self.dynamic_data_deps.setdefault(child, set()).add(parent)
         cells().from_timestamp(child).add_dynamic_parent(cells().from_timestamp(parent))
 
     def add_static_data_dep(self, child: Timestamp, parent: Timestamp):
-        self.static_data_deps[child].add(parent)
+        self.static_data_deps.setdefault(child, set()).add(parent)
         cells().from_timestamp(child).add_static_parent(cells().from_timestamp(parent))
 
     def reset_cell_counter(self):

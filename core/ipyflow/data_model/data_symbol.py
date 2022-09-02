@@ -28,7 +28,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.update_protocol import UpdateProtocol
 from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, tracer
-from ipyflow.types import SupportedIndexType
+from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard
 
 if TYPE_CHECKING:
@@ -56,15 +56,7 @@ class DataSymbol:
     # object for virtual display symbol
     DISPLAY = object()
 
-    IMMUTABLE_TYPES = {
-        bytes,
-        bytearray,
-        float,
-        frozenset,
-        int,
-        str,
-        tuple,
-    }
+    IMMUTABLE_TYPES = set(IMMUTABLE_PRIMITIVE_TYPES)
 
     def __init__(
         self,

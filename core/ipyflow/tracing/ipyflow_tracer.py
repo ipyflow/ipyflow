@@ -988,7 +988,6 @@ class DataflowTracer(StackFrameManager):
         _node_id: NodeId,
         frame: FrameType,
         *_,
-        call_node_id: NodeId,
         **__,
     ):
         tracing_will_be_enabled_by_end = self.is_tracing_enabled

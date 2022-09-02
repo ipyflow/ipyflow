@@ -27,9 +27,6 @@ def module(*_modules):
     pass
 
 
-__module__ = None  # again; just a marker
-
-
 class SymbolUpserted(ExternalCallHandler):
     """
     Stub for indicating that a value is upserted as a side effect.

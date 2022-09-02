@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+import sys
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Type
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
+from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES
 
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol
@@ -102,6 +104,11 @@ class ExternalCallHandler:
     def mutate_caller(self, should_propagate: bool) -> None:
         self.mutate_aliases(self.caller_self_obj_id, should_propagate)
 
+    def mutate_module(self) -> None:
+        if self.module is None:
+            return
+        self.mutate_aliases(id(self.module), should_propagate=True)
+
     def mutate_aliases(self, obj_id: Optional[int], should_propagate: bool) -> None:
         mutated_syms = flow().aliases.get(obj_id, set())
         Timestamp.update_usage_info(mutated_syms)
@@ -127,10 +134,39 @@ class NoopCallHandler(ExternalCallHandler):
 
 
 class StandardMutation(ExternalCallHandler):
-    def handle(self) -> None:
+    def _maybe_mutate_caller(self) -> None:
         if self.return_value is not None and self.caller_self is not self.return_value:
             return
         self.mutate_caller(should_propagate=True)
+
+    def handle(self) -> None:
+        if self.caller_self is not None:
+            self._maybe_mutate_caller()
+        elif self.module is not None and self.return_value is None:
+            self.mutate_module()
+            if len(self.args) == 0:
+                return
+            # FIXME: extermely hacky
+            first_arg_obj, first_arg_syms = self.args[0]
+            if isinstance(first_arg_obj, (list, set, dict) + IMMUTABLE_PRIMITIVE_TYPES):
+                return
+            depending_on_first_arg = []
+            for obj, dsyms in self.args[1:]:
+                filtered_dsyms = {
+                    dsym
+                    for dsym in dsyms
+                    if any(first_sym in dsym.parents for first_sym in first_arg_syms)
+                }
+                if len(filtered_dsyms) > 0:
+                    depending_on_first_arg.append((obj, filtered_dsyms))
+            self.args = [self.args[0]] + depending_on_first_arg
+            self._arg_dsyms = None
+            ArgMutate.handle(self)  # type: ignore
+
+
+class ModuleMutation(ExternalCallHandler):
+    def handle(self) -> None:
+        self.mutate_module()
 
 
 class NamespaceClear(StandardMutation):
@@ -258,25 +294,39 @@ def _resolve_external_call_simple(
     method: Optional[str],
     use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
+    if module is None:
+        if isinstance(caller_self, ModuleType):
+            module = caller_self
+        else:
+            # to handle numpy stuff
+            module = getattr(
+                getattr(
+                    getattr(function_or_method, "__self__", None), "__class__", None
+                ),
+                "__module__",
+                None,
+            )
     if caller_self is logging or isinstance(caller_self, logging.Logger):
         return NoopCallHandler()
     elif caller_self is not None and id(type(caller_self)) in flow().aliases:
         return NoopCallHandler()
     # TODO: handle case where it's a function defined in-notebook
     elif caller_self is None:
-        method_caller_self = function_or_method
+        pass
     elif method is None:
         return None
     else:
-        method_caller_self = getattr(type(caller_self), method, None)
-    external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(method_caller_self, None)
+        function_or_method = getattr(type(caller_self), method, function_or_method)
+    external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method, None)
     if external_call_type is None:
         if use_standard_default:
             external_call_type = StandardMutation
         else:
             return None
+    if isinstance(caller_self, ModuleType):
+        caller_self = None
     return external_call_type.create(
-        module=module, caller_self=caller_self, function_or_method=method_caller_self
+        module=module, caller_self=caller_self, function_or_method=function_or_method
     )
 
 

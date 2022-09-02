@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-from ipyflow.annotations import Mutated, __module__, module
-from ipyflow.tracing.external_call_handler import NoopCallHandler
+from ipyflow.annotations import module
+from ipyflow.tracing.external_call_handler import ModuleMutation, NoopCallHandler
 
 @module("matplotlib.pyplot", "pylab", "d2l.torch")
 def show() -> NoopCallHandler: ...
@@ -11,4 +11,4 @@ def plot() -> NoopCallHandler: ...
 
 #
 @module("matplotlib.pyplot", "pylab")
-def figure() -> Mutated[__module__]: ...
+def figure() -> ModuleMutation: ...

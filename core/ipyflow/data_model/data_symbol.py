@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import ast
-import builtins
 import logging
 import sys
 from collections import defaultdict
@@ -19,8 +18,6 @@ from typing import (
     cast,
 )
 
-from pyccolo.extra_builtins import EMIT_EVENT
-
 from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
 from ipyflow.data_model import sizing
 from ipyflow.data_model.annotation_utils import (
@@ -33,6 +30,7 @@ from ipyflow.data_model.update_protocol import UpdateProtocol
 from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, tracer
 from ipyflow.types import SupportedIndexType
+from ipyflow.utils.misc_utils import cleanup_discard
 
 if TYPE_CHECKING:
     # avoid circular imports
@@ -145,7 +143,7 @@ class DataSymbol:
         self.disable_warnings = False
         self._temp_disable_warnings = False
 
-        flow().aliases[id(obj)].add(self)
+        flow().aliases.setdefault(id(obj), set()).add(self)
         if (
             isinstance(self.name, str)
             and not self.is_anonymous
@@ -479,7 +477,7 @@ class DataSymbol:
         if self.obj is None or self.obj is DataSymbol.NULL:
             return -1
         total = sys.getrefcount(self.obj) - 1
-        total -= len(flow().aliases[self.obj_id])
+        total -= len(flow().aliases.get(self.obj_id, []))
         ns = flow().namespaces.get(self.obj_id, None)
         if ns is not None and ns.obj is not None and ns.obj is not DataSymbol.NULL:
             total -= 1
@@ -516,12 +514,8 @@ class DataSymbol:
         return (obj_size_ubound == cached_obj_size_ubound) and self.obj == prev_obj
 
     def _handle_aliases(self):
-        old_aliases = flow().aliases.get(self.cached_obj_id, None)
-        if old_aliases is not None:
-            old_aliases.discard(self)
-            if len(old_aliases) == 0:
-                del flow().aliases[self.cached_obj_id]
-        flow().aliases[self.obj_id].add(self)
+        cleanup_discard(flow().aliases, self.cached_obj_id, self)
+        flow().aliases.setdefault(self.obj_id, set()).add(self)
 
     def update_stmt_node(self, stmt_node: Optional[ast.stmt]) -> Optional[ast.stmt]:
         self.stmt_node = stmt_node
@@ -870,7 +864,7 @@ class DataSymbol:
             if ns is not None:
                 # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
                 ns.max_descendent_timestamp = self._timestamp
-                for alias in flow().aliases[ns.obj_id]:
+                for alias in flow().aliases.get(ns.obj_id, []):
                     for cell in alias.cells_where_deep_live:
                         cell.add_used_cell_counter(alias, self._timestamp.cell_num)
             self.updated_timestamps.add(self._timestamp)

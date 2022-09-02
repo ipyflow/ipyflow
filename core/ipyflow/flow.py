@@ -27,6 +27,7 @@ from ipyflow.run_mode import (
 )
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.types import CellId, SupportedIndexType
+from ipyflow.utils.misc_utils import cleanup_discard
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -105,7 +106,7 @@ class NotebookFlow(singletons.NotebookFlow):
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
         # TODO: wrap this in something that clears the dict entry when the set is 0 length
-        self.aliases: Dict[int, Set[DataSymbol]] = defaultdict(set)
+        self.aliases: Dict[int, Set[DataSymbol]] = {}
         self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = defaultdict(set)
         self.global_scope: Scope = Scope()
@@ -461,7 +462,9 @@ class NotebookFlow(singletons.NotebookFlow):
                 continue
             if dsym.obj_id == id(obj):
                 continue
-            for alias in self.aliases[dsym.cached_obj_id] | self.aliases[dsym.obj_id]:
+            for alias in self.aliases.get(dsym.cached_obj_id, set()) | self.aliases.get(
+                dsym.obj_id, set()
+            ):
                 containing_namespace = alias.containing_namespace
                 if containing_namespace is None:
                     continue
@@ -478,9 +481,9 @@ class NotebookFlow(singletons.NotebookFlow):
                     containing_namespace._subscript_data_symbol_by_name[
                         alias.name
                     ] = alias
-            self.aliases[dsym.cached_obj_id].discard(dsym)
-            self.aliases[dsym.obj_id].discard(dsym)
-            self.aliases[id(obj)].add(dsym)
+            cleanup_discard(self.aliases, dsym.cached_obj_id, dsym)
+            cleanup_discard(self.aliases, dsym.obj_id, dsym)
+            self.aliases.setdefault(id(obj), set()).add(dsym)
             dsym.update_obj_ref(obj)
 
     @property

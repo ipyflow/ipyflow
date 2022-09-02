@@ -111,7 +111,8 @@ class UpdateProtocol:
                 containing_ns.namespace_waiting_symbols.discard(dsym)
                 containing_ns.max_descendent_timestamp = Timestamp.current()
                 self._collect_updated_symbols_and_refresh_namespaces(
-                    flow().aliases[containing_ns.obj_id], refresh_descendent_namespaces
+                    flow().aliases.get(containing_ns.obj_id, set()),
+                    refresh_descendent_namespaces,
                 )
             if refresh_descendent_namespaces:
                 dsym_ns = dsym.namespace
@@ -132,10 +133,10 @@ class UpdateProtocol:
             return
         logger.warning("add %s to namespace waiting symbols of %s", dsym, containing_ns)
         containing_ns.namespace_waiting_symbols.add(dsym)
-        for containing_alias in flow().aliases[containing_ns.obj_id]:
+        for containing_alias in flow().aliases.get(containing_ns.obj_id, []):
             self._propagate_waiting_to_namespace_parents(containing_alias)
 
-        for containing_alias in flow().aliases[containing_ns.obj_id]:
+        for containing_alias in flow().aliases.get(containing_ns.obj_id, []):
             # do this in 2 separate loops to make sure all containing_alias are added to 'seen'
             # works around the issue when one alias depends on another
             for child in self._non_class_to_instance_children(containing_alias):

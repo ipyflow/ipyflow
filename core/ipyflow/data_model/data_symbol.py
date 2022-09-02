@@ -2,7 +2,6 @@
 import ast
 import logging
 import sys
-from collections import defaultdict
 from enum import Enum
 from types import FrameType
 from typing import (
@@ -97,8 +96,8 @@ class DataSymbol:
         self.stmt_node = self.update_stmt_node(stmt_node)
         self.symbol_node = symbol_node
         self._funcall_live_symbols = None
-        self.parents: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
-        self.children: Dict["DataSymbol", List[Timestamp]] = defaultdict(list)
+        self.parents: Dict["DataSymbol", List[Timestamp]] = {}
+        self.children: Dict["DataSymbol", List[Timestamp]] = {}
 
         # initialize at -1 for implicit since the corresponding piece of data could already be around,
         # and we don't want liveness checker to think this was newly created unless we
@@ -761,8 +760,8 @@ class DataSymbol:
         for new_parent in new_deps - self.parents.keys():
             if new_parent is None:
                 continue
-            new_parent.children[self].append(Timestamp.current())
-            self.parents[new_parent].append(Timestamp.current())
+            new_parent.children.setdefault(self, []).append(Timestamp.current())
+            self.parents.setdefault(new_parent, []).append(Timestamp.current())
         self.required_timestamp = Timestamp.uninitialized()
         self.fresher_ancestors.clear()
         self.fresher_ancestor_timestamps.clear()

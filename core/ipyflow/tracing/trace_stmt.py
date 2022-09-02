@@ -351,6 +351,7 @@ class TraceStatement:
                         "keyerror for %s",
                         ast.dump(target) if isinstance(target, ast.AST) else target,
                     )
+                # TODO: put this back in and debug
                 # if flow().is_test:
                 #     raise ke
             except ImportError:

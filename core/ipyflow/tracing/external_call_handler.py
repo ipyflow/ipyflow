@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
-import sys
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Type
 
@@ -294,18 +293,12 @@ def _resolve_external_call_simple(
     method: Optional[str],
     use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
-    if module is None:
-        if isinstance(caller_self, ModuleType):
+    if caller_self is not None and isinstance(caller_self, ModuleType):
+        if module is None:
             module = caller_self
-        else:
-            # to handle numpy stuff
-            module = getattr(
-                getattr(
-                    getattr(function_or_method, "__self__", None), "__class__", None
-                ),
-                "__module__",
-                None,
-            )
+        caller_self = None
+    if module is logging or getattr(module, "__name__", None) == "__main__":
+        return NoopCallHandler()
     if caller_self is logging or isinstance(caller_self, logging.Logger):
         return NoopCallHandler()
     elif caller_self is not None and id(type(caller_self)) in flow().aliases:

@@ -152,9 +152,7 @@ class DataflowTracer(StackFrameManager):
         self.prev_trace_stmt: Optional[TraceStatement] = None
         self.seen_stmts: Set[NodeId] = set()
         self.traced_statements: Dict[NodeId, TraceStatement] = {}
-        self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = defaultdict(
-            list
-        )
+        self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = {}
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
         self.node_id_to_saved_live_subscript_refs: Dict[NodeId, Set[DataSymbol]] = {}
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
@@ -365,9 +363,9 @@ class DataflowTracer(StackFrameManager):
                             except IndexError:
                                 pass
                             # logger.error("use node %s", ast.dump(self.ast_node_by_id[return_to_node_id]))
-                            self.node_id_to_loaded_symbols[return_to_node_id].append(
-                                dsym_to_attach
-                            )
+                            self.node_id_to_loaded_symbols.setdefault(
+                                return_to_node_id, []
+                            ).append(dsym_to_attach)
         finally:
             if self.is_tracing_enabled:
                 self.call_stack.pop()
@@ -764,9 +762,9 @@ class DataflowTracer(StackFrameManager):
                         )
                     if sym_for_obj is not None:
                         assert self.top_level_node_id_for_chain is not None
-                        self.node_id_to_loaded_symbols[
-                            self.top_level_node_id_for_chain
-                        ].append(sym_for_obj)
+                        self.node_id_to_loaded_symbols.setdefault(
+                            self.top_level_node_id_for_chain, []
+                        ).append(sym_for_obj)
         finally:
             self.active_scope = scope
 
@@ -782,9 +780,9 @@ class DataflowTracer(StackFrameManager):
                 obj, self.ast_node_by_id[node_id]
             )
             if loaded_sym is not None:
-                self.node_id_to_loaded_symbols[self.top_level_node_id_for_chain].append(
-                    loaded_sym
-                )
+                self.node_id_to_loaded_symbols.setdefault(
+                    self.top_level_node_id_for_chain, []
+                ).append(loaded_sym)
         finally:
             self.saved_complex_symbol_load_data = None
             self.first_obj_id_in_chain = None
@@ -1111,7 +1109,7 @@ class DataflowTracer(StackFrameManager):
                 implicit=True,
                 propagate=False,
             )
-            self.node_id_to_loaded_symbols[node_id].append(literal_sym)
+            self.node_id_to_loaded_symbols.setdefault(node_id, []).append(literal_sym)
             return literal
         finally:
             self.lexical_literal_stack.pop()
@@ -1178,7 +1176,7 @@ class DataflowTracer(StackFrameManager):
             symbol_node=node,
         )
         sym.func_def_stmt = node
-        self.node_id_to_loaded_symbols[lambda_node_id].append(sym)
+        self.node_id_to_loaded_symbols.setdefault(lambda_node_id, []).append(sym)
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):

@@ -7,8 +7,6 @@ class KeyDict(dict):
 
 
 def cleanup_discard(d, key, val):
-    if key not in d:
-        return
     s = d.get(key, set())
     s.discard(val)
     if len(s) == 0:
@@ -16,8 +14,6 @@ def cleanup_discard(d, key, val):
 
 
 def cleanup_pop(d, key, val):
-    if key not in d:
-        return
     d2 = d.get(key, {})
     d2.pop(val, None)
     if len(d2) == 0:

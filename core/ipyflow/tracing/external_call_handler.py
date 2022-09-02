@@ -132,6 +132,22 @@ class NoopCallHandler(ExternalCallHandler):
     pass
 
 
+# TODO: use dsl for these instead
+ARG_MUTATION_EXCEPTED_MODULES = {
+    "alt",
+    "altair",
+    "display",
+    "logging",
+    "matplotlib",
+    "pyplot",
+    "plot",
+    "plt",
+    "seaborn",
+    "sns",
+    "widget",
+}
+
+
 class StandardMutation(ExternalCallHandler):
     def _maybe_mutate_caller(self) -> None:
         if self.return_value is not None and self.caller_self is not self.return_value:
@@ -145,7 +161,16 @@ class StandardMutation(ExternalCallHandler):
             self.mutate_module()
             if len(self.args) == 0:
                 return
-            # FIXME: extermely hacky
+            # FIXME: extremely hacky
+            for module_sym in flow().aliases.get(id(self.module), []):
+                module_sym_name = module_sym.name
+                if not isinstance(module_sym_name, str):
+                    continue
+                if module_sym_name.startswith("<"):
+                    module_sym_name = module_sym_name[1:-1]
+                if module_sym_name.split(".")[0] in ARG_MUTATION_EXCEPTED_MODULES:
+                    return
+            # FIXME: extremely hacky here too
             first_arg_obj, first_arg_syms = self.args[0]
             if isinstance(first_arg_obj, (list, set, dict) + IMMUTABLE_PRIMITIVE_TYPES):
                 return

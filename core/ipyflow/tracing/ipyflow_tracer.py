@@ -47,21 +47,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
-ARG_MUTATION_EXCEPTED_MODULES = {
-    "alt",
-    "altair",
-    "display",
-    "logging",
-    "matplotlib",
-    "pyplot",
-    "plot",
-    "plt",
-    "seaborn",
-    "sns",
-    "widget",
-}
-
-
 reactive_spec = pyc.AugmentationSpec(
     aug_type=pyc.AugmentationType.prefix, token="$", replacement=""
 )
@@ -555,8 +540,11 @@ class DataflowTracer(StackFrameManager):
             return None
         module_sym = next(iter(flow().aliases.get(id(module), {None})))
         if module_sym is None:
+            sym_name = getattr(module, "__name__", str(module))
+            if not sym_name.startswith("<"):
+                sym_name = f"<{sym_name}>"
             module_sym = self.cur_frame_original_scope.upsert_data_symbol_for_name(
-                str(module),
+                sym_name,
                 module,
                 set(),
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
@@ -619,7 +607,7 @@ class DataflowTracer(StackFrameManager):
     def after_import(self, *_, module: ModuleType, **__):
         self._import_depth -= 1
         compile_and_register_handlers_for_module(module)
-        if self._import_depth == 0 and self.is_tracing_enabled:
+        if self._import_depth == 0:
             self._create_if_not_exists_module_symbol(
                 module, self.prev_trace_stmt_in_cur_frame.stmt_node, is_load=False
             )
@@ -940,93 +928,6 @@ class DataflowTracer(StackFrameManager):
         if ret:
             self._seen_functions_ids.add(function_id)
         return ret
-
-    # def _process_possible_external_call(self, retval: Any) -> None:
-    #     if self.external_call_candidate is None:
-    #         return
-    #     (
-    #         (obj, obj_name, function_or_method, method_name),
-    #         external_call,
-    #         recorded_args,
-    #     ) = self.external_call_candidate
-    #     self.external_call_candidate = None
-    #     if obj is logging or isinstance(obj, logging.Logger):
-    #         # ignore calls to logging.whatever(...)
-    #         return
-    #     obj_type = None
-    #     obj_id = id(obj)
-    #     if obj_id in flow().aliases:
-    #         aliases = flow().aliases[obj_id]
-    #         if len(aliases) > 0:
-    #             obj_type = next(iter(aliases)).obj_type
-    #     if obj_type is None:
-    #         obj_type = type(obj)
-    #     is_excepted_mutation = False
-    #     is_excepted_non_mutation = False
-    #     if isinstance(external_call, StandardMutation):
-    #         # only look for exceptions for standard mutations; other cases are handled elsewhere
-    #         if retval is not None and id(retval) != obj_id:
-    #             # doesn't look like something we can trace, but it also
-    #             # doesn't look like something that mutates the caller, since
-    #             # the return value is not None and it's not the caller object
-    #             if (
-    #                 obj_id,
-    #                 method_name,
-    #             ) in METHODS_WITH_MUTATION_EVEN_FOR_NON_NULL_RETURN:
-    #                 is_excepted_mutation = True
-    #             else:
-    #                 return
-    #         if not is_excepted_mutation:
-    #             if retval is None:
-    #                 is_excepted_non_mutation = (
-    #                     obj_id,
-    #                     method_name,
-    #                 ) in METHODS_WITHOUT_MUTATION_EVEN_FOR_NULL_RETURN
-    #             if (
-    #                 is_excepted_non_mutation
-    #                 or obj_type is None
-    #                 or id(obj_type) in flow().aliases
-    #             ):
-    #                 # the calling obj looks like something that we can trace;
-    #                 # no need to process the call as a possible mutation
-    #                 return
-    #     if isinstance(external_call, StandardMutation):
-    #         try:
-    #             top_level_sym = flow().get_first_full_symbol(self.first_obj_id_in_chain)
-    #             if (
-    #                 top_level_sym.is_import
-    #                 and top_level_sym.name not in ARG_MUTATION_EXCEPTED_MODULES
-    #             ):
-    #                 # TODO: should it be the other way around?
-    #                 #  i.e. allow-list for arg mutations, starting with np.random.seed?
-    #                 mutated_dsym = None
-    #                 if len(recorded_args) > 0:
-    #                     first_arg_dsyms = [
-    #                         sym
-    #                         for sym in recorded_args[0][1]
-    #                         if sym.obj is recorded_args[0][0]
-    #                     ]
-    #                     if len(first_arg_dsyms) == 1:
-    #                         mutated_dsym = first_arg_dsyms[0]
-    #                         if mutated_dsym.obj_type in DataSymbol.IMMUTABLE_TYPES:
-    #                             mutated_dsym = None
-    #                         elif mutated_dsym.obj_type in {list, set, dict}:
-    #                             # assume module code won't mutate these primitive containers
-    #                             mutated_dsym = None
-    #                 if mutated_dsym is not None:
-    #                     # only make this an arg mutation event if it looks like there's an arg to mutate
-    #                     filtered_args = [(mutated_dsym.obj, {mutated_dsym})]
-    #                     # just consider the first one mutated unless other args depend on it
-    #                     for obj, dsyms in recorded_args[1:]:
-    #                         filtered_dsyms = {
-    #                             dsym for dsym in dsyms if mutated_dsym in dsym.parents
-    #                         }
-    #                         filtered_args.append((obj, filtered_dsyms))
-    #                     recorded_args = filtered_args
-    #                     external_call = ArgMutate()
-    #         except:
-    #             pass
-    #     self.external_calls.append((obj_id, external_call, recorded_args))
 
     @pyc.register_raw_handler(pyc.after_call)
     def after_call(

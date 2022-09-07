@@ -23,7 +23,9 @@ REGISTERED_CLASS_SPECS: Dict[str, List[ast.ClassDef]] = {}
 REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
 
 
-def compile_function_handler(func: ast.FunctionDef) -> Type[ExternalCallHandler]:
+def compile_function_handler(
+    func: ast.FunctionDef, is_method: bool
+) -> Type[ExternalCallHandler]:
     # step 1: union arguments into groups such that any 2 args reference the same symbol somehow
     # step 2: for each group, create a handler that searches for a solution to the group constraint
     # step 3: combine the handlers into a single handler
@@ -61,7 +63,7 @@ def compile_class_handler(cls: ast.ClassDef) -> Dict[str, Type[ExternalCallHandl
         if not isinstance(func, ast.FunctionDef):
             continue
         try:
-            handlers[func.name] = compile_function_handler(func)
+            handlers[func.name] = compile_function_handler(func, is_method=True)
         except (ValueError, TypeError):
             # logger.exception(
             #     "exception while trying to compile handler for %s in class %s"
@@ -104,7 +106,9 @@ def compile_functions(
     function_handlers = {}
     for func in functions:
         try:
-            function_handlers[func.name] = compile_function_handler(func)
+            function_handlers[func.name] = compile_function_handler(
+                func, is_method=False
+            )
         except (ValueError, TypeError):
             # logger.exception(
             #     "exception while trying to compile handler for %s" % func.name

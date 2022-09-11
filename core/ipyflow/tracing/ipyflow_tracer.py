@@ -127,7 +127,6 @@ class DataflowTracer(StackFrameManager):
                 blocking_spec
             ]
         self._module_stmt_counter = 0
-        self._import_depth = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self._seen_loop_ids: Set[NodeId] = set()
         self._seen_functions_ids: Set[NodeId] = set()
@@ -218,7 +217,6 @@ class DataflowTracer(StackFrameManager):
         self.this_stmt_updated_symbols.clear()
         self._seen_functions_ids.clear()
         self.is_external_call_pending_return = False
-        self._import_depth = 0
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -519,9 +517,10 @@ class DataflowTracer(StackFrameManager):
             ns.parent_scope = parent_scope
         return ns
 
-    def _create_if_not_exists_module_symbol(
+    def create_if_not_exists_module_symbol(
         self, module_or_function: Any, node: ast.AST, is_load: bool = True
     ) -> Optional[DataSymbol]:
+        # TODO: upsert modules / namespaces hierarchically
         if isinstance(module_or_function, ModuleType):
             module = module_or_function
         else:
@@ -549,6 +548,7 @@ class DataflowTracer(StackFrameManager):
                 set(),
                 self.prev_trace_stmt_in_cur_frame.stmt_node,
                 is_subscript=False,
+                is_module=True,
                 propagate=False,
                 implicit=False,
                 symbol_node=node,
@@ -596,21 +596,12 @@ class DataflowTracer(StackFrameManager):
             )
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
-        self._create_if_not_exists_module_symbol(obj_attr_or_sub, node)
+        self.create_if_not_exists_module_symbol(obj_attr_or_sub, node)
         return data_sym
-
-    @pyc.register_raw_handler(pyc.before_import)
-    def before_import(self, *_, **__):
-        self._import_depth += 1
 
     @pyc.register_raw_handler(pyc.after_import)
     def after_import(self, *_, module: ModuleType, **__):
-        self._import_depth -= 1
         compile_and_register_handlers_for_module(module)
-        if self._import_depth == 0:
-            self._create_if_not_exists_module_symbol(
-                module, self.prev_trace_stmt_in_cur_frame.stmt_node, is_load=False
-            )
 
     @pyc.register_raw_handler(
         (
@@ -909,7 +900,7 @@ class DataflowTracer(StackFrameManager):
             assert isinstance(attr_or_subscript, str)
             method_name = attr_or_subscript
             # method_name should match ast_by_id[function_or_method].func.id
-        module_sym = self._create_if_not_exists_module_symbol(
+        module_sym = self.create_if_not_exists_module_symbol(
             function_or_method, node.func
         )
         self._save_external_call_candidate(

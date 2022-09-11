@@ -303,6 +303,19 @@ class TraceStatement:
 
         for target, dep_node in symbol_edges:
             rval_deps = resolve_rval_symbols(dep_node)
+            if is_import:
+                dep_node_as_alias = cast(ast.alias, dep_node)
+                if isinstance(self.stmt_node, ast.ImportFrom):
+                    module = sys.modules.get(
+                        f"{self.stmt_node.module}.{dep_node_as_alias.name}"
+                    ) or sys.modules.get(self.stmt_node.module)
+                else:
+                    module = sys.modules.get(dep_node_as_alias.name)
+                if module is not None:
+                    module_sym = tracer().create_if_not_exists_module_symbol(
+                        module, self.stmt_node, is_load=False
+                    )
+                    rval_deps.update(flow().aliases.get(module_sym.obj_id, set()))
             logger.info("create edges from %s to %s", rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None

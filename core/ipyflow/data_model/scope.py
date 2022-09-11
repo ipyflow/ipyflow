@@ -143,6 +143,7 @@ class Scope:
         is_subscript: bool = False,
         is_function_def: bool = False,
         is_import: bool = False,
+        is_module: bool = False,
         is_anonymous: bool = False,
         class_scope: Optional["Scope"] = None,
     ):
@@ -155,6 +156,10 @@ class Scope:
             assert overwrite
             assert not is_subscript
             return DataSymbolType.IMPORT
+        elif is_module:
+            assert overwrite
+            assert not is_subscript
+            return DataSymbolType.MODULE
         elif class_scope is not None:
             assert overwrite
             assert not is_subscript
@@ -177,6 +182,7 @@ class Scope:
         is_subscript: bool = False,
         is_function_def: bool = False,
         is_import: bool = False,
+        is_module: bool = False,
         is_anonymous: bool = False,
         class_scope: Optional["Scope"] = None,
         symbol_type: Optional[DataSymbolType] = None,
@@ -188,6 +194,7 @@ class Scope:
             is_subscript=is_subscript,
             is_function_def=is_function_def,
             is_import=is_import,
+            is_module=is_module,
             is_anonymous=is_anonymous,
             class_scope=class_scope,
         )

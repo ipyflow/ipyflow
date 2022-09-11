@@ -109,9 +109,9 @@ class GetSymbolEdges(
         for name in node.names:
             if name.asname is None:
                 if name.name != "*" and "." not in name.name:
-                    self.edges.append((name.name, node))
+                    self.edges.append((name.name, name))
             else:
-                self.edges.append((name.asname, node))
+                self.edges.append((name.asname, name))
 
 
 def get_symbol_edges(

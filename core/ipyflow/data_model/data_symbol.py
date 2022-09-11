@@ -46,6 +46,7 @@ class DataSymbolType(Enum):
     FUNCTION = "function"
     CLASS = "class"
     IMPORT = "import"
+    MODULE = "module"
     ANONYMOUS = "anonymous"
 
 

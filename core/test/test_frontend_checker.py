@@ -516,3 +516,15 @@ def test_unsafe_order():
         assert not response.ready_maker_links
         run_cell("x = y + 1", 0)
         assert flow().out_of_order_usage_detected_counter == 2
+
+
+@skipif_known_failing
+def test_qualified_import():
+    cells = {
+        0: "import numpy.random",
+        1: "logging.info(numpy.random)",
+    }
+    run_all_cells(cells)
+    response = flow().check_and_link_multiple_cells()
+    assert response.waiting_cells == set()
+    assert response.ready_cells == set()

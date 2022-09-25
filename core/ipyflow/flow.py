@@ -146,6 +146,8 @@ class NotebookFlow(singletons.NotebookFlow):
         self.register_comm_handler(
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
         )
+        self.fs: Namespace = None
+        self.display_sym: DataSymbol = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -154,11 +156,16 @@ class NotebookFlow(singletons.NotebookFlow):
     def init_virtual_symbols(self) -> None:
         if self._virtual_symbols_inited:
             return
-        self.fs: Namespace = Namespace(Namespace.FILE_SYSTEM, "fs")
+        self.fs = Namespace(Namespace.FILE_SYSTEM, "fs")
         self.display_sym = self.virtual_symbols.upsert_data_symbol_for_name(
             "display", DataSymbol.DISPLAY
         )
         self._virtual_symbols_inited = True
+
+    def initialize(self, *, entrypoint: Optional[str] = None) -> None:
+        self.mut_settings.dataflow_enabled = False
+        self.mut_settings.syntax_transforms_enabled = False
+        self.mut_settings.syntax_transforms_only = True
 
     @property
     def is_develop(self) -> bool:

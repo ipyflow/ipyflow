@@ -183,7 +183,7 @@ class TraceStatement:
             return
         ns = flow().namespaces.get(id(obj), None)
         if ns is None:
-            ns = Namespace(obj, str(name), scope)
+            ns = Namespace(obj, str(name), parent_scope=scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
             ns.upsert_data_symbol_for_name(
@@ -313,9 +313,15 @@ class TraceStatement:
                     module = sys.modules.get(dep_node_as_alias.name)
                 if module is not None:
                     module_sym = tracer().create_if_not_exists_module_symbol(
-                        module, self.stmt_node, is_load=False
+                        module,
+                        self.stmt_node,
+                        is_load=False,
+                        is_named=dep_node_as_alias.asname is None,
                     )
                     rval_deps.update(flow().aliases.get(module_sym.obj_id, set()))
+                target_as_str = cast(str, target)
+                if target_as_str == "*" or "." in target_as_str:
+                    continue
             logger.info("create edges from %s to %s", rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None

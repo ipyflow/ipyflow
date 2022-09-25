@@ -243,6 +243,10 @@ class DataSymbol:
         return self.symbol_type == DataSymbolType.IMPORT
 
     @property
+    def is_module(self) -> bool:
+        return self.symbol_type == DataSymbolType.MODULE
+
+    @property
     def imported_module(self) -> str:
         if not self.is_import:
             raise ValueError("only IMPORT symbols have `imported_module` property")

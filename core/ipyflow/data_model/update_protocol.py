@@ -99,7 +99,7 @@ class UpdateProtocol:
             self.seen.add(dsym)
             for cell in dsym.cells_where_deep_live:
                 cell.add_used_cell_counter(dsym, flow().cell_counter())
-            containing_ns = dsym.containing_namespace
+            containing_ns = None if dsym.is_module else dsym.containing_namespace
             if containing_ns is not None:
                 logger.warning(
                     "containing scope for %s: %s; ids %s, %s",
@@ -129,7 +129,7 @@ class UpdateProtocol:
             return
         self.seen.add(dsym)
         containing_ns = dsym.containing_namespace
-        if containing_ns is None:
+        if containing_ns is None or containing_ns.is_module:
             return
         logger.warning("add %s to namespace waiting symbols of %s", dsym, containing_ns)
         containing_ns.namespace_waiting_symbols.add(dsym)

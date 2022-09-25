@@ -518,7 +518,6 @@ def test_unsafe_order():
         assert flow().out_of_order_usage_detected_counter == 2
 
 
-@skipif_known_failing
 def test_qualified_import():
     cells = {
         0: "import numpy.random",

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import itertools
 import logging
+from types import ModuleType
 from typing import (
     Any,
     Dict,
@@ -98,6 +99,10 @@ class Namespace(Scope):
             )
         # do the validation before starting the generator part so that we raise immediately
         return self._items_inner()
+
+    @property
+    def is_module(self):
+        return isinstance(self.obj, ModuleType)
 
     @property
     def obj_id(self) -> int:

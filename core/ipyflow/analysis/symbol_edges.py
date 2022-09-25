@@ -108,8 +108,7 @@ class GetSymbolEdges(
     def visit_Import_or_ImportFrom(self, node: Union[ast.Import, ast.ImportFrom]):
         for name in node.names:
             if name.asname is None:
-                if name.name != "*" and "." not in name.name:
-                    self.edges.append((name.name, name))
+                self.edges.append((name.name, name))
             else:
                 self.edges.append((name.asname, name))
 

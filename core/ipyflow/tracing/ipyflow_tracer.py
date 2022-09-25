@@ -518,7 +518,11 @@ class DataflowTracer(StackFrameManager):
         return ns
 
     def create_if_not_exists_module_symbol(
-        self, module_or_function: Any, node: ast.AST, is_load: bool = True
+        self,
+        module_or_function: Any,
+        node: ast.AST,
+        is_load: bool = True,
+        is_named: bool = False,
     ) -> Optional[DataSymbol]:
         # TODO: upsert modules / namespaces hierarchically
         if isinstance(module_or_function, ModuleType):
@@ -537,25 +541,49 @@ class DataflowTracer(StackFrameManager):
             module = sys.modules.get(cast(str, module))
         if module is None:
             return None
-        module_sym = next(iter(flow().aliases.get(id(module), {None})))
-        if module_sym is None:
-            sym_name = getattr(module, "__name__", str(module))
-            if not sym_name.startswith("<"):
+        module_name = module.__name__
+        if module_name is None:
+            return None
+        is_first = True
+        cur_scope = self.cur_frame_original_scope
+        up_to_component = ""
+        symbol = None
+        if module_name == "__main__":
+            return None
+        components = module_name.split(".")
+        for idx, component in enumerate(components):
+            if is_first:
+                up_to_component = component
+            else:
+                up_to_component = f"{up_to_component}.{component}"
+            module = sys.modules.get(up_to_component)
+            if module is None:
+                return None
+            sym_name = component
+            if is_first and not is_named and not sym_name.startswith("<"):
                 sym_name = f"<{sym_name}>"
-            module_sym = self.cur_frame_original_scope.upsert_data_symbol_for_name(
-                sym_name,
-                module,
-                set(),
-                self.prev_trace_stmt_in_cur_frame.stmt_node,
-                is_subscript=False,
-                is_module=True,
-                propagate=False,
-                implicit=False,
-                symbol_node=node,
-            )
+            symbol = next(iter(flow().aliases.get(id(module), {None})))
+            if symbol is None:
+                symbol = cur_scope.upsert_data_symbol_for_name(
+                    sym_name,
+                    module,
+                    set(),
+                    self.prev_trace_stmt_in_cur_frame.stmt_node,
+                    is_subscript=False,
+                    is_module=True,
+                    propagate=False,
+                    implicit=False,
+                    symbol_node=node,
+                )
+            is_first = False
+            if idx == len(components) - 1:
+                break
+            cur_scope = symbol.namespace
+            if cur_scope is None:
+                cur_scope = Namespace(module, component, parent_scope=cur_scope)
         if is_load and getattr(module, "__name__", None) != "__main__":
-            self.node_id_to_loaded_symbols.setdefault(id(node), []).append(module_sym)
-        return module_sym
+            self.node_id_to_loaded_symbols.setdefault(id(node), []).append(symbol)
+        return symbol
 
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(
         self, obj_attr_or_sub: Any, node: ast.AST

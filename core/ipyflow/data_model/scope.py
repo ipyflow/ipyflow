@@ -309,6 +309,10 @@ class Scope:
         return self.parent_scope is None
 
     @property
+    def is_module(self):
+        return False
+
+    @property
     def is_globally_accessible(self):
         return self.is_global or (
             self.is_namespace_scope and self.parent_scope.is_globally_accessible

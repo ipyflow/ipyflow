@@ -162,14 +162,10 @@ class StandardMutation(ExternalCallHandler):
             if len(self.args) == 0:
                 return
             # FIXME: extremely hacky
-            for module_sym in flow().aliases.get(id(self.module), []):
-                module_sym_name = module_sym.name
-                if not isinstance(module_sym_name, str):
-                    continue
-                if module_sym_name.startswith("<"):
-                    module_sym_name = module_sym_name[1:-1]
-                if module_sym_name.split(".")[0] in ARG_MUTATION_EXCEPTED_MODULES:
-                    return
+            if (self.module.__name__ or "").split(".")[
+                0
+            ] in ARG_MUTATION_EXCEPTED_MODULES:
+                return
             # FIXME: extremely hacky here too
             first_arg_obj, first_arg_syms = self.args[0]
             if isinstance(first_arg_obj, (list, set, dict) + IMMUTABLE_PRIMITIVE_TYPES):

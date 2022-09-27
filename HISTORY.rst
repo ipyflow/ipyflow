@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.118 (2022-09-27)
+-------------------
+* Misc bugfixes;
+* Improve code for external call handlers;
+* Better handling for module symbols;
+
 0.0.117 (2022-07-03)
 -------------------
 * Misc bugfixes;

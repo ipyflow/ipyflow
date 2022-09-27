@@ -542,14 +542,12 @@ class DataflowTracer(StackFrameManager):
         if module is None:
             return None
         module_name = module.__name__
-        if module_name is None:
+        if module_name in (None, "builtins", "__main__"):
             return None
         is_first = True
         cur_scope = self.cur_frame_original_scope
         up_to_component = ""
         symbol = None
-        if module_name == "__main__":
-            return None
         components = module_name.split(".")
         for idx, component in enumerate(components):
             if is_first:
@@ -581,7 +579,7 @@ class DataflowTracer(StackFrameManager):
             cur_scope = symbol.namespace
             if cur_scope is None:
                 cur_scope = Namespace(module, component, parent_scope=cur_scope)
-        if is_load and getattr(module, "__name__", None) != "__main__":
+        if is_load:
             self.node_id_to_loaded_symbols.setdefault(id(node), []).append(symbol)
         return symbol
 

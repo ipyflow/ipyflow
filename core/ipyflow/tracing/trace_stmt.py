@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import builtins
 import logging
 import sys
 from types import FrameType
@@ -11,7 +12,6 @@ from ipyflow.analysis.utils import stmt_contains_lval
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
-from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
@@ -311,14 +311,15 @@ class TraceStatement:
                     ) or sys.modules.get(self.stmt_node.module)
                 else:
                     module = sys.modules.get(dep_node_as_alias.name)
-                if module is not None:
+                if module not in (None, builtins):
                     module_sym = tracer().create_if_not_exists_module_symbol(
                         module,
                         self.stmt_node,
                         is_load=False,
                         is_named=dep_node_as_alias.asname is None,
                     )
-                    rval_deps.update(flow().aliases.get(module_sym.obj_id, set()))
+                    if module_sym is not None:
+                        rval_deps.update(flow().aliases.get(module_sym.obj_id, set()))
                 target_as_str = cast(str, target)
                 if target_as_str == "*" or "." in target_as_str:
                     continue

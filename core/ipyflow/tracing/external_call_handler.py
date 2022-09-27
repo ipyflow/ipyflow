@@ -318,7 +318,11 @@ def _resolve_external_call_simple(
         if module is None:
             module = caller_self
         caller_self = None
-    if module is logging or getattr(module, "__name__", None) == "__main__":
+    if (
+        module is logging
+        or getattr(module, "__name__", None) == "__main__"
+        or function_or_method == print
+    ):
         return NoopCallHandler()
     if caller_self is logging or isinstance(caller_self, logging.Logger):
         return NoopCallHandler()

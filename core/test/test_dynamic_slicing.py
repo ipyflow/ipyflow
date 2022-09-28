@@ -73,7 +73,6 @@ def test_simple():
     run_cell("c = a + b")
     deps = set(compute_unparsed_slice(4).keys())
     assert deps == {1, 2, 4}, "got %s" % deps
-    assert False
 
 
 def test_simple_function():

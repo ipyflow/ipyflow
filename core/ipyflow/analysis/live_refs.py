@@ -88,7 +88,8 @@ class ComputeLiveSymbolRefs(
         this_assign_live: Set[LiveSymbolRef] = set()
         # we won't mutate overall dead for visiting simple targets, and we need it to avoid adding false positive lives
         with self.push_attributes(live=this_assign_live):
-            self.visit(value)
+            if value is not None:
+                self.visit(value)
             if aug_assign_target is not None:
                 self.visit(aug_assign_target)
         # make a copy, then track the new dead
@@ -107,6 +108,7 @@ class ComputeLiveSymbolRefs(
             and len(this_assign_dead) == 1
             and not (this_assign_dead <= self.dead)
             and aug_assign_target is None
+            and value is not None
             and isinstance(value, (ast.Attribute, ast.Subscript, ast.Name))
         ):
             lhs, rhs = [
@@ -151,6 +153,14 @@ class ComputeLiveSymbolRefs(
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
         self.visit_Assign_impl([], node.value, aug_assign_target=node.target)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        targets = []
+        for name in node.names:
+            if name.name == "*":
+                continue
+            targets.append(ast.Name(id=name.asname or name.name, ctx=ast.Store()))
+        self.visit_Assign_impl(targets, value=None)
 
     def visit_Assign_target(
         self,

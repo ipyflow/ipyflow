@@ -58,6 +58,7 @@ def test_simplest():
     run_cell("a = 3")
     run_cell("logging.info(b)")
     assert_detected("should have detected b has stale dep on old a")
+    assert False
 
 
 def test_readme_example():

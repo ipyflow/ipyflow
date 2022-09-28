@@ -7,13 +7,14 @@ from typing import Dict
 
 from ipyflow.analysis.slicing import make_slice_text
 from ipyflow.data_model.code_cell import cells
+from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import flow
 
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
 # _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
-_flow_fixture, run_cell_ = make_flow_fixture()
+_flow_fixture, run_cell_ = make_flow_fixture(flow_direction=FlowDirection.IN_ORDER)
 
 
 def dynamic_or_static_only_test(test_f, dynamic_enabled, static_enabled):
@@ -72,6 +73,25 @@ def test_simple():
     run_cell("c = a + b")
     deps = set(compute_unparsed_slice(4).keys())
     assert deps == {1, 2, 4}, "got %s" % deps
+
+
+def test_simple_function():
+    run_cell("a = 1")
+    run_cell("def f(): return a")
+    run_cell("a = 3")
+    run_cell("b = f() + 2")
+    run_cell("logging.info(b)")
+    deps = set(compute_unparsed_slice(5).keys())
+    assert deps == {2, 3, 4, 5}, "got %s" % deps
+
+
+def test_simple_list_comprehension():
+    run_cell("xs = 0")
+    run_cell("ys = xs ** 2")
+    run_cell("xs = 1")
+    run_cell("ys = [x**2 for x in [xs]]")
+    deps = set(compute_unparsed_slice(4).keys())
+    assert deps == {3, 4}, "got %s" % deps
 
 
 def test_dynamic_symbol_usage():

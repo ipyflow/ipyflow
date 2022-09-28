@@ -262,6 +262,8 @@ def resolve_rval_symbols(
 ) -> Set[DataSymbol]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
+    if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+        node = node.value
     rval_symbols = ResolveRvalSymbols(should_update_usage_info)(node)
     if len(rval_symbols) == 0:
         prev_cell = cells().current_cell().prev_cell

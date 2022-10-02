@@ -3,6 +3,7 @@
 Compiles the annotations in .pyi files into handlers for library code.
 """
 import ast
+import functools
 import logging
 import os
 import sys
@@ -23,6 +24,30 @@ logger = logging.getLogger(__name__)
 
 REGISTERED_CLASS_SPECS: Dict[str, List[ast.ClassDef]] = {}
 REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
+
+
+@functools.cache
+def _mutate_arg_at_position(pos: int) -> Type[ExternalCallHandler]:
+    class MutateArgAtPosition(ExternalCallHandler):
+        def handle(self) -> None:
+            dsyms = self.args[pos][1] if pos < len(self.args) else {None}
+            if len(dsyms) == 0:
+                return
+            dsym = next(iter(dsyms))
+            if dsym is None:
+                return
+            dsym.update_deps(set(), overwrite=False, mutated=True)
+
+    return MutateArgAtPosition
+
+
+def _arg_position_in_signature(func: ast.FunctionDef, arg: str, is_method: bool) -> int:
+    for i, arg in enumerate(func.args.args):
+        if arg.arg == arg:
+            return i - is_method
+    raise ValueError(
+        "arg %s not found in function signature %s" % (arg, ast.dump(func))
+    )
 
 
 def compile_function_handler(
@@ -53,14 +78,12 @@ def compile_function_handler(
                         if is_method:
                             return CallerMutation
                         else:
-                            raise ValueError(
-                                "non-method annotation should not have reference to self: %s"
-                                % ast.dump(func)
+                            return _mutate_arg_at_position(
+                                _arg_position_in_signature(
+                                    func, slice_value.id, is_method=is_method
+                                )
                             )
-                    else:
-                        raise ValueError(f"No known handler for return type {ret}")
-            else:
-                raise ValueError(f"No known handler for return type {ret}")
+            raise ValueError(f"No known handler for return type {ret}")
     else:
         raise TypeError(
             f"unable to handle return type {ret} when trying to compile {func.name}"

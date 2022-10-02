@@ -26,7 +26,7 @@ REGISTERED_CLASS_SPECS: Dict[str, List[ast.ClassDef]] = {}
 REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
 
 
-@functools.cache
+@functools.lru_cache(maxsize=None)
 def _mutate_arg_at_position(pos: int) -> Type[ExternalCallHandler]:
     class MutateArgAtPosition(ExternalCallHandler):
         def handle(self) -> None:

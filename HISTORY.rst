@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.120 (2022-10-01)
+-------------------
+* Allow ImportFrom to kill symbols during static analysis;
+
 0.0.119 (2022-09-27)
 -------------------
 * Important bugfixes;

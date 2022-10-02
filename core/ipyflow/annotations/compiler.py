@@ -50,7 +50,13 @@ def compile_function_handler(
                     if slice_value.id == "__module__":
                         return ModuleMutation
                     elif slice_value.id == "self":
-                        return CallerMutation
+                        if is_method:
+                            return CallerMutation
+                        else:
+                            raise ValueError(
+                                "non-method annotation should not have reference to self: %s"
+                                % ast.dump(func)
+                            )
                     else:
                         raise ValueError(f"No known handler for return type {ret}")
             else:

@@ -2,17 +2,22 @@
 """
 Tools describing how non-notebook code affects dataflow
 """
+import os
 from typing import List, Set
 
+from ipyflow.annotations.compiler import register_annotations_directory
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
-from ipyflow.tracing.external_call_handler import (
+from ipyflow.tracing.external_calls.base_handlers import (
     ExternalCallHandler,
     HasGetitem,
     MutatingMethodEventNotYetImplemented,
     NamespaceClear,
     NoopCallHandler,
 )
+
+register_annotations_directory(os.path.dirname(__file__))
+
 
 # fake symbols just to prevent linter errors
 self = __module__ = None

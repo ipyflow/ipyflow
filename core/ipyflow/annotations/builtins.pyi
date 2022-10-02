@@ -4,7 +4,7 @@ from ipyflow.annotations import (
     NamespaceClear,
     NoopCallHandler,
 )
-from ipyflow.tracing.external_call_handler import (
+from ipyflow.tracing.external_calls.list_handlers import (
     ListAppend,
     ListExtend,
     ListInsert,

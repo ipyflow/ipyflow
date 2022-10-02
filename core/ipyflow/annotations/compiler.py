@@ -9,7 +9,7 @@ import sys
 from types import ModuleType
 from typing import Dict, List, Type
 
-from ipyflow.tracing.external_call_handler import (
+from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
     CallerMutation,
     ExternalCallHandler,
@@ -170,6 +170,3 @@ def register_annotations_directory(dirname: str) -> None:
         module = sys.modules.get(os.path.splitext(filename)[0])
         if module is not None:
             compile_and_register_handlers_for_module(module)
-
-
-register_annotations_directory(os.path.dirname(__file__))

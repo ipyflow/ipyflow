@@ -21,12 +21,12 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import FlowRunMode
 from ipyflow.singletons import SingletonBaseTracer, flow
-from ipyflow.tracing.external_call_handler import (
+from ipyflow.tracing.external_calls import resolve_external_call
+from ipyflow.tracing.external_calls.base_handlers import (
     ExternalCallHandler,
     MutatingMethodEventNotYetImplemented,
     NoopCallHandler,
     StandardMutation,
-    resolve_external_call,
 )
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols

@@ -11,7 +11,9 @@ from typing import Dict, List, Type
 
 from ipyflow.tracing.external_call_handler import (
     REGISTERED_HANDLER_BY_FUNCTION,
+    CallerMutation,
     ExternalCallHandler,
+    ModuleMutation,
     external_call_handler_by_name,
 )
 from ipyflow.utils.ast_utils import subscript_to_slice
@@ -46,7 +48,9 @@ def compile_function_handler(
             if sub_value.id == "Mutated":
                 if isinstance(slice_value, ast.Name):
                     if slice_value.id == "__module__":
-                        raise ValueError(f"No known handler for return type {ret}")
+                        return ModuleMutation
+                    elif slice_value.id == "self":
+                        return CallerMutation
                     else:
                         raise ValueError(f"No known handler for return type {ret}")
             else:

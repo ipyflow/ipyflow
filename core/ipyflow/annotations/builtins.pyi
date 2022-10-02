@@ -1,13 +1,15 @@
 # -*- coding: utf-8 -*-
+from ipyflow.annotations import (
+    MutatingMethodEventNotYetImplemented,
+    NamespaceClear,
+    NoopCallHandler,
+)
 from ipyflow.tracing.external_call_handler import (
     ListAppend,
     ListExtend,
     ListInsert,
     ListPop,
     ListRemove,
-    MutatingMethodEventNotYetImplemented,
-    NamespaceClear,
-    NoopCallHandler,
 )
 
 class dict:

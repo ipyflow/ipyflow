@@ -2568,6 +2568,14 @@ def test_underscore():
     assert_detected()
 
 
+def test_annotations_random_module():
+    run_cell("import random")
+    run_cell("foo = type(random)")
+    run_cell("random.seed(42)")
+    run_cell("logging.info(foo)")
+    assert_detected()
+
+
 # TODO: where was I going with this?
 # def test_getitem_call():
 #     run_cell("""

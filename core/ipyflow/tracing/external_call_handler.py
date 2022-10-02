@@ -17,7 +17,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class ExternalCallHandler:
+class HasGetitem(type):
+    """
+    Mixin for indicating that a class has a __getitem__ method
+    """
+
+    def __getitem__(cls, item):
+        return NotImplemented
+
+
+class ExternalCallHandler(metaclass=HasGetitem):
     not_yet_defined = object()
     module: Optional[ModuleType] = None
     caller_self: Any = None
@@ -101,12 +110,14 @@ class ExternalCallHandler:
         self.handle()
 
     def mutate_caller(self, should_propagate: bool) -> None:
-        self.mutate_aliases(self.caller_self_obj_id, should_propagate)
+        if self.caller_self is None:
+            return
+        self.mutate_aliases(self.caller_self_obj_id, should_propagate=should_propagate)
 
-    def mutate_module(self) -> None:
+    def mutate_module(self, should_propagate: bool) -> None:
         if self.module is None:
             return
-        self.mutate_aliases(id(self.module), should_propagate=True)
+        self.mutate_aliases(id(self.module), should_propagate=should_propagate)
 
     def mutate_aliases(self, obj_id: Optional[int], should_propagate: bool) -> None:
         mutated_syms = flow().aliases.get(obj_id, set())
@@ -158,7 +169,7 @@ class StandardMutation(ExternalCallHandler):
         if self.caller_self is not None:
             self._maybe_mutate_caller()
         elif self.module is not None and self.return_value is None:
-            self.mutate_module()
+            self.mutate_module(should_propagate=True)
             if len(self.args) == 0:
                 return
             # FIXME: extremely hacky
@@ -184,9 +195,14 @@ class StandardMutation(ExternalCallHandler):
             ArgMutate.handle(self)  # type: ignore
 
 
+class CallerMutation(ExternalCallHandler):
+    def handle(self) -> None:
+        self.mutate_caller(should_propagate=True)
+
+
 class ModuleMutation(ExternalCallHandler):
     def handle(self) -> None:
-        self.mutate_module()
+        self.mutate_module(should_propagate=True)
 
 
 class NamespaceClear(StandardMutation):

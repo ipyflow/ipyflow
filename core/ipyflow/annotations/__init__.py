@@ -2,12 +2,20 @@
 """
 Tools describing how non-notebook code affects dataflow
 """
-import abc
 from typing import List, Set
 
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
-from ipyflow.tracing.external_call_handler import ExternalCallHandler
+from ipyflow.tracing.external_call_handler import (
+    ExternalCallHandler,
+    HasGetitem,
+    MutatingMethodEventNotYetImplemented,
+    NamespaceClear,
+    NoopCallHandler,
+)
+
+# fake symbols just to prevent linter errors
+self = __module__ = None
 
 
 def handler_for(*_methods):
@@ -41,14 +49,13 @@ class Mutated(ExternalCallHandler):
     pass
 
 
-class SymbolMatcher(abc.ABC):
+class SymbolMatcher(metaclass=HasGetitem):
     """
     Indicates that the annotation matches a symbol
     """
 
-    @abc.abstractmethod
     def matches(self, sym: DataSymbol) -> bool:
-        pass
+        return False
 
 
 class AllOf(SymbolMatcher):
@@ -130,3 +137,23 @@ class Parents(SymbolMatcher):
             return sym.parents.keys() == self.parents
         else:
             return sym.parents.keys() <= self.parents
+
+
+__all__ = [
+    handler_for,
+    module,
+    self,
+    __module__,
+    AllOf,
+    AnyOf,
+    Display,
+    FileSystem,
+    Children,
+    Mutated,
+    MutatingMethodEventNotYetImplemented,
+    NamespaceClear,
+    NoopCallHandler,
+    Parents,
+    SymbolUpserted,
+    SymbolMatcher,
+]

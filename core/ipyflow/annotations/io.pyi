@@ -6,7 +6,11 @@ from ipyflow.annotations import (
     Parents,
     SymbolUpserted,
     handler_for,
+    self,
 )
+
+# fake symbols to reduce lint errors
+file = None
 
 def open(file, *_, **__) -> SymbolUpserted[Parents[FileSystem[file]]]: ...
 

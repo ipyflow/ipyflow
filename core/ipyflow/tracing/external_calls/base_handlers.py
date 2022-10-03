@@ -2,7 +2,7 @@
 import ast
 import logging
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Type
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Type
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
@@ -10,7 +10,8 @@ from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES
 
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol
-    from ipyflow.tracing.ipyflow_tracer import ExternalCallArgument
+
+    ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
 
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
     caller_self: Any = None
     function_or_method: Any = None
     args: List["ExternalCallArgument"] = None
+    kwargs: Dict[str, "ExternalCallArgument"] = None
     _arg_dsyms: Optional[Set["DataSymbol"]] = None
     return_value: Any = not_yet_defined
     stmt_node: ast.stmt = None
@@ -73,6 +75,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.caller_self = caller_self
         self.function_or_method = function_or_method
         self.args: List["ExternalCallArgument"] = []
+        self.kwargs: Dict[str, "ExternalCallArgument"] = {}
         self._arg_dsyms: Optional[Set["DataSymbol"]] = None
         self.return_value: Any = self.not_yet_defined
         self.stmt_node = tracer().prev_trace_stmt_in_cur_frame.stmt_node
@@ -100,6 +103,17 @@ class ExternalCallHandler(metaclass=HasGetitem):
     def process_args(self, args: List["ExternalCallArgument"]) -> None:
         for arg in args:
             self._process_arg_impl(arg)
+
+    def process_kwarg(self, kw: str, arg: Any) -> None:
+        pass
+
+    def _process_kwarg_impl(self, kw: str, arg: "ExternalCallArgument") -> None:
+        self.kwargs[kw] = arg
+        self.process_kwarg(kw, arg[0])
+
+    def process_kwargs(self, kwargs: Dict[str, "ExternalCallArgument"]) -> None:
+        for kw, arg in kwargs.items():
+            self._process_kwarg_impl(kw, arg)
 
     def process_return(self, return_value: Any) -> None:
         self.return_value = return_value

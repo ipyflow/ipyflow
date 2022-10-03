@@ -37,7 +37,6 @@ from ipyflow.types import SupportedIndexType
 AttrSubVal = SupportedIndexType
 NodeId = int
 ObjId = int
-ExternalCallArgument = Tuple[Any, Set[DataSymbol]]
 SavedStoreData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedDelData = Tuple[Namespace, Any, AttrSubVal, bool]
 SavedComplexSymbolLoadData = Tuple[Namespace, Any, AttrSubVal, bool, Optional[str]]
@@ -864,7 +863,15 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
-    def argument(self, arg_obj: Any, arg_node_id: int, *_, is_last: bool, **__):
+    def argument(
+        self,
+        arg_obj: Any,
+        arg_node_id: int,
+        *_,
+        key: Optional[str],
+        is_last: bool,
+        **__,
+    ):
         self.num_args_seen += 1
         try:
             ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
@@ -885,7 +892,12 @@ class DataflowTracer(StackFrameManager):
                     implicit=True,
                     symbol_node=arg_node,
                 )
-        ext_call_cand._process_arg_impl((arg_obj, resolve_rval_symbols(arg_node)))
+        if key is None:
+            ext_call_cand._process_arg_impl((arg_obj, resolve_rval_symbols(arg_node)))
+        else:
+            ext_call_cand._process_kwarg_impl(
+                key, (arg_obj, resolve_rval_symbols(arg_node))
+            )
         if is_last:
             self._resolve_external_call()
 

@@ -27,10 +27,13 @@ REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
 
 
 @functools.lru_cache(maxsize=None)
-def _mutate_arg_at_position(pos: int) -> Type[ExternalCallHandler]:
-    class MutateArgAtPosition(ExternalCallHandler):
+def _mutate_argument(pos: int, name: str) -> Type[ExternalCallHandler]:
+    class MutateArgument(ExternalCallHandler):
         def handle(self) -> None:
-            dsyms = self.args[pos][1] if pos < len(self.args) else {None}
+            if name in self.kwargs:
+                dsyms = self.kwargs[name][1]
+            else:
+                dsyms = self.args[pos][1] if pos < len(self.args) else {None}
             if len(dsyms) == 0:
                 return
             dsym = next(iter(dsyms))
@@ -38,7 +41,7 @@ def _mutate_arg_at_position(pos: int) -> Type[ExternalCallHandler]:
                 return
             dsym.update_deps(set(), overwrite=False, mutated=True)
 
-    return MutateArgAtPosition
+    return MutateArgument
 
 
 def _arg_position_in_signature(
@@ -80,10 +83,11 @@ def compile_function_handler(
                         if is_method:
                             return CallerMutation
                     else:
-                        return _mutate_arg_at_position(
-                            _arg_position_in_signature(
+                        return _mutate_argument(
+                            pos=_arg_position_in_signature(
                                 func, slice_value.id, is_method=is_method
-                            )
+                            ),
+                            name=slice_value.id,
                         )
             raise ValueError(f"No known handler for return type {ret}")
     else:

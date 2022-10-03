@@ -58,7 +58,6 @@ def test_annotation_registration():
     assert fakelib_function in REGISTERED_HANDLER_BY_FUNCTION
 
 
-@skipif_known_failing
 def test_mutation_by_kwarg():
     run_cell("lst = []")
     lst_sym = lookup_symbol_by_name("lst")

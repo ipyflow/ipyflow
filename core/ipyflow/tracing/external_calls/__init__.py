@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 from types import ModuleType
 from typing import Any, Optional

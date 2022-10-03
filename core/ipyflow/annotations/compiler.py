@@ -41,12 +41,14 @@ def _mutate_arg_at_position(pos: int) -> Type[ExternalCallHandler]:
     return MutateArgAtPosition
 
 
-def _arg_position_in_signature(func: ast.FunctionDef, arg: str, is_method: bool) -> int:
+def _arg_position_in_signature(
+    func: ast.FunctionDef, arg_name: str, is_method: bool
+) -> int:
     for i, arg in enumerate(func.args.args):
-        if arg.arg == arg:
+        if arg.arg == arg_name:
             return i - is_method
     raise ValueError(
-        "arg %s not found in function signature %s" % (arg, ast.dump(func))
+        "arg %s not found in function signature %s" % (arg_name, ast.dump(func))
     )
 
 
@@ -77,12 +79,12 @@ def compile_function_handler(
                     elif slice_value.id == "self":
                         if is_method:
                             return CallerMutation
-                        else:
-                            return _mutate_arg_at_position(
-                                _arg_position_in_signature(
-                                    func, slice_value.id, is_method=is_method
-                                )
+                    else:
+                        return _mutate_arg_at_position(
+                            _arg_position_in_signature(
+                                func, slice_value.id, is_method=is_method
                             )
+                        )
             raise ValueError(f"No known handler for return type {ret}")
     else:
         raise TypeError(

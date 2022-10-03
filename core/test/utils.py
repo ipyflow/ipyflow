@@ -8,6 +8,7 @@ import pytest
 from IPython import get_ipython
 
 from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.flow import NotebookFlow
 from ipyflow.kernel.kernel import IPyflowKernelBase
 from ipyflow.run_mode import FlowDirection, FlowRunMode
@@ -27,6 +28,12 @@ skipif_known_failing = pytest.mark.skipif(**should_skip_known_failing())
 
 def assert_bool(val, msg=""):
     assert val, str(msg)
+
+
+def lookup_symbol_by_name(name: str) -> DataSymbol:
+    ret = flow().global_scope.lookup_data_symbol_by_name_this_indentation(name)
+    assert ret is not None, "got None for %s" % name
+    return ret
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency

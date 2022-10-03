@@ -2,7 +2,7 @@
 import logging
 import os
 import sys
-from test.utils import make_flow_fixture
+from test.utils import lookup_symbol_by_name, make_flow_fixture, skipif_known_failing
 
 from ipyflow.annotations import register_annotations_directory
 from ipyflow.annotations.compiler import (
@@ -56,3 +56,18 @@ def test_annotation_registration():
     compile_and_register_handlers_for_module(fakelib)
     assert fakelib_method in REGISTERED_HANDLER_BY_FUNCTION
     assert fakelib_function in REGISTERED_HANDLER_BY_FUNCTION
+
+
+@skipif_known_failing
+def test_mutation_by_kwarg():
+    run_cell("lst = []")
+    lst_sym = lookup_symbol_by_name("lst")
+    ts0 = lst_sym.timestamp
+    run_cell(
+        "from fakelib import fun_for_testing_kwarg; fun_for_testing_kwarg(None, lst)"
+    )
+    ts1 = lst_sym.timestamp
+    assert ts1 > ts0
+    run_cell("fun_for_testing_kwarg(bar=lst, foo=None)")
+    ts2 = lst_sym.timestamp
+    assert ts2 > ts1

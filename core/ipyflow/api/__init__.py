@@ -1,4 +1,4 @@
 # -*- coding: utf-8 -*-
-from ipyflow.api.lift import lift
+from ipyflow.api.lift import code, lift
 
-__all__ = ["lift"]
+__all__ = ["code", "lift"]

@@ -96,13 +96,32 @@ def compile_function_handler(
         )
 
 
+def get_names_for_function(func: ast.FunctionDef) -> List[str]:
+    names = []
+    for decorator in func.decorator_list:
+        if not isinstance(decorator, ast.Call):
+            continue
+        func = decorator.func
+        if not isinstance(func, ast.Name) or func.id != "handler_for":
+            continue
+        for arg in decorator.args:
+            if isinstance(arg, ast.Str):
+                names.append(arg.s)
+    if len(names) > 0:
+        return names
+    else:
+        return [func.name]
+
+
 def compile_class_handler(cls: ast.ClassDef) -> Dict[str, Type[ExternalCallHandler]]:
     handlers = {}
     for func in cls.body:
         if not isinstance(func, ast.FunctionDef):
             continue
         try:
-            handlers[func.name] = compile_function_handler(func, is_method=True)
+            func_handler = compile_function_handler(func, is_method=True)
+            for name in get_names_for_function(func):
+                handlers[name] = func_handler
         except (ValueError, TypeError):
             # logger.exception(
             #     "exception while trying to compile handler for %s in class %s"
@@ -145,9 +164,9 @@ def compile_functions(
     function_handlers = {}
     for func in functions:
         try:
-            function_handlers[func.name] = compile_function_handler(
-                func, is_method=False
-            )
+            func_handler = compile_function_handler(func, is_method=False)
+            for name in get_names_for_function(func):
+                function_handlers[name] = func_handler
         except (ValueError, TypeError):
             # logger.exception(
             #     "exception while trying to compile handler for %s" % func.name

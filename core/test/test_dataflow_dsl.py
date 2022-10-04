@@ -31,31 +31,32 @@ def run_cell(cell, **kwargs):
 def test_annotation_registration():
     import fakelib
 
-    fakelib_method = (
-        fakelib.OnlyPresentSoThatHandlersCanBeRegistered.method_for_method_stub_presence
-    )
+    fakelib_class = fakelib.OnlyPresentSoThatHandlersCanBeRegistered
+    fakelib_method = fakelib_class.method_for_method_stub_presence
+    fakelib_method_a = fakelib_class.method_a  # type: ignore
+    fakelib_method_b = fakelib_class.method_b  # type: ignore
     fakelib_function = fakelib.function_for_function_stub_presence
     sys.modules.pop(fakelib.__name__)
 
-    assert (
-        fakelib.__name__ not in REGISTERED_CLASS_SPECS
-        and fakelib.__name__ not in REGISTERED_FUNCTION_SPECS
-    )
-    assert fakelib_method not in REGISTERED_HANDLER_BY_FUNCTION
-    assert fakelib_function not in REGISTERED_HANDLER_BY_FUNCTION
+    non_fakelib_module_name = "non_fakelib_module"
+
+    for module_name in [fakelib.__name__, non_fakelib_module_name]:
+        assert module_name not in REGISTERED_FUNCTION_SPECS
+        assert module_name not in REGISTERED_CLASS_SPECS
+    for fun in [fakelib_method, fakelib_method_a, fakelib_method_b, fakelib_function]:
+        assert fun not in REGISTERED_HANDLER_BY_FUNCTION
 
     register_annotations_directory(os.path.dirname(__file__))
-    assert (
-        fakelib.__name__ in REGISTERED_CLASS_SPECS
-        and fakelib.__name__ in REGISTERED_FUNCTION_SPECS
-    )
-    assert fakelib_method not in REGISTERED_HANDLER_BY_FUNCTION
-    assert fakelib_function not in REGISTERED_HANDLER_BY_FUNCTION
+    for module_name in [fakelib.__name__, non_fakelib_module_name]:
+        assert module_name in REGISTERED_FUNCTION_SPECS
+        assert module_name in REGISTERED_CLASS_SPECS
+    for fun in [fakelib_method, fakelib_method_a, fakelib_method_b, fakelib_function]:
+        assert fun not in REGISTERED_HANDLER_BY_FUNCTION
 
     sys.modules[fakelib.__name__] = fakelib
     compile_and_register_handlers_for_module(fakelib)
-    assert fakelib_method in REGISTERED_HANDLER_BY_FUNCTION
-    assert fakelib_function in REGISTERED_HANDLER_BY_FUNCTION
+    for fun in [fakelib_method, fakelib_method_a, fakelib_method_b, fakelib_function]:
+        assert fun in REGISTERED_HANDLER_BY_FUNCTION, "%s not in there" % fun
 
 
 def test_mutation_by_kwarg():

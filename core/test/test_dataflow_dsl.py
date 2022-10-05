@@ -2,7 +2,12 @@
 import logging
 import os
 import sys
-from test.utils import lookup_symbol_by_name, make_flow_fixture, skipif_known_failing
+from test.utils import (
+    clear_registered_annotations,
+    lookup_symbol_by_name,
+    make_flow_fixture,
+    skipif_known_failing,
+)
 
 from ipyflow.annotations import register_annotations_directory
 from ipyflow.annotations.compiler import (
@@ -29,6 +34,11 @@ def run_cell(cell, **kwargs):
 
 
 def test_annotation_registration():
+    with clear_registered_annotations():
+        _test_annotation_registration()
+
+
+def _test_annotation_registration():
     import fakelib
 
     fakelib_class = fakelib.OnlyPresentSoThatHandlersCanBeRegistered

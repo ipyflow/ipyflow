@@ -2,17 +2,23 @@
 import os
 import sys
 import textwrap
+from contextlib import contextmanager
 from typing import Any, Tuple
 
 import pytest
 from IPython import get_ipython
 
+from ipyflow.annotations.compiler import (
+    REGISTERED_CLASS_SPECS,
+    REGISTERED_FUNCTION_SPECS,
+)
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.flow import NotebookFlow
 from ipyflow.kernel.kernel import IPyflowKernelBase
 from ipyflow.run_mode import FlowDirection, FlowRunMode
 from ipyflow.singletons import flow
+from ipyflow.tracing.external_calls.base_handlers import REGISTERED_HANDLER_BY_FUNCTION
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
 
@@ -28,6 +34,26 @@ skipif_known_failing = pytest.mark.skipif(**should_skip_known_failing())
 
 def assert_bool(val, msg=""):
     assert val, str(msg)
+
+
+@contextmanager
+def clear_registered_annotations(clear_afterwards=False):
+    orig_class_specs = dict(REGISTERED_CLASS_SPECS)
+    orig_function_specs = dict(REGISTERED_FUNCTION_SPECS)
+    orig_handlers = dict(REGISTERED_HANDLER_BY_FUNCTION)
+    try:
+        REGISTERED_CLASS_SPECS.clear()
+        REGISTERED_FUNCTION_SPECS.clear()
+        REGISTERED_HANDLER_BY_FUNCTION.clear()
+        yield
+    finally:
+        if clear_afterwards:
+            REGISTERED_CLASS_SPECS.clear()
+            REGISTERED_FUNCTION_SPECS.clear()
+            REGISTERED_HANDLER_BY_FUNCTION.clear()
+        REGISTERED_CLASS_SPECS.update(orig_class_specs)
+        REGISTERED_FUNCTION_SPECS.update(orig_function_specs)
+        REGISTERED_HANDLER_BY_FUNCTION.update(orig_handlers)
 
 
 def lookup_symbol_by_name(name: str) -> DataSymbol:

@@ -3,6 +3,7 @@ import argparse
 import ast
 import inspect
 import json
+import os.path
 import re
 import shlex
 import sys
@@ -14,6 +15,10 @@ from IPython.core.magic import register_line_magic
 
 from ipyflow.analysis.slicing import make_slice_text
 from ipyflow.analysis.symbol_ref import SymbolRef
+from ipyflow.annotations.compiler import (
+    register_annotations_directory,
+    register_annotations_file,
+)
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
@@ -51,6 +56,9 @@ tag <tag>:
       
 show_tags:
     - This will display the current tags of the executing cell.
+    
+register_annotations <directory_or_file>:
+    - This will register the annotations in the given directory or file.
 """.strip()
 
 
@@ -123,6 +131,8 @@ def make_line_magic(flow_: "NotebookFlow"):
         elif cmd == "syntax_transforms_only":
             flow_.mut_settings.syntax_transforms_only = True
             return None
+        elif cmd.startswith("register_annotation"):
+            return register_annotations(line)
         elif cmd in line_magic_names:
             warn(
                 f"We have a magic for {cmd}, but have not yet registered it",
@@ -360,6 +370,7 @@ def show_tags(line: str) -> None:
     try:
         args = _SHOW_TAGS_PARSER.parse_args(shlex.split(line))
     except:
+        warn(usage)
         return None
     if args.cell is None:
         cell = cells().current_cell()
@@ -474,3 +485,16 @@ def deregister_tracer(line_: str) -> None:
             warn(usage)
             return
         _deregister_tracers_for(tracer_cls)
+
+
+def register_annotations(line_: str) -> None:
+    line_ = line_.strip()
+    usage = f"Usage: %flow register_annotations <directory_or_file>"
+    if os.path.isdir(line_):
+        modules = register_annotations_directory(line_)
+    elif os.path.isfile(line_):
+        modules = register_annotations_file(line_)
+    else:
+        warn(usage)
+        return
+    print_("Registered annotations for modules:", modules)

@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from types import ModuleType
-from typing import Dict, List, Optional, Tuple, Type
+from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
@@ -142,7 +142,7 @@ def compile_class_handler(cls: ast.ClassDef) -> Dict[str, Type[ExternalCallHandl
     return handlers
 
 
-def get_modules_from_decorators(decorators: List[ast.expr]) -> List[str]:
+def get_modules_from_decorators(decorators: List[ast.expr]) -> Set[str]:
     modules = []
     for decorator in decorators:
         if not isinstance(decorator, ast.Call):
@@ -157,7 +157,7 @@ def get_modules_from_decorators(decorators: List[ast.expr]) -> List[str]:
         for arg in decorator.args:
             if isinstance(arg, ast.Str):
                 modules.append(arg.s)
-    return modules
+    return set(modules)
 
 
 def compile_classes(
@@ -186,63 +186,77 @@ def compile_functions(
     return function_handlers
 
 
-def register_annotations_from_source(source: str, filename: str) -> None:
+def handle_string_annotation(
+    node: Union[ast.Expr, ast.Str], filename: str
+) -> Optional[Set[str]]:
+    if isinstance(node, ast.Expr):
+        if isinstance(node.value, ast.Str):
+            node = node.value
+        else:
+            return None
+    # validate that it's not too dangerous to call "eval" in the header
+    header, contents = node.s.split("\n", 1)
+    header = header[1:]
+    parsed_header = ast.parse(header, mode="eval").body
+    if not isinstance(parsed_header, ast.Compare):
+        return None
+    for comparator in [parsed_header.left] + parsed_header.comparators:
+        if not isinstance(comparator, (ast.Attribute, ast.Tuple, ast.Num)):
+            return None
+        if isinstance(comparator, ast.Attribute):
+            if not isinstance(comparator.value, ast.Name):
+                return None
+            if comparator.value.id != "sys":
+                return None
+            if comparator.attr != "version_info":
+                return None
+        elif isinstance(comparator, ast.Tuple):
+            for elt in comparator.elts:
+                if not isinstance(elt, ast.Num):
+                    return None
+    if eval(header):
+        return register_annotations_from_source(contents, filename)
+    else:
+        return None
+
+
+def register_annotations_from_source(source: str, filename: str) -> Set[str]:
+    regisered_modules = set()
     for node in ast.parse(source).body:
         if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.Expr, ast.Str)):
             continue
         for module in get_modules_from_decorators(
             getattr(node, "decorator_list", [])
         ) or [os.path.splitext(os.path.basename(filename))[0]]:
+            regisered_modules.add(module)
             if isinstance(node, ast.ClassDef):
                 REGISTERED_CLASS_SPECS.setdefault(module, []).append(node)
             elif isinstance(node, ast.FunctionDef):
                 REGISTERED_FUNCTION_SPECS.setdefault(module, []).append(node)
             elif isinstance(node, (ast.Expr, ast.Str)):
-                if isinstance(node, ast.Expr):
-                    if isinstance(node.value, ast.Str):
-                        node = node.value
-                    else:
-                        continue
-                # validate that it's not too dangerous to call "eval" in the header
-                header, contents = node.s.split("\n", 1)
-                header = header[1:]
-                parsed_header = ast.parse(header, mode="eval").body
-                if not isinstance(parsed_header, ast.Compare):
-                    continue
-                should_skip = False
-                for comparator in [parsed_header.left] + parsed_header.comparators:
-                    if not isinstance(comparator, (ast.Attribute, ast.Tuple, ast.Num)):
-                        should_skip = True
-                        break
-                    if isinstance(comparator, ast.Attribute):
-                        if not isinstance(comparator.value, ast.Name):
-                            should_skip = True
-                            break
-                        if comparator.value.id != "sys":
-                            should_skip = True
-                            break
-                        if comparator.attr != "version_info":
-                            should_skip = True
-                            break
-                    elif isinstance(comparator, ast.Tuple):
-                        for el in comparator.elts:
-                            if not isinstance(el, ast.Num):
-                                should_skip = True
-                        if should_skip:
-                            break
-                if should_skip:
-                    continue
-                elif eval(header):
-                    register_annotations_from_source(contents, filename)
+                regisered_modules |= handle_string_annotation(node, filename) or set()
+    return regisered_modules
 
 
-def register_annotations_file(filename: str) -> None:
+def compile_handlers_for_already_imported_modules(modules: Set[str]) -> None:
+    for module_name in modules:
+        module = sys.modules.get(module_name)
+        if module is not None:
+            compile_and_register_handlers_for_module(module)
+
+
+def register_annotations_file(
+    filename: str, should_compile_handlers_for_already_imported_modules: bool = False
+) -> Set[str]:
     """
     Transforms the annotations in .pyi files into specs for later compilation into handlers for library code.
     """
     with open(filename, "r") as f:
         source = f.read()
-    register_annotations_from_source(source, filename)
+    modules = register_annotations_from_source(source, filename)
+    if should_compile_handlers_for_already_imported_modules:
+        compile_handlers_for_already_imported_modules(modules)
+    return modules
 
 
 def compile_and_register_handlers_for_module(module: ModuleType) -> None:
@@ -266,13 +280,18 @@ def compile_and_register_handlers_for_module(module: ModuleType) -> None:
             REGISTERED_HANDLER_BY_FUNCTION[function] = handler
 
 
-def register_annotations_directory(dirname: str) -> None:
+def register_annotations_directory(dirname: str) -> Set[str]:
+    registered_modules = set()
     annotation_files = []
     for filename in os.listdir(dirname):
         if os.path.splitext(filename)[1] == ".pyi":
             annotation_files.append(filename)
-            register_annotations_file(os.path.join(dirname, filename))
-    for filename in annotation_files:
-        module = sys.modules.get(os.path.splitext(filename)[0])
+            registered_modules |= register_annotations_file(
+                os.path.join(dirname, filename),
+                should_compile_handlers_for_already_imported_modules=False,
+            )
+    for module_name in registered_modules:
+        module = sys.modules.get(module_name)
         if module is not None:
             compile_and_register_handlers_for_module(module)
+    return registered_modules

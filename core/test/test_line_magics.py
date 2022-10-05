@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
+import os.path
 import textwrap
-from test.utils import make_flow_fixture
+from test.utils import clear_registered_annotations, make_flow_fixture
 
+from ipyflow.annotations.compiler import (
+    REGISTERED_CLASS_SPECS,
+    REGISTERED_FUNCTION_SPECS,
+)
 from ipyflow.data_model.code_cell import cells
 from ipyflow.line_magics import _USAGE
 from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
@@ -215,3 +220,12 @@ def test_syntax_transforms_only():
     assert flow().mut_settings.syntax_transforms_only
     run_cell("%flow on")
     assert not flow().mut_settings.syntax_transforms_only
+
+
+def test_annotation_registration():
+    with clear_registered_annotations():
+        assert len(REGISTERED_CLASS_SPECS) == 0
+        assert len(REGISTERED_FUNCTION_SPECS) == 0
+        run_cell(f"%flow register_annotations {os.path.dirname(__file__)}")
+        assert len(REGISTERED_CLASS_SPECS) > 0
+        assert len(REGISTERED_FUNCTION_SPECS) > 0

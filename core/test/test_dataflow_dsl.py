@@ -38,24 +38,53 @@ def test_annotation_registration():
     fakelib_function = fakelib.function_for_function_stub_presence
     sys.modules.pop(fakelib.__name__)
 
+    if sys.version_info >= (3, 8):
+        fakelib_posonly_function = fakelib.fun_for_testing_posonlyarg
+    else:
+        fakelib_posonly_function = None
+
     non_fakelib_module_name = "non_fakelib_module"
 
     for module_name in [fakelib.__name__, non_fakelib_module_name]:
         assert module_name not in REGISTERED_FUNCTION_SPECS
         assert module_name not in REGISTERED_CLASS_SPECS
-    for fun in [fakelib_method, fakelib_method_a, fakelib_method_b, fakelib_function]:
+    for fun in [
+        fakelib_method,
+        fakelib_method_a,
+        fakelib_method_b,
+        fakelib_function,
+        fakelib_posonly_function,
+    ]:
+        if fun is None:
+            continue
         assert fun not in REGISTERED_HANDLER_BY_FUNCTION
 
     register_annotations_directory(os.path.dirname(__file__))
     for module_name in [fakelib.__name__, non_fakelib_module_name]:
         assert module_name in REGISTERED_FUNCTION_SPECS
         assert module_name in REGISTERED_CLASS_SPECS
-    for fun in [fakelib_method, fakelib_method_a, fakelib_method_b, fakelib_function]:
+    for fun in [
+        fakelib_method,
+        fakelib_method_a,
+        fakelib_method_b,
+        fakelib_function,
+        fakelib_posonly_function,
+    ]:
+        if fun is None:
+            continue
         assert fun not in REGISTERED_HANDLER_BY_FUNCTION
 
     sys.modules[fakelib.__name__] = fakelib
     compile_and_register_handlers_for_module(fakelib)
-    for fun in [fakelib_method, fakelib_method_a, fakelib_method_b, fakelib_function]:
+    for fun in [
+        fakelib_method,
+        fakelib_method_a,
+        fakelib_method_b,
+        fakelib_function,
+        fakelib_posonly_function,
+    ]:
+        if fun is None:
+            continue
         assert fun in REGISTERED_HANDLER_BY_FUNCTION, "%s not in there" % fun
 
 
@@ -71,3 +100,39 @@ def test_mutation_by_kwarg():
     run_cell("fun_for_testing_kwarg(bar=lst, foo=None)")
     ts2 = lst_sym.timestamp
     assert ts2 > ts1
+
+
+def test_mutation_by_kwonlyarg():
+    run_cell("lst = []")
+    lst_sym = lookup_symbol_by_name("lst")
+    ts0 = lst_sym.timestamp
+    run_cell(
+        "from fakelib import fun_for_testing_kwonlyarg; fun_for_testing_kwonlyarg(lst, bar=None)"
+    )
+    ts1 = lst_sym.timestamp
+    assert ts1 == ts0
+    run_cell("fun_for_testing_kwonlyarg(bar=lst, foo=None)")
+    ts2 = lst_sym.timestamp
+    assert ts2 > ts1
+    run_cell("fun_for_testing_kwonlyarg(foo=None, bar=lst)")
+    ts3 = lst_sym.timestamp
+    assert ts3 > ts2
+
+
+if sys.version_info >= (3, 8):
+
+    def test_mutation_by_posonlyarg():
+        run_cell("lst = []")
+        lst_sym = lookup_symbol_by_name("lst")
+        ts0 = lst_sym.timestamp
+        run_cell(
+            "from fakelib import fun_for_testing_posonlyarg; fun_for_testing_posonlyarg(None, lst)"
+        )
+        ts1 = lst_sym.timestamp
+        assert ts1 == ts0
+        run_cell("fun_for_testing_posonlyarg(lst, bar=None)")
+        ts2 = lst_sym.timestamp
+        assert ts2 > ts1
+        run_cell("fun_for_testing_posonlyarg(lst, None)")
+        ts3 = lst_sym.timestamp
+        assert ts3 > ts2

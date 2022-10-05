@@ -8,7 +8,7 @@ import logging
 import os
 import sys
 from types import ModuleType
-from typing import Dict, List, Type
+from typing import Dict, List, Optional, Tuple, Type
 
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
@@ -27,13 +27,20 @@ REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
 
 
 @functools.lru_cache(maxsize=None)
-def _mutate_argument(pos: int, name: str) -> Type[ExternalCallHandler]:
+def _mutate_argument(
+    pos: Optional[int], name: Optional[str]
+) -> Type[ExternalCallHandler]:
+    if pos is None and name is None:
+        raise ValueError("pos and name cannot both be None")
+
     class MutateArgument(ExternalCallHandler):
         def handle(self) -> None:
-            if name in self.kwargs:
+            if name is not None and name in self.kwargs:
                 dsyms = self.kwargs[name][1]
-            else:
+            elif pos is not None:
                 dsyms = self.args[pos][1] if pos < len(self.args) else {None}
+            else:
+                return
             if len(dsyms) == 0:
                 return
             dsym = next(iter(dsyms))
@@ -46,10 +53,13 @@ def _mutate_argument(pos: int, name: str) -> Type[ExternalCallHandler]:
 
 def _arg_position_in_signature(
     func: ast.FunctionDef, arg_name: str, is_method: bool
-) -> int:
-    for i, arg in enumerate(func.args.args):
+) -> Tuple[Optional[int], bool]:
+    posonlyargs = getattr(func.args, "posonlyargs", [])
+    for i, arg in enumerate(posonlyargs + func.args.args + func.args.kwonlyargs):
         if arg.arg == arg_name:
-            return i - is_method
+            return None if i >= len(posonlyargs) + len(
+                func.args.args
+            ) else i - is_method, i < len(posonlyargs)
     raise ValueError(
         "arg %s not found in function signature %s" % (arg_name, ast.dump(func))
     )
@@ -83,11 +93,12 @@ def compile_function_handler(
                         if is_method:
                             return CallerMutation
                     else:
+                        pos, is_posonly = _arg_position_in_signature(
+                            func, slice_value.id, is_method=is_method
+                        )
                         return _mutate_argument(
-                            pos=_arg_position_in_signature(
-                                func, slice_value.id, is_method=is_method
-                            ),
-                            name=slice_value.id,
+                            pos=pos,
+                            name=None if is_posonly else slice_value.id,
                         )
             raise ValueError(f"No known handler for return type {ret}")
     else:
@@ -175,22 +186,63 @@ def compile_functions(
     return function_handlers
 
 
+def register_annotations_from_source(source: str, filename: str) -> None:
+    for node in ast.parse(source).body:
+        if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.Expr, ast.Str)):
+            continue
+        for module in get_modules_from_decorators(
+            getattr(node, "decorator_list", [])
+        ) or [os.path.splitext(os.path.basename(filename))[0]]:
+            if isinstance(node, ast.ClassDef):
+                REGISTERED_CLASS_SPECS.setdefault(module, []).append(node)
+            elif isinstance(node, ast.FunctionDef):
+                REGISTERED_FUNCTION_SPECS.setdefault(module, []).append(node)
+            elif isinstance(node, (ast.Expr, ast.Str)):
+                if isinstance(node, ast.Expr):
+                    if isinstance(node.value, ast.Str):
+                        node = node.value
+                    else:
+                        continue
+                # validate that it's not too dangerous to call "eval" in the header
+                header, contents = node.s.split("\n", 1)
+                header = header[1:]
+                parsed_header = ast.parse(header, mode="eval").body
+                if not isinstance(parsed_header, ast.Compare):
+                    continue
+                should_skip = False
+                for comparator in [parsed_header.left] + parsed_header.comparators:
+                    if not isinstance(comparator, (ast.Attribute, ast.Tuple, ast.Num)):
+                        should_skip = True
+                        break
+                    if isinstance(comparator, ast.Attribute):
+                        if not isinstance(comparator.value, ast.Name):
+                            should_skip = True
+                            break
+                        if comparator.value.id != "sys":
+                            should_skip = True
+                            break
+                        if comparator.attr != "version_info":
+                            should_skip = True
+                            break
+                    elif isinstance(comparator, ast.Tuple):
+                        for el in comparator.elts:
+                            if not isinstance(el, ast.Num):
+                                should_skip = True
+                        if should_skip:
+                            break
+                if should_skip:
+                    continue
+                elif eval(header):
+                    register_annotations_from_source(contents, filename)
+
+
 def register_annotations_file(filename: str) -> None:
     """
     Transforms the annotations in .pyi files into specs for later compilation into handlers for library code.
     """
     with open(filename, "r") as f:
         source = f.read()
-    for node in ast.parse(source).body:
-        if not isinstance(node, (ast.ClassDef, ast.FunctionDef)):
-            continue
-        for module in get_modules_from_decorators(node.decorator_list) or [
-            os.path.splitext(os.path.basename(filename))[0]
-        ]:
-            if isinstance(node, ast.ClassDef):
-                REGISTERED_CLASS_SPECS.setdefault(module, []).append(node)
-            elif isinstance(node, ast.FunctionDef):
-                REGISTERED_FUNCTION_SPECS.setdefault(module, []).append(node)
+    register_annotations_from_source(source, filename)
 
 
 def compile_and_register_handlers_for_module(module: ModuleType) -> None:

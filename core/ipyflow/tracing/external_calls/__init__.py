@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ast
 import logging
 from types import ModuleType
 from typing import Any, Optional
@@ -10,16 +11,18 @@ from ipyflow.singletons import flow
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
     ExternalCallHandler,
+    MutatingMethodEventNotYetImplemented,
     NoopCallHandler,
     StandardMutation,
 )
 
 
-def _resolve_external_call_simple(
+def resolve_external_call(
     module: Optional[ModuleType],
     caller_self: Optional[Any],
     function_or_method: Optional[Any],
     method: Optional[str],
+    call_node: Optional[ast.Call] = None,
     use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
     if caller_self is not None and isinstance(caller_self, ModuleType):
@@ -31,11 +34,11 @@ def _resolve_external_call_simple(
         or getattr(module, "__name__", None) == "__main__"
         or function_or_method == print
     ):
-        return NoopCallHandler()
+        return None
     if caller_self is logging or isinstance(caller_self, logging.Logger):
-        return NoopCallHandler()
+        return None
     elif caller_self is not None and id(type(caller_self)) in flow().aliases:
-        return NoopCallHandler()
+        return None
     # TODO: handle case where it's a function defined in-notebook
     elif caller_self is None:
         pass
@@ -43,30 +46,23 @@ def _resolve_external_call_simple(
         return None
     else:
         function_or_method = getattr(type(caller_self), method, function_or_method)
+    if isinstance(caller_self, ModuleType):
+        caller_self = None
+
     external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method, None)
     if external_call_type is None:
         if use_standard_default:
             external_call_type = StandardMutation
         else:
             return None
-    if isinstance(caller_self, ModuleType):
-        caller_self = None
+    elif external_call_type is NoopCallHandler:
+        return None
+    elif external_call_type is MutatingMethodEventNotYetImplemented:
+        external_call_type = StandardMutation
+
     return external_call_type.create(
-        module=module, caller_self=caller_self, function_or_method=function_or_method
-    )
-
-
-def resolve_external_call(
-    module: Optional[ModuleType],
-    caller_self: Optional[Any],
-    function_or_method: Optional[Any],
-    method: Optional[str],
-    use_standard_default: bool = True,
-) -> Optional[ExternalCallHandler]:
-    return _resolve_external_call_simple(
-        module,
-        caller_self,
-        function_or_method,
-        method,
-        use_standard_default=use_standard_default,
+        module=module,
+        caller_self=caller_self,
+        function_or_method=function_or_method,
+        call_node=call_node,
     )

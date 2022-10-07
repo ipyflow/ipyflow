@@ -23,12 +23,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import FlowRunMode
 from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_calls import resolve_external_call
-from ipyflow.tracing.external_calls.base_handlers import (
-    ExternalCallHandler,
-    MutatingMethodEventNotYetImplemented,
-    NoopCallHandler,
-    StandardMutation,
-)
+from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.trace_stmt import TraceStatement
@@ -853,11 +848,7 @@ class DataflowTracer(StackFrameManager):
             external_call = self.lexical_call_stack.get_field("external_call_candidate")
         except IndexError:
             return
-        if external_call is None or isinstance(
-            external_call, MutatingMethodEventNotYetImplemented
-        ):
-            external_call = StandardMutation()
-        elif isinstance(external_call, NoopCallHandler):
+        if external_call is None:
             return
         self.external_calls.append(external_call)
         self.is_external_call_pending_return = True
@@ -908,9 +899,10 @@ class DataflowTracer(StackFrameManager):
         obj: Optional[Any],
         function_or_method: Any,
         method_name: Optional[str],
+        call_node: ast.Call,
     ) -> None:
         self.external_call_candidate = resolve_external_call(
-            module, obj, function_or_method, method_name
+            module, obj, function_or_method, method_name, call_node
         )
 
     @pyc.before_call
@@ -943,7 +935,7 @@ class DataflowTracer(StackFrameManager):
             function_or_method, node.func
         )
         self._save_external_call_candidate(
-            getattr(module_sym, "obj", None), obj, function_or_method, method_name
+            getattr(module_sym, "obj", None), obj, function_or_method, method_name, node
         )
         self.saved_complex_symbol_load_data = None
         with self.lexical_call_stack.push():

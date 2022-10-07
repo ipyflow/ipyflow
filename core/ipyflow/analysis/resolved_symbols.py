@@ -6,7 +6,6 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.run_mode import ExecutionMode
 from ipyflow.singletons import flow
 from ipyflow.tracing.external_calls import resolve_external_call
-from ipyflow.tracing.external_calls.base_handlers import NoopCallHandler
 from ipyflow.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
@@ -119,9 +118,10 @@ class ResolvedDataSymbol(CommonEqualityMixin):
             self.dsym.obj,
             None,
             cast(str, self.next_atom.value),
+            call_node=None,
             use_standard_default=False,
         )
-        return ext_call is not None and not isinstance(ext_call, NoopCallHandler)
+        return ext_call is not None
 
     @property
     def is_unsafe(self) -> bool:

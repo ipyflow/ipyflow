@@ -2,7 +2,20 @@
 import ast
 import logging
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Type
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
@@ -47,10 +60,12 @@ class ExternalCallHandler(metaclass=HasGetitem):
         module = kwargs.pop("module", None)
         caller_self = kwargs.pop("caller_self", None)
         function_or_method = kwargs.pop("function_or_method", None)
+        call_node = kwargs.pop("call_node", None)
         return cls(
             module=module,
             caller_self=caller_self,
             function_or_method=function_or_method,
+            call_node=call_node,
         )._initialize_impl(**kwargs)
 
     def _initialize_impl(self, **kwargs) -> "ExternalCallHandler":
@@ -70,6 +85,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         module: Optional[ModuleType] = None,
         caller_self: Any = None,
         function_or_method: Any = None,
+        call_node: Optional[ast.Call] = None,
     ) -> None:
         self.module = module
         self.caller_self = caller_self
@@ -78,6 +94,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.kwargs: Dict[str, "ExternalCallArgument"] = {}
         self._arg_dsyms: Optional[Set["DataSymbol"]] = None
         self.return_value: Any = self.not_yet_defined
+        self.call_node = call_node
         self.stmt_node = tracer().prev_trace_stmt_in_cur_frame.stmt_node
 
     def __init_subclass__(cls):
@@ -120,7 +137,17 @@ class ExternalCallHandler(metaclass=HasGetitem):
 
     def _handle_impl(self) -> None:
         Timestamp.update_usage_info(self.arg_dsyms)
-        self.handle()
+        result = self.handle()
+        if result is None or self.call_node is None:
+            return
+        symbols = (
+            cast(Iterable["DataSymbol"], result)
+            if hasattr(result, "__iter__")
+            else [cast("DataSymbol", result)]
+        )
+        tracer().node_id_to_loaded_symbols.setdefault(id(self.call_node), []).extend(
+            symbols
+        )
 
     def mutate_caller(self, should_propagate: bool) -> None:
         if self.caller_self is None:
@@ -144,7 +171,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
                 refresh=should_propagate,
             )
 
-    def handle(self) -> None:
+    def handle(self) -> Optional[Union["DataSymbol", Iterable["DataSymbol"]]]:
         pass
 
 

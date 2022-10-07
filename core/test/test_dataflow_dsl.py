@@ -129,6 +129,26 @@ def test_mutation_by_kwonlyarg():
     assert ts3 > ts2
 
 
+def test_mutate_multiple():
+    run_cell("foo, bar, baz = [], [], []")
+    foo_sym = lookup_symbol_by_name("foo")
+    bar_sym = lookup_symbol_by_name("bar")
+    baz_sym = lookup_symbol_by_name("baz")
+    foo_ts0, bar_ts0, baz_ts0 = foo_sym.timestamp, bar_sym.timestamp, baz_sym.timestamp
+    run_cell(
+        "from fakelib import fun_for_testing_mutate_multiple; fun_for_testing_mutate_multiple(foo, bar, baz)"
+    )
+    foo_ts1, bar_ts1, baz_ts1 = foo_sym.timestamp, bar_sym.timestamp, baz_sym.timestamp
+    assert foo_ts1 > foo_ts0
+    assert bar_ts1 == bar_ts0
+    assert baz_ts1 > baz_ts0
+    run_cell("fun_for_testing_mutate_multiple(bar=foo, baz=bar, foo=baz)")
+    foo_ts2, bar_ts2, baz_ts2 = foo_sym.timestamp, bar_sym.timestamp, baz_sym.timestamp
+    assert foo_ts2 == foo_ts1
+    assert bar_ts2 > bar_ts1
+    assert baz_ts2 > baz_ts1
+
+
 if sys.version_info >= (3, 8):
 
     def test_mutation_by_posonlyarg():

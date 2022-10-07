@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from ipyflow.annotations import Mutated, __module__, handler_for, module, self
 
-foo = bar = None
+foo = bar = baz = None
 
 class OnlyPresentSoThatHandlersCanBeRegistered:
     def method_for_method_stub_presence(self) -> Mutated[self]: ...
@@ -16,6 +16,9 @@ def fun_for_testing_kwarg(foo, bar) -> Mutated[bar]: ...
 
 #
 def fun_for_testing_kwonlyarg(foo, *, bar) -> Mutated[bar]: ...
+
+#
+def fun_for_testing_mutate_multiple(foo, bar, baz) -> Mutated[foo, baz]: ...
 
 #
 """:sys.version_info >= (3, 8)

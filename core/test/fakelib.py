@@ -37,6 +37,10 @@ def fun_for_testing_kwonlyarg(foo, *, bar):
     pass
 
 
+def fun_for_testing_mutate_multiple(foo, bar, baz):
+    pass
+
+
 if sys.version_info >= (3, 8):
     exec(
         textwrap.dedent(

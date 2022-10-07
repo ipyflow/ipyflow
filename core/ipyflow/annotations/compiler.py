@@ -51,6 +51,17 @@ def _mutate_argument(
     return MutateArgument
 
 
+def _make_multi_handler(
+    handlers: List[Type[ExternalCallHandler]],
+) -> Type[ExternalCallHandler]:
+    class MultiHandler(ExternalCallHandler):
+        def handle(self) -> None:
+            for handler in handlers:
+                handler.handle(self)
+
+    return MultiHandler
+
+
 def _arg_position_in_signature(
     func: ast.FunctionDef, arg_name: str, is_method: bool
 ) -> Tuple[Optional[int], bool]:
@@ -63,6 +74,22 @@ def _arg_position_in_signature(
     raise ValueError(
         "arg %s not found in function signature %s" % (arg_name, ast.dump(func))
     )
+
+
+def _make_mutate_name_handler(
+    func: ast.FunctionDef, is_method: bool, name: str
+) -> Type[ExternalCallHandler]:
+    if name == "__module__":
+        return ModuleMutation
+    elif name == "self":
+        if is_method:
+            return CallerMutation
+    else:
+        pos, is_posonly = _arg_position_in_signature(func, name, is_method=is_method)
+        return _mutate_argument(
+            pos=pos,
+            name=None if is_posonly else name,
+        )
 
 
 def compile_function_handler(
@@ -87,19 +114,21 @@ def compile_function_handler(
         if isinstance(sub_value, ast.Name):
             if sub_value.id == "Mutated":
                 if isinstance(slice_value, ast.Name):
-                    if slice_value.id == "__module__":
-                        return ModuleMutation
-                    elif slice_value.id == "self":
-                        if is_method:
-                            return CallerMutation
+                    return _make_mutate_name_handler(
+                        func, is_method=is_method, name=slice_value.id
+                    )
+                elif isinstance(slice_value, ast.Tuple):
+                    handlers = []
+                    for elt in slice_value.elts:
+                        if not isinstance(elt, ast.Name):
+                            break
+                        handlers.append(
+                            _make_mutate_name_handler(
+                                func, is_method=is_method, name=elt.id
+                            )
+                        )
                     else:
-                        pos, is_posonly = _arg_position_in_signature(
-                            func, slice_value.id, is_method=is_method
-                        )
-                        return _mutate_argument(
-                            pos=pos,
-                            name=None if is_posonly else slice_value.id,
-                        )
+                        return _make_multi_handler(handlers)
             raise ValueError(f"No known handler for return type {ret}")
     else:
         raise TypeError(

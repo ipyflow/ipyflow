@@ -12,7 +12,7 @@ from ipyflow.annotations import (
 # fake symbols to reduce lint errors
 file = None
 
-def open(file, *_, **__) -> SymbolUpserted[Parents[FileSystem[file]]]: ...
+def open(file, *_, **__) -> SymbolUpserted[FileSystem[file]]: ...
 
 class IOBase:
 

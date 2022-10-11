@@ -325,7 +325,12 @@ class DataSymbol:
 
     @property
     def is_anonymous(self) -> bool:
-        return self.symbol_type == DataSymbolType.ANONYMOUS
+        if self.symbol_type == DataSymbolType.ANONYMOUS:
+            return True
+        ns = self.containing_namespace
+        if ns is not None and ns.is_anonymous:
+            return True
+        return False
 
     @property
     def is_implicit(self) -> bool:

@@ -54,4 +54,21 @@ def deps(sym: Any) -> List[DataSymbol]:
     # that handler was able to find something.
     if sym is None or not isinstance(sym, DataSymbol):
         raise ValueError("unable to lookup metadata for symbol")
-    return list(cast(DataSymbol, sym).parents.keys())
+    return [dep for dep in cast(DataSymbol, sym).parents.keys() if not dep.is_anonymous]
+
+
+def users(sym: Any) -> List[DataSymbol]:
+    """
+    Given the programmatic usage of some symbol,
+    look up the corresponding users of that symbol.
+    """
+    # See the `argument` handler in ipyflow_tracer for the
+    # actual implementation; this is just a stub that ensures
+    # that handler was able to find something.
+    if sym is None or not isinstance(sym, DataSymbol):
+        raise ValueError("unable to lookup metadata for symbol")
+    return [
+        child
+        for child in cast(DataSymbol, sym).children.keys()
+        if not child.is_anonymous
+    ]

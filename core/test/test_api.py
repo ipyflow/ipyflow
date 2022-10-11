@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.ERROR)
 # _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
 _flow_fixture, run_cell_ = make_flow_fixture(
     setup_stmts=[
-        "from ipyflow.api import code, deps, lift, timestamp",
+        "from ipyflow.api import code, deps, lift, timestamp, users",
         "import pyccolo as pyc",
     ]
 )
@@ -42,8 +42,10 @@ def test_timestamp():
     run_cell("assert timestamp(y).cell_num == 2")
 
 
-def test_deps():
+def test_deps_and_users():
     run_cell("x = 0")
     run_cell("y = x + 0")
     run_cell("assert deps(x) == []")
     run_cell("assert deps(y) == [lift(x)]")
+    run_cell("assert users(x) == [lift(y)]")
+    run_cell("assert users(y) == []")

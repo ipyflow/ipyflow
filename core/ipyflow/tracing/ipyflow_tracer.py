@@ -15,6 +15,7 @@ from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.annotations.compiler import compile_and_register_handlers_for_module
 from ipyflow.api.lift import code as api_code
 from ipyflow.api.lift import lift as api_lift
+from ipyflow.api.lift import timestamp as api_timestamp
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
@@ -835,7 +836,7 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
     def handle_lift_argument(self, _arg_obj: Any, arg_node: ast.AST, *_, **__):
-        if self.cur_function not in (api_code, api_lift):
+        if self.cur_function not in (api_code, api_lift, api_timestamp):
             return
         resolved = resolve_rval_symbols(arg_node)
         if len(resolved) == 1:

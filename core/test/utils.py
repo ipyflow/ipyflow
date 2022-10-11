@@ -86,11 +86,11 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         return cell_id
 
     test_context = kwargs.pop("test_context", True)
-    setup_cells = [
+    setup_stmts = [
         "import sys",
         'sys.path.append("./test")',
         "import logging",
-    ] + kwargs.pop("setup_cells", [])
+    ] + kwargs.pop("setup_stmts", [])
     extra_fixture = kwargs.pop("extra_fixture", None)
     flow_direction = kwargs.pop("flow_direction", FlowDirection.ANY_ORDER)
 
@@ -111,7 +111,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         DataflowTracer.instance()
         # run all at once to prevent exec counter
         # from getting too far ahead
-        run_cell("\n".join(setup_cells))
+        run_cell("\n".join(setup_stmts))
         flow().reset_cell_counter()
         # yield to execution of the actual test
         if extra_fixture is not None:

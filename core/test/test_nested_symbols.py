@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
 _flow_fixture, run_cell_ = make_flow_fixture(
-    setup_cells=["from test.test_nested_symbols import DotDict"]
+    setup_stmts=["from test.test_nested_symbols import DotDict"]
 )
 run_cell = run_cell_
 

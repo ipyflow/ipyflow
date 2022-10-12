@@ -26,6 +26,14 @@ def resolve_external_call(
     call_node: Optional[ast.Call] = None,
     use_standard_default: bool = True,
 ) -> Optional[ExternalCallHandler]:
+    if hasattr(function_or_method, "__self__") and hasattr(
+        function_or_method, "__name__"
+    ):
+        function_or_method = getattr(
+            function_or_method.__self__.__class__,
+            function_or_method.__name__,
+            function_or_method,
+        )
     if caller_self is not None and isinstance(caller_self, ModuleType):
         if module is None:
             module = caller_self
@@ -50,14 +58,14 @@ def resolve_external_call(
     if isinstance(caller_self, ModuleType):
         caller_self = None
 
-    external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method, None)
+    external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method)
     if (
         external_call_type is None
         and caller_self is not None
         and not isinstance(caller_self, type)
     ):
         for cls in caller_self.__class__.mro():
-            external_call_type = REGISTERED_HANDLER_BY_METHOD.get((cls, method), None)
+            external_call_type = REGISTERED_HANDLER_BY_METHOD.get((cls, method))
             if external_call_type is not None:
                 module = getattr(cls, "__module__", module)
                 break

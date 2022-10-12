@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.121 (2022-10-12)
+-------------------
+* Fixes and improvements for dataflow annotation dsl;
+* Api methods for (r)deps, (r)users, timestamp, code
+
 0.0.120 (2022-10-01)
 -------------------
 * Allow ImportFrom to kill symbols during static analysis;

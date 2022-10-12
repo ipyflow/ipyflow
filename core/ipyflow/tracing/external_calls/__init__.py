@@ -59,6 +59,7 @@ def resolve_external_call(
         for cls in caller_self.__class__.mro():
             external_call_type = REGISTERED_HANDLER_BY_METHOD.get((cls, method), None)
             if external_call_type is not None:
+                module = getattr(cls, "__module__", module)
                 break
     if external_call_type is None:
         if use_standard_default:

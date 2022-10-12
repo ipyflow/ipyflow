@@ -622,7 +622,7 @@ class DataflowTracer(StackFrameManager):
             )
         elif data_sym.obj_id != id(obj_attr_or_sub):
             data_sym.update_obj_ref(obj_attr_or_sub)
-        self.create_if_not_exists_module_symbol(obj_attr_or_sub, node)
+        self.create_if_not_exists_module_symbol(obj_attr_or_sub, node, is_load=False)
         return data_sym
 
     @pyc.register_raw_handler(pyc.after_import)
@@ -750,6 +750,8 @@ class DataflowTracer(StackFrameManager):
             self.first_obj_id_in_chain = obj_id
 
         try:
+            if isinstance(attr_or_subscript, list):
+                attr_or_subscript = tuple(attr_or_subscript)
             if isinstance(attr_or_subscript, tuple):
                 if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
                     return
@@ -839,7 +841,7 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
-    def handle_lift_argument(self, _arg_obj: Any, arg_node: ast.AST, *_, **__):
+    def handle_lift_argument(self, arg_obj: Any, arg_node: ast.AST, *_, **__):
         if self.cur_function not in (
             api_code,
             api_deps,
@@ -850,7 +852,7 @@ class DataflowTracer(StackFrameManager):
             api_users,
         ):
             return
-        resolved = resolve_rval_symbols(arg_node)
+        resolved = [sym for sym in resolve_rval_symbols(arg_node) if sym.obj is arg_obj]
         if len(resolved) == 1:
             return next(iter(resolved))
         else:

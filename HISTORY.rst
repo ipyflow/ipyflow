@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.122 (2022-10-12)
+-------------------
+* Small bugfix for dependency inference in attributes / subscripts;
+
 0.0.121 (2022-10-12)
 -------------------
 * Fixes and improvements for dataflow annotation dsl;

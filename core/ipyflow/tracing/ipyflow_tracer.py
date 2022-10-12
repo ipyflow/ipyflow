@@ -16,6 +16,8 @@ from ipyflow.annotations.compiler import compile_and_register_handlers_for_modul
 from ipyflow.api.lift import code as api_code
 from ipyflow.api.lift import deps as api_deps
 from ipyflow.api.lift import lift as api_lift
+from ipyflow.api.lift import rdeps as api_rdeps
+from ipyflow.api.lift import rusers as api_rusers
 from ipyflow.api.lift import timestamp as api_timestamp
 from ipyflow.api.lift import users as api_users
 from ipyflow.data_model.code_cell import cells
@@ -842,6 +844,8 @@ class DataflowTracer(StackFrameManager):
             api_code,
             api_deps,
             api_lift,
+            api_rdeps,
+            api_rusers,
             api_timestamp,
             api_users,
         ):

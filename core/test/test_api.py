@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.ERROR)
 # _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
 _flow_fixture, run_cell_ = make_flow_fixture(
     setup_stmts=[
-        "from ipyflow.api import code, deps, lift, timestamp, users",
+        "from ipyflow.api import code, deps, lift, rdeps, rusers, timestamp, users",
         "import pyccolo as pyc",
     ]
 )
@@ -49,3 +49,15 @@ def test_deps_and_users():
     run_cell("assert deps(y) == [lift(x)]")
     run_cell("assert users(x) == [lift(y)]")
     run_cell("assert users(y) == []")
+
+
+def test_rdeps_and_rusers():
+    run_cell("x = 0")
+    run_cell("y = x + 0")
+    run_cell("z = y + 0")
+    run_cell("assert rdeps(x) == []")
+    run_cell("assert rdeps(y) == [lift(x)]")
+    run_cell("assert set(rdeps(z)) == {lift(x), lift(y)}")
+    run_cell("assert set(rusers(x)) == {lift(y), lift(z)}")
+    run_cell("assert rusers(y) == [lift(z)]")
+    run_cell("assert rusers(z) == []")

@@ -15,7 +15,10 @@ from ipyflow.annotations.compiler import (
     REGISTERED_FUNCTION_SPECS,
     compile_and_register_handlers_for_module,
 )
-from ipyflow.tracing.external_calls.base_handlers import REGISTERED_HANDLER_BY_FUNCTION
+from ipyflow.tracing.external_calls.base_handlers import (
+    REGISTERED_HANDLER_BY_FUNCTION,
+    REGISTERED_HANDLER_BY_METHOD,
+)
 
 logging.basicConfig(level=logging.ERROR)
 

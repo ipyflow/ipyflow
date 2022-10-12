@@ -87,7 +87,9 @@ def _graph_union(
     return graph
 
 
-def compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCounter]:
+def compute_slice_impl(
+    seeds: List[TimestampOrCounter], match_seed_stmts: bool = False
+) -> Set[TimestampOrCounter]:
     assert len(seeds) > 0
     dependencies: Set[TimestampOrCounter] = set()
     timestamp_to_ts_deps: Dict[
@@ -126,7 +128,9 @@ def compute_slice_impl(seeds: List[TimestampOrCounter]) -> Set[TimestampOrCounte
             for ts in list(
                 timestamp_to_ts_deps.keys() | timestamp_to_static_ts_deps.keys()
             ):
-                if ts.cell_num == seed.cell_num:
+                if ts.cell_num == seed.cell_num and (
+                    not match_seed_stmts or ts.stmt_num == seed.stmt_num
+                ):
                     _get_ts_dependencies(
                         ts,
                         dependencies,

@@ -190,7 +190,7 @@ class DataSymbol:
         ts = self.timestamp
         if ts.cell_num == -1:
             ts = Timestamp(self.defined_cell_num, ts.stmt_num)
-        ts_deps = compute_slice_impl([ts])
+        ts_deps = compute_slice_impl([ts], match_seed_stmts=True)
         stmts_by_cell_num = CodeCell.compute_slice_stmts_for_timestamps(ts_deps)
         stmt_text_by_cell_num = CodeCell.get_stmt_text(stmts_by_cell_num)
         return make_slice_text(stmt_text_by_cell_num, blacken=True)

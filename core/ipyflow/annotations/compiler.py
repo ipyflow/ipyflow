@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
+    REGISTERED_HANDLER_BY_METHOD,
     CallerMutation,
     ExternalCallHandler,
     ModuleMutation,
@@ -300,6 +301,7 @@ def compile_and_register_handlers_for_module(module: ModuleType) -> None:
         if clazz is None:
             continue
         for method_name, handler in compiled_class_method_handlers.items():
+            REGISTERED_HANDLER_BY_METHOD[clazz, method_name] = handler
             method_function = getattr(clazz, method_name, None)
             if method_function is not None:
                 REGISTERED_HANDLER_BY_FUNCTION[method_function] = handler

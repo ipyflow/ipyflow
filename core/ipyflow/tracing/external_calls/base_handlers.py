@@ -107,7 +107,9 @@ class ExternalCallHandler(metaclass=HasGetitem):
     @property
     def arg_dsyms(self) -> Set["DataSymbol"]:
         if self._arg_dsyms is None:
-            self._arg_dsyms = set().union(*(arg[1] for arg in self.args))
+            self._arg_dsyms = set().union(
+                *(arg[1] for arg in self.args + list(self.kwargs.values()))
+            )
         return self._arg_dsyms
 
     def process_arg(self, arg: Any) -> None:
@@ -177,6 +179,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
 
 external_call_handler_by_name: Dict[str, Type[ExternalCallHandler]] = {}
 REGISTERED_HANDLER_BY_FUNCTION: Dict[Callable, Type[ExternalCallHandler]] = {}
+REGISTERED_HANDLER_BY_METHOD: Dict[Tuple[type, str], Type[ExternalCallHandler]] = {}
 
 
 class NoopCallHandler(ExternalCallHandler):

@@ -10,6 +10,7 @@ import ipyflow.tracing.external_calls.list_handlers
 from ipyflow.singletons import flow
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
+    REGISTERED_HANDLER_BY_METHOD,
     ExternalCallHandler,
     MutatingMethodEventNotYetImplemented,
     NoopCallHandler,
@@ -37,19 +38,28 @@ def resolve_external_call(
         return None
     if caller_self is logging or isinstance(caller_self, logging.Logger):
         return None
-    elif caller_self is not None and id(type(caller_self)) in flow().aliases:
+    elif caller_self is not None and any(
+        sym.is_class for sym in flow().aliases.get(id(type(caller_self)), [])
+    ):
         return None
     # TODO: handle case where it's a function defined in-notebook
     elif caller_self is None:
         pass
     elif method is None:
         return None
-    else:
-        function_or_method = getattr(type(caller_self), method, function_or_method)
     if isinstance(caller_self, ModuleType):
         caller_self = None
 
     external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method, None)
+    if (
+        external_call_type is None
+        and caller_self is not None
+        and not isinstance(caller_self, type)
+    ):
+        for cls in caller_self.__class__.mro():
+            external_call_type = REGISTERED_HANDLER_BY_METHOD.get((cls, method), None)
+            if external_call_type is not None:
+                break
     if external_call_type is None:
         if use_standard_default:
             external_call_type = StandardMutation

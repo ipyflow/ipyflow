@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.124 (2022-10-13)
+-------------------
+* Bugfixes around module usage and timestamps;
+
 0.0.123 (2022-10-12)
 -------------------
 * Small bugfix to ensure import statements kill symbols during liveness analysis;

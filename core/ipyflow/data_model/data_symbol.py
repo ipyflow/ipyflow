@@ -183,6 +183,8 @@ class DataSymbol:
     @property
     def timestamp(self) -> Timestamp:
         ts = self._timestamp
+        if self.is_import or self.is_module:
+            return ts
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 

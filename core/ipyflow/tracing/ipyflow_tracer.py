@@ -570,16 +570,18 @@ class DataflowTracer(StackFrameManager):
                     is_subscript=False,
                     is_module=True,
                     propagate=False,
-                    implicit=False,
+                    implicit=not isinstance(node, (ast.Import, ast.ImportFrom)),
                     symbol_node=node,
                 )
             is_first = False
             if idx == len(components) - 1:
                 break
-            cur_scope = symbol.namespace
-            if cur_scope is None:
+            symbol_namespace = symbol.namespace
+            if symbol_namespace is None:
                 cur_scope = Namespace(module, component, parent_scope=cur_scope)
-        if is_load:
+            else:
+                cur_scope = symbol_namespace
+        if is_load and not symbol.is_implicit:
             self.node_id_to_loaded_symbols.setdefault(id(node), []).append(symbol)
         return symbol
 

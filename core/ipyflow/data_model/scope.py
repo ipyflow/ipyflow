@@ -237,7 +237,13 @@ class Scope:
             skip_cloned_lookup=True,
         )
         if implicit and symbol_type != DataSymbolType.ANONYMOUS:
-            assert prev_dsym is None, "expected None, got %s" % prev_dsym
+            assert (
+                prev_dsym is None
+            ), "expected None for sym %s (lookup from %s), got %s" % (
+                name,
+                self,
+                prev_dsym,
+            )
         if prev_dsym is not None:
             prev_obj = DataSymbol.NULL if prev_dsym.obj is None else prev_dsym.obj
             # TODO: handle case where new dsym is of different type

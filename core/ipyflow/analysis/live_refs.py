@@ -154,7 +154,15 @@ class ComputeLiveSymbolRefs(
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
         self.visit_Assign_impl([], node.value, aug_assign_target=node.target)
 
+    def visit_Import(self, node: ast.Import) -> None:
+        self.visit_Import_or_ImportFrom(node)
+
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        self.visit_Import_or_ImportFrom(node)
+
+    def visit_Import_or_ImportFrom(
+        self, node: Union[ast.Import, ast.ImportFrom]
+    ) -> None:
         targets = []
         for name in node.names:
             if name.name == "*":

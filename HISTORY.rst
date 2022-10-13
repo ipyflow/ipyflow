@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.123 (2022-10-12)
+-------------------
+* Small bugfix to ensure import statements kill symbols during liveness analysis;
+
 0.0.122 (2022-10-12)
 -------------------
 * Small bugfix for dependency inference in attributes / subscripts;

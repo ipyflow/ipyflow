@@ -110,7 +110,13 @@ class Namespace(Scope):
 
     @property
     def is_anonymous(self) -> bool:
-        return self.scope_name == Namespace.ANONYMOUS
+        if self.scope_name == Namespace.ANONYMOUS:
+            return True
+        containing_ns = self.namespace_parent_scope
+        if containing_ns is not None and containing_ns.is_anonymous:
+            return True
+        else:
+            return False
 
     @property
     def is_garbage(self) -> bool:

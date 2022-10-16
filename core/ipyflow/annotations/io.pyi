@@ -2,9 +2,9 @@
 from ipyflow.annotations import (
     AnyOf,
     FileSystem,
-    Mutated,
+    Mutate,
     Parents,
-    SymbolUpserted,
+    UpsertSymbol,
     handler_for,
     self,
 )
@@ -12,7 +12,7 @@ from ipyflow.annotations import (
 # fake symbols to reduce lint errors
 file = None
 
-def open(file, *_, **__) -> SymbolUpserted[FileSystem[file]]: ...
+def open(file, *_, **__) -> UpsertSymbol[FileSystem[file]]: ...
 
 class IOBase:
 
@@ -21,13 +21,13 @@ class IOBase:
     @handler_for("flush", "truncate", "write", "writelines")
     def writer_method(
         self: AnyOf[FileSystem[file], Parents[FileSystem[file], ...]]
-    ) -> Mutated[FileSystem[file], self]: ...
+    ) -> Mutate[FileSystem[file], self]: ...
 
     """"""
 
     @handler_for("close", "readline", "readlines", "seek")
-    def reader_method(self) -> Mutated[self]: ...
+    def reader_method(self) -> Mutate[self]: ...
 
     """"""
 
-    def __enter__(self) -> SymbolUpserted[Parents[self]]: ...
+    def __enter__(self) -> UpsertSymbol[Parents[self]]: ...

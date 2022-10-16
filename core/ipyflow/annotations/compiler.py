@@ -10,6 +10,7 @@ import sys
 from types import ModuleType
 from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
+from ipyflow.annotations.annotations import Mutate
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
     REGISTERED_HANDLER_BY_METHOD,
@@ -113,7 +114,7 @@ def compile_function_handler(
         sub_value = ret.value
         slice_value = subscript_to_slice(ret)
         if isinstance(sub_value, ast.Name):
-            if sub_value.id == "Mutated":
+            if sub_value.id == Mutate.__name__:
                 if isinstance(slice_value, ast.Name):
                     return _make_mutate_name_handler(
                         func, is_method=is_method, name=slice_value.id

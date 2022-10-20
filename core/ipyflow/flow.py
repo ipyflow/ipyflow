@@ -269,9 +269,6 @@ class NotebookFlow(singletons.NotebookFlow):
             request = msg["content"]["data"]
             self.handle(request, comm=comm)
 
-        for tracer in singletons.kernel().registered_tracers:
-            # force initialization here
-            tracer.instance()
         comm.send({"type": "establish"})
 
     def _create_untracked_cells_for_content(
@@ -451,7 +448,10 @@ class NotebookFlow(singletons.NotebookFlow):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
         result = FrontendCheckerResult.empty()
-        if DataflowTracer not in singletons.kernel().registered_tracers:
+        if (
+            DataflowTracer not in singletons.kernel().registered_tracers
+            or not DataflowTracer.initialized()
+        ):
             return result
         return result.compute_frontend_checker_result(
             cells_to_check=cells_to_check,
@@ -460,6 +460,9 @@ class NotebookFlow(singletons.NotebookFlow):
         )
 
     def _safety_precheck_cell(self, cell: CodeCell) -> None:
+        for tracer in singletons.kernel().registered_tracers:
+            # just make sure all tracers are initialized
+            tracer.instance()
         checker_result = self.check_and_link_multiple_cells(
             cells_to_check=[cell],
             update_liveness_time_versions=self.mut_settings.static_slicing_enabled,

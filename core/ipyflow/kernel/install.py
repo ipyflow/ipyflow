@@ -21,6 +21,9 @@ kernel_json = {
     "display_name": DISPLAY_NAME,
     "language": "python",
     "codemirror_mode": "shell",
+    "metadata": {
+        "debugger": True,
+    },
 }
 
 

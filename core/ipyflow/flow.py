@@ -269,6 +269,9 @@ class NotebookFlow(singletons.NotebookFlow):
             request = msg["content"]["data"]
             self.handle(request, comm=comm)
 
+        for tracer in singletons.kernel().registered_tracers:
+            # force initialization here
+            tracer.instance()
         comm.send({"type": "establish"})
 
     def _create_untracked_cells_for_content(
@@ -450,9 +453,6 @@ class NotebookFlow(singletons.NotebookFlow):
         result = FrontendCheckerResult.empty()
         if DataflowTracer not in singletons.kernel().registered_tracers:
             return result
-        for tracer in singletons.kernel().registered_tracers:
-            # force initialization here in case not already inited
-            tracer.instance()
         return result.compute_frontend_checker_result(
             cells_to_check=cells_to_check,
             update_liveness_time_versions=update_liveness_time_versions,

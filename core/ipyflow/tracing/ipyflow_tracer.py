@@ -1177,7 +1177,10 @@ class DataflowTracer(StackFrameManager):
             )
         active_watchpoints = flow().active_watchpoints
         if active_watchpoints:
-            # TODO: break here
+            if sys.version_info < (3, 7):
+                logger.warning("skipping watchpoint on Python < 3.7")
+            else:
+                breakpoint()
             active_watchpoints.clear()
         return ret_expr
 

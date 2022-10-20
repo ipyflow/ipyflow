@@ -20,6 +20,7 @@ from ipyflow.api.lift import rdeps as api_rdeps
 from ipyflow.api.lift import rusers as api_rusers
 from ipyflow.api.lift import timestamp as api_timestamp
 from ipyflow.api.lift import users as api_users
+from ipyflow.api.lift import watchpoints as api_watchpoints
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
@@ -852,6 +853,7 @@ class DataflowTracer(StackFrameManager):
             api_rusers,
             api_timestamp,
             api_users,
+            api_watchpoints,
         ):
             return
         resolved = [sym for sym in resolve_rval_symbols(arg_node) if sym.obj is arg_obj]
@@ -1173,6 +1175,10 @@ class DataflowTracer(StackFrameManager):
             self.handle_other_sys_events(
                 None, 0, frame, pyc.after_stmt, stmt_node=cast(ast.stmt, stmt)
             )
+        active_watchpoints = flow().active_watchpoints
+        if active_watchpoints:
+            # TODO: break here
+            active_watchpoints.clear()
         return ret_expr
 
     @pyc.register_raw_handler(pyc.after_module_stmt)

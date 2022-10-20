@@ -28,6 +28,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.update_protocol import UpdateProtocol
 from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, tracer
+from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard
 
@@ -106,6 +107,7 @@ class DataSymbol:
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()
         self._cascading_reactive_cell_num = -1
+        self.watchpoints = Watchpoints()
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
         self.required_timestamp: Timestamp = self.timestamp
@@ -860,6 +862,9 @@ class DataSymbol:
         self._last_refreshed_timestamp = Timestamp.current()
         self._temp_disable_warnings = False
         if bump_version:
+            passing_watchpoints = self.watchpoints(self.obj)
+            if passing_watchpoints:
+                flow().active_watchpoints.append((passing_watchpoints, self))
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
             for cell in self.cells_where_live:
                 cell.add_used_cell_counter(self, self._timestamp.cell_num)

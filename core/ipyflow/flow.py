@@ -4,7 +4,18 @@ import logging
 import textwrap
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any, Callable, Dict, Iterable, NamedTuple, Optional, Set, Tuple, cast
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    cast,
+)
 
 import pyccolo as pyc
 from IPython import get_ipython
@@ -25,6 +36,7 @@ from ipyflow.run_mode import (
     FlowRunMode,
 )
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
+from ipyflow.tracing.watchpoint import Watchpoint
 from ipyflow.types import CellId, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard
 
@@ -114,6 +126,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_reactive_symbols: Set[DataSymbol] = set()
         self.updated_deep_reactive_symbols: Set[DataSymbol] = set()
+        self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], DataSymbol]] = []
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[CellId] = None

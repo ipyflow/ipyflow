@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from ipyflow.api.cells import stderr, stdout
 from ipyflow.api.lift import (
     code,
     deps,
@@ -16,6 +17,8 @@ __all__ = [
     "lift",
     "rdeps",
     "rusers",
+    "stderr",
+    "stdout",
     "timestamp",
     "users",
     "watchpoints",

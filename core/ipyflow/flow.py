@@ -175,10 +175,14 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self._virtual_symbols_inited = True
 
-    def initialize(self, *, entrypoint: Optional[str] = None) -> None:
-        self.mut_settings.dataflow_enabled = False
-        self.mut_settings.syntax_transforms_enabled = False
-        self.mut_settings.syntax_transforms_only = True
+    def initialize(self, *, entrypoint: Optional[str] = None, **kwargs) -> None:
+        self.mut_settings.dataflow_enabled = kwargs.get("dataflow_enabled", False)
+        self.mut_settings.syntax_transforms_enabled = kwargs.get(
+            "syntax_transforms_enabled", False
+        )
+        self.mut_settings.syntax_transforms_only = kwargs.get(
+            "syntax_transforms_only", True
+        )
 
     @property
     def is_develop(self) -> bool:

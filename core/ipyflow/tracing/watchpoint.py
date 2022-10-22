@@ -7,8 +7,14 @@ class Watchpoint:
         self.name = name
         self.pred = pred
 
-    def __call__(self, obj: Any) -> bool:
-        return True if self.pred is None else self.pred(obj)
+    def __call__(
+        self, obj: Any, *, position: Tuple[int, int], symbol_name: str
+    ) -> bool:
+        return (
+            True
+            if self.pred is None
+            else self.pred(obj, position=position, symbol_name=symbol_name)
+        )
 
     def __repr__(self):
         name_str = (
@@ -43,12 +49,16 @@ class Watchpoints(list):
     ):
         super().append(Watchpoint(name, pred))
 
-    def passing(self, obj: Any) -> Tuple[Watchpoint, ...]:
+    def passing(
+        self, obj: Any, *, position: Tuple[int, int], symbol_name: str
+    ) -> Tuple[Watchpoint, ...]:
         passing_watchpoints = []
         for wp in self:
-            if wp(obj):
+            if wp(obj, position=position, symbol_name=symbol_name):
                 passing_watchpoints.append(wp)
         return tuple(passing_watchpoints)
 
-    def __call__(self, obj: Any) -> Tuple[Watchpoint, ...]:
-        return self.passing(obj)
+    def __call__(
+        self, obj: Any, *, position: Tuple[int, int], symbol_name: str
+    ) -> Tuple[Watchpoint, ...]:
+        return self.passing(obj, position=position, symbol_name=symbol_name)

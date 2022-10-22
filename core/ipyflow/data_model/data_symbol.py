@@ -746,6 +746,8 @@ class DataSymbol:
             if mutated or not self._timestamp.is_initialized:
                 self._timestamp = Timestamp.current()
             return
+        if overwrite:
+            self.watchpoints.clear()
         if mutated and self.obj_type in self.IMMUTABLE_TYPES:
             return
         # if we get here, no longer implicit
@@ -866,7 +868,10 @@ class DataSymbol:
             if prev_stmt is not None:
                 passing_watchpoints = self.watchpoints(
                     self.obj,
-                    position=(flow().get_position(prev_stmt.frame)[0], prev_stmt.lineno),
+                    position=(
+                        flow().get_position(prev_stmt.frame)[0],
+                        prev_stmt.lineno,
+                    ),
                     symbol_name=self.readable_name,
                 )
                 if passing_watchpoints:

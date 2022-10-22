@@ -308,25 +308,29 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 cell_content = maybe_new_content
 
             # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
+            should_trace = self.should_trace()
+            output_captured = False
             try:
                 with self._tracing_context(
                     self.syntax_transforms_enabled
                     # disable syntax transforms for cell magics
                     and not cell_content.strip().startswith("%%")
-                ) if self.should_trace() else suppress():
+                ) if should_trace else suppress():
                     if is_async:
                         ret = await run_cell_func(cell_content)  # pragma: no cover
                     else:
                         ret = run_cell_func(cell_content)
                 # Stage 3:  Run post-execute hook
                 self.after_execute(cell_content)
+                if should_trace:
+                    self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
+                    output_captured = True
             except Exception as e:
-                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
+                if should_trace and not output_captured:
+                    self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
                 logger.exception("exception occurred")
                 self.on_exception(e)
-            finally:
-                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
-                return ret
+        return ret
 
     @classmethod
     def make_zmq_kernel_class(cls, name: str) -> Type[IPythonKernel]:

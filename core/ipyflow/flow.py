@@ -201,7 +201,6 @@ class NotebookFlow(singletons.NotebookFlow):
         self.mut_settings.trace_messages_enabled = new_val
 
     def get_first_full_symbol(self, obj_id: int) -> Optional[DataSymbol]:
-        # TODO: also avoid anonymous namespaces?
         for alias in self.aliases.get(obj_id, []):
             if not alias.is_anonymous:
                 return alias

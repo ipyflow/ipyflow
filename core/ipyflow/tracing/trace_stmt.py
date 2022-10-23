@@ -4,7 +4,7 @@ import builtins
 import logging
 import sys
 from types import FrameType
-from typing import List, Optional, Set, Tuple, Union, cast
+from typing import List, Optional, Set, Union, cast
 
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef

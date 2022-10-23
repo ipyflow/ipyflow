@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
-from ipyflow.data_model.code_cell import cells
 from typing import Optional
+
+from ipyflow.data_model.code_cell import cells
 
 
 def stdout(cell_num: int) -> Optional[str]:

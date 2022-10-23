@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.125 (2022-10-23)
+-------------------
+* Scaffolding for watchpoint functionality;
+* stderr / stdout API functions for accessing cell outputs;
+
 0.0.124 (2022-10-13)
 -------------------
 * Bugfixes around module usage and timestamps;

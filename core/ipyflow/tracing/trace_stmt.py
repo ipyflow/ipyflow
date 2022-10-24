@@ -56,11 +56,13 @@ class TraceStatement:
             func_name = self.stmt_node.name
         else:
             func_name = None
-        func_sym = flow().statement_to_func_cell.get(id(self.stmt_node), None)
+        func_sym = tracer().calling_symbol
+        if func_sym is None or func_sym.call_scope is None:
+            func_sym = flow().statement_to_func_cell.get(id(self.stmt_node), None)
         if func_sym is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
-        if not func_sym.is_function:
+        if func_sym.call_scope is None:
             msg = "got non-function symbol %s for name %s" % (
                 func_sym.full_path,
                 func_name,
@@ -71,6 +73,13 @@ class TraceStatement:
                 logger.warning(msg)
                 return old_scope
         if not self.finished:
+            prev_call_scope = func_sym.call_scope
+            new_call_scope = prev_call_scope.parent_scope.make_child_scope(
+                func_sym.name
+            )
+            if prev_call_scope.symtab is not None:
+                new_call_scope.symtab = prev_call_scope.symtab
+            func_sym.call_scope = new_call_scope
             func_sym.create_symbols_for_call_args(call_frame)
         return func_sym.call_scope
 

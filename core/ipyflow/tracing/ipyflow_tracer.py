@@ -155,6 +155,7 @@ class DataflowTracer(StackFrameManager):
                 "", f"<cell-{cells().exec_counter()}>", "exec"
             )
 
+        self.calling_symbol: Optional[DataSymbol] = None
         self.call_stack: pyc.TraceStack = self.make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
@@ -218,6 +219,7 @@ class DataflowTracer(StackFrameManager):
         self.this_stmt_updated_symbols.clear()
         self._seen_functions_ids.clear()
         self.is_external_call_pending_return = False
+        self.calling_symbol = None
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -929,17 +931,26 @@ class DataflowTracer(StackFrameManager):
     def before_call(self, function_or_method, node: ast.Call, *_, **__):
         if self.saved_complex_symbol_load_data is None:
             obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
+            if isinstance(node.func, ast.Name):
+                self.calling_symbol = (
+                    self.cur_frame_original_scope.lookup_data_symbol_by_name(
+                        node.func.id
+                    )
+                )
         else:
             # TODO: this will cause errors if we add more fields
             _ignored: Any
             (
-                _namespace,
+                namespace,
                 obj,
                 attr_or_subscript,
                 is_subscript,
                 *_ignored,
                 obj_name,
             ) = self.saved_complex_symbol_load_data
+            self.calling_symbol = namespace.lookup_data_symbol_by_name(
+                attr_or_subscript, is_subscript=is_subscript
+            )
         # TODO: check if `function_or_method` has been registered as requiring a custom side effect
         if is_subscript:
             # TODO: need to do this also for chained calls, e.g. f()()

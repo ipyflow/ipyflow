@@ -74,10 +74,12 @@ class TraceStatement:
                 return old_scope
         if not self.finished:
             prev_call_scope = func_sym.call_scope
+            # we need a new scope upon call to prevent picking up outer scope's overwritten nonlocals
             new_call_scope = prev_call_scope.parent_scope.make_child_scope(
                 func_sym.name
             )
             if prev_call_scope.symtab is not None:
+                # we need to keep the previous call scope's symtab since it came from the function's containing scope
                 new_call_scope.symtab = prev_call_scope.symtab
             func_sym.call_scope = new_call_scope
             func_sym.create_symbols_for_call_args(call_frame)

@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.126 (2022-10-26)
+-------------------
+* Bugfixes for call scopes and symbol tables (better global / nonlocal handling);
+* Bugfix to get working on Python 3.11
+
 0.0.125 (2022-10-23)
 -------------------
 * Scaffolding for watchpoint functionality;

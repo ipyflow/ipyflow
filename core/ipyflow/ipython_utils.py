@@ -24,8 +24,10 @@ class _IpythonState:
     @contextmanager
     def save_number_of_currently_executing_cell(self):
         self.cell_counter = _ipython().execution_count
-        yield
-        self.cell_counter = None
+        try:
+            yield
+        finally:
+            self.cell_counter = None
 
     @contextmanager
     def ast_transformer_context(self, transformers: List[ast.NodeTransformer]):

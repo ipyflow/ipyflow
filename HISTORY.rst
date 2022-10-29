@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.127 (2022-10-28)
+-------------------
+* Add call symbols as deps during namespace unpack assign;
+* Improved handling / tolerance around execution counters;
+
 0.0.126 (2022-10-26)
 -------------------
 * Bugfixes for call scopes and symbol tables (better global / nonlocal handling);

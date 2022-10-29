@@ -211,7 +211,10 @@ class TraceStatement:
         self._handle_reactive_store(target.value)
 
     def _handle_store_target_tuple_unpack_from_namespace(
-        self, target: Union[ast.List, ast.Tuple], rhs_namespace: Namespace
+        self,
+        target: Union[ast.List, ast.Tuple],
+        rhs_namespace: Namespace,
+        extra_deps: Set[DataSymbol],
     ) -> None:
         saved_starred_node: Optional[ast.Starred] = None
         saved_starred_deps = []
@@ -227,6 +230,7 @@ class TraceStatement:
                 inner_deps = set()
             else:
                 inner_deps = {inner_dep}
+            inner_deps |= extra_deps
             if isinstance(inner_target, (ast.List, ast.Tuple)):
                 inner_namespace = flow().namespaces.get(inner_dep.obj_id, None)
                 if inner_namespace is None:
@@ -235,7 +239,7 @@ class TraceStatement:
                     )
                 else:
                     self._handle_store_target_tuple_unpack_from_namespace(
-                        inner_target, inner_namespace
+                        inner_target, inner_namespace, extra_deps
                     )
             else:
                 self._handle_assign_target_for_deps(
@@ -262,8 +266,12 @@ class TraceStatement:
                     target, resolve_rval_symbols(value)
                 )
             else:
+                extra_deps: Set[DataSymbol] = set()
+                if isinstance(value, ast.Call):
+                    # in this case, every target should depend on whatever was called
+                    extra_deps |= resolve_rval_symbols(value.func)
                 self._handle_store_target_tuple_unpack_from_namespace(
-                    target, rhs_namespace
+                    target, rhs_namespace, extra_deps
                 )
         else:
             self._handle_assign_target_for_deps(

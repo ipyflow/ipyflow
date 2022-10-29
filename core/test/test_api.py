@@ -51,6 +51,19 @@ def test_deps_and_users():
     run_cell("assert users(y) == []")
 
 
+def test_call_deps():
+    run_cell("def f(): return 0, 1, 2, 3")
+    run_cell("a, b, c, d = f()")
+    for sym in "a", "b", "c", "d":
+        run_cell(f"assert deps({sym}) == [lift(f)]")
+        run_cell(f"assert users({sym}) == []")
+    run_cell("g = lambda: (0, 1, 2, 3)")
+    run_cell("w, x, y, z = g()")
+    for sym in "w", "x", "y", "z":
+        run_cell(f"assert deps({sym}) == [lift(g)]")
+        run_cell(f"assert users({sym}) == []")
+
+
 def test_rdeps_and_rusers():
     run_cell("x = 0")
     run_cell("y = x + 0")

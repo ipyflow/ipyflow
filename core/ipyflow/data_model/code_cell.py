@@ -22,6 +22,7 @@ from typing import (
 )
 
 import pyccolo as pyc
+from IPython import get_ipython
 
 from ipyflow.analysis.live_refs import (
     LiveSymbolRef,
@@ -33,7 +34,7 @@ from ipyflow.analysis.live_refs import (
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.ipython_utils import CapturedIO
+from ipyflow.ipython_utils import _IPY, CapturedIO
 from ipyflow.ipython_utils import cell_counter as ipy_cell_counter
 from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import flow, kernel
@@ -213,8 +214,15 @@ class CodeCell(CodeCellSlicingMixin):
         if bump_cell_counter:
             cls._cell_counter += 1
             cell_ctr = cls._cell_counter
-            if validate_ipython_counter:
-                assert cell_ctr == ipy_cell_counter()
+            if validate_ipython_counter and cell_ctr != ipy_cell_counter():
+                actual_counter = get_ipython().execution_count
+                logger.warning(
+                    "mismatch between cell counter (%d) and saved ipython counter (%d)",
+                    cell_ctr,
+                    ipy_cell_counter(),
+                )
+                logger.warning("fixing up to actual counter of %d", actual_counter)
+                cell_ctr = cls._cell_counter = _IPY.cell_counter = actual_counter
         else:
             cell_ctr = -1
         prev_cell = cls.from_id(cell_id)

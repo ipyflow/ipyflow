@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.128 (2022-10-31)
+-------------------
+* Misc fixes;
+
 0.0.127 (2022-10-28)
 -------------------
 * Add call symbols as deps during namespace unpack assign;

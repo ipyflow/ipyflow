@@ -102,7 +102,6 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         self.tracer_cleanup_pending: bool = False
         self.syntax_transforms_enabled: bool = True
         self.syntax_transforms_only: bool = False
-        self._lock = asyncio.Lock()
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
         if run_cell_func is None:
@@ -301,11 +300,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             raise
 
     async def pyc_execute(self, cell_content: str, is_async: bool, run_cell_func):
-        async with self._lock:
-            with save_number_of_currently_executing_cell():
-                return await self._pyc_execute_impl(
-                    cell_content, is_async, run_cell_func
-                )
+        with save_number_of_currently_executing_cell():
+            return await self._pyc_execute_impl(cell_content, is_async, run_cell_func)
 
     async def _pyc_execute_impl(self, cell_content: str, is_async: bool, run_cell_func):
         ret = None
@@ -377,7 +373,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                             cell, silent, store_history, user_expressions, allow_stdin
                         )
 
-                    if silent:
+                    if silent or not store_history:
                         # then it's probably a control message; don't run through ipyflow
                         return await _run_cell_func(code)
                     else:
@@ -406,7 +402,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
                     return asyncio.get_event_loop().run_until_complete(
                         _run_cell_func(code)
-                        if silent
+                        if silent or not store_history
                         else self.pyc_execute(code, True, _run_cell_func)
                     )
 

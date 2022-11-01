@@ -746,7 +746,7 @@ class DataSymbol:
             if mutated or not self._timestamp.is_initialized:
                 self._timestamp = Timestamp.current()
             return
-        if overwrite:
+        if overwrite and not self.is_globally_accessible:
             self.watchpoints.clear()
         if mutated and self.obj_type in self.IMMUTABLE_TYPES:
             return
@@ -864,18 +864,6 @@ class DataSymbol:
         self._last_refreshed_timestamp = Timestamp.current()
         self._temp_disable_warnings = False
         if bump_version:
-            prev_stmt = tracer().prev_trace_stmt_in_cur_frame
-            if prev_stmt is not None:
-                passing_watchpoints = self.watchpoints(
-                    self.obj,
-                    position=(
-                        flow().get_position(prev_stmt.frame)[0],
-                        prev_stmt.lineno,
-                    ),
-                    symbol_name=self.readable_name,
-                )
-                if passing_watchpoints:
-                    flow().active_watchpoints.append((passing_watchpoints, self))
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
             for cell in self.cells_where_live:
                 cell.add_used_cell_counter(self, self._timestamp.cell_num)

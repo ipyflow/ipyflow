@@ -22,7 +22,7 @@ kernel_json = {
     "language": "python",
     "codemirror_mode": "shell",
     "metadata": {
-        "debugger": True,
+        "debugger": False,
     },
 }
 

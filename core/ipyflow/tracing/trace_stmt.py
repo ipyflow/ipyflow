@@ -417,4 +417,15 @@ class TraceStatement:
             return
         tracer().seen_stmts.add(self.stmt_id)
         self.handle_dependencies()
+        for sym in list(tracer().this_stmt_updated_symbols):
+            passing_watchpoints = sym.watchpoints(
+                sym.obj,
+                position=(
+                    flow().get_position(self.frame)[0],
+                    self.lineno,
+                ),
+                symbol_name=sym.readable_name,
+            )
+            if passing_watchpoints:
+                flow().active_watchpoints.append((passing_watchpoints, sym))
         tracer().after_stmt_reset_hook()

@@ -25,6 +25,8 @@ import {
 
 const IPYFLOW_KERNEL_NAME: string = 'ipyflow';
 
+type Highlights = 'all' | 'none' | 'executed' | 'reactive';
+
 /**
  * Initialization data for the jupyterlab-ipyflow extension.
  */
@@ -106,7 +108,7 @@ let orderIdxById: {[id: string]: number} = {};
 let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
-let lastExecutionHighlightsEnabled: boolean = null;
+let lastExecutionHighlights: Highlights = null;
 let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
 let forcedReactiveCells: Set<string> = new Set();
@@ -421,7 +423,7 @@ const connectToComm = (
 
   const updateUI = (notebook: Notebook) => {
     clearCellState(notebook);
-    if (!lastExecutionHighlightsEnabled) {
+    if (lastExecutionHighlights === 'none') {
       return;
     }
     refreshNodeMapping(notebook);
@@ -451,7 +453,7 @@ const connectToComm = (
       const flow_order = msg.content.data['flow_order'];
       const exec_schedule = msg.content.data['exec_schedule'];
       lastExecutionMode = exec_mode;
-      lastExecutionHighlightsEnabled = msg.content.data['highlights_enabled'] as boolean;
+      lastExecutionHighlights = msg.content.data['highlights'] as Highlights;
       executedReactiveReadyCells.add(msg.content.data['last_executed_cell_id'] as string);
       for (const cell of notebook.widgets) {
         if (cell.model.type !== 'code' || executedReactiveReadyCells.has(cell.model.id)) {

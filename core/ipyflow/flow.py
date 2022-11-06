@@ -34,6 +34,7 @@ from ipyflow.run_mode import (
     ExecutionSchedule,
     FlowDirection,
     FlowRunMode,
+    Highlights,
 )
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.tracing.watchpoint import Watchpoint
@@ -57,7 +58,7 @@ class NotebookSafetySettings(NamedTuple):
 class MutableNotebookSafetySettings:
     dataflow_enabled: bool
     trace_messages_enabled: bool
-    highlights_enabled: bool
+    highlights: Highlights
     static_slicing_enabled: bool
     dynamic_slicing_enabled: bool
     exec_mode: ExecutionMode
@@ -98,7 +99,7 @@ class NotebookFlow(singletons.NotebookFlow):
             MutableNotebookSafetySettings(
                 dataflow_enabled=kwargs.pop("dataflow_enabled", True),
                 trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
-                highlights_enabled=kwargs.pop("highlights_enabled", True),
+                highlights=kwargs.pop("highlights", Highlights.EXECUTED),
                 static_slicing_enabled=kwargs.pop("static_slicing_enabled", True),
                 dynamic_slicing_enabled=kwargs.pop("dynamic_slicing_enabled", True),
                 exec_mode=ExecutionMode(kwargs.pop("exec_mode", ExecutionMode.NORMAL)),
@@ -387,7 +388,7 @@ class NotebookFlow(singletons.NotebookFlow):
         response["exec_schedule"] = self.mut_settings.exec_schedule.value
         response["flow_order"] = self.mut_settings.flow_order.value
         response["last_executed_cell_id"] = last_cell_id
-        response["highlights_enabled"] = self.mut_settings.highlights_enabled
+        response["highlights"] = self.mut_settings.highlights.value
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:

@@ -9,7 +9,7 @@ from ipyflow.annotations.compiler import (
 )
 from ipyflow.data_model.code_cell import cells
 from ipyflow.line_magics import _USAGE
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.singletons import flow, kernel
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
@@ -93,17 +93,17 @@ def test_enable_disable_trace_messages():
 
 
 def test_enable_disable_highlights():
-    assert flow().mut_settings.highlights_enabled
+    assert flow().mut_settings.highlights == Highlights.EXECUTED
     run_cell("%flow nohls")
-    assert not flow().mut_settings.highlights_enabled
+    assert flow().mut_settings.highlights == Highlights.NONE
     run_cell("%flow hls")
-    assert flow().mut_settings.highlights_enabled
+    assert flow().mut_settings.highlights == Highlights.EXECUTED
     run_cell("%flow highlights off")
-    assert not flow().mut_settings.highlights_enabled
+    assert flow().mut_settings.highlights == Highlights.NONE
     run_cell("%flow highlights on")
-    assert flow().mut_settings.highlights_enabled
+    assert flow().mut_settings.highlights == Highlights.EXECUTED
     run_cell("%flow highlights disable")
-    assert not flow().mut_settings.highlights_enabled
+    assert flow().mut_settings.highlights == Highlights.NONE
     run_cell("%flow highlights enable")
 
 

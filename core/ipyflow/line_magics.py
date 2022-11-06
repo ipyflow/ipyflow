@@ -22,7 +22,7 @@ from ipyflow.annotations.compiler import (
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.singletons import flow, kernel
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -283,17 +283,20 @@ def trace_messages(line_: str) -> None:
 
 
 def set_highlights(cmd: str, rest: str) -> None:
-    usage = "Usage: %flow [hls|nohls]"
+    usage = "Usage: %flow [hls [strategy]|nohls]"
     if cmd == "hls":
-        flow().mut_settings.highlights_enabled = True
+        if rest == "":
+            flow().mut_settings.highlights = Highlights.EXECUTED
+        else:
+            flow().mut_settings.highlights = Highlights(rest)
     elif cmd == "nohls":
-        flow().mut_settings.highlights_enabled = False
+        flow().mut_settings.highlights = Highlights.NONE
     else:
         rest = rest.lower()
         if rest == "on" or rest.startswith("enable"):
-            flow().mut_settings.highlights_enabled = True
+            flow().mut_settings.highlights = Highlights.EXECUTED
         elif rest == "off" or rest.startswith("disable"):
-            flow().mut_settings.highlights_enabled = False
+            flow().mut_settings.highlights = Highlights.NONE
         else:
             warn(usage)
 

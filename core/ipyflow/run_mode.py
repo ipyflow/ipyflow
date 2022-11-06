@@ -32,3 +32,10 @@ class ExecutionSchedule(Enum):
 class FlowDirection(Enum):
     ANY_ORDER = "any_order"
     IN_ORDER = "in_order"
+
+
+class Highlights(Enum):
+    ALL = "all"
+    NONE = "none"
+    EXECUTED = "executed"
+    REACTIVE = "reactive"

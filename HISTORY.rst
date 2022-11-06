@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.129 (2022-11-06)
+-------------------
+* Configurable reactive highlights;
+* Use typescript 4.3.5 (compatible with JupyterLab 3)
+* Update logos;
+
 0.0.128 (2022-10-31)
 -------------------
 * Misc fixes;

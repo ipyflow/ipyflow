@@ -276,24 +276,10 @@ const connectToComm = (
         itercell.node.classList.remove(readyMakingInputClass);
       }
     });
-    const payload = {
+    comm.send({
       type: 'compute_exec_schedule',
       executed_cell_id: cell.id,
       cell_metadata_by_id,
-    };
-    comm.send(payload).done.then(() => {
-      if (cellPendingExecution !== null) {
-        CodeCell.execute(cellPendingExecution, session)
-      } else {
-        if (lastExecutionMode === 'reactive') {
-          readyCells = executedReactiveReadyCells;
-          updateUI(notebook);
-        }
-        resetReactiveState();
-        comm.send({
-          type: 'reactivity_cleanup',
-        });
-      }
     });
   };
 
@@ -479,11 +465,22 @@ const connectToComm = (
         }
       }
       if (cellPendingExecution === null) {
-        resetReactiveState();
-        updateUI(notebook);
+        if (lastExecutionMode === 'reactive') {
+          if (lastExecutionHighlights === 'reactive') {
+            readyCells = executedReactiveReadyCells;
+          }
+          updateUI(notebook);
+          resetReactiveState();
+          comm.send({
+            type: 'reactivity_cleanup',
+          });
+        } else {
+          resetReactiveState()
+          updateUI(notebook);
+        }
       } else {
         onActiveCellChange(notebook, cellPendingExecution);
-        clearCellState(notebook);
+        CodeCell.execute(cellPendingExecution, session)
       }
     }
   };

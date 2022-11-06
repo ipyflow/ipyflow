@@ -284,21 +284,18 @@ def trace_messages(line_: str) -> None:
 
 def set_highlights(cmd: str, rest: str) -> None:
     usage = "Usage: %flow [hls [strategy]|nohls]"
-    if cmd == "hls":
-        if rest == "":
-            flow().mut_settings.highlights = Highlights.EXECUTED
-        else:
-            flow().mut_settings.highlights = Highlights(rest)
-    elif cmd == "nohls":
-        flow().mut_settings.highlights = Highlights.NONE
-    else:
-        rest = rest.lower()
-        if rest == "on" or rest.startswith("enable"):
+    rest = rest.lower().strip()
+    if cmd == "hls" or cmd != "nohls":
+        if rest == "" or rest == "on" or rest.startswith("enable"):
             flow().mut_settings.highlights = Highlights.EXECUTED
         elif rest == "off" or rest.startswith("disable"):
             flow().mut_settings.highlights = Highlights.NONE
+        elif rest in {member.value for member in Highlights}:
+            flow().mut_settings.highlights = Highlights(rest)
         else:
             warn(usage)
+    elif cmd == "nohls":
+        flow().mut_settings.highlights = Highlights.NONE
 
 
 _SLICE_PARSER = argparse.ArgumentParser("slice")

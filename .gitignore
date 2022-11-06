@@ -16,7 +16,6 @@ dist/
 !**/notebooks/*.ipynb
 **/[uU]ntitled*
 MANIFEST
-core/ipyflow/resources/**
 .coverage
 coverage.xml
 htmlcov/**

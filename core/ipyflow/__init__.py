@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+from ipyflow.api import *
+
 
 # Jupyter Extension points
 def _jupyter_nbextension_paths():

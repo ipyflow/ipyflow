@@ -56,9 +56,11 @@ list of notebook types in Jupyter's "New" dropdown dialogue. For JupyterLab,
 similarly select "Python 3 (ipyflow)" from the list of available kernels in
 the Launcher tab.
 
+<!--
 Jupyter Notebook Entrypoint:     |  Jupyter Lab Entrypoint:
 :-------------------------------:|:-------------------------:
 ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png)
+-->
 
 Uninstall
 ---------

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.130 (2022-11-06)
+-------------------
+* Make core api functions directly importable from ipyflow;
+
 0.0.129 (2022-11-06)
 -------------------
 * Configurable reactive highlights;

@@ -60,6 +60,7 @@ EOF
 
 pushd ./frontend/labextension
 npm publish
+git restore ../../core/ipyflow/resources
 popd
 
 git push --tags

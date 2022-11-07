@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set
 
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
+from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.singletons import flow
 from ipyflow.types import CellId
 
@@ -362,6 +362,8 @@ class FrontendCheckerResult(NamedTuple):
         )
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
+        if flow_.mut_settings.highlights == Highlights.EXECUTED:
+            cells_to_check = (cell for cell in cells_to_check if cell.cell_ctr > 0)
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
         for cell in cells_to_check:
             checker_result = self._check_one_cell(

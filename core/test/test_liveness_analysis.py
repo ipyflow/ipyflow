@@ -87,6 +87,11 @@ def test_subscript_is_live():
     assert live == {"bar", "baz"}
 
 
+def test_dict_literal():
+    live, dead = compute_live_dead_symbol_refs("{'foo': bar}")
+    assert live == {"bar"}
+
+
 if sys.version_info >= (3, 8):
 
     def test_walrus():

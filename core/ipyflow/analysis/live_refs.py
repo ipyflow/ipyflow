@@ -214,6 +214,11 @@ class ComputeLiveSymbolRefs(
     def visit_Tuple(self, node: ast.Tuple) -> None:
         self.visit_Tuple_or_List(node)
 
+    def visit_Dict(self, node: ast.Dict) -> None:
+        with self.attrsub_context(False):
+            self.generic_visit(node.keys)
+            self.generic_visit(node.values)
+
     def visit_For(self, node: ast.For) -> None:
         # Case "for a,b in something: "
         self.visit(node.iter)

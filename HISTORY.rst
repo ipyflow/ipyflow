@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.131 (2022-11-07)
+-------------------
+* Bugfix for cyclic waiting check;
+* Only process previously-executed cells by default;
+
 0.0.130 (2022-11-06)
 -------------------
 * Make core api functions directly importable from ipyflow;

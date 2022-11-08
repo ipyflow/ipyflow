@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.132 (2022-11-08)
+-------------------
+* Actually fix cyclic waiting check bug;
+
 0.0.131 (2022-11-07)
 -------------------
 * Bugfix for cyclic waiting check;

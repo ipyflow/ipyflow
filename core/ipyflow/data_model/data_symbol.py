@@ -669,11 +669,7 @@ class DataSymbol:
             return False
         return self.waiting_timestamp < self.required_timestamp.cell_num
 
-    def _is_ready_or_waiting_at_position_impl(
-        self, pos: int, deep: bool, seen: Set["DataSymbol"]
-    ) -> bool:
-        if self in seen:
-            return False
+    def _is_ready_or_waiting_at_position_impl(self, pos: int, deep: bool) -> bool:
         for par, timestamps in self.parents.items():
             for ts in timestamps:
                 dep_introduced_pos = cells().from_timestamp(ts).position
@@ -683,7 +679,7 @@ class DataSymbol:
                     if cells().from_timestamp(updated_ts).position > dep_introduced_pos:
                         continue
                     if updated_ts.cell_num > ts.cell_num or par.is_waiting_at_position(
-                        dep_introduced_pos, seen=seen
+                        dep_introduced_pos
                     ):
                         # logger.error("sym: %s", self)
                         # logger.error("pos: %s", pos)
@@ -695,13 +691,11 @@ class DataSymbol:
                         return True
         if deep:
             for sym in self.namespace_waiting_symbols:
-                if sym.is_waiting_at_position(pos, seen=seen):
+                if sym.is_waiting_at_position(pos):
                     return True
         return False
 
-    def is_waiting_at_position(
-        self, pos: int, deep: bool = True, seen: Optional[Set["DataSymbol"]] = None
-    ) -> bool:
+    def is_waiting_at_position(self, pos: int, deep: bool = True) -> bool:
         if deep:
             if not self.is_waiting:
                 return False
@@ -715,12 +709,9 @@ class DataSymbol:
             self._last_computed_ready_or_waiting_cache_ts = cells().exec_counter()
         if (pos, deep) in self._is_ready_or_waiting_at_position_cache:
             return self._is_ready_or_waiting_at_position_cache[pos, deep]
-        if seen is None:
-            seen = set()
-        if self in seen:
-            return False
-        seen.add(self)
-        is_waiting = self._is_ready_or_waiting_at_position_impl(pos, deep, seen)
+        # preemptively set this entry to 'False' in the cache to avoid infinite loops
+        self._is_ready_or_waiting_at_position_cache[pos, deep] = False
+        is_waiting = self._is_ready_or_waiting_at_position_impl(pos, deep)
         self._is_ready_or_waiting_at_position_cache[pos, deep] = is_waiting
         return is_waiting
 

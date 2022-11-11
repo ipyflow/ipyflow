@@ -356,6 +356,12 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 self.before_init_metadata(parent)
                 return super().init_metadata(parent)
 
+            def _is_code_empty(self, code: str) -> bool:
+                return (
+                    self.shell.input_transformer_manager.transform_cell(code).strip()
+                    == ""
+                )
+
             if inspect.iscoroutinefunction(IPythonKernel.do_execute):
 
                 async def do_execute(
@@ -373,7 +379,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                             cell, silent, store_history, user_expressions, allow_stdin
                         )
 
-                    if silent or not store_history:
+                    if silent or not store_history or self._is_code_empty(code):
                         # then it's probably a control message; don't run through ipyflow
                         return await _run_cell_func(code)
                     else:
@@ -402,7 +408,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
                     return asyncio.get_event_loop().run_until_complete(
                         _run_cell_func(code)
-                        if silent or not store_history
+                        if silent or not store_history or self._is_code_empty(code)
                         else self.pyc_execute(code, True, _run_cell_func)
                     )
 

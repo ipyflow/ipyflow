@@ -211,13 +211,21 @@ class NotebookFlow(singletons.NotebookFlow):
     def cell_counter() -> int:
         return cells().exec_counter()
 
-    def add_dynamic_data_dep(self, child: Timestamp, parent: Timestamp):
+    def add_dynamic_data_dep(
+        self, child: Timestamp, parent: Timestamp, sym: DataSymbol
+    ) -> None:
         self.dynamic_data_deps.setdefault(child, set()).add(parent)
-        cells().from_timestamp(child).add_dynamic_parent(cells().from_timestamp(parent))
+        cells().from_timestamp(child).add_dynamic_parent(
+            cells().from_timestamp(parent), sym
+        )
 
-    def add_static_data_dep(self, child: Timestamp, parent: Timestamp):
+    def add_static_data_dep(
+        self, child: Timestamp, parent: Timestamp, sym: DataSymbol
+    ) -> None:
         self.static_data_deps.setdefault(child, set()).add(parent)
-        cells().from_timestamp(child).add_static_parent(cells().from_timestamp(parent))
+        cells().from_timestamp(child).add_static_parent(
+            cells().from_timestamp(parent), sym
+        )
 
     def reset_cell_counter(self):
         # only called in test context

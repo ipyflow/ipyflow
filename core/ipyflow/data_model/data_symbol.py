@@ -850,7 +850,7 @@ class DataSymbol:
             and used_time not in self.timestamp_by_used_time
             and ts_to_use < used_time
         ):
-            flow().add_dynamic_data_dep(used_time, ts_to_use)
+            flow().add_dynamic_data_dep(used_time, ts_to_use, self)
             self.timestamp_by_used_time[used_time] = ts_to_use
             if used_node is not None:
                 self.used_node_by_used_time[used_time] = used_node

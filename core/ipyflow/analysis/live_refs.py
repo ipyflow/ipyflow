@@ -350,7 +350,7 @@ def get_live_symbols_and_cells_for_references(
                 liveness_time = resolved.liveness_timestamp
                 assert liveness_time > ts_to_use
                 if ts_to_use.is_initialized:
-                    flow().add_static_data_dep(liveness_time, ts_to_use)
+                    flow().add_static_data_dep(liveness_time, ts_to_use, resolved.dsym)
                     resolved.dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
                 if resolved.atom.is_cascading_reactive:
                     resolved.dsym.bump_cascading_reactive_cell_num(cell_ctr)

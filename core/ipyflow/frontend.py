@@ -111,15 +111,15 @@ class FrontendCheckerResult(NamedTuple):
             ready_making_cell_ids: Set[CellId] = set()
             if flow_.mut_settings.flow_order == ExecutionSchedule.DAG_BASED:
                 if flow_.mut_settings.dynamic_slicing_enabled:
-                    ready_making_cell_ids |= (
-                        cells().from_id(waiting_cell_id).dynamic_parent_ids
-                        & eligible_ready_making_for_dag
-                    )
+                    ready_making_cell_ids |= {
+                        pid
+                        for pid, _ in cells().from_id(waiting_cell_id).dynamic_parents
+                    } & eligible_ready_making_for_dag
                 if flow_.mut_settings.static_slicing_enabled:
-                    ready_making_cell_ids |= (
-                        cells().from_id(waiting_cell_id).static_parent_ids
-                        & eligible_ready_making_for_dag
-                    )
+                    ready_making_cell_ids |= {
+                        pid
+                        for pid, _ in cells().from_id(waiting_cell_id).static_parents
+                    } & eligible_ready_making_for_dag
             else:
                 waiting_syms = waiting_symbols_by_cell_id.get(waiting_cell_id, set())
                 ready_making_cell_ids = ready_making_cell_ids.union(
@@ -175,13 +175,15 @@ class FrontendCheckerResult(NamedTuple):
                 if cell.cell_id in self.waiting_cells:
                     continue
                 if flow_.mut_settings.dynamic_slicing_enabled:
-                    if cell.dynamic_parent_ids & (
+                    if {pid for pid, _ in cell.dynamic_parents} & (
                         self.ready_cells | self.waiting_cells
                     ):
                         self.waiting_cells.add(cell.cell_id)
                         continue
                 if flow_.mut_settings.static_slicing_enabled:
-                    if cell.static_parent_ids & (self.ready_cells | self.waiting_cells):
+                    if {pid for pid, _ in cell.static_parents} & (
+                        self.ready_cells | self.waiting_cells
+                    ):
                         self.waiting_cells.add(cell.cell_id)
             if prev_waiting_cells == self.waiting_cells:
                 break
@@ -198,24 +200,26 @@ class FrontendCheckerResult(NamedTuple):
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
             is_ready = False
             flow_order = flow_.mut_settings.flow_order
-            if flow_.mut_settings.dynamic_slicing_enabled:
-                for par in cell.dynamic_parents:
+            for slicing_type_enabled, parent_edges in (
+                (flow_.mut_settings.dynamic_slicing_enabled, cell.dynamic_parents),
+                (flow_.mut_settings.static_slicing_enabled, cell.static_parents),
+            ):
+                if is_ready:
+                    break
+                elif not slicing_type_enabled:
+                    continue
+                for pid, sym in parent_edges:
+                    par = cells().from_id(pid)
                     if (
                         flow_order == flow_order.IN_ORDER
                         and par.position >= cell.position
                     ):
                         continue
-                    if par.cell_ctr > max(cell.cell_ctr, flow_.min_timestamp):
-                        is_ready = True
-                        break
-            if not is_ready and flow_.mut_settings.static_slicing_enabled:
-                for par in cell.static_parents:
                     if (
-                        flow_order == flow_order.IN_ORDER
-                        and par.position >= cell.position
+                        max(cell.cell_ctr, flow_.min_timestamp)
+                        < par.cell_ctr
+                        == sym.timestamp.cell_num
                     ):
-                        continue
-                    if par.cell_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                         is_ready = True
                         break
         else:

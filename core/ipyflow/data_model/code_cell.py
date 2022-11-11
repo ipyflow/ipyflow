@@ -93,10 +93,10 @@ class CodeCell(CodeCellSlicingMixin):
         self.override_live_refs: Optional[List[str]] = None
         self.override_dead_refs: Optional[List[str]] = None
         self.reactive_tags: Set[str] = set()
-        self._dynamic_parents: Set[CellId] = set()
-        self._dynamic_children: Set[CellId] = set()
-        self._static_parents: Set[CellId] = set()
-        self._static_children: Set[CellId] = set()
+        self._dynamic_parents: Set[Tuple[CellId, "DataSymbol"]] = set()
+        self._dynamic_children: Set[Tuple[CellId, "DataSymbol"]] = set()
+        self._static_parents: Set[Tuple[CellId, "DataSymbol"]] = set()
+        self._static_children: Set[Tuple[CellId, "DataSymbol"]] = set()
         self._used_cell_counters_by_live_symbol: Dict[
             "DataSymbol", Set[int]
         ] = defaultdict(set)
@@ -149,58 +149,59 @@ class CodeCell(CodeCellSlicingMixin):
     def get_reactive_ids_for_tag(cls, tag: str) -> Set[CellId]:
         return cls._reactive_cells_by_tag.get(tag, set())
 
-    def add_dynamic_parent(self, parent: Union["CodeCell", CellId]) -> None:
+    def add_dynamic_parent(
+        self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
+    ) -> None:
         pid = parent.cell_id if isinstance(parent, CodeCell) else parent
         if pid == self.cell_id or pid in self._dynamic_children:
             return
-        self._dynamic_parents.add(pid)
+        self._dynamic_parents.add((pid, sym))
         parent = self.from_id(pid)
-        parent._dynamic_children.add(self.cell_id)
+        parent._dynamic_children.add((self.cell_id, sym))
 
-    def add_static_parent(self, parent: Union["CodeCell", CellId]) -> None:
+    def add_static_parent(
+        self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
+    ) -> None:
         pid = parent.cell_id if isinstance(parent, CodeCell) else parent
         if pid == self.cell_id or pid in self._static_children:
             return
-        self._static_parents.add(pid)
+        self._static_parents.add((pid, sym))
         parent = self.from_id(pid)
-        parent._static_children.add(self.cell_id)
+        parent._static_children.add((self.cell_id, sym))
 
     @property
-    def dynamic_parents(self) -> Generator["CodeCell", None, None]:
-        for pid in self._dynamic_parents:
-            yield self.from_id(pid)
+    def dynamic_parents(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
+        # trick to catch some mutations at typecheck time w/out runtime overhead
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._dynamic_parents)
 
     @property
-    def dynamic_children(self) -> Generator["CodeCell", None, None]:
-        for cid in self._dynamic_children:
-            yield self.from_id(cid)
+    def dynamic_children(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._dynamic_children)
 
     @property
-    def static_parents(self) -> Generator["CodeCell", None, None]:
-        for pid in self._static_parents:
-            yield self.from_id(pid)
+    def static_parents(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._static_parents)
 
     @property
-    def static_children(self) -> Generator["CodeCell", None, None]:
-        for cid in self._static_children:
-            yield self.from_id(cid)
+    def static_children(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._static_children)
 
     @property
     def dynamic_parent_ids(self) -> FrozenSet[CellId]:
         # trick to catch some mutations at typecheck time w/out runtime overhead
-        return cast("FrozenSet[CellId]", self._dynamic_parents)
+        return cast("FrozenSet[CellId]", {pid for pid, _ in self._dynamic_parents})
 
     @property
     def dynamic_children_ids(self) -> FrozenSet[CellId]:
-        return cast("FrozenSet[CellId]", self._dynamic_children)
+        return cast("FrozenSet[CellId]", {cid for cid, _ in self._dynamic_children})
 
     @property
     def static_parent_ids(self) -> FrozenSet[CellId]:
-        return cast("FrozenSet[CellId]", self._static_parents)
+        return cast("FrozenSet[CellId]", {pid for pid, _ in self._static_parents})
 
     @property
     def static_children_ids(self) -> FrozenSet[CellId]:
-        return cast("FrozenSet[CellId]", self._static_children)
+        return cast("FrozenSet[CellId]", {cid for cid, _ in self._static_children})
 
     @classmethod
     def create_and_track(

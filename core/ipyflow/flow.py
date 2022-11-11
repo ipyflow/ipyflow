@@ -184,6 +184,18 @@ class NotebookFlow(singletons.NotebookFlow):
         self.mut_settings.syntax_transforms_only = kwargs.get(
             "syntax_transforms_only", True
         )
+        self.mut_settings.exec_mode = ExecutionMode(
+            kwargs.get("exec_mode", ExecutionMode.NORMAL)
+        )
+        self.mut_settings.exec_schedule = ExecutionSchedule(
+            kwargs.get("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
+        )
+        self.mut_settings.flow_order = FlowDirection(
+            kwargs.get("flow_order", FlowDirection.IN_ORDER)
+        )
+        self.mut_settings.highlights = Highlights(
+            kwargs.get("highlights", Highlights.EXECUTED)
+        )
 
     @property
     def is_develop(self) -> bool:
@@ -281,6 +293,7 @@ class NotebookFlow(singletons.NotebookFlow):
             request = msg["content"]["data"]
             self.handle(request, comm=comm)
 
+        self.initialize(**open_msg.get("content", {}).get("data", {}))
         comm.send({"type": "establish"})
 
     def _create_untracked_cells_for_content(

@@ -36,7 +36,7 @@ from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.ipython_utils import _IPY, CapturedIO
 from ipyflow.ipython_utils import cell_counter as ipy_cell_counter
-from ipyflow.run_mode import FlowDirection
+from ipyflow.run_mode import ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, kernel
 from ipyflow.types import CellId, TimestampOrCounter
 
@@ -370,6 +370,18 @@ class CodeCell(CodeCellSlicingMixin):
     def get_max_used_live_symbol_cell_counter(
         self, live_symbols: Set[ResolvedDataSymbol], filter_to_reactive: bool = False
     ) -> int:
+        min_allowed_cell_position_by_symbol: Dict["DataSymbol", int] = {}
+        flow_ = flow()
+        if (
+            flow_.mut_settings.exec_schedule
+            == ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
+            and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
+        ):
+            for pid, dsym in self.static_parents:
+                min_allowed_cell_position_by_symbol[dsym] = max(
+                    min_allowed_cell_position_by_symbol.get(dsym, -1),
+                    self.from_id(pid).position,
+                )
         with self._override_position_index_for_current_flow_semantics():
             max_used_cell_ctr = -1
             this_cell_pos = self.position
@@ -385,7 +397,12 @@ class CodeCell(CodeCellSlicingMixin):
                 for cell_ctr in self._used_cell_counters_by_live_symbol.get(
                     sym.dsym, []
                 ):
-                    if self.from_timestamp(cell_ctr).position <= this_cell_pos:
+                    used_cell_position = self.from_timestamp(cell_ctr).position
+                    if (
+                        this_cell_pos
+                        >= used_cell_position
+                        > min_allowed_cell_position_by_symbol.get(sym.dsym, -2)
+                    ):
                         max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
             return max_used_cell_ctr
 

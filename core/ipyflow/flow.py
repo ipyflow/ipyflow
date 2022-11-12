@@ -188,7 +188,7 @@ class NotebookFlow(singletons.NotebookFlow):
             kwargs.get("exec_mode", ExecutionMode.NORMAL)
         )
         self.mut_settings.exec_schedule = ExecutionSchedule(
-            kwargs.get("exec_schedule", ExecutionSchedule.DAG_BASED)
+            kwargs.get("exec_schedule", ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED)
         )
         self.mut_settings.flow_order = FlowDirection(
             kwargs.get("flow_order", FlowDirection.IN_ORDER)

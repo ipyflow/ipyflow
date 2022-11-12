@@ -492,7 +492,10 @@ class DataSymbol:
         if flow().mut_settings.exec_mode == ExecutionMode.REACTIVE:
             # always bump timestamps for reactive mode
             return False
-        if flow().mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
+        if flow().mut_settings.exec_schedule in (
+            ExecutionSchedule.DAG_BASED,
+            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+        ):
             # always bump timestamps for dag schedule
             return False
         if prev_obj is None:

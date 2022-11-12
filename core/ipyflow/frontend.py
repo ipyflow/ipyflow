@@ -109,7 +109,10 @@ class FrontendCheckerResult(NamedTuple):
         eligible_ready_making_for_dag = self.ready_cells | self.waiting_cells
         for waiting_cell_id in self.waiting_cells:
             ready_making_cell_ids: Set[CellId] = set()
-            if flow_.mut_settings.flow_order == ExecutionSchedule.DAG_BASED:
+            if flow_.mut_settings.flow_order in (
+                ExecutionSchedule.DAG_BASED,
+                ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+            ):
                 if flow_.mut_settings.dynamic_slicing_enabled:
                     ready_making_cell_ids |= {
                         pid
@@ -167,7 +170,10 @@ class FrontendCheckerResult(NamedTuple):
 
     def _compute_dag_based_waiters(self, cells_to_check: List[CodeCell]) -> None:
         flow_ = flow()
-        if flow_.mut_settings.exec_schedule != ExecutionSchedule.DAG_BASED:
+        if flow_.mut_settings.exec_schedule not in (
+            ExecutionSchedule.DAG_BASED,
+            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+        ):
             return
         prev_waiting_cells: Set[CellId] = set()
         while True:
@@ -196,9 +202,13 @@ class FrontendCheckerResult(NamedTuple):
     def _compute_is_ready(self, cell: CodeCell, checker_result: CheckerResult) -> bool:
         flow_ = flow()
         cell_id = cell.cell_id
-        is_ready = cell_id not in self.waiting_cells
-        if flow_.mut_settings.exec_schedule == ExecutionSchedule.DAG_BASED:
-            is_ready = False
+        if cell_id in self.waiting_cells:
+            return False
+        is_ready = False
+        if flow_.mut_settings.exec_schedule in (
+            ExecutionSchedule.DAG_BASED,
+            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+        ):
             flow_order = flow_.mut_settings.flow_order
             for slicing_type_enabled, parent_edges in (
                 (flow_.mut_settings.dynamic_slicing_enabled, cell.dynamic_parents),
@@ -222,12 +232,17 @@ class FrontendCheckerResult(NamedTuple):
                     ):
                         is_ready = True
                         break
-        else:
-            is_ready = is_ready and (
-                cell.get_max_used_live_symbol_cell_counter(checker_result.live)
-                > max(cell.cell_ctr, flow_.min_timestamp)
-            )
-        if flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT:
+        if not is_ready and flow_.mut_settings.exec_schedule in (
+            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+            ExecutionSchedule.LIVENESS_BASED,
+        ):
+            is_ready = cell.get_max_used_live_symbol_cell_counter(
+                checker_result.live
+            ) > max(cell.cell_ctr, flow_.min_timestamp)
+        elif (
+            not is_ready
+            and flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
+        ):
             for dead_sym in checker_result.dead:
                 if dead_sym.timestamp.cell_num > max(
                     cell.cell_ctr, flow_.min_timestamp

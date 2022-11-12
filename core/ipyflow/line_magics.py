@@ -396,6 +396,8 @@ def set_exec_schedule(line_: str) -> None:
         schedule = ExecutionSchedule.LIVENESS_BASED
     elif line_.startswith("dag"):
         schedule = ExecutionSchedule.DAG_BASED
+    elif line_.startswith("hybrid"):
+        schedule = ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
     elif line_.startswith("strict"):
         if flow().mut_settings.flow_order != FlowDirection.IN_ORDER:
             warn(

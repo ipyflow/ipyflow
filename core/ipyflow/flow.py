@@ -104,7 +104,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 dynamic_slicing_enabled=kwargs.pop("dynamic_slicing_enabled", True),
                 exec_mode=ExecutionMode(kwargs.pop("exec_mode", ExecutionMode.NORMAL)),
                 exec_schedule=ExecutionSchedule(
-                    kwargs.pop("exec_schedule", ExecutionSchedule.DAG_BASED)
+                    kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
                 ),
                 flow_order=FlowDirection(
                     kwargs.pop("flow_direction", FlowDirection.IN_ORDER)

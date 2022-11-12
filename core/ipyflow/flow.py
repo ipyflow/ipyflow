@@ -104,7 +104,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 dynamic_slicing_enabled=kwargs.pop("dynamic_slicing_enabled", True),
                 exec_mode=ExecutionMode(kwargs.pop("exec_mode", ExecutionMode.NORMAL)),
                 exec_schedule=ExecutionSchedule(
-                    kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
+                    kwargs.pop("exec_schedule", ExecutionSchedule.DAG_BASED)
                 ),
                 flow_order=FlowDirection(
                     kwargs.pop("flow_direction", FlowDirection.IN_ORDER)
@@ -177,18 +177,18 @@ class NotebookFlow(singletons.NotebookFlow):
         self._virtual_symbols_inited = True
 
     def initialize(self, *, entrypoint: Optional[str] = None, **kwargs) -> None:
-        self.mut_settings.dataflow_enabled = kwargs.get("dataflow_enabled", False)
+        self.mut_settings.dataflow_enabled = kwargs.get("dataflow_enabled", True)
         self.mut_settings.syntax_transforms_enabled = kwargs.get(
             "syntax_transforms_enabled", False
         )
         self.mut_settings.syntax_transforms_only = kwargs.get(
-            "syntax_transforms_only", True
+            "syntax_transforms_only", False
         )
         self.mut_settings.exec_mode = ExecutionMode(
             kwargs.get("exec_mode", ExecutionMode.NORMAL)
         )
         self.mut_settings.exec_schedule = ExecutionSchedule(
-            kwargs.get("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
+            kwargs.get("exec_schedule", ExecutionSchedule.DAG_BASED)
         )
         self.mut_settings.flow_order = FlowDirection(
             kwargs.get("flow_order", FlowDirection.IN_ORDER)

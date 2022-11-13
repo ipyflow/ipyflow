@@ -443,9 +443,10 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         if prev_sym is not None and prev_sym.obj is obj:
             return None
-        self.global_scope.upsert_data_symbol_for_name(
-            symbol_name, obj, dep_symbols, ast.parse("pass").body[0]
-        )
+        with Timestamp.offset(stmt_offset=-1):
+            self.global_scope.upsert_data_symbol_for_name(
+                symbol_name, obj, dep_symbols, ast.parse("pass").body[0]
+            )
         return None
 
     def handle_register_dynamic_comm_handler(self, request) -> Optional[Dict[str, Any]]:

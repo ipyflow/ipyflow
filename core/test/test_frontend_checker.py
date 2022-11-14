@@ -7,7 +7,7 @@ from typing import Dict
 
 from ipyflow.data_model.code_cell import cells
 from ipyflow.flow import MutableNotebookSafetySettings, NotebookSafetySettings
-from ipyflow.run_mode import FlowDirection
+from ipyflow.run_mode import ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow
 
 logging.basicConfig(level=logging.ERROR)
@@ -210,6 +210,26 @@ def test_external_object_update_propagates_to_waiting_namespace_symbols():
         response = flow().check_and_link_multiple_cells()
         assert response.waiting_cells == set(), "got %s" % response.waiting_cells
         assert response.ready_cells == {2, 4}
+
+
+def test_dag_semantics():
+    cells = {
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+        3: "x = 42",
+        4: "y = x + 1",
+        5: "logging.info(y)",
+    }
+    with override_settings(exec_schedule=ExecutionSchedule.DAG_BASED):
+        run_all_cells(cells)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == set()
+        assert response.waiting_cells == set()
+        run_cell(cells[0], 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {1}
+        assert response.waiting_cells == {2}
 
 
 def test_symbol_on_both_sides_of_assignment():

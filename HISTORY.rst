@@ -1,96 +1,104 @@
 History
 =======
 
+0.0.133 (2022-11-14)
+--------------------
+* Use non-ipyflow execution path for empty cells;
+* Improve DAG scheduler with symbol info on edges;
+* Add hybrid DAG + liveness based exec schedule and make default;
+* Fix upsert_symbol stmt number bug;
+* Allow comm open message to set configuration;
+
 0.0.132 (2022-11-08)
--------------------
+--------------------
 * Actually fix cyclic waiting check bug;
 
 0.0.131 (2022-11-07)
--------------------
+--------------------
 * Bugfix for cyclic waiting check;
 * Only process previously-executed cells by default;
 
 0.0.130 (2022-11-06)
--------------------
+--------------------
 * Make core api functions directly importable from ipyflow;
 
 0.0.129 (2022-11-06)
--------------------
+--------------------
 * Configurable reactive highlights;
 * Use typescript 4.3.5 (compatible with JupyterLab 3)
 * Update logos;
 
 0.0.128 (2022-10-31)
--------------------
+--------------------
 * Misc fixes;
 
 0.0.127 (2022-10-28)
--------------------
+--------------------
 * Add call symbols as deps during namespace unpack assign;
 * Improved handling / tolerance around execution counters;
 
 0.0.126 (2022-10-26)
--------------------
+--------------------
 * Bugfixes for call scopes and symbol tables (better global / nonlocal handling);
 * Bugfix to get working on Python 3.11
 
 0.0.125 (2022-10-23)
--------------------
+--------------------
 * Scaffolding for watchpoint functionality;
 * stderr / stdout API functions for accessing cell outputs;
 
 0.0.124 (2022-10-13)
--------------------
+--------------------
 * Bugfixes around module usage and timestamps;
 
 0.0.123 (2022-10-12)
--------------------
+--------------------
 * Small bugfix to ensure import statements kill symbols during liveness analysis;
 
 0.0.122 (2022-10-12)
--------------------
+--------------------
 * Small bugfix for dependency inference in attributes / subscripts;
 
 0.0.121 (2022-10-12)
--------------------
+--------------------
 * Fixes and improvements for dataflow annotation dsl;
 * Api methods for (r)deps, (r)users, timestamp, code
 
 0.0.120 (2022-10-01)
--------------------
+--------------------
 * Allow ImportFrom to kill symbols during static analysis;
 
 0.0.119 (2022-09-27)
--------------------
+--------------------
 * Important bugfixes;
 
 0.0.118 (2022-09-27)
--------------------
+--------------------
 * Misc bugfixes;
 * Improve code for external call handlers;
 * Better handling for module symbols;
 
 0.0.117 (2022-07-03)
--------------------
+--------------------
 * Misc bugfixes;
 
 0.0.116 (2022-07-02)
--------------------
+--------------------
 * Bump pyccolo to a version with perf improvements for imports;
 * Lazily import mutation special case modules;
 * Fix more versioneer issues;
 
 0.0.112 (2022-06-30)
--------------------
+--------------------
 * Keep ipyflow and ipyflow-core versions in lock-step;
 
 0.0.111 (2022-06-30)
--------------------
+--------------------
 * Fix some versioneer issues;
 * Fix a bug related to readiness for in-order semantics;
 
 0.0.109 (2022-06-14)
--------------------
+--------------------
 * Add comm handler for refresh symbols;
 * Add comm handler for upserting symbol;
 * Add comm handler for registering dynamic comm handlers;
@@ -100,24 +108,24 @@ History
 # Exclude garbage symbols from user-accessible;
 
 0.0.106 (2022-06-10)
--------------------
+--------------------
 * Make cascading reactivity also work for not-yet-executed cells;
 
 0.0.105 (2022-06-09)
--------------------
+--------------------
 * Treat cells with non-resolvable live refs as waiting;
 
 0.0.104 (2022-06-09)
--------------------
+--------------------
 * Make in_order semantics the default;
 * Model unexecuted cells as well as executed ones;
 
 0.0.103 (2022-06-08)
--------------------
+--------------------
 * Add get_code magic;
 
 0.0.102 (2022-06-06)
--------------------
+--------------------
 * Stdout / stderr tee utilities delegate non-critical attributes;
 
 0.0.99 (2022-06-06)

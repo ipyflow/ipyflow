@@ -212,26 +212,6 @@ def test_external_object_update_propagates_to_waiting_namespace_symbols():
         assert response.ready_cells == {2, 4}
 
 
-def test_dag_semantics():
-    cells = {
-        0: "x = 0",
-        1: "y = x + 1",
-        2: "logging.info(y)",
-        3: "x = 42",
-        4: "y = x + 1",
-        5: "logging.info(y)",
-    }
-    with override_settings(exec_schedule=ExecutionSchedule.DAG_BASED):
-        run_all_cells(cells)
-        response = flow().check_and_link_multiple_cells()
-        assert response.ready_cells == set()
-        assert response.waiting_cells == set()
-        run_cell(cells[0], 0)
-        response = flow().check_and_link_multiple_cells()
-        assert response.ready_cells == {1}
-        assert response.waiting_cells == {2}
-
-
 def test_symbol_on_both_sides_of_assignment():
     cells = {
         0: "x = 0",
@@ -547,3 +527,81 @@ def test_qualified_import():
     response = flow().check_and_link_multiple_cells()
     assert response.waiting_cells == set()
     assert response.ready_cells == set()
+
+
+# dag tests
+
+
+def test_dag_semantics_simple():
+    cells = {
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+        3: "x = 42",
+        4: "y = x + 1",
+        5: "logging.info(y)",
+    }
+    with override_settings(exec_schedule=ExecutionSchedule.DAG_BASED):
+        run_all_cells(cells)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == set()
+        assert response.waiting_cells == set()
+        run_cell(cells[0], 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {1}
+        assert response.waiting_cells == {2}
+
+
+def test_dag_edge_change():
+    cells = {
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+    }
+    with override_settings(exec_schedule=ExecutionSchedule.DAG_BASED):
+        run_all_cells(cells)
+        run_cell("z = 77", 1)
+        run_cell("x = 42", 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == set()
+        assert response.waiting_cells == set()
+        run_cell("y = x + 2", 1)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {2}
+        assert response.waiting_cells == set()
+
+
+def test_dag_edge_hybrid():
+    cells = {
+        0: "x = 0",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+        3: "x = 42",
+        4: "y = x + 3",
+        5: "logging.info(y)",
+    }
+    with override_settings(
+        exec_schedule=ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+        flow_order=FlowDirection.IN_ORDER,
+    ):
+        run_all_cells(cells)
+        run_cell("x = 1", 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {1}
+        assert response.waiting_cells == {2}
+        run_cell(cells[4], 4)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {1, 5}
+        assert response.waiting_cells == {2}
+        run_cell(cells[1], 1)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {2}
+        assert response.waiting_cells == set()
+        run_cell(cells[4], 4)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {5}
+        assert response.waiting_cells == set()
+        run_cell(cells[3], 3)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {4}
+        assert response.waiting_cells == {5}

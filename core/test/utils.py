@@ -66,10 +66,19 @@ def lookup_symbol_by_name(name: str) -> DataSymbol:
 def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
     os.environ[FlowRunMode.DEVELOP.value] = "1"
 
-    def run_cell(code, cell_id=None, ignore_exceptions=False) -> int:
+    def run_cell(code, cell_id=None, cell_pos=None, ignore_exceptions=False) -> int:
+        next_exec_counter = cells().next_exec_counter()
         if cell_id is None:
-            cell_id = cells().next_exec_counter()
+            cell_id = next_exec_counter
         flow().set_active_cell(cell_id)
+        if cell_pos is None:
+            cell_pos = cells()._position_by_cell_id.get(cell_id, None)
+        if cell_pos is None:
+            if isinstance(cell_id, int):
+                cell_pos = cell_id
+            else:
+                cell_pos = next_exec_counter
+        cells()._position_by_cell_id[cell_id] = cell_pos
         get_ipython().run_cell_magic(
             flow().cell_magic_name, None, textwrap.dedent(code)
         )

@@ -372,6 +372,8 @@ class FrontendCheckerResult(NamedTuple):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> "FrontendCheckerResult":
         flow_ = flow()
+        if last_executed_cell_id is None:
+            last_executed_cell_id = flow_.last_executed_cell_id
         waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
         killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
         phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}

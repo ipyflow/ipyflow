@@ -1208,8 +1208,6 @@ class DataflowTracer(StackFrameManager):
                 ret,
                 resolve_rval_symbols(stmt),
                 stmt,
-                is_anonymous=True,
-                implicit=True,
             )
         self._module_stmt_counter += 1
         return ret

@@ -529,6 +529,26 @@ def test_qualified_import():
     assert response.ready_cells == set()
 
 
+def test_underscore():
+    cells = {
+        0: "x = 0",
+        1: "x + 1",
+        2: "logging.info(_)",
+    }
+    run_all_cells(cells)
+    response = flow().check_and_link_multiple_cells()
+    assert response.ready_cells == set()
+    assert response.waiting_cells == set()
+    run_cell("x = 1", 0)
+    response = flow().check_and_link_multiple_cells()
+    assert response.ready_cells == {1}
+    assert response.waiting_cells == {2}
+    run_cell(cells[1], 1)
+    response = flow().check_and_link_multiple_cells()
+    assert response.ready_cells == {2}
+    assert response.waiting_cells == set()
+
+
 # dag tests
 
 

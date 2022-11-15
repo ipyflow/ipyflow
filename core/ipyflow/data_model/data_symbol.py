@@ -725,7 +725,10 @@ class DataSymbol:
             return False
         return True
 
-    def _is_simple_assign(self, new_deps: Set["DataSymbol"]) -> bool:
+    def _is_underscore_or_simple_assign(self, new_deps: Set["DataSymbol"]) -> bool:
+        if self.name == "_":
+            # FIXME: distinguish between explicit assignment to _ from user and implicit assignment from kernel
+            return True
         if not isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign)):
             return False
         if len(new_deps) != 1:
@@ -806,7 +809,7 @@ class DataSymbol:
                 refresh_descendent_namespaces=not (
                     mutated and not propagate_to_namespace_descendents
                 )
-                and not self._is_simple_assign(new_deps),
+                and not self._is_underscore_or_simple_assign(new_deps),
                 refresh_namespace_waiting=not mutated,
             )
         if propagate and (deleted or not should_preserve_timestamp):

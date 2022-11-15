@@ -505,8 +505,12 @@ class NotebookFlow(singletons.NotebookFlow):
         for dsym in symbols:
             if not dsym.containing_scope.is_global:
                 continue
-            obj = get_ipython().user_global_ns.get(dsym.name, None)
-            if obj is None:
+            try:
+                obj = get_ipython().user_global_ns.get(dsym.name, None)
+                if obj is None:
+                    continue
+            except:  # noqa
+                # cinder runtime can throw an exception here due to lazy imports that fail
                 continue
             if dsym.obj_id == id(obj):
                 continue

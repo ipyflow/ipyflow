@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.134 (2022-11-15)
+--------------------
+* Better handling for _ symbol;
+* Cinder failsafe in symbol resync;
+
 0.0.133 (2022-11-14)
 --------------------
 * Use non-ipyflow execution path for empty cells;

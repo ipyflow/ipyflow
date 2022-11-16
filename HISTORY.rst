@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.135 (2022-11-15)
+--------------------
+* Infinite recursion corner case hotfix;
+
 0.0.134 (2022-11-15)
 --------------------
 * Better handling for _ symbol;

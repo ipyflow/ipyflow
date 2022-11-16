@@ -199,8 +199,14 @@ class DataSymbol:
         stmt_text_by_cell_num = CodeCell.get_stmt_text(stmts_by_cell_num)
         return make_slice_text(stmt_text_by_cell_num, blacken=True)
 
-    @property
-    def cascading_reactive_cell_num(self) -> int:
+    def cascading_reactive_cell_num(
+        self, seen: Optional[Set["DataSymbol"]] = None
+    ) -> int:
+        if seen is None:
+            seen = set()
+        if self in seen:
+            return -1
+        seen.add(self)
         cell_num = self._cascading_reactive_cell_num
         ns = self.namespace
         return (
@@ -208,7 +214,7 @@ class DataSymbol:
             if ns is None
             else max(
                 cell_num,
-                ns.max_cascading_reactive_cell_num,
+                ns.max_cascading_reactive_cell_num(seen),
             )
         )
 
@@ -293,7 +299,7 @@ class DataSymbol:
             )
 
     def is_cascading_reactive_at_counter(self, ctr: int) -> bool:
-        return self.cascading_reactive_cell_num > max(
+        return self.cascading_reactive_cell_num() > max(
             ctr, flow().min_cascading_reactive_cell_num
         )
 
@@ -793,7 +799,7 @@ class DataSymbol:
         ):
             bump_version = refresh
             self.bump_cascading_reactive_cell_num()
-        elif self.cascading_reactive_cell_num == flow().cell_counter():
+        elif self.cascading_reactive_cell_num() == flow().cell_counter():
             bump_version = refresh
         else:
             bump_version = refresh and (

@@ -134,11 +134,10 @@ class Namespace(Scope):
         else:
             return dsym.is_subscript
 
-    @property
-    def max_cascading_reactive_cell_num(self) -> int:
+    def max_cascading_reactive_cell_num(self, seen: Set[DataSymbol]) -> int:
         return max(
             (
-                dsym.cascading_reactive_cell_num
+                dsym.cascading_reactive_cell_num(seen=seen)
                 for dsym in self.all_data_symbols_this_indentation()
             ),
             default=-1,

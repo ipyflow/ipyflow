@@ -68,7 +68,7 @@ class MutableNotebookSafetySettings:
     lint_out_of_order_usages: bool
     syntax_transforms_enabled: bool
     syntax_transforms_only: bool
-    max_call_depth_for_tracing: int
+    max_external_call_depth_for_tracing: int
 
 
 class NotebookFlow(singletons.NotebookFlow):
@@ -114,7 +114,9 @@ class NotebookFlow(singletons.NotebookFlow):
                 lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
                 syntax_transforms_enabled=kwargs.pop("syntax_transforms_enabled", True),
                 syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
-                max_call_depth_for_tracing=kwargs.pop("max_call_depth_for_tracing", 10),
+                max_external_call_depth_for_tracing=kwargs.pop(
+                    "max_external_call_depth_for_tracing", 3
+                ),
             )
         )
         # Note: explicitly adding the types helps PyCharm intellisense
@@ -198,8 +200,9 @@ class NotebookFlow(singletons.NotebookFlow):
         self.mut_settings.highlights = Highlights(
             kwargs.get("highlights", Highlights.EXECUTED)
         )
-        self.mut_settings.max_call_depth_for_tracing = kwargs.get(
-            "max_call_depth_for_tracing", self.mut_settings.max_call_depth_for_tracing
+        self.mut_settings.max_external_call_depth_for_tracing = kwargs.get(
+            "max_external_call_depth_for_tracing",
+            self.mut_settings.max_external_call_depth_for_tracing,
         )
 
     @property

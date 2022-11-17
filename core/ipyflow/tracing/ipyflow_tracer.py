@@ -76,6 +76,7 @@ class StackFrameManager(SingletonBaseTracer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.call_depth = 0
+        self.external_call_depth = 0
 
     @pyc.register_raw_handler((pyc.call, pyc.return_))
     def handle_first_ipython_frame(
@@ -93,10 +94,16 @@ class StackFrameManager(SingletonBaseTracer):
         # We want to skip the outer 'call' and 'return' for these
         if event == pyc.call:
             self.call_depth += 1
+            self.external_call_depth += not flow().is_cell_file(
+                frame.f_code.co_filename
+            )
             if self.call_depth == 1:
                 return pyc.SkipAll
         elif event == pyc.return_:
             self.call_depth -= 1
+            self.external_call_depth -= not flow().is_cell_file(
+                frame.f_code.co_filename
+            )
             if flow().is_develop:
                 assert self.call_depth >= 0
             if self.call_depth == 0:
@@ -203,6 +210,7 @@ class DataflowTracer(StackFrameManager):
             if is_tracing_enabled and not self.is_tracing_enabled:
                 self._enable_tracing()
 
+    @contextmanager
     def dataflow_tracing_disabled_patch(
         self, obj: Any, attr: str
     ) -> Generator[None, None, None]:
@@ -252,7 +260,10 @@ class DataflowTracer(StackFrameManager):
         # these should be pushed / popped appropriately by ast events
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
-        if self.call_depth >= flow().mut_settings.max_call_depth_for_tracing:
+        if (
+            self.external_call_depth
+            >= flow().mut_settings.max_external_call_depth_for_tracing
+        ):
             self._disable_tracing()
             return
         # ensures we only handle del's and not delitem's

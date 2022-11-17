@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.136 (2022-11-16)
+--------------------
+* Disable tracing during magics;
+* Disable tracing below a certain call depth of external code;
+
 0.0.135 (2022-11-15)
 --------------------
 * Infinite recursion corner case hotfix;

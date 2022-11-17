@@ -4,8 +4,9 @@ import logging
 import symtable
 import sys
 from collections import defaultdict
+from contextlib import contextmanager
 from types import FrameType, ModuleType
-from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Union, cast
 
 import astunparse
 import pyccolo as pyc
@@ -191,6 +192,32 @@ class DataflowTracer(StackFrameManager):
                     # `None` means use 'cur_frame_original_scope'
                     self.active_literal_scope: Optional[Namespace] = None
 
+    @contextmanager
+    def dataflow_tracing_disabled(self) -> Generator[None, None, None]:
+        is_tracing_enabled = self.is_tracing_enabled
+        try:
+            if is_tracing_enabled:
+                self._disable_tracing()
+            yield
+        finally:
+            if is_tracing_enabled and not self.is_tracing_enabled:
+                self._enable_tracing()
+
+    def dataflow_tracing_disabled_patch(
+        self, obj: Any, attr: str
+    ) -> Generator[None, None, None]:
+        orig_func = getattr(obj, attr)
+
+        def new_func(*args, **kwargs):
+            with self.dataflow_tracing_disabled():
+                return orig_func(*args, **kwargs)
+
+        try:
+            setattr(obj, attr, new_func)
+            yield
+        finally:
+            setattr(obj, attr, orig_func)
+
     @property
     def syntax_augmentation_specs(self) -> List[pyc.AugmentationSpec]:
         return [blocking_spec, cascading_reactive_spec, reactive_spec]
@@ -225,6 +252,9 @@ class DataflowTracer(StackFrameManager):
         # these should be pushed / popped appropriately by ast events
 
     def _handle_call_transition(self, trace_stmt: TraceStatement):
+        if self.call_depth >= flow().mut_settings.max_call_depth_for_tracing:
+            self._disable_tracing()
+            return
         # ensures we only handle del's and not delitem's
         self.node_id_to_saved_del_data.clear()
         new_scope = trace_stmt.get_post_call_scope(trace_stmt.frame)

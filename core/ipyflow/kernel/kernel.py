@@ -16,6 +16,7 @@ from typing import (
 
 import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
+from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
 
 from ipyflow import singletons
@@ -442,7 +443,13 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
     @contextmanager
     def inner_tracing_context(self) -> Generator[None, None, None]:
         singletons.flow().init_virtual_symbols()
-        yield
+        with singletons.tracer().dataflow_tracing_disabled_patch(
+            get_ipython(), "run_line_magic"
+        ):
+            with singletons.tracer().dataflow_tracing_disabled_patch(
+                get_ipython(), "run_cell_magic"
+            ):
+                yield
 
     def should_trace(self) -> bool:
         return singletons.flow().mut_settings.dataflow_enabled

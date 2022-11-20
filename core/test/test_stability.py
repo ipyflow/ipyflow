@@ -191,6 +191,17 @@ def test_namespace_change_to_non_container():
     run_cell("x = 3")
 
 
+def test_reactive_modifiers_dont_happen_inside_strings():
+    run_cell(
+        """
+        x = '''
+        y = $x + $z
+        '''.strip()
+        """
+    )
+    run_cell("assert len(x) == 11")
+
+
 if sys.version_info >= (3, 8):
 
     def test_reactive_variable_does_not_break():

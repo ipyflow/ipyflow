@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.137 (2022-11-19)
+--------------------
+* Use pyccolo >= 0.0.39 for better syntax augmentation;
+
 0.0.136 (2022-11-16)
 --------------------
 * Disable tracing during magics;

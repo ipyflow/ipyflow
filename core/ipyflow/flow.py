@@ -183,7 +183,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def initialize(self, *, entrypoint: Optional[str] = None, **kwargs) -> None:
         self.mut_settings.dataflow_enabled = kwargs.get("dataflow_enabled", True)
         self.mut_settings.syntax_transforms_enabled = kwargs.get(
-            "syntax_transforms_enabled", False
+            "syntax_transforms_enabled", True
         )
         self.mut_settings.syntax_transforms_only = kwargs.get(
             "syntax_transforms_only", False

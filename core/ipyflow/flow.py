@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+import sys
 import textwrap
 from dataclasses import dataclass
 from types import FrameType
@@ -112,7 +113,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 ),
                 warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
                 lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
-                syntax_transforms_enabled=kwargs.pop("syntax_transforms_enabled", True),
+                syntax_transforms_enabled=kwargs.pop("syntax_transforms_enabled", sys.version_info >= (3, 8)),
                 syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
                 max_external_call_depth_for_tracing=kwargs.pop(
                     "max_external_call_depth_for_tracing", 3
@@ -183,7 +184,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def initialize(self, *, entrypoint: Optional[str] = None, **kwargs) -> None:
         self.mut_settings.dataflow_enabled = kwargs.get("dataflow_enabled", True)
         self.mut_settings.syntax_transforms_enabled = kwargs.get(
-            "syntax_transforms_enabled", True
+            "syntax_transforms_enabled", sys.version_info >= (3, 8)
         )
         self.mut_settings.syntax_transforms_only = kwargs.get(
             "syntax_transforms_only", False

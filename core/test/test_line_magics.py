@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import os.path
+import sys
 import textwrap
 from test.utils import clear_registered_annotations, make_flow_fixture
 
@@ -205,13 +206,16 @@ def test_lint_out_of_order():
 
 
 def test_syntax_transforms_enabled():
-    assert flow().mut_settings.syntax_transforms_enabled
+    assert flow().mut_settings.syntax_transforms_enabled == (sys.version_info >= (3, 8))
+    prev_enabled = flow().mut_settings.syntax_transforms_enabled
     run_cell("%flow syntax_transforms foo")
-    assert flow().mut_settings.syntax_transforms_enabled
+    assert flow().mut_settings.syntax_transforms_enabled == prev_enabled
     run_cell("%flow syntax_transforms off")
     assert not flow().mut_settings.syntax_transforms_enabled
     run_cell("%flow syntax_transforms on")
     assert flow().mut_settings.syntax_transforms_enabled
+    if sys.version_info < (3, 8):
+        run_cell("%flow syntax_transforms off")
 
 
 def test_syntax_transforms_only():

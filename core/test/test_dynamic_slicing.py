@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import functools
 import logging
+import sys
 import textwrap
 from test.utils import make_flow_fixture
 from typing import Dict
@@ -541,21 +542,25 @@ def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
     assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)
 
 
-def test_slice_with_reactive_modifiers():
-    run_cell("x = 0")
-    run_cell("y = $x + 1")
-    run_cell("logging.info($y)")
-    slice_text = make_slice_text(compute_unparsed_slice_stmts(3), blacken=True).strip()
-    expected = textwrap.dedent(
-        """
-        # Cell 1
-        x = 0
-        
-        # Cell 2
-        y = x + 1
+if sys.version_info >= (3, 8):
 
-        # Cell 3
-        logging.info(y)
-        """
-    ).strip()
-    assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)
+    def test_slice_with_reactive_modifiers():
+        run_cell("x = 0")
+        run_cell("y = $x + 1")
+        run_cell("logging.info($y)")
+        slice_text = make_slice_text(
+            compute_unparsed_slice_stmts(3), blacken=True
+        ).strip()
+        expected = textwrap.dedent(
+            """
+            # Cell 1
+            x = 0
+            
+            # Cell 2
+            y = x + 1
+
+            # Cell 3
+            logging.info(y)
+            """
+        ).strip()
+        assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)

@@ -113,7 +113,9 @@ class NotebookFlow(singletons.NotebookFlow):
                 ),
                 warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
                 lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
-                syntax_transforms_enabled=kwargs.pop("syntax_transforms_enabled", sys.version_info >= (3, 8)),
+                syntax_transforms_enabled=kwargs.pop(
+                    "syntax_transforms_enabled", sys.version_info >= (3, 8)
+                ),
                 syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
                 max_external_call_depth_for_tracing=kwargs.pop(
                     "max_external_call_depth_for_tracing", 3

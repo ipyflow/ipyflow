@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import sys
 from typing import List, Set
 
 from pyccolo.syntax_augmentation import (
@@ -42,29 +43,6 @@ def test_simple():
     assert _replace_reactive_atoms("$foo $42bar $_baz42") == "foo 42bar _baz42"
 
 
-def test_simple_names_recovered():
-    run_cell("x = 0")
-    run_cell("y = $x + 1")
-    assert _get_all_reactive_var_names() == {"x"}
-    run_cell("z = $y + 2")
-    assert _get_all_reactive_var_names() == {"x", "y"}
-    run_cell("w1 = $z + 2\nw2 = $w1 + 3")
-    assert _get_all_reactive_var_names() == {"x", "y", "z", "w1"}
-
-
-def test_nested_names_recovered():
-    run_cell(
-        """
-        def assert_nonzero(v):
-            assert v != 0
-        """
-    )
-    run_cell("x = 42")
-    run_cell("$assert_nonzero($x)")
-    varnames = _get_all_reactive_var_names()
-    assert varnames == {"x", "assert_nonzero"}, "got %s" % varnames
-
-
 def test_reactive_positions():
     assert _get_reactive_positions("foo") == []
     assert _get_reactive_positions("$foo") == [0]
@@ -84,3 +62,27 @@ def test_positions_with_offset_from_replacement():
     assert _get_augmented_positions("$$foo $$bar $$baz", spec) == [0, 5, 10]
     assert _get_augmented_positions("foo $$bar $$baz", spec) == [4, 9]
     assert _get_augmented_positions("$$foo bar $$baz", spec) == [0, 9]
+
+
+if sys.version_info >= (3, 8):
+
+    def test_simple_names_recovered():
+        run_cell("x = 0")
+        run_cell("y = $x + 1")
+        assert _get_all_reactive_var_names() == {"x"}
+        run_cell("z = $y + 2")
+        assert _get_all_reactive_var_names() == {"x", "y"}
+        run_cell("w1 = $z + 2\nw2 = $w1 + 3")
+        assert _get_all_reactive_var_names() == {"x", "y", "z", "w1"}
+
+    def test_nested_names_recovered():
+        run_cell(
+            """
+            def assert_nonzero(v):
+                assert v != 0
+            """
+        )
+        run_cell("x = 42")
+        run_cell("$assert_nonzero($x)")
+        varnames = _get_all_reactive_var_names()
+        assert varnames == {"x", "assert_nonzero"}, "got %s" % varnames

@@ -67,144 +67,131 @@ def test_mutate_one_list_entry():
     assert cells_run - {cell_id} == set(), "got %s" % cells_run
 
 
-def test_simple_reactive_var_load():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("y = $x + 1")[1] == {2}
-    assert run_cell("logging.info($y)")[1] == {3}
-    assert run_cell("x = 42")[1] == {4, 2, 3}
-    cell_id, cells_run = run_cell("y = 99")
-    assert cells_run - {cell_id} == {3}
-
-
-def test_simple_reactive_var_store():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("y = x + 1")[1] == {2}
-    assert run_cell("logging.info(y)")[1] == {3}
-    assert run_cell("$x = 42")[1] == {4, 2}
-    cell_id, cells_run = run_cell("$y = 99")
-    assert cells_run - {cell_id} == {3}, "got %s" % cells_run
-
-
-def test_simple_blocked_reactive_var_store():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("$:y = $x + 1")[1] == {2}
-    assert run_cell("logging.info($y)")[1] == {3}
-    assert run_cell("x = 42")[1] == {4, 2}
-    cell_id, cells_run = run_cell("z = 9001")
-    assert cells_run - {cell_id} == set(), "got %s" % (cells_run - {cell_id})
-    cell_id, cells_run = run_cell("y = 99")
-    assert cells_run - {cell_id} == {3}
-
-
-def test_simple_blocked_reactive_var_load():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("y = $:x + 1")[1] == {2}
-    assert run_cell("logging.info(y)")[1] == {3}
-    assert run_cell("$x = 42")[1] == {4}
-    cell_id, cells_run = run_cell("$y = 99")
-    assert cells_run - {cell_id} == {3}, "got %s" % cells_run
-
-
-def test_reactive_function_defn():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("def f(): return x")[1] == {2}
-    assert run_cell("logging.info(f())")[1] == {3}
-    assert run_cell("def $f(): return x + 3")[1] == {4, 3}
-
-
-def test_reactive_function_call():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("def f(): return $x")[1] == {2}
-    assert run_cell("logging.info(f())")[1] == {3}
-    assert run_cell("x = 42")[1] == {4, 3}
-
-
-def test_reactive_store_to_global_var_from_function_call():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("def f(): global x; $x = 42")[1] == {2}
-    assert run_cell("logging.info(x)")[1] == {3}
-    assert run_cell("f()")[1] == {4, 3}
-
-
-def test_reactive_store_to_local_var_from_function_call():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("def f(): $x = 42")[1] == {2}
-    assert run_cell("logging.info(x)")[1] == {3}
-    assert run_cell("f()")[1] == {4}
-
-
-def test_simple_cascading_reactive_load():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("y = $$x + 1")[1] == {2}
-    assert run_cell("logging.info(y)")[1] == {3}
-    assert run_cell("x = 42")[1] == {2, 3, 4}
-
-
-def test_simple_cascading_reactive_store():
-    assert run_cell("x = 0")[1] == {1}
-    assert run_cell("y = x + 1")[1] == {2}
-    assert run_cell("logging.info(y)")[1] == {3}
-    assert run_cell("$$x = 42")[1] == {2, 3, 4}
-    assert run_cell("$x = 43")[1] == {2, 7}
-
-
-def test_import_reactive_store():
-    assert (
-        run_cell(
-            """
-    try:
-        logging.info(ast)
-    except:
-        pass
-    """
-        )[1]
-        == {1}
-    )
-    assert run_cell("import $ast")[1] == {1, 2}
-
-
-def test_cascading_import():
-    assert (
-        run_cell(
-            """
-    try:
-        foo = ast.parse("bar")
-    except:
-        pass
-    """
-        )[1]
-        == {1}
-    )
-    assert (
-        run_cell(
-            """
-        try:
-            logging.info(foo.body)
-        except:
-            pass
-        """
-        )[1]
-        == {2}
-    )
-    assert run_cell("import $$ast")[1] == {1, 2, 3}
-
-
-def test_reactive_import_from():
-    assert (
-        run_cell(
-            """
-        try:
-            foo = path.join("bar", "baz")
-        except:
-            pass
-        """
-        )[1]
-        == {1}
-    )
-    assert run_cell("from os import $path")[1] == {1, 2}
-
-
 if sys.version_info >= (3, 8):
+
+    def test_simple_reactive_var_load():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("y = $x + 1")[1] == {2}
+        assert run_cell("logging.info($y)")[1] == {3}
+        assert run_cell("x = 42")[1] == {4, 2, 3}
+        cell_id, cells_run = run_cell("y = 99")
+        assert cells_run - {cell_id} == {3}
+
+    def test_simple_reactive_var_store():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("y = x + 1")[1] == {2}
+        assert run_cell("logging.info(y)")[1] == {3}
+        assert run_cell("$x = 42")[1] == {4, 2}
+        cell_id, cells_run = run_cell("$y = 99")
+        assert cells_run - {cell_id} == {3}, "got %s" % cells_run
+
+    def test_simple_blocked_reactive_var_store():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("$:y = $x + 1")[1] == {2}
+        assert run_cell("logging.info($y)")[1] == {3}
+        assert run_cell("x = 42")[1] == {4, 2}
+        cell_id, cells_run = run_cell("z = 9001")
+        assert cells_run - {cell_id} == set(), "got %s" % (cells_run - {cell_id})
+        cell_id, cells_run = run_cell("y = 99")
+        assert cells_run - {cell_id} == {3}
+
+    def test_simple_blocked_reactive_var_load():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("y = $:x + 1")[1] == {2}
+        assert run_cell("logging.info(y)")[1] == {3}
+        assert run_cell("$x = 42")[1] == {4}
+        cell_id, cells_run = run_cell("$y = 99")
+        assert cells_run - {cell_id} == {3}, "got %s" % cells_run
+
+    def test_reactive_function_defn():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("def f(): return x")[1] == {2}
+        assert run_cell("logging.info(f())")[1] == {3}
+        assert run_cell("def $f(): return x + 3")[1] == {4, 3}
+
+    def test_reactive_function_call():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("def f(): return $x")[1] == {2}
+        assert run_cell("logging.info(f())")[1] == {3}
+        assert run_cell("x = 42")[1] == {4, 3}
+
+    def test_reactive_store_to_global_var_from_function_call():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("def f(): global x; $x = 42")[1] == {2}
+        assert run_cell("logging.info(x)")[1] == {3}
+        assert run_cell("f()")[1] == {4, 3}
+
+    def test_reactive_store_to_local_var_from_function_call():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("def f(): $x = 42")[1] == {2}
+        assert run_cell("logging.info(x)")[1] == {3}
+        assert run_cell("f()")[1] == {4}
+
+    def test_simple_cascading_reactive_load():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("y = $$x + 1")[1] == {2}
+        assert run_cell("logging.info(y)")[1] == {3}
+        assert run_cell("x = 42")[1] == {2, 3, 4}
+
+    def test_simple_cascading_reactive_store():
+        assert run_cell("x = 0")[1] == {1}
+        assert run_cell("y = x + 1")[1] == {2}
+        assert run_cell("logging.info(y)")[1] == {3}
+        assert run_cell("$$x = 42")[1] == {2, 3, 4}
+        assert run_cell("$x = 43")[1] == {2, 7}
+
+    def test_import_reactive_store():
+        assert (
+            run_cell(
+                """
+        try:
+            logging.info(ast)
+        except:
+            pass
+        """
+            )[1]
+            == {1}
+        )
+        assert run_cell("import $ast")[1] == {1, 2}
+
+    def test_cascading_import():
+        assert (
+            run_cell(
+                """
+        try:
+            foo = ast.parse("bar")
+        except:
+            pass
+        """
+            )[1]
+            == {1}
+        )
+        assert (
+            run_cell(
+                """
+            try:
+                logging.info(foo.body)
+            except:
+                pass
+            """
+            )[1]
+            == {2}
+        )
+        assert run_cell("import $$ast")[1] == {1, 2, 3}
+
+    def test_reactive_import_from():
+        assert (
+            run_cell(
+                """
+            try:
+                foo = path.join("bar", "baz")
+            except:
+                pass
+            """
+            )[1]
+            == {1}
+        )
+        assert run_cell("from os import $path")[1] == {1, 2}
 
     def test_reactive_attr_load():
         assert (

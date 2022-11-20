@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import sys
 
 from .utils import make_flow_fixture, skipif_known_failing
 
@@ -185,12 +186,14 @@ def test_syntax_error_does_not_completely_mess_up_kernel():
     run_cell("x = 5")
 
 
-def test_reactive_variable_does_not_break():
-    run_cell("x = 0")
-    run_cell("y = $x + 1")
-    run_cell("print($y)")
-
-
 def test_namespace_change_to_non_container():
     run_cell("x = 3, 4")
     run_cell("x = 3")
+
+
+if sys.version_info >= (3, 8):
+
+    def test_reactive_variable_does_not_break():
+        run_cell("x = 0")
+        run_cell("y = $x + 1")
+        run_cell("print($y)")

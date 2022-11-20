@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ipyflow.api
 from ipyflow.api import *
 
 
@@ -23,3 +24,6 @@ def load_jupyter_server_extension(nbapp):
 
 from . import _version
 __version__ = _version.get_versions()['version']
+
+
+__all__ = ipyflow.api.__all__ + ["__version__"]

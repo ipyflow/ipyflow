@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-import re
 from typing import List, Set
 
 from pyccolo.syntax_augmentation import (
-    AUGMENTED_SYNTAX_REGEX_TEMPLATE,
     AugmentationSpec,
     AugmentationType,
     replace_tokens_and_get_augmented_positions,
@@ -17,26 +15,19 @@ from .utils import make_flow_fixture
 _flow_fixture, run_cell = make_flow_fixture()
 
 
-REACTIVE_ATOM_REGEX = re.compile(
-    AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=reactive_spec.escaped_token)
-)
-
-
 def _replace_reactive_atoms(s: str) -> str:
-    return replace_tokens_and_get_augmented_positions(
-        s, reactive_spec, REACTIVE_ATOM_REGEX
-    )[0]
+    return replace_tokens_and_get_augmented_positions(s, reactive_spec)[0]
 
 
 def _get_reactive_positions(s: str) -> List[int]:
-    return replace_tokens_and_get_augmented_positions(
-        s, reactive_spec, REACTIVE_ATOM_REGEX
-    )[1]
+    return [
+        pos[1]
+        for pos in replace_tokens_and_get_augmented_positions(s, reactive_spec)[1]
+    ]
 
 
 def _get_augmented_positions(s: str, spec: AugmentationSpec) -> List[int]:
-    regex = re.compile(AUGMENTED_SYNTAX_REGEX_TEMPLATE.format(token=spec.escaped_token))
-    return replace_tokens_and_get_augmented_positions(s, spec, regex)[1]
+    return [pos[1] for pos in replace_tokens_and_get_augmented_positions(s, spec)[1]]
 
 
 def _get_all_reactive_var_names() -> Set[str]:
@@ -46,9 +37,6 @@ def _get_all_reactive_var_names() -> Set[str]:
 
 
 def test_simple():
-    assert REACTIVE_ATOM_REGEX.match("") is None
-    assert REACTIVE_ATOM_REGEX.match("foo") is None
-    assert REACTIVE_ATOM_REGEX.match("foo bar") is None
     assert _replace_reactive_atoms("$foo $bar") == "foo bar"
     assert _replace_reactive_atoms("$foo bar $baz42") == "foo bar baz42"
     assert _replace_reactive_atoms("$foo $42bar $_baz42") == "foo 42bar _baz42"

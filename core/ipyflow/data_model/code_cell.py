@@ -394,16 +394,22 @@ class CodeCell(CodeCellSlicingMixin):
                         and sym.dsym not in flow().updated_reactive_symbols
                     ):
                         continue
-                for cell_ctr in self._used_cell_counters_by_live_symbol.get(
-                    sym.dsym, []
+                live_sym_updated_cell_ctr = sym.timestamp.cell_num
+                if (
+                    live_sym_updated_cell_ctr
+                    in self._used_cell_counters_by_live_symbol.get(sym.dsym, set())
                 ):
-                    used_cell_position = self.from_timestamp(cell_ctr).position
+                    used_cell_position = self.from_timestamp(
+                        live_sym_updated_cell_ctr
+                    ).position
                     if (
                         this_cell_pos
                         >= used_cell_position
-                        > min_allowed_cell_position_by_symbol.get(sym.dsym, -2)
+                        >= min_allowed_cell_position_by_symbol.get(sym.dsym, -2)
                     ):
-                        max_used_cell_ctr = max(max_used_cell_ctr, cell_ctr)
+                        max_used_cell_ctr = max(
+                            max_used_cell_ctr, live_sym_updated_cell_ctr
+                        )
             return max_used_cell_ctr
 
     def _get_live_dead_symbol_refs(

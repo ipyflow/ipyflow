@@ -615,7 +615,7 @@ def test_dag_edge_hybrid():
         assert response.waiting_cells == {2}
         run_cell(cells[1], 1)
         response = flow().check_and_link_multiple_cells()
-        assert response.ready_cells == {2}
+        assert response.ready_cells == {2}, "got %s" % response.ready_cells
         assert response.waiting_cells == set()
         run_cell(cells[4], 4)
         response = flow().check_and_link_multiple_cells()

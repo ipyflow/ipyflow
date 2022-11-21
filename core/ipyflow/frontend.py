@@ -109,7 +109,7 @@ class FrontendCheckerResult(NamedTuple):
         eligible_ready_making_for_dag = self.ready_cells | self.waiting_cells
         for waiting_cell_id in self.waiting_cells:
             ready_making_cell_ids: Set[CellId] = set()
-            if flow_.mut_settings.flow_order in (
+            if flow_.mut_settings.exec_schedule in (
                 ExecutionSchedule.DAG_BASED,
                 ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
             ):
@@ -305,6 +305,7 @@ class FrontendCheckerResult(NamedTuple):
         is_ready = self._compute_is_ready(cell, checker_result)
         if is_ready:
             self.ready_cells.add(cell_id)
+        was_ready = cells().from_id(cell_id).set_ready(is_ready)
         if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
             if (
                 last_executed_cell_pos is not None
@@ -313,7 +314,7 @@ class FrontendCheckerResult(NamedTuple):
                 # prevent this cell from being considered as newly ready so that
                 # it is not reactively executed
                 return checker_result
-        if not cells().from_id(cell_id).set_ready(is_ready) and is_ready:
+        if not was_ready and is_ready:
             self.new_ready_cells.add(cell_id)
         return checker_result
 

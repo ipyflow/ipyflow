@@ -22,7 +22,8 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     author='Stephen Macke',
     author_email='stephen.macke@gmail.com',
-    description='Fearless interactivity for Jupyter notebooks.',
+    description='Next-generation IPython kernel with reactivity, '
+                'execution suggestions, syntax extensions, and more.',
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
     url='https://github.com/nbsafety-project/nbsafety',

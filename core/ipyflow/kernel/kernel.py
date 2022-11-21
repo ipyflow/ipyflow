@@ -12,6 +12,7 @@ from typing import (
     Optional,
     Tuple,
     Type,
+    Union,
 )
 
 import pyccolo as pyc
@@ -67,7 +68,7 @@ class PyccoloKernelHooks:
     def after_execute(self, cell_content: str) -> None:
         ...
 
-    def on_exception(self, e: Exception) -> None:
+    def on_exception(self, e: Optional[Exception]) -> None:
         ...
 
 
@@ -334,6 +335,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
             logger.exception("exception occurred")
             self.on_exception(e)
+        else:
+            self.on_exception(None)
         return ret
 
     @classmethod
@@ -382,9 +385,12 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
                     if silent or not store_history or self._is_code_empty(code):
                         # then it's probably a control message; don't run through ipyflow
-                        return await _run_cell_func(code)
+                        ret = await _run_cell_func(code)
                     else:
-                        return await self.pyc_execute(code, True, _run_cell_func)
+                        ret = await self.pyc_execute(code, True, _run_cell_func)
+                    if ret["status"] == "error":
+                        self.on_exception(ret["ename"])
+                    return ret
 
             else:
 
@@ -407,11 +413,14 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                         else:
                             return ret
 
-                    return asyncio.get_event_loop().run_until_complete(
+                    ret = asyncio.get_event_loop().run_until_complete(
                         _run_cell_func(code)
                         if silent or not store_history or self._is_code_empty(code)
                         else self.pyc_execute(code, True, _run_cell_func)
                     )
+                    if ret["status"] == "error":
+                        self.on_exception(ret["ename"])
+                    return ret
 
         ZMQKernel.__name__ = name
         return ZMQKernel
@@ -538,10 +547,8 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         )
         flow_.gc()
 
-    def on_exception(self, e: Exception) -> None:
-        flow_ = singletons.flow()
-        if flow_.is_test:
-            flow_.set_exception_raised_during_execution(e)
+    def on_exception(self, e: Union[None, str, Exception]) -> None:
+        singletons.flow().get_and_set_exception_raised_during_execution(e)
 
 
 IPyflowKernel = IPyflowKernelBase.make_zmq_kernel_class("IPyflowKernel")

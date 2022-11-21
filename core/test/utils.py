@@ -129,7 +129,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
             yield
         # ensure each test didn't give failures during ast transformation
         IPyflowKernelBase.instance().cleanup_tracers()
-        exc = flow().set_exception_raised_during_execution(None)
+        _, exc = flow().reset_exception_counter()
         if exc is not None:
             raise exc
         get_ipython().reset()  # reset ipython state

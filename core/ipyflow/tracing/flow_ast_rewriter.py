@@ -22,6 +22,6 @@ class DataflowAstRewriter(AstRewriter):
             )
             return ret
         except Exception as e:
-            flow().set_exception_raised_during_execution(e)
+            flow().get_and_set_exception_raised_during_execution(e)
             traceback.print_exc()
             raise e

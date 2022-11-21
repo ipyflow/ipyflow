@@ -15,6 +15,7 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    Union,
     cast,
 )
 
@@ -147,7 +148,9 @@ class NotebookFlow(singletons.NotebookFlow):
         self._line_magic = make_line_magic(self)
         self._prev_cell_waiting_symbols: Set[DataSymbol] = set()
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
-        self._exception_raised_during_execution: Optional[Exception] = None
+        self._exception_raised_during_execution: Union[None, Exception, str] = None
+        self._last_exception_raised: Optional[Exception] = None
+        self.exception_counter: int = 0
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
         self.min_cascading_reactive_cell_num = -1
@@ -263,11 +266,20 @@ class NotebookFlow(singletons.NotebookFlow):
             sym.timestamp_by_liveness_time.clear()
         cells().clear()
 
-    def set_exception_raised_during_execution(
-        self, new_val: Optional[Exception] = None
-    ) -> Optional[Exception]:
+    def get_and_set_exception_raised_during_execution(
+        self, new_val: Union[None, str, Exception] = None
+    ) -> Union[None, str, Exception]:
         ret = self._exception_raised_during_execution
         self._exception_raised_during_execution = new_val
+        if new_val is not None:
+            self._last_exception_raised = new_val
+            self.exception_counter += 1
+        return ret
+
+    def reset_exception_counter(self) -> Tuple[int, Optional[Exception]]:
+        ret = self.exception_counter, self._last_exception_raised
+        self.exception_counter = 0
+        self._last_exception_raised = None
         return ret
 
     def get_position(self, frame: FrameType) -> Tuple[Optional[int], int]:
@@ -421,6 +433,9 @@ class NotebookFlow(singletons.NotebookFlow):
         response["flow_order"] = self.mut_settings.flow_order.value
         response["last_executed_cell_id"] = last_cell_id
         response["highlights"] = self.mut_settings.highlights.value
+        response["last_execution_was_error"] = (
+            self._exception_raised_during_execution is not None
+        )
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:

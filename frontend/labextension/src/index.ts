@@ -441,27 +441,30 @@ const connectToComm = (
       lastExecutionMode = exec_mode;
       lastExecutionHighlights = msg.content.data['highlights'] as Highlights;
       executedReactiveReadyCells.add(msg.content.data['last_executed_cell_id'] as string);
-      for (const cell of notebook.widgets) {
-        if (cell.model.type !== 'code' || executedReactiveReadyCells.has(cell.model.id)) {
-          continue;
-        }
-        if (!forcedReactiveCells.has(cell.model.id)) {
-          if (exec_mode !== 'reactive' || !newReadyCells.has(cell.model.id)) {
+      const last_execution_was_error = msg.content.data['last_execution_was_error'] as boolean;
+      if (!last_execution_was_error) {
+        for (const cell of notebook.widgets) {
+          if (cell.model.type !== 'code' || executedReactiveReadyCells.has(cell.model.id)) {
             continue;
           }
-        }
-        const codeCell = (cell as CodeCell);
-        if (cellPendingExecution === null) {
-          cellPendingExecution = codeCell;
-          // break early if using one of the order-based semantics
-          if (flow_order === 'in_order' || exec_schedule === 'strict') {
-            break;
+          if (!forcedReactiveCells.has(cell.model.id)) {
+            if (exec_mode !== 'reactive' || !newReadyCells.has(cell.model.id)) {
+              continue;
+            }
           }
-        } else if (codeCell.model.executionCount == null) {
-          // pass
-        } else if (codeCell.model.executionCount < cellPendingExecution.model.executionCount) {
-          // otherwise, execute in order of earliest execution counter
-          cellPendingExecution = codeCell;
+          const codeCell = (cell as CodeCell);
+          if (cellPendingExecution === null) {
+            cellPendingExecution = codeCell;
+            // break early if using one of the order-based semantics
+            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+              break;
+            }
+          } else if (codeCell.model.executionCount == null) {
+            // pass
+          } else if (codeCell.model.executionCount < cellPendingExecution.model.executionCount) {
+            // otherwise, execute in order of earliest execution counter
+            cellPendingExecution = codeCell;
+          }
         }
       }
       if (cellPendingExecution === null) {

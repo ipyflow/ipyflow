@@ -128,7 +128,7 @@ const gatherCellMetadataById = (Jupyter: any) => {
 }
 
 const connectToComm = (Jupyter: any) => {
-    const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow');
+    const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {exec_schedule: 'liveness_based'});
     const onExecution = (evt: any, data: {cell: any}) => {
         if (data.cell.notebook !== Jupyter.notebook) {
             return;

@@ -13,69 +13,201 @@
 
 About
 -----
-`ipyflow` (formerly `nbsafety`) is a next-generation Python kernel for Jupyter
-and other notebook systems that tracks dataflow relationships between symbols
-and cells during a given interactive session. Consider the following example:
+`ipyflow` is a next-generation Python kernel for Jupyter and other notebook
+interfaces that tracks dataflow relationships between symbols and cells during
+a given interactive session. Here are some of its main features:
 
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/example.gif" alt="ipyflow example" width="750" />
+### Execution Suggestions
 
-When the first cell is rerun, the second cell now contains a reference to an
-updated `f` and is suggested for re-execution with a turquoise highlight. The
-third cell contains a reference to a stale `y` -- `y` is stale due to its
-dependency on an old value of `f`. As such, the third cell is marked as unsafe
-for re-execution with a red highlight.  Once the second cell is rerun, it is
-now suggested to re-execute the third cell in order to refresh its stale
-output.
+To keep the execution state consistent with the code in cells, rerun the
+turquoise cells, and avoid the red cells:
 
+<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
 
-`ipyflow` accomplishes its magic using a combination of a runtime tracer (to
-build the implicit dependency graph) and a static checker (to provide warnings
-before running a cell), both of which are deeply aware of Python's data model.
-In particular, `ipyflow` requires ***minimal to no changes*** in user
-behavior, opting to get out of the way unless absolutely necessary and letting
-you use notebooks the way you prefer.
+A turquoise input with red output just means that the output may be out-of-sync.
 
-Install
--------
+### Reactivity
+
+Do you trust me? Good. It's time to free yourself of the burden of manual re-execution:
+
+<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+
+Simply run the magic command `%flow mode reactive` in any cell to enable
+reactivity.  Disable by running `%flow mode normal`.
+
+### Syntax Extensions
+
+Oh ye of little faith, oh ye unprepared to relinquish control, yet slothful
+enough to desire the same benefits of reactivity: we have toiled many hours to
+implement *reactive modifiers* that allow you to opt-in to reactivity on a
+per-symbol basis:
+
+<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
+
+Prefixing a symbol with `$` in a load context will cause the referencing cell
+to re-execute itself, whenever the aforementioned symbol is updated. You can
+also use the `$` syntax in store contexts, which triggers cells that reference
+the corresponding symbol to re-execute, regardless of whether the reference is
+similarly `$`-prefixed:
+
+<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
+
+You can also prefix with `$$` to trigger a cascading reactive update to all
+dependencies in the chain, recursively:
+
+<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
+
+Congratulations on reaching cusp of enlightenment. Now that you are here, why
+not just enable reactivity by default with `%flow mode reactive`?
+
+## State API
+
+`ipyflow` must understand the underlying execution state at a deep level in
+order to provide its features. It exposes an API for interacting with some of
+this state, including a `code` function for obtaining the code necessary to
+reconstruct some symbol:
+
+```python
+# Cell 1
+from ipyflow import code
+
+# Cell 2
+x = 0
+
+# Cell 3
+y = x + 1
+
+# Cell 4
+print(code(y))
+"""
+Output:
+# Cell 2
+x = 0
+
+# Cell 3
+y = x + 1
+"""
+```
+
+You can also see the cell (1-indexed) and statement (0-indexed) of when a
+symbol was last updated with the `timestamp` function:
+
+```python
+from ipyflow import timestamp
+timestamp(y)
+# Timestamp(cell_num=3, stmt_num=0)
+```
+
+To see dependencies and dependents of a particular symbol, use the `deps` and
+`users` fuctions, respectively:
+
+```python
+from ipyflow import deps, users
+
+deps(y)
+# [<x>]
+
+users(x)
+# [<y>]
+```
+
+If you want to elevate a symbol to the representation used internally by
+`ipyflow`, use the `lift` function (at your own risk, of course):
+
+```python
+from ipyflow import lift
+
+y_sym = lift(y)
+y_sym.timestamp
+# Timestamp(cell_num=3, stmt_num=0)
+```
+
+Finally, `ipyflow` also comes with some rudimentary support for watchpoints:
+
+```python
+# Cell 1
+from ipyflow import watchpoints
+
+def watchpoint(obj, position, symbol_name):
+    cell, line = position
+    if obj <= 42:
+        return
+    print(f"{symbol_name} = {obj} exceeds 42 at {cell=}, {line=}")
+
+# Cell 2
+y = 14
+watchpoints(y).add(watchpoint)
+
+# Cell 3
+y += 10
+
+# Cell 4
+y += 20
+# y = 44 exceeds 42 at cell=4, line=1
+```
+
+Quick Start
+-----------
 ```bash
 pip install ipyflow
 ```
-
-Interface
----------
-The kernel ships with an extension that highlights cells with live references
-to stale symbols using red UI elements. It furthermore uses turquoise highlights
-for cells with live references to updated symbols, as well as for cells that
-resolve staleness.
-
-Running
--------
 
 To run an `ipyflow` kernel in Jupyter, select "Python 3 (ipyflow)" from the
 list of notebook types in Jupyter's "New" dropdown dialogue. For JupyterLab,
 similarly select "Python 3 (ipyflow)" from the list of available kernels in
 the Launcher tab.
 
-<!--
 Jupyter Notebook Entrypoint:     |  Jupyter Lab Entrypoint:
 :-------------------------------:|:-------------------------:
 ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png)
--->
 
-Uninstall
----------
-```bash
-pip uninstall ipyflow
+Note: reactive execution features are not yet supported in classic Jupyter notebooks.
+
+Citing
+------
+`ipyflow` started its life under the name `nbsafety`, which provided the initial
+suggestions and slicing functionality.
+
+For the [execution suggestions](http://www.vldb.org/pvldb/vol14/p1093-macke.pdf):
+```bibtex
+@article{macke2021fine,
+  title={Fine-grained lineage for safer notebook interactions},
+  author={Macke, Stephen and Gong, Hongpu and Lee, Doris Jung-Lin and Head, Andrew and Xin, Doris and Parameswaran, Aditya},
+  journal={Proceedings of the VLDB Endowment},
+  volume={14},
+  number={6},
+  pages={1093--1101},
+  year={2021},
+  publisher={VLDB Endowment}
+}
+```
+
+For the [dynamic slicer](https://smacke.net/papers/nbslicer.pdf)
+(used for the `code` function, for example):
+```bibtex
+@article{shankar2022bolt,
+  title={Bolt-on, Compact, and Rapid Program Slicing for Notebooks},
+  author={Shankar, Shreya and Macke, Stephen and Chasins, Andrew and Head, Andrew and Parameswaran, Aditya},
+  journal={Proceedings of the VLDB Endowment},
+  volume={15},
+  number={13},
+  pages={4038--4047},
+  year={2022},
+  publisher={VLDB Endowment}
+}
+```
+
+We don't have a paper written yet for the syntax extensions that implement the
+reactive algebra, but in the mean time, you can cite the `ipyflow` repo
+directly for that and anything else not covered by the previous publications:
+```bibtex
+@misc{ipyflow,
+  title = {{IPyflow: A Next-Generation, Dataflow-Aware IPython Kernel}},
+  howpublished = {\url{https://github.com/ipyflow/ipyflow}},
+  year = {2022},
+}
 ```
 
 License
 -------
 Code in this project licensed under the [BSD-3-Clause License](https://opensource.org/licenses/BSD-3-Clause).
-
-## Contributors
-	
-
-| [<img alt="Stephen Macke" src="https://avatars1.githubusercontent.com/u/325653?s=460&v=4" width="100">](https://github.com/smacke) | [<img alt="Ray Gong" src="https://avatars1.githubusercontent.com/u/46979212?s=460&v=4" width="100">](https://github.com/ruiduoray) | [<img alt="Shreya Shankar" src="https://avatars.githubusercontent.com/u/6224969?s=460&v=4" width="100">](https://github.com/shreyashankar) |
-|:--------------------------------------------------:|:--------------------------------------------------:|:--------------------------------------------------:|
-| [Stephen Macke](https://github.com/smacke)       | [Ray Gong](https://github.com/ruiduoray)         | [Shreya Shankar](https://github.com/shreyashankar) |
-

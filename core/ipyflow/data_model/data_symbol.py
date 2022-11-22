@@ -190,11 +190,29 @@ class DataSymbol:
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
+    def compute_namespace_timestamps(
+        self, seen: Optional[Set["DataSymbol"]] = None
+    ) -> Set[Timestamp]:
+        timestamps = {self._timestamp}
+        ns = self.namespace
+        if ns is None:
+            return timestamps
+        if seen is None:
+            seen = set()
+        if self in seen:
+            return timestamps
+        seen.add(self)
+        for dsym in ns.all_data_symbols_this_indentation():
+            timestamps |= dsym.compute_namespace_timestamps(seen=seen)
+        return timestamps
+
     def code(self) -> str:
-        ts = self.timestamp
+        ts = self._timestamp
         if ts.cell_num == -1:
-            ts = Timestamp(self.defined_cell_num, ts.stmt_num)
-        ts_deps = compute_slice_impl([ts], match_seed_stmts=True)
+            timestamps = {Timestamp(self.defined_cell_num, ts.stmt_num)}
+        else:
+            timestamps = self.compute_namespace_timestamps()
+        ts_deps = compute_slice_impl(list(timestamps), match_seed_stmts=True)
         stmts_by_cell_num = CodeCell.compute_slice_stmts_for_timestamps(ts_deps)
         stmt_text_by_cell_num = CodeCell.get_stmt_text(stmts_by_cell_num)
         return make_slice_text(stmt_text_by_cell_num, blacken=True)
@@ -842,6 +860,8 @@ class DataSymbol:
         used_time: Optional[Timestamp] = None,
         used_node: Optional[ast.AST] = None,
         exclude_ns: bool = False,
+        seen: Optional[Set["DataSymbol"]] = None,
+        is_static: bool = False,
     ) -> None:
         if used_time is None:
             used_time = Timestamp.current()
@@ -852,20 +872,40 @@ class DataSymbol:
                 used_time.cell_num,
                 self.timestamp,
             )
-        ts_to_use = (
-            self.timestamp_excluding_ns_descendents if exclude_ns else self.timestamp
-        )
+        ts_to_use = self._timestamp  #  if exclude_ns else self.timestamp
         if ts_to_use.is_initialized:
             ts_to_use = max(ts_to_use, self._last_refreshed_timestamp)
+        timestamp_by_used_time = (
+            self.timestamp_by_liveness_time
+            if is_static
+            else self.timestamp_by_used_time
+        )
         if (
             ts_to_use.is_initialized
-            and used_time not in self.timestamp_by_used_time
+            and used_time not in timestamp_by_used_time
             and ts_to_use < used_time
         ):
-            flow().add_dynamic_data_dep(used_time, ts_to_use, self)
-            self.timestamp_by_used_time[used_time] = ts_to_use
-            if used_node is not None:
-                self.used_node_by_used_time[used_time] = used_node
+            timestamp_by_used_time[used_time] = ts_to_use
+            if is_static:
+                flow().add_static_data_dep(used_time, ts_to_use, self)
+            else:
+                flow().add_dynamic_data_dep(used_time, ts_to_use, self)
+                if used_node is not None:
+                    self.used_node_by_used_time[used_time] = used_node
+        ns = None if exclude_ns else self.namespace
+        if ns is not None and seen is None:
+            seen = set()
+        if ns is None or self in seen:
+            return
+        seen.add(self)
+        for dsym in ns.all_data_symbols_this_indentation():
+            dsym.update_usage_info(
+                used_time=used_time,
+                used_node=None,
+                exclude_ns=False,
+                seen=seen,
+                is_static=is_static,
+            )
 
     def refresh(
         self,

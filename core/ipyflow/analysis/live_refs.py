@@ -342,16 +342,12 @@ def get_live_symbols_and_cells_for_references(
         ):
             did_resolve = True
             if update_liveness_time_versions:
-                ts_to_use = (
-                    resolved.dsym.timestamp
-                    if resolved.is_last
-                    else resolved.dsym.timestamp_excluding_ns_descendents
-                )
                 liveness_time = resolved.liveness_timestamp
-                assert liveness_time > ts_to_use
-                if ts_to_use.is_initialized:
-                    flow().add_static_data_dep(liveness_time, ts_to_use, resolved.dsym)
-                    resolved.dsym.timestamp_by_liveness_time[liveness_time] = ts_to_use
+                resolved.dsym.update_usage_info(
+                    used_time=liveness_time,
+                    exclude_ns=not resolved.is_last,
+                    is_static=True,
+                )
                 if resolved.atom.is_cascading_reactive:
                     resolved.dsym.bump_cascading_reactive_cell_num(cell_ctr)
             if resolved.is_called:

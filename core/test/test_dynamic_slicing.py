@@ -542,6 +542,19 @@ def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
     assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)
 
 
+def test_namespace_contributions():
+    run_cell("import pandas as pd")
+    run_cell('df = pd.DataFrame({"a": [0,1], "b": [2., 3.]})')
+    run_cell("df['x'] = df.a + 1")
+    run_cell("df['y'] = df.a + 2")
+    run_cell("df['z'] = df.b + 3")
+    run_cell("df.dropna()")
+    deps = set(compute_unparsed_slice(6).keys())
+    assert deps == {1, 2, 3, 4, 5, 6}, "got %s" % deps
+    slice_size = num_stmts_in_slice(6)
+    assert slice_size == len(deps), "got %d" % slice_size
+
+
 if sys.version_info >= (3, 8):
 
     def test_slice_with_reactive_modifiers():

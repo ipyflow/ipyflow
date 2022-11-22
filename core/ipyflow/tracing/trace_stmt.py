@@ -9,6 +9,7 @@ from typing import List, Optional, Set, Union, cast
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
+from ipyflow.data_model import DUPED_ATTRSUB_CLASSES
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
@@ -141,14 +142,18 @@ class TraceStatement:
             #     raise ke
             return
         subscript_vals_to_use = [is_subscript]
-        pandas = sys.modules.get("pandas", None)
-        if pandas is not None and scope.is_namespace_scope:
+        if scope.is_namespace_scope:
             namespace = cast(Namespace, scope)
-            if (
-                isinstance(namespace.obj, pandas.DataFrame)
-                and name in namespace.obj.columns
-            ):
-                subscript_vals_to_use.append(not is_subscript)
+            for modname, classname in DUPED_ATTRSUB_CLASSES:
+                module = sys.modules.get(modname)
+                if module is None:
+                    continue
+                clazz = getattr(module, classname, None)
+                if clazz is None:
+                    continue
+                if isinstance(namespace.obj, clazz) and name in namespace.obj.columns:
+                    subscript_vals_to_use.append(not is_subscript)
+                    break
         for subscript_val in subscript_vals_to_use:
             upserted = scope.upsert_data_symbol_for_name(
                 name,

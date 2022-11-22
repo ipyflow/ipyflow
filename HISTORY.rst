@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.140 (2022-XX-YY)
+--------------------
+* Improved support for Modin dataframes;
+
 0.0.139 (2022-11-22)
 --------------------
 * Better handling of namespace symbol contributions to slices;

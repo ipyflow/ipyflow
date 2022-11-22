@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 import sys
-from typing import TYPE_CHECKING, Generator, Iterable, Set
+from typing import TYPE_CHECKING, Generator, Iterable, Set, cast
 
+from ipyflow.data_model import DUPED_ATTRSUB_CLASSES
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 
@@ -39,7 +40,7 @@ class UpdateProtocol:
         directly_updated_symbols = (
             flow().aliases[self.updated_sym.obj_id] if mutated else {self.updated_sym}
         )
-        directly_updated_symbols |= self._maybe_get_adhoc_pandas_updated_syms()
+        directly_updated_symbols |= self._maybe_get_duped_attrsub_updated_syms()
         self._collect_updated_symbols_and_refresh_namespaces(
             directly_updated_symbols, propagate_to_namespace_descendents
         )
@@ -64,25 +65,31 @@ class UpdateProtocol:
         for dsym in updated_symbols_with_ancestors:
             self._propagate_waiting_to_deps(dsym, skip_seen_check=True)
 
-    def _maybe_get_adhoc_pandas_updated_syms(self):
-        pandas = sys.modules.get("pandas", None)
-        if pandas is None:
-            return set()
+    def _maybe_get_duped_attrsub_updated_syms(self) -> Set["DataSymbol"]:
+        for modname, classname in DUPED_ATTRSUB_CLASSES:
+            module = sys.modules.get(modname, None)
+            if modname is None:
+                continue
+            clazz = getattr(module, classname, None)
+            if clazz is None:
+                continue
 
-        if self.updated_sym.obj is None or not isinstance(
-            self.updated_sym.obj, pandas.Series
-        ):
-            return set()
+            ns = self.updated_sym.containing_namespace
+            if ns is None or ns.obj is None or not isinstance(ns.obj, clazz):
+                continue
 
-        ns = self.updated_sym.containing_namespace
-        if ns is None or ns.obj is None or not isinstance(ns.obj, pandas.DataFrame):
-            return set()
-
-        name = self.updated_sym.name
-        return {
-            ns.lookup_data_symbol_by_name_this_indentation(name, is_subscript=is_sub)
-            for is_sub in [True, False]
-        } - {None}
+            name = self.updated_sym.name
+            return cast(
+                Set["DataSymbol"],
+                {
+                    ns.lookup_data_symbol_by_name_this_indentation(
+                        name, is_subscript=is_sub
+                    )
+                    for is_sub in (True, False)
+                }
+                - {None},
+            )
+        return set()
 
     def _collect_updated_symbols_and_refresh_namespaces(
         self,

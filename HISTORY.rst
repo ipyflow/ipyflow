@@ -1,6 +1,13 @@
 History
 =======
 
+0.0.138 (2022-11-21)
+--------------------
+* Pin pyccolo to 0.0.39 exactly prevent forward compat issues;
+* Fix a couple of hybrid-liveness-dag issues / corner cases;
+* Stop reactive execution when exception is encountered;
+* Use liveness_based exec_schedule for classic notebook frontend;
+
 0.0.137 (2022-11-19)
 --------------------
 * Use pyccolo >= 0.0.39 for better syntax augmentation;

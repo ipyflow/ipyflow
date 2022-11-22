@@ -149,7 +149,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._prev_cell_waiting_symbols: Set[DataSymbol] = set()
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Union[None, Exception, str] = None
-        self._last_exception_raised: Optional[Exception] = None
+        self._last_exception_raised: Union[None, str, Exception] = None
         self.exception_counter: int = 0
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
@@ -276,7 +276,7 @@ class NotebookFlow(singletons.NotebookFlow):
             self.exception_counter += 1
         return ret
 
-    def reset_exception_counter(self) -> Tuple[int, Optional[Exception]]:
+    def reset_exception_counter(self) -> Tuple[int, Union[None, str, Exception]]:
         ret = self.exception_counter, self._last_exception_raised
         self.exception_counter = 0
         self._last_exception_raised = None

@@ -131,7 +131,10 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         IPyflowKernelBase.instance().cleanup_tracers()
         _, exc = flow().reset_exception_counter()
         if exc is not None:
-            raise exc
+            if isinstance(exc, str):
+                raise Exception(exc)
+            elif isinstance(exc, Exception):
+                raise exc
         get_ipython().reset()  # reset ipython state
 
     return init_or_reset_dependency_graph, run_cell

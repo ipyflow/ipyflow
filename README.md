@@ -152,14 +152,14 @@ Quick Start
 pip install ipyflow
 ```
 
-To run an `ipyflow` kernel in Jupyter, select "Python 3 (ipyflow)" from the
-list of notebook types in Jupyter's "New" dropdown dialogue. For JupyterLab,
-similarly select "Python 3 (ipyflow)" from the list of available kernels in
-the Launcher tab.
+To run an `ipyflow` kernel in JupyterLab, select "Python 3 (ipyflow)" from the
+list of available kernels in the Launcher tab. For classic Jupyter, similarly
+select "Python 3 (ipyflow)" from the list of notebook types in the "New"
+dropdown dialogue.
 
-Jupyter Notebook Entrypoint:     |  Jupyter Lab Entrypoint:
-:-------------------------------:|:-------------------------:
-![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png)
+JupyterLab  Entrypoint:          |  Classic Jupyter Entrypoint:
+:-------------------------------:|:---------------------------:
+![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png)
 
 Note: reactive execution features are not yet supported in classic Jupyter notebooks.
 

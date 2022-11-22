@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.139 (2022-11-22)
+--------------------
+* Better handling of namespace symbol contributions to slices;
+
 0.0.138 (2022-11-21)
 --------------------
 * Pin pyccolo to 0.0.39 exactly prevent forward compat issues;

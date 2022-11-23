@@ -33,7 +33,7 @@ A turquoise input with red output just means that the output may be out-of-sync.
 Do you trust me? Good. It's time to free yourself of the burden of manual re-execution:
 
 <p align="center">
-<img width="500vw" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+<img style="width: 70vw;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
 </p>
 
 Simply run the magic command `%flow mode reactive` in any cell to enable

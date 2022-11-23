@@ -22,7 +22,9 @@ a given interactive session. Here are some of its main features:
 To keep the execution state consistent with the code in cells, rerun the
 turquoise cells, and avoid the red cells:
 
-<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
+<p align="center">
+<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
+</p>
 
 A turquoise input with red output just means that the output may be out-of-sync.
 
@@ -30,7 +32,9 @@ A turquoise input with red output just means that the output may be out-of-sync.
 
 Do you trust me? Good. It's time to free yourself of the burden of manual re-execution:
 
-<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+<p align="center">
+<img style="width: 70%; min-width: 600px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+</p>
 
 Simply run the magic command `%flow mode reactive` in any cell to enable
 reactivity.  Disable by running `%flow mode normal`.
@@ -42,7 +46,9 @@ enough to desire the same benefits of reactivity: we have toiled many hours to
 implement *reactive modifiers* that allow you to opt-in to reactivity on a
 per-symbol basis:
 
-<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
+<p align="center">
+<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
+</p>
 
 Prefixing a symbol with `$` in a load context will cause the referencing cell
 to re-execute itself, whenever the aforementioned symbol is updated. You can
@@ -50,12 +56,16 @@ also use the `$` syntax in store contexts, which triggers cells that reference
 the corresponding symbol to re-execute, regardless of whether the reference is
 similarly `$`-prefixed:
 
-<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
+<p align="center">
+<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
+</p>
 
 You can also prefix with `$$` to trigger a cascading reactive update to all
 dependencies in the chain, recursively:
 
-<img style="display: block; margin-left: auto; margin-right: auto; width: 60%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
+<p align="center">
+<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
+</p>
 
 Congratulations on reaching cusp of enlightenment. Now that you are here, why
 not just enable reactivity by default with `%flow mode reactive`?

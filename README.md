@@ -23,7 +23,7 @@ To keep the execution state consistent with the code in cells, rerun the
 turquoise cells, and avoid the red cells:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
+<img style="width: 70%;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
 </p>
 
 A turquoise input with red output just means that the output may be out-of-sync.
@@ -33,7 +33,7 @@ A turquoise input with red output just means that the output may be out-of-sync.
 Do you trust me? Good. It's time to free yourself of the burden of manual re-execution:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+<img style="width: 70%;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
 </p>
 
 Simply run the magic command `%flow mode reactive` in any cell to enable
@@ -47,7 +47,7 @@ implement *reactive modifiers* that allow you to opt-in to reactivity on a
 per-symbol basis:
 
 <p align="center">
-<img style="width: 70%; min-width: 350px;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
+<img style="width: 70%;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
 </p>
 
 Prefixing a symbol with `$` in a load context will cause the referencing cell
@@ -57,14 +57,14 @@ the corresponding symbol to re-execute, regardless of whether the reference is
 similarly `$`-prefixed:
 
 <p align="center">
-<img style="width: 70%; min-width: 350px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
+<img style="width: 70%;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
 </p>
 
 You can also prefix with `$$` to trigger a cascading reactive update to all
 dependencies in the chain, recursively:
 
 <p align="center">
-<img style="width: 70%; min-width: 350px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
+<img style="width: 70%;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
 </p>
 
 Congratulations on reaching cusp of enlightenment. Now that you are here, why

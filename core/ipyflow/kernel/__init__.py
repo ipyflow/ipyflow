@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import sys
 from ipyflow.kernel.kernel import IPyflowKernel
 
 __all__ = ["IPyflowKernel"]
@@ -11,8 +11,11 @@ def _set_gc_thresholds():
 
     # Clean up what might be garbage so far.
     gc.collect(2)
-    # Exclude current items from future GC.
-    gc.freeze()
+
+    if sys.version_info >= (3, 7):
+        # Exclude current items from future GC.
+        # only available in Python 3.7+
+        gc.freeze()
 
     allocs, gen1, gen2 = gc.get_threshold()
     allocs = 50_000  # Start the GC sequence every 50K not 700 allocations.

@@ -89,8 +89,9 @@ y = x + 1
 
 # Cell 4
 print(code(y))
+
+# Output:
 """
-Output:
 # Cell 2
 x = 0
 

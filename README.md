@@ -23,7 +23,7 @@ To keep the execution state consistent with the code in cells, rerun the
 turquoise cells, and avoid the red cells:
 
 <p align="center">
-<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
+<img style="width: 70%; min-width: 600px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
 </p>
 
 A turquoise input with red output just means that the output may be out-of-sync.
@@ -47,7 +47,7 @@ implement *reactive modifiers* that allow you to opt-in to reactivity on a
 per-symbol basis:
 
 <p align="center">
-<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
+<img style="width: 70%; min-width: 600px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
 </p>
 
 Prefixing a symbol with `$` in a load context will cause the referencing cell
@@ -57,14 +57,14 @@ the corresponding symbol to re-execute, regardless of whether the reference is
 similarly `$`-prefixed:
 
 <p align="center">
-<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
+<img style="width: 70%; min-width: 600px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
 </p>
 
 You can also prefix with `$$` to trigger a cascading reactive update to all
 dependencies in the chain, recursively:
 
 <p align="center">
-<img style="width: 70%; min-width: 500px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
+<img style="width: 70%; min-width: 600px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
 </p>
 
 Congratulations on reaching cusp of enlightenment. Now that you are here, why

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.141 (2022-11-23)
+--------------------
+* Relax gc thresholds to improve perf;
+
 0.0.140 (2022-11-22)
 --------------------
 * Improved support for Modin dataframes;

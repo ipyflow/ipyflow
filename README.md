@@ -193,8 +193,8 @@ For the [execution suggestions](http://www.vldb.org/pvldb/vol14/p1093-macke.pdf)
 }
 ```
 
-For the [dynamic slicer](https://smacke.net/papers/nbslicer.pdf)
-(used for the `code` function, for example):
+For the [dynamic slicer](https://smacke.net/papers/nbslicer.pdf) (used for
+reactivity and for the `code` function, for example):
 ```bibtex
 @article{shankar2022bolt,
   title={Bolt-on, Compact, and Rapid Program Slicing for Notebooks},

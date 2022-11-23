@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.140 (2022-XX-YY)
+0.0.140 (2022-11-22)
 --------------------
 * Improved support for Modin dataframes;
 

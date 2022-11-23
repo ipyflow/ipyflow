@@ -6,8 +6,13 @@ __all__ = ["IPyflowKernel"]
 
 
 # ref: https://mkennedy.codes/posts/python-gc-settings-change-this-and-make-your-app-go-20pc-faster/
-def _set_gc_thresholds():
+def _set_gc_thresholds() -> None:
     import gc
+
+    allocs, gen1, gen2 = gc.get_threshold()
+    if allocs >= 50_000:
+        # relaxed thresholds already set
+        return
 
     # Clean up what might be garbage so far.
     gc.collect(2)
@@ -17,7 +22,6 @@ def _set_gc_thresholds():
         # only available in Python 3.7+
         gc.freeze()
 
-    allocs, gen1, gen2 = gc.get_threshold()
     allocs = 50_000  # Start the GC sequence every 50K not 700 allocations.
     gen1 = gen1 * 2
     gen2 = gen2 * 2

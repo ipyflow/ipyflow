@@ -23,7 +23,7 @@ To keep the execution state consistent with the code in cells, rerun the
 turquoise cells, and avoid the red cells:
 
 <p align="center">
-<img style="width: 70%; min-width: 350px" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
 </p>
 
 A turquoise input with red output just means that the output may be out-of-sync.
@@ -33,7 +33,7 @@ A turquoise input with red output just means that the output may be out-of-sync.
 Do you trust me? Good. It's time to free yourself of the burden of manual re-execution:
 
 <p align="center">
-<img style="width: 70vw;" src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
 </p>
 
 Simply run the magic command `%flow mode reactive` in any cell to enable

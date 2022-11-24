@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import sys
+
 from ipyflow.kernel.kernel import IPyflowKernel
 
 __all__ = ["IPyflowKernel"]

@@ -143,8 +143,8 @@ def get_names_for_function(func: ast.FunctionDef) -> List[str]:
     for decorator in func.decorator_list:
         if not isinstance(decorator, ast.Call):
             continue
-        func = decorator.func
-        if not isinstance(func, ast.Name) or func.id != "handler_for":
+        deco_func = decorator.func
+        if not isinstance(deco_func, ast.Name) or deco_func.id != "handler_for":
             continue
         for arg in decorator.args:
             if isinstance(arg, ast.Str):

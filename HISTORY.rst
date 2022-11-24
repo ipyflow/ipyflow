@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.142 (2022-11-23)
+--------------------
+* Couple of minor bugfixes;
+
 0.0.141 (2022-11-23)
 --------------------
 * Relax gc thresholds to improve perf;

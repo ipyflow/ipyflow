@@ -174,14 +174,15 @@ class capture_output_tee:
             self.shell.display_pub = TeeDisplayPublisher(
                 self.save_display_pub, capture_display_pub
             )
-            self.save_display_hook = sys.displayhook
-            capture_display_hook = CapturingDisplayHook(
-                shell=self.shell, outputs=capture_display_pub.outputs
-            )
-            sys.displayhook = TeeDisplayHook(
-                sys.displayhook,
-                capture_display_hook,
-            )
+            # TODO: keeping this causes duped outputs for ipywidgets; figure out why
+            # self.save_display_hook = sys.displayhook
+            # capture_display_hook = CapturingDisplayHook(
+            #     shell=self.shell, outputs=capture_display_pub.outputs
+            # )
+            # sys.displayhook = TeeDisplayHook(
+            #     self.save_display_hook,
+            #     capture_display_hook,
+            # )
 
         return CapturedIO(
             stdout,
@@ -194,4 +195,4 @@ class capture_output_tee:
         sys.stderr = self.sys_stderr
         if self.display and self.shell:
             self.shell.display_pub = self.save_display_pub
-            sys.displayhook = self.save_display_hook
+            # sys.displayhook = self.save_display_hook

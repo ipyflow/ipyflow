@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.143 (2022-12-04)
+--------------------
+* Bugfixes around reactivity-blocking syntax extension;
+* Integration for ipywidgets;
+* Remove restriction on ipython version;
+
 0.0.142 (2022-11-23)
 --------------------
 * Couple of minor bugfixes;

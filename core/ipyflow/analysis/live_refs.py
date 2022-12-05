@@ -343,7 +343,7 @@ def get_live_symbols_and_cells_for_references(
             did_resolve = True
             if update_liveness_time_versions:
                 liveness_time = resolved.liveness_timestamp
-                resolved.dsym.update_usage_info(
+                resolved.update_usage_info(
                     used_time=liveness_time,
                     exclude_ns=not resolved.is_last,
                     is_static=True,
@@ -441,9 +441,9 @@ def compute_live_dead_symbol_refs(
 
 def static_resolve_rvals(
     code: Union[ast.AST, str], cell_ctr: int = -1
-) -> Set["DataSymbol"]:
+) -> Set[ResolvedDataSymbol]:
     live_refs, *_ = compute_live_dead_symbol_refs(code)
     resolved_live_syms, *_ = get_live_symbols_and_cells_for_references(
         live_refs, flow().global_scope, cell_ctr=cell_ctr
     )
-    return {resolved.dsym for resolved in resolved_live_syms}
+    return resolved_live_syms

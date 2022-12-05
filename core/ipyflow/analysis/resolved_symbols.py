@@ -30,6 +30,10 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         self.next_atom = next_atom
         self.liveness_timestamp = liveness_timestamp
 
+    def update_usage_info(self, *args, **kwargs) -> None:
+        kwargs["is_blocking"] = kwargs.get("is_blocking", self.is_blocking)
+        self.dsym.update_usage_info(*args, **kwargs)
+
     def __hash__(self) -> int:
         return hash(
             (
@@ -43,6 +47,10 @@ class ResolvedDataSymbol(CommonEqualityMixin):
     @property
     def timestamp(self) -> Timestamp:
         return self.dsym.timestamp
+
+    @property
+    def is_anonymous(self) -> bool:
+        return self.dsym.is_anonymous
 
     @property
     def is_called(self) -> bool:

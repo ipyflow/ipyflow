@@ -446,8 +446,6 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
     def before_enter_tracing_context(self) -> None:
         flow_ = singletons.flow()
         flow_.updated_symbols.clear()
-        flow_.updated_reactive_symbols.clear()
-        flow_.updated_deep_reactive_symbols.clear()
 
     @contextmanager
     def inner_tracing_context(self) -> Generator[None, None, None]:

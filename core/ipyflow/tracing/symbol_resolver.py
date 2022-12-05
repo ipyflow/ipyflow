@@ -267,9 +267,10 @@ def resolve_rval_symbols(
     rval_symbols = ResolveRvalSymbols(should_update_usage_info)(node)
     if len(rval_symbols) == 0:
         prev_cell = cells().current_cell().prev_cell
-        rval_symbols = static_resolve_rvals(
+        static_rval_symbols = static_resolve_rvals(
             node, cell_ctr=-1 if prev_cell is None else prev_cell.cell_ctr
         )
         if should_update_usage_info:
-            Timestamp.update_usage_info(rval_symbols, used_node=node)
+            Timestamp.update_usage_info(static_rval_symbols, used_node=node)
+        rval_symbols = {sym.dsym for sym in static_rval_symbols}
     return rval_symbols

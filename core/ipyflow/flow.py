@@ -442,6 +442,8 @@ class NotebookFlow(singletons.NotebookFlow):
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
         self.min_cascading_reactive_cell_num = self.cell_counter()
+        self.updated_reactive_symbols.clear()
+        self.updated_deep_reactive_symbols.clear()
         return None
 
     def handle_refresh_symbols(self, request) -> Optional[Dict[str, Any]]:

@@ -386,14 +386,14 @@ class CodeCell(CodeCellSlicingMixin):
             max_used_cell_ctr = -1
             this_cell_pos = self.position
             for sym in live_symbols:
-                if filter_to_reactive:
-                    if sym.is_blocking:
-                        continue
-                    if (
-                        not sym.is_reactive
-                        and sym.dsym not in flow().updated_reactive_symbols
-                    ):
-                        continue
+                if sym.is_blocking:
+                    continue
+                if (
+                    filter_to_reactive
+                    and not sym.is_reactive
+                    and sym.dsym not in flow().updated_reactive_symbols
+                ):
+                    continue
                 live_sym_updated_cell_ctr = sym.timestamp.cell_num
                 if (
                     live_sym_updated_cell_ctr

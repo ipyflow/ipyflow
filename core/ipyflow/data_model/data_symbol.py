@@ -862,7 +862,9 @@ class DataSymbol:
         exclude_ns: bool = False,
         seen: Optional[Set["DataSymbol"]] = None,
         is_static: bool = False,
+        is_blocking: bool = False,
     ) -> None:
+        is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
         if flow().is_develop:
@@ -886,12 +888,13 @@ class DataSymbol:
             and ts_to_use < used_time
         ):
             timestamp_by_used_time[used_time] = ts_to_use
-            if is_static:
-                flow().add_static_data_dep(used_time, ts_to_use, self)
-            else:
-                flow().add_dynamic_data_dep(used_time, ts_to_use, self)
-                if used_node is not None:
-                    self.used_node_by_used_time[used_time] = used_node
+            if not is_blocking:
+                if is_static:
+                    flow().add_static_data_dep(used_time, ts_to_use, self)
+                else:
+                    flow().add_dynamic_data_dep(used_time, ts_to_use, self)
+            if used_node is not None:
+                self.used_node_by_used_time[used_time] = used_node
         ns = None if exclude_ns else self.namespace
         if ns is not None and seen is None:
             seen = set()
@@ -905,6 +908,7 @@ class DataSymbol:
                 exclude_ns=False,
                 seen=seen,
                 is_static=is_static,
+                is_blocking=is_blocking,
             )
 
     def refresh(

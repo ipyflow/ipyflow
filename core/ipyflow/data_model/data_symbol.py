@@ -29,8 +29,8 @@ from ipyflow.data_model.update_protocol import UpdateProtocol
 from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.watchpoint import Watchpoints
-from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, SupportedIndexType
-from ipyflow.utils.misc_utils import cleanup_discard
+from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, CellId, SupportedIndexType
+from ipyflow.utils.misc_utils import cleanup_discard, debounce
 
 if TYPE_CHECKING:
     # avoid circular imports
@@ -39,6 +39,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
+
+
+@debounce(0.1)
+def _debounced_exec_schedule(executed_cell_id: CellId) -> None:
+    flow().handle(
+        {"type": "compute_exec_schedule", "executed_cell_id": executed_cell_id}
+    )
 
 
 class DataSymbolType(Enum):
@@ -107,6 +114,7 @@ class DataSymbol:
         self._version: int = 0
         self._defined_cell_num = cells().exec_counter()
         self._cascading_reactive_cell_num = -1
+        self._override_ready_liveness_cell_num = -1
         self.watchpoints = Watchpoints()
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
@@ -854,6 +862,43 @@ class DataSymbol:
             # fixup namespace name if necessary
             # can happen if symbol for 'self' was created in a previous __init__
             ns.scope_name = self.name
+        if overwrite and len(flow().aliases[self.obj_id]) == 1:
+            self._handle_possible_widget_creation()
+
+    def _handle_possible_widget_creation(self) -> None:
+        if self.obj is None:
+            return
+        Widget = getattr(sys.modules.get("ipywidgets"), "Widget", None)
+        if (
+            Widget is None
+            or not isinstance(self.obj, Widget)
+            or not hasattr(self.obj, "observe")
+            or not hasattr(self.obj, "value")
+        ):
+            return
+        self.namespaced().upsert_data_symbol_for_name(
+            "value", None, set(), self.stmt_node
+        )
+        self.obj.observe(self._observe_widget)
+
+    def _observe_widget(self, msg: Dict[str, Any]) -> None:
+        if msg.get("name") != "value" or "new" not in msg:
+            return
+        newval = msg["new"]
+        ns = self.namespace
+        sym = ns.lookup_data_symbol_by_name_this_indentation("value")
+        if sym is None:
+            return
+        sym._override_ready_liveness_cell_num = flow().cell_counter() + 1
+        _debounced_exec_schedule(cells().from_timestamp(self.timestamp).cell_id)
+
+    def namespaced(self) -> "Namespace":
+        ns = self.namespace
+        if ns is not None:
+            return ns
+        # FIXME: workaround for circular dep
+        Namespace = getattr(sys.modules["ipyflow.data_model.namespace"], "Namespace")
+        return Namespace(self.obj, self.name, parent_scope=self.containing_scope)
 
     def update_usage_info(
         self,

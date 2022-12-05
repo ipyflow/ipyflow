@@ -20,6 +20,7 @@ from typing import (
 )
 
 import pyccolo as pyc
+from ipykernel.comm import Comm
 from IPython import get_ipython
 
 from ipyflow import singletons
@@ -172,6 +173,8 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self.fs: Namespace = None
         self.display_sym: DataSymbol = None
+        self._comm: Optional[Comm] = None
+        self._prev_cell_metadata_by_id: Optional[Dict[CellId, Dict[str, Any]]] = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -310,12 +313,13 @@ class NotebookFlow(singletons.NotebookFlow):
     def set_tags(self, tags: Tuple[str, ...]) -> None:
         self._tags = tags
 
-    def _comm_target(self, comm, open_msg) -> None:
+    def _comm_target(self, comm: Comm, open_msg: Dict[str, Any]) -> None:
         @comm.on_msg
         def _responder(msg):
             request = msg["content"]["data"]
             self.handle(request, comm=comm)
 
+        self._comm = comm
         self.initialize(**open_msg.get("content", {}).get("data", {}))
         comm.send({"type": "establish"})
 
@@ -354,7 +358,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle(self, request: Dict[str, Any], comm=None) -> None:
         request_type = request["type"]
-        handler = self._comm_handlers.get(request_type, None)
+        handler = self._comm_handlers.get(request_type)
         if handler is None:
             dbg_msg = "Unsupported request type for request %s" % request
             logger.error(dbg_msg)
@@ -367,6 +371,8 @@ class NotebookFlow(singletons.NotebookFlow):
                 "type": request_type,
                 "error": str(e),
             }
+        if comm is None:
+            comm = self._comm
         if comm is not None:
             if response is None:
                 response = {"type": request_type}
@@ -377,23 +383,30 @@ class NotebookFlow(singletons.NotebookFlow):
                     "unable to serialize response for request of type %s" % request_type
                 ) from e
 
-    def handle_change_active_cell(self, request) -> Optional[Dict[str, Any]]:
+    def handle_change_active_cell(
+        self, request: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         self.set_active_cell(request["active_cell_id"])
         return None
 
-    def handle_compute_exec_schedule(self, request) -> Optional[Dict[str, Any]]:
+    def handle_compute_exec_schedule(
+        self, request: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         if self._active_cell_id is None:
-            self.set_active_cell(request.get("executed_cell_id", None))
-        last_cell_id = request.get("executed_cell_id", None)
-        cell_metadata_by_id = request.get("cell_metadata_by_id", None)
+            self.set_active_cell(request.get("executed_cell_id"))
+        last_cell_id = request.get("executed_cell_id")
+        cell_metadata_by_id = request.get(
+            "cell_metadata_by_id", self._prev_cell_metadata_by_id
+        )
+        self._prev_cell_metadata_by_id = cell_metadata_by_id
         cells_to_check = None
         if cell_metadata_by_id is not None:
             cell_metadata_by_id = {
                 cell_id: metadata
                 for cell_id, metadata in cell_metadata_by_id.items()
                 if metadata["type"] == "code"
-                or metadata.get("override_live_refs", None)
-                or metadata.get("override_dead_refs", None)
+                or metadata.get("override_live_refs")
+                or metadata.get("override_dead_refs")
             }
             order_index_by_id = {
                 cell_id: metadata["index"]
@@ -406,12 +419,12 @@ class NotebookFlow(singletons.NotebookFlow):
             override_live_refs_by_cell_id = {
                 cell_id: metadata["override_live_refs"]
                 for cell_id, metadata in cell_metadata_by_id.items()
-                if metadata.get("override_live_refs", None)
+                if metadata.get("override_live_refs")
             }
             override_dead_refs_by_cell_id = {
                 cell_id: metadata["override_dead_refs"]
                 for cell_id, metadata in cell_metadata_by_id.items()
-                if metadata.get("override_dead_refs", None)
+                if metadata.get("override_dead_refs")
             }
             self._create_untracked_cells_for_content(content_by_cell_id)
             cells().set_cell_positions(order_index_by_id)

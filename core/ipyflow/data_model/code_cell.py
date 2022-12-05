@@ -408,7 +408,9 @@ class CodeCell(CodeCellSlicingMixin):
                         >= min_allowed_cell_position_by_symbol.get(sym.dsym, -2)
                     ):
                         max_used_cell_ctr = max(
-                            max_used_cell_ctr, live_sym_updated_cell_ctr
+                            max_used_cell_ctr,
+                            live_sym_updated_cell_ctr,
+                            sym.dsym._override_ready_liveness_cell_num,
                         )
             return max_used_cell_ctr
 

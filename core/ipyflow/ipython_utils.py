@@ -4,25 +4,28 @@ import logging
 import sys
 from contextlib import contextmanager
 from io import StringIO
-from typing import Callable, List, Optional
+from typing import Any, Callable, Generator, List, Optional
 
 from IPython import get_ipython
+from IPython.core.displayhook import DisplayHook
+from IPython.core.displaypub import CapturingDisplayPublisher, DisplayPublisher
+from IPython.core.interactiveshell import ExecutionResult, InteractiveShell
 from IPython.utils.capture import CapturedIO
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-def _ipython():
+def _ipython() -> InteractiveShell:
     return get_ipython()
 
 
 class _IpythonState:
-    def __init__(self):
+    def __init__(self) -> None:
         self.cell_counter: Optional[int] = None
 
     @contextmanager
-    def save_number_of_currently_executing_cell(self):
+    def save_number_of_currently_executing_cell(self) -> Generator[None, None, None]:
         self.cell_counter = _ipython().execution_count
         try:
             yield
@@ -30,35 +33,47 @@ class _IpythonState:
             self.cell_counter = None
 
     @contextmanager
-    def ast_transformer_context(self, transformers: List[ast.NodeTransformer]):
+    def ast_transformer_context(
+        self, transformers: List[ast.NodeTransformer]
+    ) -> Generator[None, None, None]:
         old = _ipython().ast_transformers
         _ipython().ast_transformers = old + transformers
-        yield
-        _ipython().ast_transformers = old
+        try:
+            yield
+        finally:
+            _ipython().ast_transformers = old
 
     @contextmanager
     def input_transformer_context(
         self, transformers: List[Callable[[List[str]], List[str]]]
-    ):
+    ) -> Generator[None, None, None]:
         old = _ipython().input_transformers_post
         _ipython().input_transformers_post = old + transformers
-        yield
-        _ipython().input_transformers_post = old
+        try:
+            yield
+        finally:
+            _ipython().input_transformers_post = old
 
 
 _IPY = _IpythonState()
 
 
-def save_number_of_currently_executing_cell():
-    return _IPY.save_number_of_currently_executing_cell()
+@contextmanager
+def save_number_of_currently_executing_cell() -> Generator[None, None, None]:
+    with _IPY.save_number_of_currently_executing_cell():
+        yield
 
 
-def ast_transformer_context(transformers):
-    return _IPY.ast_transformer_context(transformers)
+@contextmanager
+def ast_transformer_context(transformers) -> Generator[None, None, None]:
+    with _IPY.ast_transformer_context(transformers):
+        yield
 
 
-def input_transformer_context(transformers):
-    return _IPY.input_transformer_context(transformers)
+@contextmanager
+def input_transformer_context(transformers) -> Generator[None, None, None]:
+    with _IPY.input_transformer_context(transformers):
+        yield
 
 
 def cell_counter() -> int:
@@ -67,7 +82,7 @@ def cell_counter() -> int:
     return _IPY.cell_counter
 
 
-def run_cell(cell, **kwargs):
+def run_cell(cell, **kwargs) -> ExecutionResult:
     return _ipython().run_cell(
         cell,
         store_history=kwargs.pop("store_history", True),
@@ -96,41 +111,41 @@ class Tee:
 
 
 class TeeDisplayHook:
-    def __init__(self, disp1, disp2):
+    def __init__(self, disp1: DisplayHook, disp2: DisplayHook) -> None:
         self.disp1 = disp1
         self.disp2 = disp2
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> Any:
         if item in ("disp1", "disp2"):
             raise AttributeError()
         # delegate to the first display hook
         return getattr(self.disp1, item)
 
-    def __call__(self, result=None):
+    def __call__(self, result=None) -> None:
         self.disp1(result=result)
         self.disp2(result=result)
 
 
 class TeeDisplayPublisher:
-    def __init__(self, pub1, pub2):
+    def __init__(self, pub1: DisplayPublisher, pub2: DisplayPublisher) -> None:
         self.pub1 = pub1
         self.pub2 = pub2
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str) -> Any:
         if item in ("pub1", "pub2"):
             raise AttributeError()
         # delegate to the first publisher
         return getattr(self.pub1, item)
 
-    def publish(self, *args, **kwargs):
+    def publish(self, *args, **kwargs) -> None:
         self.pub1.publish(*args, **kwargs)
         self.pub2.publish(*args, **kwargs)
 
-    def clear_output(self, *args, **kwargs):
+    def clear_output(self, *args, **kwargs) -> None:
         self.pub1.clear_output(*args, **kwargs)
         self.pub2.clear_output(*args, **kwargs)
 
-    def set_parent(self, *args, **kwargs):
+    def set_parent(self, *args, **kwargs) -> None:
         if hasattr(self.pub1, "set_parent"):
             self.pub1.set_parent(*args, **kwargs)
         if hasattr(self.pub2, "set_parent"):
@@ -140,17 +155,13 @@ class TeeDisplayPublisher:
 class capture_output_tee:
     """context manager for capturing and replicating stdout/err"""
 
-    def __init__(self, stdout=True, stderr=True, display=True):
+    def __init__(self, stdout=True, stderr=True, display=True) -> None:
         self.stdout = stdout
         self.stderr = stderr
         self.display = display
         self.shell = None
 
-    def __enter__(self):
-        from IPython.core.displayhook import CapturingDisplayHook
-        from IPython.core.displaypub import CapturingDisplayPublisher
-        from IPython.core.getipython import get_ipython
-
+    def __enter__(self) -> CapturedIO:
         self.sys_stdout = sys.stdout
         self.sys_stderr = sys.stderr
 
@@ -164,11 +175,11 @@ class capture_output_tee:
         capture_display_pub = None
         if self.stdout:
             stdout = StringIO()
-            sys.stdout = Tee(sys.stdout, stdout)
+            sys.stdout = Tee(sys.stdout, stdout)  # type: ignore
         if self.stderr:
             stderr = StringIO()
-            sys.stderr = Tee(sys.stderr, stderr)
-        if self.display:
+            sys.stderr = Tee(sys.stderr, stderr)  # type: ignore
+        if self.display and self.shell is not None:
             self.save_display_pub = self.shell.display_pub
             capture_display_pub = CapturingDisplayPublisher()
             self.shell.display_pub = TeeDisplayPublisher(
@@ -184,13 +195,13 @@ class capture_output_tee:
             #     capture_display_hook,
             # )
 
-        return CapturedIO(
-            stdout,
-            stderr,
-            None if capture_display_pub is None else capture_display_pub.outputs,
-        )
+        if capture_display_pub is None:
+            outputs = None
+        else:
+            outputs = capture_display_pub.outputs
+        return CapturedIO(stdout, stderr, outputs)
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         sys.stdout = self.sys_stdout
         sys.stderr = self.sys_stderr
         if self.display and self.shell:

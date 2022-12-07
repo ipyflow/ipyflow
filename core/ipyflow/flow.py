@@ -82,7 +82,7 @@ class NotebookFlow(singletons.NotebookFlow):
         cell_magic_name=None,
         use_comm=False,
         **kwargs,
-    ):
+    ) -> None:
         super().__init__()
         cells().clear()
         self.settings: NotebookSafetySettings = NotebookSafetySettings(

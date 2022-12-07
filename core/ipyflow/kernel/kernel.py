@@ -89,7 +89,7 @@ class OutputRecorder(pyc.BaseTracer):
 
 
 class PyccoloKernelMixin(PyccoloKernelHooks):
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
             store_history=kwargs.pop("store_history", True)
         )

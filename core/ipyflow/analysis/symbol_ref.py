@@ -154,7 +154,7 @@ class Atom(CommonEqualityMixin):
 
 
 class SymbolRefVisitor(ast.NodeVisitor):
-    def __init__(self):
+    def __init__(self) -> None:
         self.symbol_chain: List[Atom] = []
 
     def __call__(

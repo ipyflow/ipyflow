@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class GetSymbolEdges(
     SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
 ):
-    def __init__(self):
+    def __init__(self) -> None:
         self.edges: List[Tuple[Union[str, ast.AST], ast.AST]] = []
 
     def __call__(self, node: ast.AST) -> List[Tuple[Union[str, ast.AST], ast.AST]]:

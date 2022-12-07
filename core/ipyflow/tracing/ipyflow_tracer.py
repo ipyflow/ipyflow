@@ -122,7 +122,7 @@ class DataflowTracer(StackFrameManager):
     ) -> bool:
         return FlowRunMode.get() == FlowRunMode.DEVELOP
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._tracing_enabled_files.discard(self.defined_file)
         with self.persistent_fields():
@@ -159,7 +159,7 @@ class DataflowTracer(StackFrameManager):
         except:
             # it'll just give a syntax error anyway when we try to execute;
             # do this just for the benefit of the type checker
-            self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
+            self.cur_cell_symtab = symtable.symtable(
                 "", f"<cell-{cells().exec_counter()}>", "exec"
             )
 
@@ -1237,7 +1237,7 @@ class DataflowTracer(StackFrameManager):
         return ret_expr
 
     @pyc.register_raw_handler(pyc.after_module_stmt)
-    def after_module_stmt(self, _ret, node_id, *_, **__):
+    def after_module_stmt(self, _ret, node_id, *_, **__) -> Optional[Any]:
         if self.is_tracing_enabled:
             assert self.cur_frame_original_scope.is_global
         ret = self._saved_stmt_ret_expr

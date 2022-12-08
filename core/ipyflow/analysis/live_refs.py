@@ -324,7 +324,7 @@ def get_live_symbols_and_cells_for_references(
 ) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
     live_symbols: Set[ResolvedDataSymbol] = set()
     unresolved_live_refs: Set[LiveSymbolRef] = set()
-    called_dsyms: Set[Tuple["DataSymbol", int]] = set()
+    called_syms: Set[Tuple[ResolvedDataSymbol, int]] = set()
     for live_symbol_ref in symbol_refs:
         chain = live_symbol_ref.ref.chain
         if len(chain) >= 1:
@@ -351,7 +351,7 @@ def get_live_symbols_and_cells_for_references(
                 if resolved.atom.is_cascading_reactive:
                     resolved.dsym.bump_cascading_reactive_cell_num(cell_ctr)
             if resolved.is_called:
-                called_dsyms.add((resolved.dsym, live_symbol_ref.timestamp))
+                called_syms.add((resolved, live_symbol_ref.timestamp))
             if not resolved.is_unsafe:
                 live_symbols.add(resolved)
         if not did_resolve:
@@ -361,7 +361,7 @@ def get_live_symbols_and_cells_for_references(
         live_cells,
         unresolved_from_calls,
     ) = _compute_call_chain_live_symbols_and_cells(
-        called_dsyms, cell_ctr, update_liveness_time_versions
+        called_syms, cell_ctr, update_liveness_time_versions
     )
     live_symbols |= live_from_calls
     unresolved_live_refs |= unresolved_from_calls
@@ -369,26 +369,26 @@ def get_live_symbols_and_cells_for_references(
 
 
 def _compute_call_chain_live_symbols_and_cells(
-    live_with_stmt_ctr: Set[Tuple["DataSymbol", int]],
+    live_with_stmt_ctr: Set[Tuple[ResolvedDataSymbol, int]],
     cell_ctr: int,
     update_liveness_time_versions: bool,
 ) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
-    seen = set()
-    worklist = list(live_with_stmt_ctr)
+    seen: Set[Tuple[ResolvedDataSymbol, int]] = set()
+    worklist: List[Tuple[ResolvedDataSymbol, int]] = list(live_with_stmt_ctr)
     live: Set[ResolvedDataSymbol] = set()
     unresolved: Set[LiveSymbolRef] = set()
     while len(worklist) > 0:
-        workitem = worklist.pop()
+        workitem: Tuple[ResolvedDataSymbol, int] = worklist.pop()
         if workitem in seen:
             continue
-        called_dsym, stmt_ctr = workitem
+        called_sym, stmt_ctr = workitem
         # TODO: handle callable classes
-        if called_dsym.func_def_stmt is None:
+        if called_sym.dsym.func_def_stmt is None:
             continue
         seen.add(workitem)
-        init_killed = {arg.arg for arg in called_dsym.get_definition_args()}
+        init_killed = {arg.arg for arg in called_sym.dsym.get_definition_args()}
         live_refs, _ = compute_live_dead_symbol_refs(
-            cast(ast.FunctionDef, called_dsym.func_def_stmt).body,
+            cast(ast.FunctionDef, called_sym.dsym.func_def_stmt).body,
             init_killed=init_killed,
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
@@ -404,11 +404,19 @@ def _compute_call_chain_live_symbols_and_cells(
             else:
                 did_resolve = False
             for resolved in symbol_ref.gen_resolved_symbols(
-                called_dsym.call_scope, only_yield_final_symbol=False
+                called_sym.dsym.call_scope, only_yield_final_symbol=False
             ):
+                # FIXME: kind of hacky
+                resolved.atom.is_cascading_reactive = (
+                    resolved.atom.is_cascading_reactive
+                    or called_sym.is_cascading_reactive
+                )
+                resolved.atom.is_reactive = (
+                    resolved.atom.is_reactive or called_sym.is_reactive
+                )
                 did_resolve = True
                 if resolved.is_called:
-                    worklist.append((resolved.dsym, stmt_ctr))
+                    worklist.append((resolved, stmt_ctr))
                 if resolved.dsym.is_anonymous:
                     continue
                 if not resolved.is_unsafe:

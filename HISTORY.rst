@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.144 (2022-12-07)
+--------------------
+* Bugfix that allows new threads to be spawned more reliably;
+* Better handling around reactive / cascading reactive modifiers;
+* Better handling around readiness computation for hybrid liveness / dag scheduling;
+
 0.0.143 (2022-12-04)
 --------------------
 * Bugfixes around reactivity-blocking syntax extension;

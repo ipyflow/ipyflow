@@ -63,10 +63,10 @@
     "extension": true,
     "outputDir": "../../core/ipyflow/resources/labextension/",
     "_build": {
-      "load": "static/remoteEntry.07bf98769549703b866d.js",
+      "load": "static/remoteEntry.82a8addd34140a732683.js",
       "extension": "./extension",
       "style": "./style"
     }
   },
-  "version": "0.0.143"
+  "version": "0.0.144"
 }

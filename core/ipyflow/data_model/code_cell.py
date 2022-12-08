@@ -370,18 +370,20 @@ class CodeCell(CodeCellSlicingMixin):
     def get_max_used_live_symbol_cell_counter(
         self, live_symbols: Set[ResolvedDataSymbol], filter_to_reactive: bool = False
     ) -> int:
-        min_allowed_cell_position_by_symbol: Dict["DataSymbol", int] = {}
+        min_allowed_cell_position_by_symbol: Optional[Dict["DataSymbol", int]] = None
         flow_ = flow()
         if (
             flow_.mut_settings.exec_schedule
             == ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
             and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
         ):
-            for pid, dsym in self.static_parents:
-                min_allowed_cell_position_by_symbol[dsym] = max(
-                    min_allowed_cell_position_by_symbol.get(dsym, -1),
-                    self.from_id(pid).position,
-                )
+            min_allowed_cell_position_by_symbol = {}
+            for parents in (self.static_parents, self.dynamic_parents):
+                for pid, dsym in parents:
+                    min_allowed_cell_position_by_symbol[dsym] = max(
+                        min_allowed_cell_position_by_symbol.get(dsym, -1),
+                        self.from_id(pid).position,
+                    )
         with self._override_position_index_for_current_flow_semantics():
             max_used_cell_ctr = -1
             this_cell_pos = self.position
@@ -402,16 +404,19 @@ class CodeCell(CodeCellSlicingMixin):
                     used_cell_position = self.from_timestamp(
                         live_sym_updated_cell_ctr
                     ).position
-                    if (
-                        this_cell_pos
-                        >= used_cell_position
-                        >= min_allowed_cell_position_by_symbol.get(sym.dsym, -2)
-                    ):
-                        max_used_cell_ctr = max(
-                            max_used_cell_ctr,
-                            live_sym_updated_cell_ctr,
-                            sym.dsym._override_ready_liveness_cell_num,
-                        )
+                    if this_cell_pos >= used_cell_position:
+                        if (
+                            min_allowed_cell_position_by_symbol is None
+                            or used_cell_position
+                            >= min_allowed_cell_position_by_symbol.get(
+                                sym.dsym, float("inf")
+                            )
+                        ):
+                            max_used_cell_ctr = max(
+                                max_used_cell_ctr,
+                                live_sym_updated_cell_ctr,
+                                sym.dsym._override_ready_liveness_cell_num,
+                            )
             return max_used_cell_ctr
 
     def _get_live_dead_symbol_refs(

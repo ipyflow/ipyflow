@@ -820,6 +820,8 @@ class DataSymbol:
         )
         prev_cell = cells().current_cell().prev_cell
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
+        if overwrite:
+            self._cascading_reactive_cell_num = -1
         if any(
             dsym.is_cascading_reactive_at_counter(prev_cell_ctr) for dsym in new_deps
         ):

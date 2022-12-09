@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.145 (2022-12-08)
+--------------------
+* Another bugfix around reactive / cascading reactive modifiers;
+
 0.0.144 (2022-12-07)
 --------------------
 * Bugfix that allows new threads to be spawned more reliably;

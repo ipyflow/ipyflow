@@ -108,6 +108,7 @@ let orderIdxById: {[id: string]: number} = {};
 let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
+let isReactivelyExecuting: boolean = false;
 let lastExecutionHighlights: Highlights = null;
 let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
@@ -474,14 +475,18 @@ const connectToComm = (
           }
           updateUI(notebook);
           resetReactiveState();
-          comm.send({
-            type: 'reactivity_cleanup',
-          });
         } else {
           resetReactiveState()
           updateUI(notebook);
         }
+        if (isReactivelyExecuting) {
+          comm.send({
+            type: 'reactivity_cleanup',
+          });
+        }
+        isReactivelyExecuting = false;
       } else {
+        isReactivelyExecuting = true;
         onActiveCellChange(notebook, cellPendingExecution);
         CodeCell.execute(cellPendingExecution, session)
       }

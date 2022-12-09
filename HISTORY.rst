@@ -1,7 +1,11 @@
 History
 =======
 
-0.0.145 (2022-12-08)
+0.0.147 (2022-12-09)
+--------------------
+* Treat attrsub value as live during nested symbol assignment;
+
+0.0.146 (2022-12-08)
 --------------------
 * Another bugfix around reactive / cascading reactive modifiers;
 

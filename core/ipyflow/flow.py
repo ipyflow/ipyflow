@@ -463,8 +463,6 @@ class NotebookFlow(singletons.NotebookFlow):
         response["last_execution_was_error"] = (
             self._exception_raised_during_execution is not None
         )
-        self.updated_reactive_symbols_last_cell.clear()
-        self.updated_deep_reactive_symbols_last_cell.clear()
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
@@ -531,16 +529,20 @@ class NotebookFlow(singletons.NotebookFlow):
         last_executed_cell_id: Optional[CellId] = None,
     ) -> FrontendCheckerResult:
         result = FrontendCheckerResult.empty()
-        if (
-            DataflowTracer not in singletons.kernel().registered_tracers
-            or not DataflowTracer.initialized()
-        ):
-            return result
-        return result.compute_frontend_checker_result(
-            cells_to_check=cells_to_check,
-            update_liveness_time_versions=update_liveness_time_versions,
-            last_executed_cell_id=last_executed_cell_id,
-        )
+        try:
+            if (
+                DataflowTracer not in singletons.kernel().registered_tracers
+                or not DataflowTracer.initialized()
+            ):
+                return result
+            return result.compute_frontend_checker_result(
+                cells_to_check=cells_to_check,
+                update_liveness_time_versions=update_liveness_time_versions,
+                last_executed_cell_id=last_executed_cell_id,
+            )
+        finally:
+            self.updated_reactive_symbols_last_cell.clear()
+            self.updated_deep_reactive_symbols_last_cell.clear()
 
     def _safety_precheck_cell(self, cell: CodeCell) -> None:
         for tracer in singletons.kernel().registered_tracers:

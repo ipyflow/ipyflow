@@ -251,7 +251,7 @@ class DataSymbol:
         while containing_ns is not None and containing_ns.is_namespace_scope:
             for sym in flow().aliases.get(containing_ns.obj_id, []):
                 ret = max(ret, sym._cascading_reactive_cell_num)
-            containing_ns = containing_ns.parent_scope
+            containing_ns = containing_ns.parent_scope  # type: ignore
         return ret
 
     def bump_cascading_reactive_cell_num(self, ctr: Optional[int] = None) -> None:

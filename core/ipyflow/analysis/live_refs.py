@@ -92,9 +92,10 @@ class ComputeLiveSymbolRefs(
                 self.visit(value)
             if aug_assign_target is not None:
                 self.visit(aug_assign_target)
-            for target in targets:
-                if isinstance(target, (ast.Attribute, ast.Subscript)):
-                    self.visit(target.value)
+            # TODO: need a way to distinguish these as "shallow" live and only reexecute if whole symbol is updated
+            # for target in targets:
+            #     if isinstance(target, (ast.Attribute, ast.Subscript)):
+            #         self.visit(target.value)
         # make a copy, then track the new dead
         this_assign_dead = set(self.dead)
         with self.push_attributes(dead=this_assign_dead):

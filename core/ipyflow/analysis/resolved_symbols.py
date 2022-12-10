@@ -76,7 +76,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         return (
             self.atom.is_reactive
             or self.is_cascading_reactive
-            or (self.is_live and self.dsym in flow().updated_deep_reactive_symbols)
+            or (self.is_live and flow().is_updated_deep_reactive(self.dsym))
         )
 
     @property

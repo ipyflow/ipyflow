@@ -393,7 +393,7 @@ class CodeCell(CodeCellSlicingMixin):
                 if (
                     filter_to_reactive
                     and not sym.is_reactive
-                    and sym.dsym not in flow().updated_reactive_symbols
+                    and not flow().is_updated_reactive(sym.dsym)
                 ):
                     continue
                 live_sym_updated_cell_ctr = sym.timestamp.cell_num

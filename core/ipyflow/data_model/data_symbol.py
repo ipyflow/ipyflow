@@ -931,7 +931,7 @@ class DataSymbol:
                 used_time.cell_num,
                 self.timestamp,
             )
-        ts_to_use = self._timestamp  #  if exclude_ns else self.timestamp
+        ts_to_use = self._timestamp  # if exclude_ns else self.timestamp
         if ts_to_use.is_initialized:
             ts_to_use = max(ts_to_use, self._last_refreshed_timestamp)
         timestamp_by_used_time = (

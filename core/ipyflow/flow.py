@@ -136,6 +136,8 @@ class NotebookFlow(singletons.NotebookFlow):
         self.updated_symbols: Set[DataSymbol] = set()
         self.updated_reactive_symbols: Set[DataSymbol] = set()
         self.updated_deep_reactive_symbols: Set[DataSymbol] = set()
+        self.updated_reactive_symbols_last_cell: Set[DataSymbol] = set()
+        self.updated_deep_reactive_symbols_last_cell: Set[DataSymbol] = set()
         self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], DataSymbol]] = []
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
@@ -254,6 +256,18 @@ class NotebookFlow(singletons.NotebookFlow):
         self.static_data_deps.setdefault(child, set()).add(parent)
         cells().from_timestamp(child).add_static_parent(
             cells().from_timestamp(parent), sym
+        )
+
+    def is_updated_reactive(self, sym: DataSymbol) -> bool:
+        return (
+            sym in self.updated_reactive_symbols
+            or sym in self.updated_reactive_symbols_last_cell
+        )
+
+    def is_updated_deep_reactive(self, sym: DataSymbol) -> bool:
+        return (
+            sym in self.updated_deep_reactive_symbols
+            or sym in self.updated_deep_reactive_symbols_last_cell
         )
 
     def reset_cell_counter(self):
@@ -449,6 +463,8 @@ class NotebookFlow(singletons.NotebookFlow):
         response["last_execution_was_error"] = (
             self._exception_raised_during_execution is not None
         )
+        self.updated_reactive_symbols_last_cell.clear()
+        self.updated_deep_reactive_symbols_last_cell.clear()
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:

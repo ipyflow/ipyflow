@@ -351,7 +351,7 @@ def get_live_symbols_and_cells_for_references(
                     exclude_ns=not resolved.is_last,
                     is_static=True,
                 )
-                if resolved.atom.is_cascading_reactive:
+                if resolved.is_cascading_reactive:
                     resolved.dsym.bump_cascading_reactive_cell_num(cell_ctr)
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))

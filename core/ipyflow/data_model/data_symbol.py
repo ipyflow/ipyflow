@@ -226,7 +226,9 @@ class DataSymbol:
         return make_slice_text(stmt_text_by_cell_num, blacken=True)
 
     def cascading_reactive_cell_num(
-        self, seen: Optional[Set["DataSymbol"]] = None
+        self,
+        seen: Optional[Set["DataSymbol"]] = None,
+        consider_containing_symbols: bool = True,
     ) -> int:
         if seen is None:
             seen = set()
@@ -235,7 +237,7 @@ class DataSymbol:
         seen.add(self)
         cell_num = self._cascading_reactive_cell_num
         ns = self.namespace
-        return (
+        ret = (
             cell_num
             if ns is None
             else max(
@@ -243,6 +245,14 @@ class DataSymbol:
                 ns.max_cascading_reactive_cell_num(seen),
             )
         )
+        if not consider_containing_symbols:
+            return ret
+        containing_ns = self.containing_namespace
+        while containing_ns is not None and containing_ns.is_namespace_scope:
+            for sym in flow().aliases.get(containing_ns.obj_id, []):
+                ret = max(ret, sym._cascading_reactive_cell_num)
+            containing_ns = containing_ns.parent_scope
+        return ret
 
     def bump_cascading_reactive_cell_num(self, ctr: Optional[int] = None) -> None:
         self._cascading_reactive_cell_num = max(

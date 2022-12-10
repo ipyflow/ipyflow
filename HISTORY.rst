@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.148 (2022-12-09)
+--------------------
+* Revert previous change;
+* Distinguish between cascading / non updated reactive symbols;
+
 0.0.147 (2022-12-09)
 --------------------
 * Treat attrsub value as live during nested symbol assignment;

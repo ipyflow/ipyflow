@@ -465,21 +465,10 @@ class CodeCell(CodeCellSlicingMixin):
         for resolved in live_resolved_symbols:
             if resolved.is_deep:
                 resolved.dsym.cells_where_deep_live.add(self)
-                self.add_used_cell_counter(
-                    resolved.dsym, resolved.dsym.timestamp.cell_num
-                )
             else:
                 resolved.dsym.cells_where_shallow_live.add(self)
-                self.add_used_cell_counter(
-                    resolved.dsym,
-                    resolved.dsym.timestamp_excluding_ns_descendents.cell_num,
-                )
-        used_cells = {
-            resolved.dsym.timestamp.cell_num
-            if resolved.is_deep
-            else resolved.dsym.timestamp_excluding_ns_descendents.cell_num
-            for resolved in live_resolved_symbols
-        }
+            self.add_used_cell_counter(resolved.dsym, resolved.timestamp.cell_num)
+        used_cells = {resolved.timestamp.cell_num for resolved in live_resolved_symbols}
         return CheckerResult(
             live=live_resolved_symbols,
             unresolved_live_refs=unresolved_live_refs,

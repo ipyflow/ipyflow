@@ -84,7 +84,7 @@ def test_comprehension_with_live_elt():
 
 def test_subscript_is_live():
     live, dead = compute_live_dead_symbol_refs("foo[bar] = baz")
-    assert live == {"bar", "baz"}
+    assert live == {"foo", "bar", "baz"}
 
 
 def test_dict_literal():

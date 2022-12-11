@@ -46,6 +46,7 @@ class ComputeLiveSymbolRefs(
         self._in_kill_context = False
         self._inside_attrsub = False
         self._skip_simple_names = False
+        self._is_lhs = False
 
     def __call__(self, node: ast.AST) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
         """
@@ -80,7 +81,9 @@ class ComputeLiveSymbolRefs(
                 or SymbolRef(Atom(leading_atom.value, is_callpoint=False)) in self.dead
             ):
                 return
-            self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
+            self.live.add(
+                LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)
+            )
 
     # the idea behind this one is that we don't treat a symbol as dead
     # if it is used on the RHS of an assignment
@@ -92,10 +95,10 @@ class ComputeLiveSymbolRefs(
                 self.visit(value)
             if aug_assign_target is not None:
                 self.visit(aug_assign_target)
-            # TODO: need a way to distinguish these as "shallow" live and only reexecute if whole symbol is updated
-            # for target in targets:
-            #     if isinstance(target, (ast.Attribute, ast.Subscript)):
-            #         self.visit(target.value)
+            with self.push_attributes(_is_lhs=True):
+                for target in targets:
+                    if isinstance(target, (ast.Attribute, ast.Subscript)):
+                        self.visit(target.value)
         # make a copy, then track the new dead
         this_assign_dead = set(self.dead)
         with self.push_attributes(dead=this_assign_dead):
@@ -205,7 +208,9 @@ class ComputeLiveSymbolRefs(
         elif not self._skip_simple_names and ref not in self.dead:
             if id(node) in tracer().reactive_node_ids:
                 ref.chain[0].is_reactive = True
-            self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
+            self.live.add(
+                LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)
+            )
 
     def visit_Tuple_or_List(self, node: Union[ast.List, ast.Tuple]) -> None:
         with self.attrsub_context(False):
@@ -294,7 +299,9 @@ class ComputeLiveSymbolRefs(
         if self._in_kill_context:
             self.dead.add(ref)
         elif not self._skip_simple_names and ref not in self.dead:
-            self.live.add(LiveSymbolRef(ref, self._module_stmt_counter))
+            self.live.add(
+                LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)
+            )
 
     def visit_Module(self, node: ast.Module) -> None:
         for child in node.body:

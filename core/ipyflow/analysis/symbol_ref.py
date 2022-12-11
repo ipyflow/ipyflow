@@ -406,23 +406,29 @@ class SymbolRef(CommonEqualityMixin):
 
 
 class LiveSymbolRef(CommonEqualityMixin):
-    def __init__(self, ref: SymbolRef, timestamp: int) -> None:
+    def __init__(
+        self, ref: SymbolRef, timestamp: int, is_lhs_ref: bool = False
+    ) -> None:
         self.ref = ref
         self.timestamp = timestamp
+        self.is_lhs_ref = is_lhs_ref
 
     @classmethod
-    def from_string(cls, symbol_str: str) -> "LiveSymbolRef":
-        return cls(SymbolRef.from_string(symbol_str), 0)
+    def from_string(cls, symbol_str: str, **kwargs) -> "LiveSymbolRef":
+        kwargs["timestamp"] = kwargs.get("timestamp", 0)
+        return cls(SymbolRef.from_string(symbol_str), **kwargs)
 
     @staticmethod
     def resolve(symbol_str: str) -> Optional["DataSymbol"]:
         return SymbolRef.resolve(symbol_str)
 
     def __hash__(self) -> int:
-        return hash((self.ref, self.timestamp))
+        return hash((self.ref, self.timestamp, self.is_lhs_ref))
 
     def __str__(self) -> str:
-        return f"<live:{self.ref}@{self.timestamp}>"
+        return (
+            f"<live:{self.ref}@{self.timestamp}{' (lhs)' if self.is_lhs_ref else ''}>"
+        )
 
     def __repr__(self) -> str:
         return str(self)
@@ -440,6 +446,7 @@ class LiveSymbolRef(CommonEqualityMixin):
             only_yield_final_symbol,
             yield_all_intermediate_symbols=yield_all_intermediate_symbols,
         ):
+            resolved_sym.is_lhs_ref = self.is_lhs_ref
             resolved_sym.liveness_timestamp = Timestamp(cell_ctr, self.timestamp)
             blocking_seen = blocking_seen or resolved_sym.is_blocking
             if blocking_seen and not resolved_sym.is_blocking:

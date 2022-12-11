@@ -24,14 +24,18 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         atom: "Atom",
         next_atom: Optional["Atom"],
         liveness_timestamp: Optional[Timestamp] = None,
+        is_lhs_ref: bool = False,
     ) -> None:
         self.dsym = dsym
         self.atom = atom
         self.next_atom = next_atom
         self.liveness_timestamp = liveness_timestamp
+        self.is_lhs_ref = is_lhs_ref
 
     def update_usage_info(self, *args, **kwargs) -> None:
         kwargs["is_blocking"] = kwargs.get("is_blocking", self.is_blocking)
+        if self.is_lhs_ref:
+            kwargs["exclude_ns"] = True
         self.dsym.update_usage_info(*args, **kwargs)
 
     def __hash__(self) -> int:
@@ -41,12 +45,16 @@ class ResolvedDataSymbol(CommonEqualityMixin):
                 self.atom,
                 self.next_atom,
                 self.liveness_timestamp,
+                self.is_lhs_ref,
             )
         )
 
     @property
     def timestamp(self) -> Timestamp:
-        return self.dsym.timestamp
+        if self.is_deep:
+            return self.dsym.timestamp
+        else:
+            return self.dsym.timestamp_excluding_ns_descendents
 
     @property
     def is_anonymous(self) -> bool:
@@ -74,7 +82,7 @@ class ResolvedDataSymbol(CommonEqualityMixin):
         if self.is_blocking:
             return False
         return (
-            self.atom.is_reactive
+            (self.atom.is_reactive and not self.is_lhs_ref)
             or self.is_cascading_reactive
             or (self.is_live and flow().is_updated_deep_reactive(self.dsym))
         )
@@ -99,6 +107,8 @@ class ResolvedDataSymbol(CommonEqualityMixin):
     def is_deep(self) -> bool:
         # for live symbols, if it is used in its entirety
         assert self.is_live
+        if self.is_lhs_ref:
+            return False
         if self.is_reactive:
             return True
         if self.next_atom is None:

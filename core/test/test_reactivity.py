@@ -251,9 +251,11 @@ if sys.version_info >= (3, 8):
             cells_run - {cell_id}
         )
         cell_id, cells_run = run_cell('ex = Example("foo", 0)')
-        assert cells_run - {cell_id} == {5, 6}
+        assert cells_run - {cell_id} == {5, 6}, "got %s" % (cells_run - {cell_id})
         cell_id, cells_run = run_cell('$ex = Example("foo", 0)')
-        assert cells_run - {cell_id} == {2, 3, 4, 5, 6}
+        assert cells_run - {cell_id} == {2, 3, 4, 5, 6, 7, 11, 15}, "got %s" % (
+            cells_run - {cell_id}
+        )
 
     def test_blocked_reactive_attr_store():
         assert (
@@ -313,7 +315,9 @@ if sys.version_info >= (3, 8):
         cell_id, cells_run = run_cell('ex = Example("foo", 0)')
         assert cells_run - {cell_id} == set()
         cell_id, cells_run = run_cell('$ex = Example("foo", 0)')
-        assert cells_run - {cell_id} == {2, 5, 6}
+        assert cells_run - {cell_id} == {2, 5, 6, 7, 9}, "got %s" % (
+            cells_run - {cell_id}
+        )
 
     def test_store_after_blocked_store_reactively_executes():
         assert run_cell("x = 0")[1] == {1}

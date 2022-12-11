@@ -247,11 +247,8 @@ class DataSymbol:
         )
         if not consider_containing_symbols:
             return ret
-        containing_ns = self.containing_namespace
-        while containing_ns is not None and containing_ns.is_namespace_scope:
-            for sym in flow().aliases.get(containing_ns.obj_id, []):
-                ret = max(ret, sym._cascading_reactive_cell_num)
-            containing_ns = containing_ns.parent_scope  # type: ignore
+        for sym in self.iter_containing_symbols():
+            ret = max(ret, sym.cascading_reactive_cell_num(seen=seen))
         return ret
 
     def bump_cascading_reactive_cell_num(self, ctr: Optional[int] = None) -> None:
@@ -259,6 +256,14 @@ class DataSymbol:
             self._cascading_reactive_cell_num,
             flow().cell_counter() if ctr is None else ctr,
         )
+
+    def iter_containing_symbols(self) -> Generator["DataSymbol", None, None]:
+        yield self
+        ns = self.containing_namespace
+        if ns is None or not ns.is_namespace_scope:
+            return
+        for containing_ns in ns.iter_containing_namespaces():
+            yield from flow().aliases.get(containing_ns.obj_id, [])
 
     @property
     def waiting_timestamp(self) -> int:

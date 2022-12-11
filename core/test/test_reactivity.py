@@ -404,3 +404,10 @@ if sys.version_info >= (3, 8):
         assert run_cell("logging.info(bar())")[1] == {2}
         rerun = run_cell("baz(42)")[1]
         assert rerun == {2, 3}, "got %s" % rerun
+
+    def test_cascading_nesting():
+        assert run_cell("matrix = [['f'] * 3 for _ in range(3)]")[1] == {1}
+        assert run_cell("x = matrix[0][0]")[1] == {2}
+        assert run_cell("x")[1] == {3}
+        rerun = run_cell("$$matrix = [['g'] * 3 for _ in range(3)]")[1]
+        assert rerun == {2, 3, 4}, "got %s" % rerun

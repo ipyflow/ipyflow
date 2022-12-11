@@ -326,6 +326,12 @@ class Namespace(Scope):
             return self.parent_scope
         return None
 
+    def iter_containing_namespaces(self) -> Generator["Namespace", None, None]:
+        containing_ns = self
+        while containing_ns is not None and containing_ns.is_namespace_scope:
+            yield containing_ns
+            containing_ns = containing_ns.parent_scope  # type: ignore
+
     def transfer_symbols_to(self, new_ns: "Namespace") -> None:
         for dsym in list(
             self.all_data_symbols_this_indentation(

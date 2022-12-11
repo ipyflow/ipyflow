@@ -282,7 +282,7 @@ class TraceStatement:
                 extra_deps: Set[DataSymbol] = set()
                 if isinstance(value, ast.Call):
                     # in this case, every target should depend on whatever was called
-                    extra_deps |= resolve_rval_symbols(value.func)
+                    extra_deps |= resolve_rval_symbols(value)
                 self._handle_store_target_tuple_unpack_from_namespace(
                     target, rhs_namespace, extra_deps
                 )

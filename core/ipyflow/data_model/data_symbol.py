@@ -201,7 +201,7 @@ class DataSymbol:
     def compute_namespace_timestamps(
         self, seen: Optional[Set["DataSymbol"]] = None
     ) -> Set[Timestamp]:
-        timestamps = {self._timestamp}
+        timestamps = {self._timestamp, self.timestamp}
         ns = self.namespace
         if ns is None:
             return timestamps

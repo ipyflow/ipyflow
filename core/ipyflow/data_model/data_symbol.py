@@ -615,6 +615,12 @@ class DataSymbol:
         caller_node = self._get_calling_ast_node()
         if caller_node is None or not isinstance(caller_node, ast.Call):
             return
+        if isinstance(caller_node.func, ast.Attribute) and isinstance(
+            self.func_def_stmt, ast.Lambda
+        ):
+            # then these probably don't correspond with each other
+            # TODO: use executing here?
+            return
         def_args = self.func_def_stmt.args.args
         if len(self.func_def_stmt.args.defaults) > 0:
             def_args = def_args[: -len(self.func_def_stmt.args.defaults)]

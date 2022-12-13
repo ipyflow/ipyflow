@@ -201,6 +201,12 @@ class ComputeLiveSymbolRefs(
         self.generic_visit(node.decorator_list)
         self.dead.add(SymbolRef(node))
 
+    def visit_withitem(self, node: ast.withitem):
+        self.visit(node.context_expr)
+        if node.optional_vars is not None:
+            with self.kill_context():
+                self.visit(node.optional_vars)
+
     def visit_Name(self, node: ast.Name) -> None:
         ref = SymbolRef(node)
         if self._in_kill_context:

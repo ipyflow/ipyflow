@@ -246,7 +246,7 @@ class TraceStatement:
             inner_deps |= extra_deps
             if isinstance(inner_target, (ast.List, ast.Tuple)):
                 inner_namespace = flow().namespaces.get(inner_dep.obj_id, None)
-                if inner_namespace is None:
+                if inner_namespace is None or inner_namespace.obj is None:
                     self._handle_store_target_tuple_unpack_from_deps(
                         inner_target, inner_deps
                     )
@@ -274,7 +274,7 @@ class TraceStatement:
                 # but we skip it anyway just for the sake of explicitness
                 else flow().namespaces.get(id(tracer().saved_assign_rhs_obj), None)
             )
-            if rhs_namespace is None:
+            if rhs_namespace is None or rhs_namespace.obj is None:
                 self._handle_store_target_tuple_unpack_from_deps(
                     target, resolve_rval_symbols(value)
                 )

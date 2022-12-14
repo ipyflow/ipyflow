@@ -620,12 +620,21 @@ class NotebookFlow(singletons.NotebookFlow):
         return ret
 
     def gc(self):
-        # Need to do the garbage check and the collection separately
-        garbage_syms = [
-            dsym for dsym in self.all_data_symbols() if dsym.is_new_garbage()
-        ]
-        for dsym in garbage_syms:
-            dsym.collect_self_garbage()
+        # Need to do the garbage marking and the collection separately
+        prev_cell = cells().from_counter(self.cell_counter()).prev_cell
+        prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
+        if prev_cell_ctr > 0:
+            for sym in self.all_data_symbols():
+                if sym.defined_cell_num != prev_cell_ctr:
+                    continue
+                if sym.is_anonymous or sym.is_new_garbage():
+                    sym.mark_garbage()
+        garbage_syms = [sym for sym in self.all_data_symbols() if sym.is_garbage]
+        for sym in garbage_syms:
+            sym.collect_self_garbage()
+        garbage_namespaces = [ns for ns in self.namespaces.values() if ns.is_garbage]
+        for ns in garbage_namespaces:
+            ns.collect_self_garbage()
 
     def retrieve_namespace_attr_or_sub(
         self, obj: Any, attr_or_sub: SupportedIndexType, is_subscript: bool

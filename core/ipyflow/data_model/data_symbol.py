@@ -159,6 +159,10 @@ class DataSymbol:
                 ns.scope_name = self.name
 
     @property
+    def aliases(self) -> List["DataSymbol"]:
+        return list(flow().aliases.get(self.obj_id))
+
+    @property
     def cells_where_live(self) -> Set[CodeCell]:
         return self.cells_where_deep_live | self.cells_where_shallow_live
 
@@ -169,7 +173,7 @@ class DataSymbol:
         return self.readable_name
 
     def __hash__(self) -> int:
-        return hash(self.full_path)
+        return hash(id(self))
 
     def temporary_disable_warnings(self) -> None:
         self._temp_disable_warnings = True
@@ -432,11 +436,12 @@ class DataSymbol:
     def is_new_garbage(self) -> bool:
         if self._tombstone:
             return False
+        containing_ns = self.containing_namespace
         numpy = sys.modules.get("numpy", None)
         if (
             numpy is not None
-            and self.containing_namespace is not None
-            and isinstance(self.containing_namespace.obj, numpy.ndarray)
+            and containing_ns is not None
+            and isinstance(containing_ns.obj, numpy.ndarray)
         ):
             # numpy atoms are not interned (so assigning array elts to a variable does not bump refcount);
             # also seems that refcount is always 0, so just check if the containing namespace is garbage
@@ -462,23 +467,36 @@ class DataSymbol:
             )
         )
 
-    def collect_self_garbage(self) -> None:
-        """
-        Just null out the reference to obj; we need to keep the edges
-        and namespace relationships around for waiter propagation.
-        """
-        # TODO: ideally we should figure out how to GC the symbols themselves
-        #  and remove them from the symbol graph, to keep this from getting
-        #  too large. One idea is that a symbol can be GC'd if its reachable
-        #  descendants are all tombstone'd, and likewise a namespace can be
-        #  GC'd if all of its children are GC'able as per prior criterion.
-        self._tombstone = True
-        ns = flow().namespaces.get(self.obj_id, None)
-        if ns is not None:
-            ns._tombstone = True
-            ns.obj = None
+    def _remove_self_from_aliases(self) -> None:
+        cleanup_discard(flow().aliases, self.obj_id, self)
         self.obj = None
+
+    def mark_garbage(self) -> None:
+        if self.is_garbage:
+            return
+        self._tombstone = True
+        ns = self.namespace
+        if ns is not None and all(alias.is_garbage for alias in self.aliases):
+            ns.mark_garbage()
+
+    def collect_self_garbage(self) -> None:
+        assert self.is_garbage
         flow().blocked_reactive_timestamps_by_symbol.pop(self, None)
+        self._remove_self_from_aliases()
+        for parent in self.parents:
+            parent.children.pop(self, None)
+        for child in self.children:
+            child.parents.pop(self, None)
+        containing_ns = self.containing_namespace
+        if self.is_subscript and containing_ns is not None:
+            containing_ns._subscript_data_symbol_by_name.pop(self.name, None)
+        elif not self.is_subscript:
+            self.containing_scope._data_symbol_by_name.pop(self.name, None)
+        else:
+            logger.warning(
+                "could not find symbol %s in its scope %s", self, self.containing_scope
+            )
+        self.containing_scope = None
 
     # def update_type(self, new_type):
     #     self.symbol_type = new_type
@@ -488,7 +506,6 @@ class DataSymbol:
     #         self.call_scope = None
 
     def update_obj_ref(self, obj: Any, refresh_cached: bool = True) -> None:
-        logger.info("%s update obj ref to %s", self, obj)
         self._tombstone = False
         self._cached_out_of_sync = True
         if (
@@ -506,17 +523,21 @@ class DataSymbol:
             old_ns = flow().namespaces.get(self.cached_obj_id, None)
             if (
                 old_ns is not None
-                and new_ns is None
                 and old_ns.full_namespace_path == self.full_namespace_path
             ):
                 if new_ns is None:
                     logger.info("create fresh copy of namespace %s", old_ns)
                     new_ns = old_ns.fresh_copy(obj)
+                    old_ns.transfer_symbols_to(new_ns)
                 else:
                     new_ns.scope_name = old_ns.scope_name
                     new_ns.parent_scope = old_ns.parent_scope
-                old_ns.transfer_symbols_to(new_ns)
             self._handle_aliases()
+            if (
+                old_ns is not None
+                and len(flow().aliases.get(self.cached_obj_id, [])) == 0
+            ):
+                old_ns.mark_garbage()
         if refresh_cached:
             self._refresh_cached_obj()
 

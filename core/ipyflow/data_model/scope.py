@@ -42,7 +42,7 @@ class Scope:
         self._data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
 
     def __hash__(self):
-        return hash(self.full_path)
+        return hash(id(self))
 
     def __str__(self):
         return str(self.full_path)
@@ -309,6 +309,7 @@ class Scope:
         dsym = self._data_symbol_by_name.pop(name, None)
         if dsym is not None:
             dsym.update_deps(set(), deleted=True)
+            dsym.mark_garbage()
 
     @property
     def is_global(self):
@@ -358,7 +359,7 @@ class Scope:
         else:
             prefix = ""
         if prefix:
-            if getattr(self, "is_subscript", False):
+            if self.scope_name.isdecimal() or getattr(self, "is_subscript", False):
                 return f"{prefix}[{self.scope_name}]"
             else:
                 return f"{prefix}.{self.scope_name}"

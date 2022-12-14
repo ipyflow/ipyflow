@@ -74,6 +74,10 @@ class Namespace(Scope):
             )
         return len(self.obj)
 
+    @property
+    def size(self) -> int:
+        return len(self._subscript_data_symbol_by_name) + len(self._data_symbol_by_name)
+
     def _iter_inner(self) -> Generator[Optional[DataSymbol], None, None]:
         for i in range(len(self.obj)):
             yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
@@ -120,11 +124,21 @@ class Namespace(Scope):
 
     @property
     def is_garbage(self) -> bool:
-        return (
-            self._tombstone
-            or self.obj_id not in flow().aliases
-            or self.obj_id not in flow().namespaces
+        return self._tombstone
+
+    def mark_garbage(self) -> None:
+        if self.is_garbage:
+            return
+        self._tombstone = True
+        for sym in self.all_data_symbols_this_indentation(exclude_class=True):
+            sym.mark_garbage()
+
+    def collect_self_garbage(self) -> None:
+        assert self.is_garbage
+        assert (
+            len(list(self.all_data_symbols_this_indentation(exclude_class=True))) == 0
         )
+        flow().namespaces.pop(self.obj_id, None)
 
     @property
     def is_subscript(self) -> bool:
@@ -177,7 +191,7 @@ class Namespace(Scope):
         path = self.full_namespace_path
         name = str(dsym.name)
         if path:
-            if dsym.is_subscript:
+            if dsym.is_subscript or name.isdecimal():
                 return f"{path}[{name}]"
             else:
                 return f"{path}.{name}"

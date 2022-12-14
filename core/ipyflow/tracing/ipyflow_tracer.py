@@ -1138,6 +1138,8 @@ class DataflowTracer(StackFrameManager):
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
             parent_scope: Scope = self.active_literal_scope.parent_scope
+            while parent_scope.is_namespace_scope:
+                parent_scope = parent_scope.parent_scope
             assert parent_scope is not None
             literal_sym = parent_scope.upsert_data_symbol_for_name(
                 "<literal_sym_%d>" % id(literal),

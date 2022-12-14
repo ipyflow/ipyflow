@@ -7,7 +7,7 @@ nvm use default
 # ref: https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/
 set -euxo pipefail
 
-if ! git diff-index --quiet HEAD --; then
+if [[ -n $(git status -s) ]]; then
     echo "dirty working tree; please clean or commit changes"
     exit 1
 fi

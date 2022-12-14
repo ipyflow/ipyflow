@@ -697,8 +697,17 @@ class DataflowTracer(StackFrameManager):
     #         self._seen_loop_ids.add(loop_id)
     #     return ret
 
-    @pyc.register_raw_handler((pyc.after_for_loop_iter, pyc.after_while_loop_iter))
-    def after_loop_iter(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
+    @pyc.register_raw_handler(
+        (
+            pyc.after_for_loop_iter,
+            pyc.after_while_loop_iter,
+            pyc.after_comprehension_if,
+            pyc.after_comprehension_elt,
+            pyc.after_dict_comprehension_key,
+            pyc.after_dict_comprehension_value,
+        )
+    )
+    def after_loop_iter(self, *_, guard: str, **__):
         self.activate_guard(guard)
 
     # @pyc.register_raw_handler(pyc.after_function_execution)

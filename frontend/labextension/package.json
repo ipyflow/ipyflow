@@ -63,5 +63,5 @@
     "extension": true,
     "outputDir": "../../core/ipyflow/resources/labextension/"
   },
-  "version": "0.0.148"
+  "version": "0.0.149"
 }

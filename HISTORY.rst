@@ -1,6 +1,13 @@
 History
 =======
 
+0.0.149 (2022-12-14)
+--------------------
+* Improve garbage collection;
+* Trace-once semantics for comprehensions;
+* Misc liveness analysis improvements;
+* Misc other bugfixes;
+
 0.0.148 (2022-12-09)
 --------------------
 * Revert previous change;

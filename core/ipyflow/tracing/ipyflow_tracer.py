@@ -283,7 +283,7 @@ class DataflowTracer(StackFrameManager):
     def _check_prev_stmt_done_executing_hook(
         self, event: pyc.TraceEvent, trace_stmt: TraceStatement
     ):
-        if event == pyc.after_stmt and self.is_tracing_enabled:
+        if event == pyc.after_stmt:  # and self.is_tracing_enabled:
             trace_stmt.finished_execution_hook()
         elif event == pyc.return_ and self.prev_event not in (
             pyc.call,
@@ -784,7 +784,7 @@ class DataflowTracer(StackFrameManager):
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         is_subscript = "subscript" in event.value
-        if sym_for_obj is not None:
+        if sym_for_obj is not None and sym_for_obj.obj is obj:
             try:
                 data_sym = scope.lookup_data_symbol_by_name_this_indentation(
                     attr_or_subscript,

@@ -627,7 +627,7 @@ class DataSymbol:
         return args
 
     def _match_call_args_with_definition_args(
-        self,
+        self
     ) -> Generator[Tuple[ast.arg, List["DataSymbol"]], None, None]:
         # TODO: handle posonlyargs, kwonlyargs
         assert self.func_def_stmt is not None and isinstance(
@@ -636,11 +636,14 @@ class DataSymbol:
         caller_node = self._get_calling_ast_node()
         if caller_node is None or not isinstance(caller_node, ast.Call):
             return
-        if isinstance(caller_node.func, ast.Attribute) and isinstance(
-            self.func_def_stmt, ast.Lambda
-        ):
-            # then these probably don't correspond with each other
-            # TODO: use executing here?
+        kwarg_by_name = {
+            arg_key.arg: arg_key
+            for arg_key in self.func_def_stmt.args.args[
+                -len(self.func_def_stmt.args.defaults) :
+            ]
+        }
+        if not all(keyword.arg in kwarg_by_name for keyword in caller_node.keywords):
+            # TODO: figure out a more reliable way to detect this
             return
         def_args = self.func_def_stmt.args.args
         if len(self.func_def_stmt.args.defaults) > 0:
@@ -655,12 +658,6 @@ class DataSymbol:
                 break
             yield def_arg, tracer().resolve_loaded_symbols(call_arg)
         seen_keys = set()
-        kwarg_by_name = {
-            arg_key.arg: arg_key
-            for arg_key in self.func_def_stmt.args.args[
-                -len(self.func_def_stmt.args.defaults) :
-            ]
-        }
         for keyword in caller_node.keywords:
             keyword_key, keyword_value = keyword.arg, keyword.value
             if keyword_value is None:
@@ -864,6 +861,8 @@ class DataSymbol:
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
         if overwrite:
             self._cascading_reactive_cell_num = -1
+            flow().updated_reactive_symbols.discard(self)
+            flow().updated_deep_reactive_symbols.discard(self)
         if any(
             dsym.is_cascading_reactive_at_counter(prev_cell_ctr) for dsym in new_deps
         ):

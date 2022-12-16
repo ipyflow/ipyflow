@@ -133,6 +133,9 @@ class Namespace(Scope):
         for sym in self.all_data_symbols_this_indentation(exclude_class=True):
             sym.mark_garbage()
 
+    def unmark_garbage(self) -> None:
+        self._tombstone = False
+
     def collect_self_garbage(self) -> None:
         assert self.is_garbage
         assert (

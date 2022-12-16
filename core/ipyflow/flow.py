@@ -634,7 +634,10 @@ class NotebookFlow(singletons.NotebookFlow):
             sym.collect_self_garbage()
         garbage_namespaces = [ns for ns in self.namespaces.values() if ns.is_garbage]
         for ns in garbage_namespaces:
-            ns.collect_self_garbage()
+            if ns.size == 0:
+                ns.collect_self_garbage()
+            else:
+                ns.unmark_garbage()
 
     def retrieve_namespace_attr_or_sub(
         self, obj: Any, attr_or_sub: SupportedIndexType, is_subscript: bool

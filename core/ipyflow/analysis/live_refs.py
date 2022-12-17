@@ -3,6 +3,7 @@ import ast
 import builtins
 import logging
 import sys
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Iterable, List, Optional, Set, Tuple, Union, cast
 
 from ipyflow.analysis.mixins import (
@@ -61,6 +62,19 @@ class ComputeLiveSymbolRefs(
 
     def kill_context(self):
         return self.push_attributes(_in_kill_context=True)
+
+    @contextmanager
+    def killed_context(self, node):
+        dead = self.dead
+        with self.push_attributes(_in_kill_context=True, dead=set()):
+            self.visit(node)
+            new_dead = self.dead
+            not_present_before = {ref for ref in new_dead if ref not in dead}
+        self.dead |= new_dead
+        try:
+            yield
+        finally:
+            self.dead -= not_present_before
 
     def live_context(self):
         return self.push_attributes(_in_kill_context=False)
@@ -288,13 +302,15 @@ class ComputeLiveSymbolRefs(
         self.visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(node)
 
     def visit_GeneratorExp_or_DictComp_or_ListComp_or_SetComp(self, node) -> None:
-        # TODO: as w/ for loop, this will have false positives on later live references
-        for gen in node.generators:
-            self.visit(gen.iter)
-            with self.kill_context():
-                self.visit(gen.target)
-        # visit the elt at the end to ensure we don't add it to live vars if it was one of the generator targets
-        self.visit(node.elt)
+        with self.killed_context([gen.target for gen in node.generators]):
+            if isinstance(node, ast.DictComp):
+                self.visit(node.key)
+                self.visit(node.value)
+            else:
+                self.visit(node.elt)
+            for gen in node.generators:
+                self.visit(gen.iter)
+                self.visit(gen.ifs)
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         with self.kill_context():

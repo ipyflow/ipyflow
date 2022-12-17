@@ -627,7 +627,7 @@ class DataSymbol:
         return args
 
     def _match_call_args_with_definition_args(
-        self
+        self,
     ) -> Generator[Tuple[ast.arg, List["DataSymbol"]], None, None]:
         # TODO: handle posonlyargs, kwonlyargs
         assert self.func_def_stmt is not None and isinstance(

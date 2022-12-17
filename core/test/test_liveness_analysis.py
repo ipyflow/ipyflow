@@ -71,7 +71,7 @@ def test_comprehension_with_killed_elt():
         "[x for y in range(10) for x in range(11)]"
     )
     assert live == {"range"}
-    assert dead == {"x", "y"}
+    assert dead == set()
 
 
 def test_comprehension_with_live_elt():
@@ -79,7 +79,7 @@ def test_comprehension_with_live_elt():
         "[x for y in range(10) for _ in range(11)]"
     )
     assert live == {"x", "range"}, "got %s" % live
-    assert dead == {"y", "_"}
+    assert dead == set()
 
 
 def test_subscript_is_live():

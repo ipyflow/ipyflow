@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.150 (2022-12-16)
+--------------------
+* Improve comprehension behavior;
+
 0.0.149 (2022-12-14)
 --------------------
 * Improve garbage collection;

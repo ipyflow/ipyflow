@@ -100,7 +100,7 @@ class Atom(CommonEqualityMixin):
             is_callpoint=self.is_callpoint,
             is_subscript=self.is_subscript,
             is_reactive=False,
-            is_cascading_reactive=self.is_cascading_reactive,
+            is_cascading_reactive=False,
             is_blocking=self.is_blocking,
         )
 

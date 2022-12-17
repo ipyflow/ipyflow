@@ -91,7 +91,7 @@ class ComputeLiveSymbolRefs(
         leading_atom = ref.chain[0]
         if isinstance(leading_atom.value, str):
             if (
-                SymbolRef(leading_atom) in self.dead
+                SymbolRef(leading_atom.nonreactive()) in self.dead
                 or SymbolRef(Atom(leading_atom.value, is_callpoint=False)) in self.dead
             ):
                 return
@@ -198,7 +198,7 @@ class ComputeLiveSymbolRefs(
         ],
     ) -> None:
         if isinstance(target_node, (ast.Name, ast.Attribute, ast.Subscript)):
-            self.dead.add(SymbolRef(target_node))
+            self.dead.add(SymbolRef(target_node).nonreactive())
             if isinstance(target_node, ast.Subscript):
                 with self.live_context():
                     self.visit(target_node.slice)
@@ -213,7 +213,7 @@ class ComputeLiveSymbolRefs(
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self.generic_visit(node.args.defaults)
         self.generic_visit(node.decorator_list)
-        self.dead.add(SymbolRef(node))
+        self.dead.add(SymbolRef(node).nonreactive())
 
     def visit_withitem(self, node: ast.withitem):
         self.visit(node.context_expr)
@@ -224,7 +224,7 @@ class ComputeLiveSymbolRefs(
     def visit_Name(self, node: ast.Name) -> None:
         ref = SymbolRef(node)
         if self._in_kill_context:
-            self.dead.add(ref)
+            self.dead.add(ref.nonreactive())
         elif not self._skip_simple_names and ref not in self.dead:
             if id(node) in tracer().reactive_node_ids:
                 ref.chain[0].is_reactive = True
@@ -260,7 +260,7 @@ class ComputeLiveSymbolRefs(
         self.generic_visit(node.bases)
         self.generic_visit(node.decorator_list)
         self.generic_visit(node.body)
-        self.dead.add(SymbolRef(node))
+        self.dead.add(SymbolRef(node).nonreactive())
 
     def visit_Call(self, node: ast.Call) -> None:
         with self.attrsub_context(False):
@@ -319,7 +319,7 @@ class ComputeLiveSymbolRefs(
     def visit_arg(self, node) -> None:
         ref = SymbolRef(node.arg)
         if self._in_kill_context:
-            self.dead.add(ref)
+            self.dead.add(ref.nonreactive())
         elif not self._skip_simple_names and ref not in self.dead:
             self.live.add(
                 LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)

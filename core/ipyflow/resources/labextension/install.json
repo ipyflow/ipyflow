@@ -1,0 +1,5 @@
+{
+  "packageManager": "python",
+  "packageName": "ipyflow",
+  "uninstallInstructions": "See https://github.com/nbsafety-project/nbsafety/#uninstall"
+}

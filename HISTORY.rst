@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.151 (2022-12-18)
+--------------------
+* Bugfix for deadness detection;
+* JupyterLab cmd+shift+enter hotkey for reactive / alt mode execution;
+
 0.0.150 (2022-12-16)
 --------------------
 * Improve comprehension behavior;

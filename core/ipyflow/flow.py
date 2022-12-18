@@ -153,6 +153,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Union[None, Exception, str] = None
         self._last_exception_raised: Union[None, str, Exception] = None
+        self._is_reactivity_toggled = False
         self.exception_counter: int = 0
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
@@ -465,12 +466,24 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         return response
 
+    def toggle_reactivity(self):
+        if self.mut_settings.exec_mode == ExecutionMode.NORMAL:
+            self.mut_settings.exec_mode = ExecutionMode.REACTIVE
+        elif self.mut_settings.exec_mode == ExecutionMode.REACTIVE:
+            self.mut_settings.exec_mode = ExecutionMode.NORMAL
+        else:
+            raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
+        self._is_reactivity_toggled = True
+
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
         self.min_cascading_reactive_cell_num = self.cell_counter()
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
+        if self._is_reactivity_toggled:
+            self.toggle_reactivity()
+            self._is_reactivity_toggled = False
         return None
 
     def handle_refresh_symbols(self, request) -> Optional[Dict[str, Any]]:

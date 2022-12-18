@@ -8,6 +8,7 @@ import {
 } from '@jupyterlab/application';
 
 import {
+  ICommandPalette,
   ISessionContext
 } from '@jupyterlab/apputils';
 
@@ -32,12 +33,43 @@ type Highlights = 'all' | 'none' | 'executed' | 'reactive';
  */
 const extension: JupyterFrontEndPlugin<void> = {
   id: 'jupyterlab-ipyflow',
-  requires: [INotebookTracker],
+  requires: [INotebookTracker, ICommandPalette],
   autoStart: true,
   activate: (
     app: JupyterFrontEnd,
-    notebooks: INotebookTracker
+    notebooks: INotebookTracker,
+    palette: ICommandPalette,
   ) => {
+    app.commands.addCommand('alt-mode-execute', {
+      label: 'Alt Mode Execute',
+      isEnabled: () => true,
+      isVisible: () => true,
+      isToggled: () => false,
+      execute: () => {
+        if (notebooks.activeCell.model.type === 'code') {
+          const session = notebooks.currentWidget.sessionContext;
+          if (session.isReady && notebooks.activeCell.model.type === 'code') {
+            session.session.kernel.requestExecute({
+              code: '%flow toggle-reactivity-until-next-reset',
+              silent: true,
+              store_history: false,
+            }).done.then(() => {
+              CodeCell.execute(notebooks.activeCell as CodeCell, session);
+            })
+          }
+        }
+      }
+    });
+    app.commands.addKeyBinding({
+      command: 'alt-mode-execute',
+      keys: ['Accel Shift Enter'],
+      selector: '.jp-Notebook',
+    });
+    palette.addItem({
+      command: 'alt-mode-execute',
+      category: 'execution',
+      args: {},
+    });
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
@@ -469,21 +501,18 @@ const connectToComm = (
         }
       }
       if (cellPendingExecution === null) {
-        if (lastExecutionMode === 'reactive') {
+        if (isReactivelyExecuting) {
           if (lastExecutionHighlights === 'reactive') {
             readyCells = executedReactiveReadyCells;
           }
-          updateUI(notebook);
           resetReactiveState();
-        } else {
-          resetReactiveState()
-          updateUI(notebook);
-        }
-        if (isReactivelyExecuting) {
           comm.send({
             type: 'reactivity_cleanup',
           });
+        } else {
+          executedReactiveReadyCells = new Set();
         }
+        updateUI(notebook);
         isReactivelyExecuting = false;
       } else {
         isReactivelyExecuting = true;

@@ -133,6 +133,8 @@ def make_line_magic(flow_: "NotebookFlow"):
             return None
         elif cmd.startswith("register_annotation"):
             return register_annotations(line)
+        elif cmd == "toggle_reactivity_until_next_reset":
+            return toggle_reactivity_until_next_reset()
         elif cmd in line_magic_names:
             warn(
                 f"We have a magic for {cmd}, but have not yet registered it",
@@ -500,3 +502,7 @@ def register_annotations(line_: str) -> None:
         warn(usage)
         return
     print_("Registered annotations for modules:", modules)
+
+
+def toggle_reactivity_until_next_reset():
+    flow().toggle_reactivity()

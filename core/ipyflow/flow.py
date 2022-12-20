@@ -464,7 +464,25 @@ class NotebookFlow(singletons.NotebookFlow):
         response["last_execution_was_error"] = (
             self._exception_raised_during_execution is not None
         )
+        if (
+            self._is_reactivity_toggled
+            and self.mut_settings.exec_mode == ExecutionMode.NORMAL
+        ):
+            self.toggle_reactivity()
+            self._is_reactivity_toggled = False
         return response
+
+    def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
+        self.min_cascading_reactive_cell_num = self.cell_counter()
+        self.updated_reactive_symbols.clear()
+        self.updated_deep_reactive_symbols.clear()
+        if (
+            self._is_reactivity_toggled
+            and self.mut_settings.exec_mode == ExecutionMode.REACTIVE
+        ):
+            self.toggle_reactivity()
+            self._is_reactivity_toggled = False
+        return None
 
     def toggle_reactivity(self):
         if self.mut_settings.exec_mode == ExecutionMode.NORMAL:
@@ -474,15 +492,6 @@ class NotebookFlow(singletons.NotebookFlow):
         else:
             raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
         self._is_reactivity_toggled = True
-
-    def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
-        self.min_cascading_reactive_cell_num = self.cell_counter()
-        self.updated_reactive_symbols.clear()
-        self.updated_deep_reactive_symbols.clear()
-        if self._is_reactivity_toggled:
-            self.toggle_reactivity()
-            self._is_reactivity_toggled = False
-        return None
 
     def handle_refresh_symbols(self, request) -> Optional[Dict[str, Any]]:
         for symbol_str in request.get("symbols", []):

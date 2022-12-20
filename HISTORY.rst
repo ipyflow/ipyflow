@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.152 (2022-12-20)
+--------------------
+* Reactive state improvements;
+
 0.0.151 (2022-12-18)
 --------------------
 * Bugfix for deadness detection;

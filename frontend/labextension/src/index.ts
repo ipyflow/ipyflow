@@ -28,6 +28,35 @@ const IPYFLOW_KERNEL_NAME: string = 'ipyflow';
 
 type Highlights = 'all' | 'none' | 'executed' | 'reactive';
 
+const waitingClass = 'waiting-cell';
+const readyClass = 'ready-cell';
+const readyMakingClass = 'ready-making-cell';
+const readyMakingInputClass = 'ready-making-input-cell';
+const linkedWaitingClass = 'linked-waiting';
+const linkedReadyMakerClass = 'linked-ready-maker';
+
+// ipyflow frontend state
+let dirtyCells: Set<string> = new Set();
+let waitingCells: Set<string> = new Set();
+let readyCells: Set<string> = new Set();
+let waiterLinks: {[id: string]: string[]} = {}
+let readyMakerLinks: {[id: string]: string[]} = {}
+let activeCell: Cell<ICellModel> = null;
+let activeCellId: string = null;
+let cellsById: {[id: string]: HTMLElement} = {};
+let cellModelsById: {[id: string]: ICellModel} = {};
+let orderIdxById: {[id: string]: number} = {};
+let cellPendingExecution: CodeCell = null;
+
+let lastExecutionMode: string = null;
+let isReactivelyExecuting: boolean = false;
+let lastExecutionHighlights: Highlights = null;
+let executedReactiveReadyCells: Set<string> = new Set();
+let newReadyCells: Set<string> = new Set();
+let forcedReactiveCells: Set<string> = new Set();
+
+const cleanup = new Event('cleanup');
+
 /**
  * Initialization data for the jupyterlab-ipyflow extension.
  */
@@ -118,40 +147,6 @@ const extension: JupyterFrontEndPlugin<void> = {
       });
     });
   }
-};
-
-const waitingClass = 'waiting-cell';
-const readyClass = 'ready-cell';
-const readyMakingClass = 'ready-making-cell';
-const readyMakingInputClass = 'ready-making-input-cell';
-const linkedWaitingClass = 'linked-waiting';
-const linkedReadyMakerClass = 'linked-ready-maker';
-
-let dirtyCells: Set<string> = new Set();
-let waitingCells: Set<string> = new Set();
-let readyCells: Set<string> = new Set();
-let waiterLinks: {[id: string]: string[]} = {}
-let readyMakerLinks: {[id: string]: string[]} = {}
-let activeCell: Cell<ICellModel> = null;
-let activeCellId: string = null;
-let cellsById: {[id: string]: HTMLElement} = {};
-let cellModelsById: {[id: string]: ICellModel} = {};
-let orderIdxById: {[id: string]: number} = {};
-let cellPendingExecution: CodeCell = null;
-
-let lastExecutionMode: string = null;
-let isReactivelyExecuting: boolean = false;
-let lastExecutionHighlights: Highlights = null;
-let executedReactiveReadyCells: Set<string> = new Set();
-let newReadyCells: Set<string> = new Set();
-let forcedReactiveCells: Set<string> = new Set();
-
-const cleanup = new Event('cleanup');
-
-const resetReactiveState = () => {
-  newReadyCells = new Set();
-  forcedReactiveCells = new Set();
-  executedReactiveReadyCells = new Set();
 };
 
 const getJpInputCollapser = (elem: HTMLElement) => {
@@ -461,10 +456,14 @@ const connectToComm = (
     } else if (msg.content.data['type'] === 'compute_exec_schedule') {
       waitingCells = new Set(msg.content.data['waiting_cells'] as string[]);
       readyCells = new Set(msg.content.data['ready_cells'] as string[]);
-      newReadyCells = new Set([...newReadyCells, ...msg.content.data['new_ready_cells'] as string[]]);
-      forcedReactiveCells = new Set(
-          [...forcedReactiveCells, ...msg.content.data['forced_reactive_cells'] as string[]]
-      );
+      newReadyCells = new Set([
+        ...newReadyCells,
+        ...msg.content.data['new_ready_cells'] as string[],
+      ]);
+      forcedReactiveCells = new Set([
+        ...forcedReactiveCells,
+        ...msg.content.data['forced_reactive_cells'] as string[],
+      ]);
       waiterLinks = msg.content.data['waiter_links'] as { [id: string]: string[] };
       readyMakerLinks = msg.content.data['ready_maker_links'] as { [id: string]: string[] };
       cellPendingExecution = null;
@@ -473,17 +472,19 @@ const connectToComm = (
       const exec_schedule = msg.content.data['exec_schedule'];
       lastExecutionMode = exec_mode;
       lastExecutionHighlights = msg.content.data['highlights'] as Highlights;
-      executedReactiveReadyCells.add(msg.content.data['last_executed_cell_id'] as string);
+      const lastExecutedCellId = msg.content.data['last_executed_cell_id'] as string;
+      executedReactiveReadyCells.add(lastExecutedCellId);
       const last_execution_was_error = msg.content.data['last_execution_was_error'] as boolean;
       if (!last_execution_was_error) {
         for (const cell of notebook.widgets) {
           if (cell.model.type !== 'code' || executedReactiveReadyCells.has(cell.model.id)) {
             continue;
           }
-          if (!forcedReactiveCells.has(cell.model.id)) {
-            if (exec_mode !== 'reactive' || !newReadyCells.has(cell.model.id)) {
-              continue;
-            }
+          if (!newReadyCells.has(cell.model.id)) {
+            continue;
+          }
+          if (!forcedReactiveCells.has(cell.model.id) && exec_mode !== 'reactive') {
+            continue;
           }
           const codeCell = (cell as CodeCell);
           if (cellPendingExecution === null) {
@@ -505,13 +506,13 @@ const connectToComm = (
           if (lastExecutionHighlights === 'reactive') {
             readyCells = executedReactiveReadyCells;
           }
-          resetReactiveState();
           comm.send({
             type: 'reactivity_cleanup',
           });
-        } else {
-          executedReactiveReadyCells = new Set();
         }
+        forcedReactiveCells = new Set();
+        newReadyCells = new Set();
+        executedReactiveReadyCells = new Set();
         updateUI(notebook);
         isReactivelyExecuting = false;
       } else {

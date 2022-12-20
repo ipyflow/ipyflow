@@ -2,7 +2,7 @@
 import ast
 import logging
 from collections import defaultdict
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
@@ -199,12 +199,15 @@ class FrontendCheckerResult(NamedTuple):
         for cell_id in self.waiting_cells:
             cells().from_id(cell_id).set_ready(False)
 
-    def _compute_is_ready(self, cell: CodeCell, checker_result: CheckerResult) -> bool:
+    def _compute_readiness(
+        self, cell: CodeCell, checker_result: CheckerResult
+    ) -> Tuple[bool, bool]:
         flow_ = flow()
         cell_id = cell.cell_id
         if cell_id in self.waiting_cells:
-            return False
+            return False, False
         is_ready = False
+        is_new_ready = False
         if flow_.mut_settings.exec_schedule in (
             ExecutionSchedule.DAG_BASED,
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
@@ -214,7 +217,7 @@ class FrontendCheckerResult(NamedTuple):
                 (flow_.mut_settings.dynamic_slicing_enabled, cell.dynamic_parents),
                 (flow_.mut_settings.static_slicing_enabled, cell.static_parents),
             ):
-                if is_ready:
+                if is_new_ready:
                     break
                 elif not slicing_type_enabled:
                     continue
@@ -231,16 +234,22 @@ class FrontendCheckerResult(NamedTuple):
                         == sym.timestamp.cell_num
                     ):
                         is_ready = True
-                        break
-        if not is_ready and flow_.mut_settings.exec_schedule in (
+                        if sym.timestamp.cell_num == flow_.cell_counter():
+                            is_new_ready = True
+                            break
+        if not is_new_ready and flow_.mut_settings.exec_schedule in (
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
             ExecutionSchedule.LIVENESS_BASED,
         ):
-            is_ready = cell.get_max_used_live_symbol_cell_counter(
+            max_used_live_sym_ctr = cell.get_max_used_live_symbol_cell_counter(
                 checker_result.live
-            ) > max(cell.cell_ctr, flow_.min_timestamp)
+            )
+            if max_used_live_sym_ctr > max(cell.cell_ctr, flow_.min_timestamp):
+                is_ready = True
+                if max_used_live_sym_ctr == flow_.cell_counter():
+                    is_new_ready = True
         elif (
-            not is_ready
+            not is_new_ready
             and flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
         ):
             for dead_sym in checker_result.dead:
@@ -248,7 +257,9 @@ class FrontendCheckerResult(NamedTuple):
                     cell.cell_ctr, flow_.min_timestamp
                 ):
                     is_ready = True
-        return is_ready
+                    if dead_sym.timestamp.cell_num == flow_.cell_counter():
+                        is_new_ready = True
+        return is_ready, is_new_ready
 
     def _check_one_cell(
         self,
@@ -302,7 +313,7 @@ class FrontendCheckerResult(NamedTuple):
             )
             if len(phantom_cell_info_for_cell) > 0:
                 phantom_cell_info[cell_id] = phantom_cell_info_for_cell
-        is_ready = self._compute_is_ready(cell, checker_result)
+        is_ready, is_new_ready = self._compute_readiness(cell, checker_result)
         if is_ready:
             self.ready_cells.add(cell_id)
         was_ready = cells().from_id(cell_id).set_ready(is_ready)
@@ -314,7 +325,7 @@ class FrontendCheckerResult(NamedTuple):
                 # prevent this cell from being considered as newly ready so that
                 # it is not reactively executed
                 return checker_result
-        if not was_ready and is_ready:
+        if is_new_ready or (not was_ready and is_ready):
             self.new_ready_cells.add(cell_id)
         return checker_result
 

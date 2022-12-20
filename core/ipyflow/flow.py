@@ -476,8 +476,6 @@ class NotebookFlow(singletons.NotebookFlow):
         self._is_reactivity_toggled = True
 
     def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
-        for cell in cells().all_cells_most_recently_run_for_each_id():
-            cell.set_ready(False)
         self.min_cascading_reactive_cell_num = self.cell_counter()
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()

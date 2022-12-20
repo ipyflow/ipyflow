@@ -390,6 +390,9 @@ def set_exec_mode(line_: str) -> None:
         warn(usage)
         return
     flow().mut_settings.exec_mode = exec_mode
+    if exec_mode == ExecutionMode.REACTIVE:
+        for cell in cells().all_cells_most_recently_run_for_each_id():
+            cell.set_ready(False)
 
 
 def set_exec_schedule(line_: str) -> None:

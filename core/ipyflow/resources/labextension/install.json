@@ -1,0 +1,5 @@
+{
+  "packageManager": "python",
+  "packageName": "ipyflow",
+  "uninstallInstructions": "pip uninstall ipyflow"
+}

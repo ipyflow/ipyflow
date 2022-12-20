@@ -468,6 +468,7 @@ const connectToComm = (
       readyMakerLinks = msg.content.data['ready_maker_links'] as { [id: string]: string[] };
       cellPendingExecution = null;
       const exec_mode = msg.content.data['exec_mode'] as string;
+      isReactivelyExecuting = isReactivelyExecuting || (exec_mode === 'reactive');
       const flow_order = msg.content.data['flow_order'];
       const exec_schedule = msg.content.data['exec_schedule'];
       lastExecutionMode = exec_mode;

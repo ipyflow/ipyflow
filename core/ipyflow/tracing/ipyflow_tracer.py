@@ -135,6 +135,7 @@ class DataflowTracer(StackFrameManager):
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 blocking_spec
             ]
+        self.tracing_disabled_since_last_module_stmt = False
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self._seen_loop_ids: Set[NodeId] = set()
@@ -296,6 +297,10 @@ class DataflowTracer(StackFrameManager):
             # if prev_overall is not None and prev_overall is not self._stack[-1][0]:
             #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             #     prev_overall.finished_execution_hook()
+
+    def _disable_tracing(self, *args, **kwargs) -> None:
+        self.tracing_disabled_since_last_module_stmt = True
+        super()._disable_tracing(*args, **kwargs)
 
     def _handle_return_transition(self, trace_stmt: TraceStatement, ret: Any):
         try:
@@ -1262,6 +1267,7 @@ class DataflowTracer(StackFrameManager):
                 stmt,
             )
         self._module_stmt_counter += 1
+        self.tracing_disabled_since_last_module_stmt = False
         return ret
 
     @pyc.register_raw_handler(pyc.before_stmt)

@@ -643,7 +643,7 @@ class DataSymbol:
             ]
         }
         if not all(keyword.arg in kwarg_by_name for keyword in caller_node.keywords):
-            # TODO: figure out a more reliable way to detect this
+            logger.warning("detected mismatched kwargs from caller node to definition")
             return
         def_args = self.func_def_stmt.args.args
         if len(self.func_def_stmt.args.defaults) > 0:
@@ -675,6 +675,11 @@ class DataSymbol:
             yield arg_key, tracer().resolve_loaded_symbols(arg_value)
 
     def _get_calling_ast_node(self) -> Optional[ast.Call]:
+        if tracer().tracing_disabled_since_last_module_stmt or (
+            not hasattr(self.obj, "__module__")
+            and getattr(type(self.obj), "__module__", None) == "builtins"
+        ):
+            return None
         if self.func_def_stmt is not None and isinstance(
             self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef)
         ):

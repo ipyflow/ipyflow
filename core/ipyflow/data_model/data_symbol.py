@@ -160,7 +160,7 @@ class DataSymbol:
 
     @property
     def aliases(self) -> List["DataSymbol"]:
-        return list(flow().aliases.get(self.obj_id))
+        return list(flow().aliases.get(self.obj_id, []))
 
     @property
     def cells_where_live(self) -> Set[CodeCell]:

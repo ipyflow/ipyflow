@@ -10,6 +10,7 @@ const linkedWaitingClass = 'linked-waiting';
 const linkedReadyClass = 'linked-ready';
 const linkedReadyMakingClass = 'linked-ready-making';
 
+let codecell_execute: any = null;
 const cleanup = new Event('cleanup');
 
 const getCellInputSection = (elem: HTMLElement) => {
@@ -127,8 +128,12 @@ const gatherCellMetadataById = (Jupyter: any) => {
     return cell_metadata_by_id;
 }
 
-const connectToComm = (Jupyter: any) => {
-    const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {exec_schedule: 'liveness_based'});
+const connectToComm = (Jupyter: any, code_cell: any) => {
+    const comm = Jupyter.notebook.kernel.comm_manager.new_comm(
+        'ipyflow', {
+            exec_schedule: 'liveness_based',
+        },
+    );
     const onExecution = (evt: any, data: {cell: any}) => {
         if (data.cell.notebook !== Jupyter.notebook) {
             return;
@@ -162,6 +167,7 @@ const connectToComm = (Jupyter: any) => {
         if (msg.content.data.type == 'establish') {
             Jupyter.notebook.events.on('execute.CodeCell', onExecution);
             Jupyter.notebook.events.on('select.Cell', onSelect);
+            code_cell.CodeCell.prototype.execute = codecell_execute;
         } else if (msg.content.data.type === 'compute_exec_schedule') {
             clearCellState(Jupyter);
             const waitingCells: any = msg.content.data['waiting_cells'];
@@ -241,16 +247,25 @@ const connectToComm = (Jupyter: any) => {
         clearCellState(Jupyter);
         Jupyter.notebook.events.unbind('execute.CodeCell', onExecution);
         Jupyter.notebook.events.unbind('select.Cell', onSelect);
+        code_cell.CodeCell.prototype.execute = () => {};
     };
 }
 
 __non_webpack_require__([
-  'base/js/namespace'
-], function load_ipython_extension(Jupyter: any) {
+    'base/js/namespace',
+    'notebook/js/codecell',
+], function load_ipython_extension(Jupyter: any, code_cell: any) {
     // console.log('This is the current notebook application instance:', Jupyter.notebook);
+    codecell_execute = code_cell.CodeCell.prototype.execute;
+    // prevent execution until comm connection established
+    code_cell.CodeCell.prototype.execute = () => {};
     Jupyter.notebook.events.on('kernel_ready.Kernel', () => {
-        const commDisconnectHandler = connectToComm(Jupyter);
+        const commDisconnectHandler = connectToComm(Jupyter, code_cell);
         Jupyter.notebook.events.on('spec_changed.Kernel', () => {
+            // console.log('kernel changed');
+            commDisconnectHandler();
+        });
+        Jupyter.notebook.events.on('kernel_restarting.Kernel', () => {
             // console.log('kernel changed');
             commDisconnectHandler();
         });

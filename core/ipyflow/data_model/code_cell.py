@@ -172,19 +172,47 @@ class CodeCell(CodeCellSlicingMixin):
     @property
     def dynamic_parents(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
         # trick to catch some mutations at typecheck time w/out runtime overhead
-        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._dynamic_parents)
+        parents = self._dynamic_parents
+        if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
+            parents = {
+                (cell_id, syms)
+                for cell_id, syms in parents
+                if self.position > self.from_id(cell_id).position
+            }
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", parents)
 
     @property
     def dynamic_children(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
-        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._dynamic_children)
+        children = self._dynamic_children
+        if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
+            children = {
+                (cell_id, syms)
+                for cell_id, syms in children
+                if self.position < self.from_id(cell_id).position
+            }
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", children)
 
     @property
     def static_parents(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
-        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._static_parents)
+        parents = self._static_parents
+        if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
+            parents = {
+                (cell_id, syms)
+                for cell_id, syms in parents
+                if self.position > self.from_id(cell_id).position
+            }
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", parents)
 
     @property
     def static_children(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
-        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", self._static_children)
+        children = self._static_children
+        if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
+            children = {
+                (cell_id, syms)
+                for cell_id, syms in children
+                if self.position < self.from_id(cell_id).position
+            }
+        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", children)
 
     @property
     def dynamic_parent_ids(self) -> FrozenSet[CellId]:

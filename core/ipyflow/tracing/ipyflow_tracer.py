@@ -1260,7 +1260,6 @@ class DataflowTracer(StackFrameManager):
                 ret,
                 resolve_rval_symbols(stmt),
                 stmt,
-                implicit=type(ret) not in DataSymbol.IMMUTABLE_TYPES,
             )
         self._module_stmt_counter += 1
         return ret

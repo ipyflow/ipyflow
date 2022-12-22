@@ -153,7 +153,14 @@ class CodeCell(CodeCellSlicingMixin):
         self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
     ) -> None:
         pid = parent.cell_id if isinstance(parent, CodeCell) else parent
-        if pid == self.cell_id or pid in self._dynamic_children:
+        if pid in self._dynamic_children:
+            return
+        if pid == self.cell_id:
+            # in this case, inherit the previous parents, if any
+            if self.prev_cell is not None:
+                for prev_pid, prev_sym in self.prev_cell._dynamic_parents:
+                    if sym is prev_sym:
+                        self._dynamic_parents.add((prev_pid, sym))
             return
         self._dynamic_parents.add((pid, sym))
         parent = self.from_id(pid)
@@ -163,7 +170,14 @@ class CodeCell(CodeCellSlicingMixin):
         self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
     ) -> None:
         pid = parent.cell_id if isinstance(parent, CodeCell) else parent
-        if pid == self.cell_id or pid in self._static_children:
+        if pid in self._static_children:
+            return
+        if pid == self.cell_id:
+            # in this case, inherit the previous parents, if any
+            if self.prev_cell is not None:
+                for prev_pid, prev_sym in self.prev_cell._static_parents:
+                    if sym is prev_sym:
+                        self._static_parents.add((prev_pid, sym))
             return
         self._static_parents.add((pid, sym))
         parent = self.from_id(pid)

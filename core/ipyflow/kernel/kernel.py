@@ -492,7 +492,10 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
 
         # Stage 1: Precheck.
         if DataflowTracer in self.registered_tracers:
-            flow_._safety_precheck_cell(cell)
+            try:
+                flow_._safety_precheck_cell(cell)
+            except Exception:
+                logger.exception("exception occurred during precheck")
 
             used_out_of_order_counter = flow_.out_of_order_usage_detected_counter
             if (

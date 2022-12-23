@@ -228,7 +228,10 @@ class SymbolRefVisitor(ast.NodeVisitor):
             # TODO: handle this case too, e.g. (lambda: [1, 2])()
             pass
         else:
-            raise TypeError("invalid type for node.func %s" % node.func)
+            # probably a user error that happens to not be a syntax error;
+            # probably will fail at runtime
+            # logger.error("invalid type for node.func %s" % ast.dump(node.func))
+            pass
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         self._append_atom(node, node.attr)

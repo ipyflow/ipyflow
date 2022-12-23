@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.153 (2022-12-23)
+--------------------
+* Misc bugfixes and improvements;
+* Better handling of static / dynamic parents when out of order cell deps detected;
+
 0.0.152 (2022-12-20)
 --------------------
 * Reactive state improvements;

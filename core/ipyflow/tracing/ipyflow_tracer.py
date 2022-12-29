@@ -8,7 +8,6 @@ from contextlib import contextmanager
 from types import FrameType, ModuleType
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Union, cast
 
-import astunparse
 import pyccolo as pyc
 from IPython import get_ipython
 
@@ -36,6 +35,11 @@ from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.trace_stmt import TraceStatement
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import SupportedIndexType
+
+if hasattr(ast, "unparse"):
+    astunparse = ast
+else:
+    import astunparse  # type: ignore
 
 AttrSubVal = SupportedIndexType
 NodeId = int

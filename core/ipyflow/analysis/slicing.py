@@ -4,12 +4,16 @@ import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type
 
-import astunparse
 import black
 
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow
 from ipyflow.types import TimestampOrCounter
+
+if hasattr(ast, "unparse"):
+    astunparse = ast
+else:
+    import astunparse  # type: ignore
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell

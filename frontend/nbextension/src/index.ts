@@ -131,7 +131,7 @@ const gatherCellMetadataById = (Jupyter: any) => {
 const connectToComm = (Jupyter: any, code_cell: any) => {
     const comm = Jupyter.notebook.kernel.comm_manager.new_comm(
         'ipyflow', {
-            exec_schedule: 'liveness_based',
+            // exec_schedule: 'liveness_based',
         },
     );
     const onExecution = (evt: any, data: {cell: any}) => {

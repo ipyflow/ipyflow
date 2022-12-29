@@ -94,6 +94,11 @@ const extension: JupyterFrontEndPlugin<void> = {
       keys: ['Accel Shift Enter'],
       selector: '.jp-Notebook',
     });
+    app.commands.addKeyBinding({
+      command: 'alt-mode-execute',
+      keys: ['Ctrl Shift Enter'],
+      selector: '.jp-Notebook',
+    });
     palette.addItem({
       command: 'alt-mode-execute',
       category: 'execution',

@@ -932,7 +932,7 @@ class DataSymbol:
     def _observe_widget(self, msg: Dict[str, Any]) -> None:
         if msg.get("name") != "value" or "new" not in msg:
             return
-        newval = msg["new"]
+        # newval = msg["new"]
         ns = self.namespace
         sym = ns.lookup_data_symbol_by_name_this_indentation("value")
         if sym is None:

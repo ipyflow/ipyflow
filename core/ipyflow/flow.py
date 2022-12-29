@@ -482,6 +482,8 @@ class NotebookFlow(singletons.NotebookFlow):
         ):
             self.toggle_reactivity()
             self._is_reactivity_toggled = False
+        for sym in self.all_data_symbols():
+            sym._override_ready_liveness_cell_num = -1
         return None
 
     def toggle_reactivity(self):

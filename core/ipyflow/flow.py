@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+import os
 import sys
 import textwrap
-from dataclasses import dataclass
 from types import FrameType
 from typing import (
     Any,
@@ -11,7 +11,6 @@ from typing import (
     Dict,
     Iterable,
     List,
-    NamedTuple,
     Optional,
     Set,
     Tuple,
@@ -22,9 +21,18 @@ from typing import (
 import pyccolo as pyc
 from ipykernel.comm import Comm
 from IPython import get_ipython
+from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 
 from ipyflow import singletons
 from ipyflow.analysis.symbol_ref import SymbolRef
+from ipyflow.config import (
+    DataflowSettings,
+    ExecutionMode,
+    ExecutionSchedule,
+    FlowDirection,
+    Highlights,
+    MutableDataflowSettings,
+)
 from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
@@ -32,13 +40,6 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
-from ipyflow.run_mode import (
-    ExecutionMode,
-    ExecutionSchedule,
-    FlowDirection,
-    FlowRunMode,
-    Highlights,
-)
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.tracing.watchpoint import Watchpoint
 from ipyflow.types import CellId, SupportedIndexType
@@ -46,32 +47,6 @@ from ipyflow.utils.misc_utils import cleanup_discard
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
-
-
-class NotebookSafetySettings(NamedTuple):
-    test_context: bool
-    use_comm: bool
-    mark_waiting_symbol_usages_unsafe: bool
-    mark_typecheck_failures_unsafe: bool
-    mark_phantom_cell_usages_unsafe: bool
-    mode: FlowRunMode
-
-
-@dataclass
-class MutableNotebookSafetySettings:
-    dataflow_enabled: bool
-    trace_messages_enabled: bool
-    highlights: Highlights
-    static_slicing_enabled: bool
-    dynamic_slicing_enabled: bool
-    exec_mode: ExecutionMode
-    exec_schedule: ExecutionSchedule
-    flow_order: FlowDirection
-    warn_out_of_order_usages: bool
-    lint_out_of_order_usages: bool
-    syntax_transforms_enabled: bool
-    syntax_transforms_only: bool
-    max_external_call_depth_for_tracing: int
 
 
 class NotebookFlow(singletons.NotebookFlow):
@@ -85,7 +60,7 @@ class NotebookFlow(singletons.NotebookFlow):
     ) -> None:
         super().__init__()
         cells().clear()
-        self.settings: NotebookSafetySettings = NotebookSafetySettings(
+        self.settings: DataflowSettings = DataflowSettings(
             test_context=kwargs.pop("test_context", False),
             use_comm=use_comm,
             mark_waiting_symbol_usages_unsafe=kwargs.pop(
@@ -97,33 +72,37 @@ class NotebookFlow(singletons.NotebookFlow):
             mark_phantom_cell_usages_unsafe=kwargs.pop(
                 "mark_phantom_cell_usages_unsafe", False
             ),
-            mode=FlowRunMode.get(),
         )
-        self.mut_settings: MutableNotebookSafetySettings = (
-            MutableNotebookSafetySettings(
-                dataflow_enabled=kwargs.pop("dataflow_enabled", True),
-                trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
-                highlights=kwargs.pop("highlights", Highlights.EXECUTED),
-                static_slicing_enabled=kwargs.pop("static_slicing_enabled", True),
-                dynamic_slicing_enabled=kwargs.pop("dynamic_slicing_enabled", True),
-                exec_mode=ExecutionMode(kwargs.pop("exec_mode", ExecutionMode.NORMAL)),
-                exec_schedule=ExecutionSchedule(
-                    kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
-                ),
-                flow_order=FlowDirection(
-                    kwargs.pop("flow_direction", FlowDirection.IN_ORDER)
-                ),
-                warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
-                lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
-                syntax_transforms_enabled=kwargs.pop(
-                    "syntax_transforms_enabled", sys.version_info >= (3, 8)
-                ),
-                syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
-                max_external_call_depth_for_tracing=kwargs.pop(
-                    "max_external_call_depth_for_tracing", 3
-                ),
-            )
+        self.mut_settings: MutableDataflowSettings = MutableDataflowSettings(
+            dataflow_enabled=kwargs.pop("dataflow_enabled", True),
+            trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
+            highlights=kwargs.pop("highlights", Highlights.EXECUTED),
+            static_slicing_enabled=kwargs.pop("static_slicing_enabled", True),
+            dynamic_slicing_enabled=kwargs.pop("dynamic_slicing_enabled", True),
+            exec_mode=ExecutionMode(kwargs.pop("exec_mode", ExecutionMode.NORMAL)),
+            exec_schedule=ExecutionSchedule(
+                kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
+            ),
+            flow_order=FlowDirection(
+                kwargs.pop("flow_direction", FlowDirection.IN_ORDER)
+            ),
+            warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
+            lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
+            syntax_transforms_enabled=kwargs.pop(
+                "syntax_transforms_enabled", sys.version_info >= (3, 8)
+            ),
+            syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
+            max_external_call_depth_for_tracing=kwargs.pop(
+                "max_external_call_depth_for_tracing", 3
+            ),
+            is_dev_mode=kwargs.pop(
+                "is_dev_mode", os.environ.get(PYCCOLO_DEV_MODE_ENV_VAR) == "1"
+            ),
         )
+        if self.is_dev_mode:
+            os.environ[PYCCOLO_DEV_MODE_ENV_VAR] = "1"
+        else:
+            os.environ.pop(PYCCOLO_DEV_MODE_ENV_VAR, None)
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
         # TODO: wrap this in something that clears the dict entry when the set is 0 length
@@ -216,10 +195,17 @@ class NotebookFlow(singletons.NotebookFlow):
             "max_external_call_depth_for_tracing",
             self.mut_settings.max_external_call_depth_for_tracing,
         )
+        self.mut_settings.is_dev_mode = kwargs.get(
+            "is_dev_mode", self.mut_settings.is_dev_mode
+        )
+        if self.is_dev_mode:
+            os.environ[PYCCOLO_DEV_MODE_ENV_VAR] = "1"
+        else:
+            os.environ.pop(PYCCOLO_DEV_MODE_ENV_VAR, None)
 
     @property
-    def is_develop(self) -> bool:
-        return self.settings.mode == FlowRunMode.DEVELOP
+    def is_dev_mode(self) -> bool:
+        return self.mut_settings.is_dev_mode
 
     @property
     def is_test(self) -> bool:
@@ -671,13 +657,13 @@ class NotebookFlow(singletons.NotebookFlow):
                     #  or could cause side effects upon subscripting
                     return obj[attr_or_sub]
                 else:
-                    if self.is_develop:
+                    if self.is_dev_mode:
                         assert isinstance(attr_or_sub, str)
                     return getattr(obj, cast(str, attr_or_sub))
         except (AttributeError, IndexError, KeyError):
             raise
         except Exception as e:
-            if self.is_develop:
+            if self.is_dev_mode:
                 logger.warning("unexpected exception: %s", e)
                 logger.warning("object: %s", obj)
                 logger.warning("attr / subscript: %s", attr_or_sub)

@@ -2,8 +2,8 @@
 import logging
 from typing import TYPE_CHECKING, Optional, cast
 
+from ipyflow.config import ExecutionMode
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.run_mode import ExecutionMode
 from ipyflow.singletons import flow
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.utils import CommonEqualityMixin

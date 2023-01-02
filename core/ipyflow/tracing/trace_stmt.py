@@ -68,7 +68,7 @@ class TraceStatement:
                 func_sym.full_path,
                 func_name,
             )
-            if flow().is_develop:
+            if flow().is_dev_mode:
                 raise TypeError(msg)
             else:
                 logger.warning(msg)
@@ -141,7 +141,7 @@ class TraceStatement:
         except KeyError:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
-            if flow().is_develop:
+            if flow().is_dev_mode:
                 logger.warning(
                     "keyerror for %s",
                     ast.dump(target) if isinstance(target, ast.AST) else target,
@@ -398,7 +398,7 @@ class TraceStatement:
             except KeyError as ke:
                 # e.g., slices aren't implemented yet
                 # put logging behind flag to avoid noise to user
-                if flow().is_develop:
+                if flow().is_dev_mode:
                     logger.warning(
                         "keyerror for %s",
                         ast.dump(target) if isinstance(target, ast.AST) else target,

@@ -7,8 +7,8 @@ from test.utils import make_flow_fixture
 from typing import Dict
 
 from ipyflow.analysis.slicing import make_slice_text
+from ipyflow.config import FlowDirection
 from ipyflow.data_model.code_cell import cells
-from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import flow
 
 logging.basicConfig(level=logging.ERROR)

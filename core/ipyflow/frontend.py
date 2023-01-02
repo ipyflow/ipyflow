@@ -4,9 +4,9 @@ import logging
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
+from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.singletons import flow
 from ipyflow.types import CellId
 

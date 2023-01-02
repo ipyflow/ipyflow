@@ -10,6 +10,6 @@ if [ "$1" == "ui" ]; then
     popd
 else
     pushd core
-    env PYTHONPATH="." ipython3 --quick --no-banner --quiet --colors=NoColor --simple-prompt ../scripts/test_runner.py -- $@
+    env PYTHONPATH="." PYCCOLO_DEV_MODE="1" ipython3 --quick --no-banner --quiet --colors=NoColor --simple-prompt ../scripts/test_runner.py -- $@
     popd
 fi

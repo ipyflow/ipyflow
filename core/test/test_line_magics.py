@@ -8,9 +8,9 @@ from ipyflow.annotations.compiler import (
     REGISTERED_CLASS_SPECS,
     REGISTERED_FUNCTION_SPECS,
 )
+from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import cells
 from ipyflow.line_magics import _USAGE
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.singletons import flow, kernel
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 

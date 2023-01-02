@@ -19,10 +19,10 @@ from ipyflow.annotations.compiler import (
     register_annotations_directory,
     register_annotations_file,
 )
+from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.singletons import flow, kernel
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 

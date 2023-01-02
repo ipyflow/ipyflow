@@ -26,7 +26,6 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.run_mode import FlowRunMode
 from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
@@ -108,7 +107,7 @@ class StackFrameManager(SingletonBaseTracer):
             self.external_call_depth -= not flow().is_cell_file(
                 frame.f_code.co_filename
             )
-            if flow().is_develop:
+            if flow().is_dev_mode:
                 assert self.call_depth >= 0
             if self.call_depth == 0:
                 return pyc.SkipAll
@@ -124,7 +123,7 @@ class DataflowTracer(StackFrameManager):
     def should_propagate_handler_exception(
         self, evt: pyc.TraceEvent, exc: Exception
     ) -> bool:
-        return FlowRunMode.get() == FlowRunMode.DEVELOP
+        return flow().is_dev_mode
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -404,7 +403,7 @@ class DataflowTracer(StackFrameManager):
         finally:
             if self.is_tracing_enabled:
                 self.call_stack.pop()
-            if flow().is_develop and len(self.call_stack) == 0:
+            if flow().is_dev_mode and len(self.call_stack) == 0:
                 assert self.call_depth == 1
 
     def state_transition_hook(
@@ -1309,7 +1308,7 @@ class DataflowTracer(StackFrameManager):
             self._enable_tracing()
 
     def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
-        if flow().is_develop:
+        if flow().is_dev_mode:
             assert not self.is_tracing_enabled
             assert self.call_depth > 0, (
                 "expected managed call depth > 0, got %d" % self.call_depth
@@ -1319,7 +1318,7 @@ class DataflowTracer(StackFrameManager):
             if flow().is_cell_file(frame.f_code.co_filename):
                 call_depth += 1
             frame = frame.f_back
-        if flow().is_develop:
+        if flow().is_dev_mode:
             assert call_depth >= 1, "expected call depth >= 1, got %d" % call_depth
         # TODO: allow reenabling tracing beyond just at the top level
         if call_depth != 1:
@@ -1370,7 +1369,7 @@ class DataflowTracer(StackFrameManager):
                 # TODO: this is bad and I should feel bad. Need a better way to figure out which
                 #  stmt is executing than by using line numbers.
                 parent_node = self.parent_stmt_by_id.get(id(stmt_node), None)
-                if flow().is_develop:
+                if flow().is_dev_mode:
                     logger.info(
                         "node %s parent %s",
                         ast.dump(stmt_node),
@@ -1384,7 +1383,7 @@ class DataflowTracer(StackFrameManager):
                     stmt_node = parent_node
             return stmt_node
         except KeyError as e:
-            if flow().is_develop:
+            if flow().is_dev_mode:
                 self.EVENT_LOGGER.warning(
                     "got key error for stmt node in cell %d, line %d",
                     cell_num,

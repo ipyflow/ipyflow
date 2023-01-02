@@ -47,7 +47,7 @@ class Namespace(Scope):
             and id(obj) in flow().namespaces
         ):  # pragma: no cover
             msg = "namespace already registered for %s" % obj
-            if flow().is_develop:
+            if flow().is_dev_mode:
                 raise ValueError(msg)
             else:
                 logger.warning(msg)

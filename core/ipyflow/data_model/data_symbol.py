@@ -18,6 +18,7 @@ from typing import (
 )
 
 from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
+from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.data_model import sizing
 from ipyflow.data_model.annotation_utils import (
     get_type_annotation,
@@ -26,7 +27,6 @@ from ipyflow.data_model.annotation_utils import (
 from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.update_protocol import UpdateProtocol
-from ipyflow.run_mode import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, CellId, SupportedIndexType
@@ -960,7 +960,7 @@ class DataSymbol:
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
-        if flow().is_develop:
+        if flow().is_dev_mode:
             logger.info(
                 "sym `%s` used in cell %d last updated in cell %d",
                 self,

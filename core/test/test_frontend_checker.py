@@ -5,9 +5,9 @@ from dataclasses import asdict
 from test.utils import make_flow_fixture, skipif_known_failing
 from typing import Dict
 
+from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.code_cell import cells
-from ipyflow.flow import MutableNotebookSafetySettings, NotebookSafetySettings
-from ipyflow.run_mode import ExecutionSchedule, FlowDirection
+from ipyflow.flow import DataflowSettings, MutableDataflowSettings
 from ipyflow.singletons import flow
 
 logging.basicConfig(level=logging.ERROR)
@@ -30,8 +30,8 @@ def override_settings(**kwargs):
             new_mut_settings[k] = v
         else:
             raise ValueError("key %s not in either settings or mut_settings" % k)
-    new_settings = NotebookSafetySettings(**new_settings)
-    new_mut_settings = MutableNotebookSafetySettings(**new_mut_settings)
+    new_settings = DataflowSettings(**new_settings)
+    new_mut_settings = MutableDataflowSettings(**new_mut_settings)
     try:
         flow().settings = new_settings
         flow().mut_settings = new_mut_settings

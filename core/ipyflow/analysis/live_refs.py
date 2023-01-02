@@ -13,8 +13,8 @@ from ipyflow.analysis.mixins import (
 )
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.symbol_ref import Atom, LiveSymbolRef, SymbolRef
+from ipyflow.config import FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.run_mode import FlowDirection
 from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:

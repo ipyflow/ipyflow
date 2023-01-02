@@ -30,45 +30,47 @@ A turquoise input with red output just means that the output may be out-of-sync.
 
 ### Reactivity
 
-Do you trust me? Good. It's time to free yourself of the burden of manual re-execution:
+Do you trust me? Good. It's time to free yourself of the burden of manual
+re-execution.  Use ctrl+shift+enter (on Mac, cmd+shift+enter also works) to
+execute a cell and its (recursive) dependencies reactively:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivit-hotkey.gif" />
+</p>
+
+You can also run the magic command `%flow mode reactive` in any cell to enable
+reactivity as the default execution mode:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
 </p>
 
-Simply run the magic command `%flow mode reactive` in any cell to enable
-reactivity.  Disable by running `%flow mode normal`.
+Disable by running `%flow mode normal`.
 
 ### Syntax Extensions
 
-Oh ye of little faith, oh ye unprepared to relinquish control, yet slothful
-enough to desire the same benefits of reactivity: we have toiled many hours to
-implement *reactive modifiers* that allow you to opt-in to reactivity on a
-per-symbol basis:
+Prefixing a symbol with `$` in a load context will cause the referencing cell
+to re-execute itself, whenever the aforementioned symbol is updated (regardless
+of execution mode):
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
 </p>
 
-Prefixing a symbol with `$` in a load context will cause the referencing cell
-to re-execute itself, whenever the aforementioned symbol is updated. You can
-also use the `$` syntax in store contexts, which triggers cells that reference
-the corresponding symbol to re-execute, regardless of whether the reference is
-similarly `$`-prefixed:
+You can also use the `$` syntax in store contexts, which triggers cells that
+reference the corresponding symbol to re-execute, regardless of whether the
+reference is similarly `$`-prefixed:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
 </p>
 
-You can also prefix with `$$` to trigger a cascading reactive update to all
-dependencies in the chain, recursively:
+Finally, you can also prefix with `$$` to trigger a cascading reactive update
+to all dependencies in the chain, recursively:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
 </p>
-
-Congratulations on reaching cusp of enlightenment. Now that you are here, why
-not just enable reactivity by default with `%flow mode reactive`?
 
 ## State API
 

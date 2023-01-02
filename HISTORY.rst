@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.154 (2022-01-02)
+--------------------
+* Hide verbose / developer logging behind an environment variable shared with pyccolo;
+* Improved ipywidgets integration;
+
 0.0.153 (2022-12-23)
 --------------------
 * Misc bugfixes and improvements;

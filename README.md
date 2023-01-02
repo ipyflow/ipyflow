@@ -35,7 +35,7 @@ re-execution.  Use ctrl+shift+enter (on Mac, cmd+shift+enter also works) to
 execute a cell and its (recursive) dependencies reactively:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivit-hotkey.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactive-hotkey.gif" />
 </p>
 
 You can also run the magic command `%flow mode reactive` in any cell to enable

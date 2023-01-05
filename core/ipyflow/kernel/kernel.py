@@ -547,8 +547,13 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         if prev_cell is not None:
             captured = prev_cell.captured_output
             if (
-                len(captured.outputs) > 0
-                or len(captured.stdout) + len(captured.stderr) > 256
+                sum(
+                    sum(len(datum) for datum in output.data.values())
+                    for output in captured.outputs
+                )
+                + len(captured.stdout)
+                + len(captured.stderr)
+                > 256
             ):
                 # don't save potentially large outputs for previous versions
                 prev_cell.captured_output = None

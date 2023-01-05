@@ -301,7 +301,7 @@ const connectToComm = (
     notebook.widgets.forEach((itercell, idx) => {
       cell_metadata_by_id[itercell.model.id] = {
         index: idx,
-        content: itercell.model.value.text,
+        content: itercell.model.sharedModel.getSource(),
         type: itercell.model.type,
       }
       if (itercell.model.id === cell.id) {

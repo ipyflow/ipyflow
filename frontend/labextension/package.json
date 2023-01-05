@@ -6,9 +6,9 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/nbsafety-project/nbsafety",
+  "homepage": "https://github.com/ipyflow/ipyflow",
   "bugs": {
-    "url": "https://github.com/nbsafety-project/nbsafety/issues"
+    "url": "https://github.com/ipyflow/ipyflow/issues"
   },
   "license": "BSD-3-Clause",
   "author": "Stephen Macke",
@@ -21,7 +21,7 @@
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nbsafety-project/nbsafety.git"
+    "url": "https://github.com/ipyflow/ipyflow.git"
   },
   "scripts": {
     "build": "jlpm run build:lib && jlpm run build:labextension:dev",

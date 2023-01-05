@@ -248,11 +248,17 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             yield
 
     @contextmanager
-    def _tracing_context(self, syntax_transforms_enabled: bool):
+    def _tracing_context(
+        self, syntax_transforms_enabled: bool, should_capture_output: bool
+    ):
         self.before_enter_tracing_context()
 
         try:
-            all_tracers = [tracer.instance() for tracer in self.registered_tracers]
+            all_tracers = [
+                tracer.instance()
+                for tracer in self.registered_tracers
+                if tracer is not OutputRecorder or should_capture_output
+            ]
             if self.syntax_transforms_only:
                 with self._syntax_transform_only_tracing_context(
                     syntax_transforms_enabled, all_tracers
@@ -314,24 +320,35 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
 
         # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
         should_trace = self.should_trace()
+        is_already_recording_output = cell_content.strip().startswith("%%capture")
+        should_capture_output = should_trace and not is_already_recording_output
         output_captured = False
         try:
             with self._tracing_context(
                 self.syntax_transforms_enabled
                 # disable syntax transforms for cell magics
-                and not cell_content.strip().startswith("%%")
+                and not cell_content.strip().startswith("%%"),
+                should_capture_output,
             ) if should_trace else suppress():
                 if is_async:
                     ret = await run_cell_func(cell_content)  # pragma: no cover
                 else:
                     ret = run_cell_func(cell_content)
+                if is_already_recording_output:
+                    outvar = (
+                        cell_content.strip().splitlines()[0][len("%%capture") :].strip()
+                    )
+                    # TODO: add all live refs as dependencies
+                    singletons.flow().global_scope.upsert_data_symbol_for_name(
+                        outvar, get_ipython().user_ns.get(outvar)
+                    )
             # Stage 3:  Run post-execute hook
             self.after_execute(cell_content)
-            if should_trace:
+            if should_capture_output:
                 self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
                 output_captured = True
         except Exception as e:
-            if should_trace and not output_captured:
+            if should_capture_output and not output_captured:
                 self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
             logger.exception("exception occurred")
             self.on_exception(e)
@@ -528,7 +545,13 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         ):
             prev_cell.captured_output.show()
         if prev_cell is not None:
-            prev_cell.captured_output = None
+            captured = prev_cell.captured_output
+            if (
+                len(captured.outputs) > 0
+                or len(captured.stdout) + len(captured.stderr) > 256
+            ):
+                # don't save potentially large outputs for previous versions
+                prev_cell.captured_output = None
         cell.captured_output = self.tee_output_tracer.capture_output
 
     def after_execute(self, cell_content: str) -> None:

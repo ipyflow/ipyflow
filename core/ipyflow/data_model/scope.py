@@ -245,8 +245,6 @@ class Scope:
             ):
                 prev_dsym.update_obj_ref(obj, refresh_cached=False)
                 # old_dsym.update_type(symbol_type)
-                # if we're updating a pre-existing one, it should not be an implicit upsert
-                assert stmt_node is not None
                 prev_dsym.update_stmt_node(stmt_node)
                 return prev_dsym, prev_dsym, prev_obj
             else:

@@ -24,6 +24,8 @@ import {
   Notebook
 } from '@jupyterlab/notebook';
 
+import _ from 'lodash';
+
 const IPYFLOW_KERNEL_NAME: string = 'ipyflow';
 
 type Highlights = 'all' | 'none' | 'executed' | 'reactive';
@@ -287,6 +289,40 @@ const connectToComm = (
   const comm = session.session.kernel.createComm('ipyflow');
   let disconnected = false;
 
+  const gatherCellMetadataAndContent = () => {
+    const cell_metadata_by_id: {[id: string]: {
+        index: number, content: string, type: string
+      }} = {};
+    notebook.widgets.forEach((itercell, idx) => {
+      cell_metadata_by_id[itercell.model.id] = {
+        index: idx,
+        content: itercell.model.value.text,
+        type: itercell.model.type,
+      }
+    });
+    return cell_metadata_by_id;
+  };
+
+  const onContentChanged = _.debounce(() => {
+    if (disconnected) {
+      notebook.model.contentChanged.disconnect(onContentChanged);
+      return;
+    }
+    comm.send({
+      type: 'notify_content_changed',
+      cell_metadata_by_id: gatherCellMetadataAndContent(),
+    });
+  }, 500);
+
+  const requestComputeExecSchedule = (cell?: ICellModel) => {
+    const cell_metadata_by_id = gatherCellMetadataAndContent();
+    comm.send({
+      type: 'compute_exec_schedule',
+      executed_cell_id: cell?.id,
+      cell_metadata_by_id,
+    });
+  };
+
   const onExecution = (cell: ICellModel, args: IChangedArgs<any>) => {
     if (disconnected) {
       cell.stateChanged.disconnect(onExecution);
@@ -295,27 +331,14 @@ const connectToComm = (
     if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
-    const cell_metadata_by_id: {[id: string]: {
-      index: number, content: string, type: string
-    }} = {};
     notebook.widgets.forEach((itercell, idx) => {
-      cell_metadata_by_id[itercell.model.id] = {
-        index: idx,
-        content: itercell.model.value.text,
-        type: itercell.model.type,
-      }
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(readyClass);
         itercell.node.classList.remove(readyMakingInputClass);
       }
     });
-    comm.send({
-      type: 'compute_exec_schedule',
-      executed_cell_id: cell.id,
-      cell_metadata_by_id,
-    });
+    requestComputeExecSchedule(cell);
   };
-
 
   const notifyActiveCell = (newActiveCell: ICellModel) => {
     let newActiveCellOrderIdx = -1;
@@ -397,10 +420,8 @@ const connectToComm = (
       addWaitingOutputInteractions(elem, linkedWaitingClass);
     } else if (readyCells.has(id)) {
       elem.classList.add(readyMakingInputClass);
-      if (lastExecutionMode === 'normal') {
-        elem.classList.add(readyClass);
-        addWaitingOutputInteractions(elem, linkedReadyMakerClass);
-      }
+      elem.classList.add(readyClass);
+      addWaitingOutputInteractions(elem, linkedReadyMakerClass);
     }
 
     if (lastExecutionMode === 'reactive') {
@@ -458,6 +479,8 @@ const connectToComm = (
     if (msg.content.data['type'] === 'establish') {
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
+      notebook.model.contentChanged.connect(onContentChanged);
+      requestComputeExecSchedule();
     } else if (msg.content.data['type'] === 'compute_exec_schedule') {
       waitingCells = new Set(msg.content.data['waiting_cells'] as string[]);
       readyCells = new Set(msg.content.data['ready_cells'] as string[]);

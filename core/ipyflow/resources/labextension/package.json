@@ -6,9 +6,9 @@
     "jupyterlab",
     "jupyterlab-extension"
   ],
-  "homepage": "https://github.com/nbsafety-project/nbsafety",
+  "homepage": "https://github.com/ipyflow/ipyflow",
   "bugs": {
-    "url": "https://github.com/nbsafety-project/nbsafety/issues"
+    "url": "https://github.com/ipyflow/ipyflow/issues"
   },
   "license": "BSD-3-Clause",
   "author": "Stephen Macke",
@@ -21,7 +21,7 @@
   "style": "style/index.css",
   "repository": {
     "type": "git",
-    "url": "https://github.com/nbsafety-project/nbsafety.git"
+    "url": "https://github.com/ipyflow/ipyflow.git"
   },
   "scripts": {
     "build": "jlpm run build:lib && jlpm run build:labextension:dev",
@@ -42,7 +42,8 @@
   "dependencies": {
     "@jupyterlab/application": "^3.4.3",
     "@jupyterlab/coreutils": "^5.4.3",
-    "@jupyterlab/notebook": "^3.4.3"
+    "@jupyterlab/notebook": "^3.4.3",
+    "lodash": "^4.0"
   },
   "devDependencies": {
     "@jupyterlab/builder": "^3.4.3",
@@ -63,7 +64,7 @@
     "extension": true,
     "outputDir": "../../core/ipyflow/resources/labextension/",
     "_build": {
-      "load": "static/remoteEntry.9b3ea95a5746f2f3a9a8.js",
+      "load": "static/remoteEntry.963472b32258bd6c7cdb.js",
       "extension": "./extension",
       "style": "./style"
     }

@@ -147,6 +147,9 @@ class NotebookFlow(singletons.NotebookFlow):
         self.register_comm_handler(
             "compute_exec_schedule", self.handle_compute_exec_schedule
         )
+        self.register_comm_handler(
+            "notify_content_changed", self.handle_notify_content_changed
+        )
         self.register_comm_handler("reactivity_cleanup", self.handle_reactivity_cleanup)
         self.register_comm_handler("refresh_symbols", self.handle_refresh_symbols)
         self.register_comm_handler("upsert_symbol", self.handle_upsert_symbol)
@@ -324,19 +327,17 @@ class NotebookFlow(singletons.NotebookFlow):
         self.initialize(**open_msg.get("content", {}).get("data", {}))
         comm.send({"type": "establish"})
 
-    def _create_untracked_cells_for_content(
-        self, content_by_cell_id: Dict[CellId, str]
-    ):
+    @staticmethod
+    def _create_untracked_cells_for_content(content_by_cell_id: Dict[CellId, str]):
         for cell_id, content in content_by_cell_id.items():
             cell = cells().from_id(cell_id)
             if cell is not None:
                 continue
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
-    def _recompute_ast_for_dirty_cells(self, content_by_cell_id: Dict[CellId, str]):
+    @staticmethod
+    def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[CellId, str]):
         for cell_id, content in content_by_cell_id.items():
-            if cell_id == self.last_executed_cell_id:
-                continue
             cell = cells().from_id(cell_id)
             if cell is None or cell.current_content == content:
                 continue
@@ -390,54 +391,66 @@ class NotebookFlow(singletons.NotebookFlow):
         self.set_active_cell(request["active_cell_id"])
         return None
 
+    def handle_notify_content_changed(self, request: Dict[str, Any]) -> None:
+        cell_metadata_by_id = request.get(
+            "cell_metadata_by_id", self._prev_cell_metadata_by_id
+        )
+        if cell_metadata_by_id is None:
+            # bail if we don't have this
+            # TODO: respond with an error
+            return
+        self._prev_cell_metadata_by_id = cell_metadata_by_id
+        cell_metadata_by_id = {
+            cell_id: metadata
+            for cell_id, metadata in cell_metadata_by_id.items()
+            if metadata["type"] == "code"
+            or metadata.get("override_live_refs")
+            or metadata.get("override_dead_refs")
+        }
+        order_index_by_id = {
+            cell_id: metadata["index"]
+            for cell_id, metadata in cell_metadata_by_id.items()
+        }
+        content_by_cell_id = {
+            cell_id: metadata["content"]
+            for cell_id, metadata in cell_metadata_by_id.items()
+        }
+        override_live_refs_by_cell_id = {
+            cell_id: metadata["override_live_refs"]
+            for cell_id, metadata in cell_metadata_by_id.items()
+            if metadata.get("override_live_refs")
+        }
+        override_dead_refs_by_cell_id = {
+            cell_id: metadata["override_dead_refs"]
+            for cell_id, metadata in cell_metadata_by_id.items()
+            if metadata.get("override_dead_refs")
+        }
+        self._create_untracked_cells_for_content(content_by_cell_id)
+        cells().set_cell_positions(order_index_by_id)
+        cells().set_override_refs(
+            override_live_refs_by_cell_id, override_dead_refs_by_cell_id
+        )
+        self._recompute_ast_for_dirty_cells(content_by_cell_id)
+
     def handle_compute_exec_schedule(
         self, request: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
-        last_cell_id = request.get("executed_cell_id")
+        last_cell_id = request.get("executed_cell_id", self.last_executed_cell_id)
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )
-        self._prev_cell_metadata_by_id = cell_metadata_by_id
-        cells_to_check = None
-        if cell_metadata_by_id is not None:
-            cell_metadata_by_id = {
-                cell_id: metadata
-                for cell_id, metadata in cell_metadata_by_id.items()
-                if metadata["type"] == "code"
-                or metadata.get("override_live_refs")
-                or metadata.get("override_dead_refs")
-            }
-            order_index_by_id = {
-                cell_id: metadata["index"]
-                for cell_id, metadata in cell_metadata_by_id.items()
-            }
-            content_by_cell_id = {
-                cell_id: metadata["content"]
-                for cell_id, metadata in cell_metadata_by_id.items()
-            }
-            override_live_refs_by_cell_id = {
-                cell_id: metadata["override_live_refs"]
-                for cell_id, metadata in cell_metadata_by_id.items()
-                if metadata.get("override_live_refs")
-            }
-            override_dead_refs_by_cell_id = {
-                cell_id: metadata["override_dead_refs"]
-                for cell_id, metadata in cell_metadata_by_id.items()
-                if metadata.get("override_dead_refs")
-            }
-            self._create_untracked_cells_for_content(content_by_cell_id)
-            cells().set_cell_positions(order_index_by_id)
-            cells().set_override_refs(
-                override_live_refs_by_cell_id, override_dead_refs_by_cell_id
-            )
-            cells_to_check = (
-                cell
-                for cell in (cells().from_id(cell_id) for cell_id in order_index_by_id)
-                if cell is not None
-            )
-            self._recompute_ast_for_dirty_cells(content_by_cell_id)
+        if last_cell_id is None or cell_metadata_by_id is None:
+            # bail if we don't have either of these
+            # TODO: respond with an error
+            return None
+        self.handle_notify_content_changed(request)
+        cells_to_check = (
+            cell
+            for cell in (cells().from_id(cell_id) for cell_id in cell_metadata_by_id)
+            if cell is not None
+        )
         response = self.check_and_link_multiple_cells(
             cells_to_check=cells_to_check, last_executed_cell_id=last_cell_id
         ).to_json()
@@ -468,8 +481,6 @@ class NotebookFlow(singletons.NotebookFlow):
         ):
             self.toggle_reactivity()
             self._is_reactivity_toggled = False
-        for sym in self.all_data_symbols():
-            sym._override_ready_liveness_cell_num = -1
         return None
 
     def toggle_reactivity(self):

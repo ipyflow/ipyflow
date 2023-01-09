@@ -188,6 +188,7 @@ class Scope:
         symbol_type: Optional[DataSymbolType] = None,
         propagate: bool = True,
         implicit: bool = False,
+        is_cascading_reactive: Optional[bool] = None,
     ) -> DataSymbol:
         symbol_type = symbol_type or self._resolve_symbol_type(
             overwrite=overwrite,
@@ -216,6 +217,7 @@ class Scope:
             overwrite=overwrite,
             propagate=propagate,
             refresh=not implicit,
+            is_cascading_reactive=is_cascading_reactive,
         )
         tracer().this_stmt_updated_symbols.add(dsym)
         return dsym

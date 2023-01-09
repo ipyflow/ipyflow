@@ -488,10 +488,8 @@ def static_resolve_rvals(
     return resolved_live_syms
 
 
-def any_cascading_reactive_rval_modifiers(code: Optional[Union[ast.AST, str]]) -> bool:
-    if code is None:
-        return False
-    live_refs, *_ = compute_live_dead_symbol_refs(code)
+def stmt_contains_cascading_reactive_rval(stmt: ast.stmt) -> bool:
+    live_refs, *_ = compute_live_dead_symbol_refs(stmt)
     for ref in live_refs:
         for atom in ref.ref.chain:
             if atom.is_cascading_reactive:

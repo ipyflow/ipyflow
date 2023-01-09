@@ -6,6 +6,7 @@ import sys
 from types import FrameType
 from typing import List, Optional, Set, Union, cast
 
+from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
@@ -28,6 +29,7 @@ class TraceStatement:
         self.class_scope: Optional[Namespace] = None
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
+        self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
 
     @property
     def lineno(self) -> int:
@@ -40,6 +42,14 @@ class TraceStatement:
     @property
     def stmt_id(self) -> int:
         return id(self.stmt_node)
+
+    @property
+    def stmt_contains_cascading_reactive_rval(self) -> bool:
+        if self._stmt_contains_cascading_reactive_rval is None:
+            self._stmt_contains_cascading_reactive_rval = (
+                stmt_contains_cascading_reactive_rval(self.stmt_node)
+            )
+        return self._stmt_contains_cascading_reactive_rval
 
     def _contains_lval(self) -> bool:
         return stmt_contains_lval(self.stmt_node)
@@ -170,6 +180,7 @@ class TraceStatement:
                 self.stmt_node,
                 is_subscript=subscript_val,
                 symbol_node=target,
+                is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
             )
             logger.info(
                 "sym %s upserted to scope %s has parents %s",
@@ -211,7 +222,12 @@ class TraceStatement:
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
             ns.upsert_data_symbol_for_name(
-                i, inner_dep.obj, deps, self.stmt_node, is_subscript=True
+                i,
+                inner_dep.obj,
+                deps,
+                self.stmt_node,
+                is_subscript=True,
+                is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
             )
         scope.upsert_data_symbol_for_name(
             name,
@@ -220,6 +236,7 @@ class TraceStatement:
             self.stmt_node,
             is_subscript=is_subscript,
             symbol_node=target,
+            is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
         )
         self._handle_reactive_store(target.value)
 
@@ -381,6 +398,7 @@ class TraceStatement:
                     class_scope=self.class_scope,
                     propagate=not isinstance(self.stmt_node, ast.For),
                     symbol_node=target if isinstance(target, ast.AST) else None,
+                    is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
                 )
                 if isinstance(
                     self.stmt_node,

@@ -473,39 +473,47 @@ const connectToComm = (
   };
 
   comm.onMsg = (msg) => {
-    if (disconnected) {
+    const payload = msg.content.data;
+    if (disconnected || !(payload.success ?? false)) {
       return;
     }
-    if (msg.content.data['type'] === 'establish') {
+    if (payload.type === 'establish') {
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
       notebook.model.contentChanged.connect(onContentChanged);
       requestComputeExecSchedule();
-    } else if (msg.content.data['type'] === 'compute_exec_schedule') {
-      waitingCells = new Set(msg.content.data['waiting_cells'] as string[]);
-      readyCells = new Set(msg.content.data['ready_cells'] as string[]);
+    } else if (payload.type === 'compute_exec_schedule') {
+      waitingCells = new Set(payload.waiting_cells as string[]);
+      readyCells = new Set(payload.ready_cells as string[]);
       newReadyCells = new Set([
         ...newReadyCells,
-        ...msg.content.data['new_ready_cells'] as string[],
+        ...payload.new_ready_cells as string[],
       ]);
       forcedReactiveCells = new Set([
         ...forcedReactiveCells,
-        ...msg.content.data['forced_reactive_cells'] as string[],
+        ...payload.forced_reactive_cells as string[],
       ]);
-      waiterLinks = msg.content.data['waiter_links'] as { [id: string]: string[] };
-      readyMakerLinks = msg.content.data['ready_maker_links'] as { [id: string]: string[] };
+      waiterLinks = payload.waiter_links as { [id: string]: string[] };
+      readyMakerLinks = payload.ready_maker_links as { [id: string]: string[] };
       cellPendingExecution = null;
-      const exec_mode = msg.content.data['exec_mode'] as string;
+      const exec_mode = payload.exec_mode as string;
       isReactivelyExecuting = isReactivelyExecuting || (exec_mode === 'reactive');
-      const flow_order = msg.content.data['flow_order'];
-      const exec_schedule = msg.content.data['exec_schedule'];
+      const flow_order = payload.flow_order;
+      const exec_schedule = payload.exec_schedule;
       lastExecutionMode = exec_mode;
-      lastExecutionHighlights = msg.content.data['highlights'] as Highlights;
-      const lastExecutedCellId = msg.content.data['last_executed_cell_id'] as string;
+      lastExecutionHighlights = payload.highlights as Highlights;
+      const lastExecutedCellId = payload.last_executed_cell_id as string;
       executedReactiveReadyCells.add(lastExecutedCellId);
-      const last_execution_was_error = msg.content.data['last_execution_was_error'] as boolean;
+      const last_execution_was_error = payload.last_execution_was_error as boolean;
       if (!last_execution_was_error) {
+        let lastExecutedCellIdSeen = false;
         for (const cell of notebook.widgets) {
+          if (!lastExecutedCellIdSeen) {
+            lastExecutedCellIdSeen = (cell.model.id == lastExecutedCellId);
+            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+              continue;
+            }
+          }
           if (cell.model.type !== 'code' || executedReactiveReadyCells.has(cell.model.id)) {
             continue;
           }

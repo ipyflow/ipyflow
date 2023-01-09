@@ -325,7 +325,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
         self._comm = comm
         self.initialize(**open_msg.get("content", {}).get("data", {}))
-        comm.send({"type": "establish"})
+        comm.send({"type": "establish", "success": True})
 
     @staticmethod
     def _create_untracked_cells_for_content(content_by_cell_id: Dict[CellId, str]):
@@ -370,20 +370,23 @@ class NotebookFlow(singletons.NotebookFlow):
             response = handler(request)
         except Exception as e:
             response = {
-                "type": request_type,
+                "success": False,
                 "error": str(e),
             }
         if comm is None:
             comm = self._comm
-        if comm is not None:
-            if response is None:
-                response = {"type": request_type}
-            try:
-                comm.send(response)
-            except TypeError as e:
-                raise Exception(
-                    "unable to serialize response for request of type %s" % request_type
-                ) from e
+        if comm is None:
+            return
+        if response is None:
+            response = {}
+        response["type"] = response.get("type", request_type)
+        response["success"] = response.get("success", True)
+        try:
+            comm.send(response)
+        except TypeError as e:
+            raise Exception(
+                "unable to serialize response for request of type %s" % request_type
+            ) from e
 
     def handle_change_active_cell(
         self, request: Dict[str, Any]
@@ -391,14 +394,15 @@ class NotebookFlow(singletons.NotebookFlow):
         self.set_active_cell(request["active_cell_id"])
         return None
 
-    def handle_notify_content_changed(self, request: Dict[str, Any]) -> None:
+    def handle_notify_content_changed(
+        self, request: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )
         if cell_metadata_by_id is None:
             # bail if we don't have this
-            # TODO: respond with an error
-            return
+            return {"success": False, "error": "null value for cell metadata"}
         self._prev_cell_metadata_by_id = cell_metadata_by_id
         cell_metadata_by_id = {
             cell_id: metadata
@@ -431,21 +435,26 @@ class NotebookFlow(singletons.NotebookFlow):
             override_live_refs_by_cell_id, override_dead_refs_by_cell_id
         )
         self._recompute_ast_for_dirty_cells(content_by_cell_id)
+        return None
 
     def handle_compute_exec_schedule(
         self, request: Dict[str, Any]
     ) -> Optional[Dict[str, Any]]:
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
+        self.handle_notify_content_changed(request)
         last_cell_id = request.get("executed_cell_id", self.last_executed_cell_id)
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )
         if last_cell_id is None or cell_metadata_by_id is None:
             # bail if we don't have either of these
-            # TODO: respond with an error
-            return None
-        self.handle_notify_content_changed(request)
+            null_vals = []
+            if last_cell_id is None:
+                null_vals.append("last_cell_id")
+            if cell_metadata_by_id is None:
+                null_vals.append("cell_metadata_by_id")
+            return {"success": False, "error": f"null value for {', '.join(null_vals)}"}
         cells_to_check = (
             cell
             for cell in (cells().from_id(cell_id) for cell_id in cell_metadata_by_id)
@@ -471,7 +480,7 @@ class NotebookFlow(singletons.NotebookFlow):
             self._is_reactivity_toggled = False
         return response
 
-    def handle_reactivity_cleanup(self, _request=None) -> Optional[Dict[str, Any]]:
+    def handle_reactivity_cleanup(self, _request=None) -> None:
         self.min_cascading_reactive_cell_num = self.cell_counter()
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
@@ -481,7 +490,6 @@ class NotebookFlow(singletons.NotebookFlow):
         ):
             self.toggle_reactivity()
             self._is_reactivity_toggled = False
-        return None
 
     def toggle_reactivity(self):
         if self.mut_settings.exec_mode == ExecutionMode.NORMAL:
@@ -492,7 +500,7 @@ class NotebookFlow(singletons.NotebookFlow):
             raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
         self._is_reactivity_toggled = True
 
-    def handle_refresh_symbols(self, request) -> Optional[Dict[str, Any]]:
+    def handle_refresh_symbols(self, request) -> None:
         for symbol_str in request.get("symbols", []):
             symbol_ref = SymbolRef.from_string(symbol_str)
             for resolved in symbol_ref.gen_resolved_symbols(
@@ -505,7 +513,7 @@ class NotebookFlow(singletons.NotebookFlow):
         symbol_name = request["symbol"]
         user_globals = get_ipython().user_global_ns
         if symbol_name not in user_globals:
-            return None
+            return {"success": False}
         dep_symbols = set()
         for dep in request.get("deps", []):
             dep_sym = SymbolRef.resolve(dep)
@@ -516,7 +524,7 @@ class NotebookFlow(singletons.NotebookFlow):
             symbol_name
         )
         if prev_sym is not None and prev_sym.obj is obj:
-            return None
+            return {"success": False}
         with Timestamp.offset(stmt_offset=-1):
             self.global_scope.upsert_data_symbol_for_name(
                 symbol_name, obj, dep_symbols, ast.parse("pass").body[0]

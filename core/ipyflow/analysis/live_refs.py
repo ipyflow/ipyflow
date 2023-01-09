@@ -381,8 +381,6 @@ def get_live_symbols_and_cells_for_references(
                     exclude_ns=not resolved.is_last,
                     is_static=True,
                 )
-                if resolved.is_cascading_reactive:
-                    resolved.dsym.bump_cascading_reactive_cell_num(cell_ctr)
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))
             if not resolved.is_unsafe:
@@ -481,10 +479,21 @@ def compute_live_dead_symbol_refs(
 
 
 def static_resolve_rvals(
-    code: Union[ast.AST, str], cell_ctr: int = -1
+    code: Union[ast.AST, str], cell_ctr: int = -1, scope: Optional["Scope"] = None
 ) -> Set[ResolvedDataSymbol]:
     live_refs, *_ = compute_live_dead_symbol_refs(code)
     resolved_live_syms, *_ = get_live_symbols_and_cells_for_references(
-        live_refs, flow().global_scope, cell_ctr=cell_ctr
+        live_refs, scope or flow().global_scope, cell_ctr=cell_ctr
     )
     return resolved_live_syms
+
+
+def any_cascading_reactive_rval_modifiers(code: Optional[Union[ast.AST, str]]) -> bool:
+    if code is None:
+        return False
+    live_refs, *_ = compute_live_dead_symbol_refs(code)
+    for ref in live_refs:
+        for atom in ref.ref.chain:
+            if atom.is_cascading_reactive:
+                return True
+    return False

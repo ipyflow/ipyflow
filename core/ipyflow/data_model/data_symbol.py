@@ -17,6 +17,7 @@ from typing import (
     cast,
 )
 
+from ipyflow.analysis.live_refs import any_cascading_reactive_rval_modifiers
 from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.data_model import sizing
@@ -95,6 +96,7 @@ class DataSymbol:
         self.call_scope: Optional[Scope] = None
         self.func_def_stmt: Optional[ast.stmt] = None
         self.stmt_node = self.update_stmt_node(stmt_node)
+        self._stmt_node_has_cascading_reactive_rval_modifiers: Optional[bool] = None
         self.symbol_node = symbol_node
         self._funcall_live_symbols = None
         self.parents: Dict["DataSymbol", List[Timestamp]] = {}
@@ -593,9 +595,17 @@ class DataSymbol:
         cleanup_discard(flow().aliases, self.cached_obj_id, self)
         flow().aliases.setdefault(self.obj_id, set()).add(self)
 
+    def stmt_node_has_cascading_reactive_rval_modifiers(self) -> bool:
+        if self._stmt_node_has_cascading_reactive_rval_modifiers is None:
+            self._stmt_node_has_cascading_reactive_rval_modifiers = (
+                any_cascading_reactive_rval_modifiers(self.stmt_node)
+            )
+        return self._stmt_node_has_cascading_reactive_rval_modifiers
+
     def update_stmt_node(self, stmt_node: Optional[ast.stmt]) -> Optional[ast.stmt]:
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
+        self._stmt_node_has_cascading_reactive_rval_modifiers = None
         if self.is_function or (
             stmt_node is not None and isinstance(stmt_node, ast.Lambda)
         ):
@@ -868,9 +878,15 @@ class DataSymbol:
             self._cascading_reactive_cell_num = -1
             flow().updated_reactive_symbols.discard(self)
             flow().updated_deep_reactive_symbols.discard(self)
-        if any(
+            is_cascading_reactive = (
+                self.stmt_node_has_cascading_reactive_rval_modifiers()
+            )
+        else:
+            is_cascading_reactive = False
+        is_cascading_reactive = is_cascading_reactive or any(
             dsym.is_cascading_reactive_at_counter(prev_cell_ctr) for dsym in new_deps
-        ):
+        )
+        if is_cascading_reactive:
             bump_version = refresh
             self.bump_cascading_reactive_cell_num()
         elif self.cascading_reactive_cell_num() == flow().cell_counter():

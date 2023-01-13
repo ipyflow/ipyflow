@@ -34,7 +34,7 @@
     "eslint": "eslint . --ext .ts,.tsx --fix",
     "eslint:check": "eslint . --ext .ts,.tsx",
     "install:extension": "jupyter labextension develop --overwrite .",
-    "prepare": "jlpm run clean && jlpm run build:prod",
+    "prepare": "jlpm run clean && jlpm run build",
     "watch": "run-p watch:src watch:labextension",
     "watch:src": "tsc -w",
     "watch:labextension": "jupyter labextension watch ."
@@ -65,7 +65,7 @@
     "extension": true,
     "outputDir": "../../core/ipyflow/resources/labextension/",
     "_build": {
-      "load": "static/remoteEntry.6594ca7c19e7b1354435.js",
+      "load": "static/remoteEntry.1537f3d9b283fabe0099.js",
       "extension": "./extension",
       "style": "./style"
     }

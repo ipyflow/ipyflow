@@ -443,6 +443,7 @@ class NotebookFlow(singletons.NotebookFlow):
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
         self.handle_notify_content_changed(request)
+        self._add_parents_for_override_live_refs()
         last_cell_id = request.get("executed_cell_id", self.last_executed_cell_id)
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
@@ -502,11 +503,9 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_refresh_symbols(self, request) -> None:
         for symbol_str in request.get("symbols", []):
-            symbol_ref = SymbolRef.from_string(symbol_str)
-            for resolved in symbol_ref.gen_resolved_symbols(
-                self.global_scope, only_yield_final_symbol=True
-            ):
-                resolved.dsym.refresh()
+            dsym = SymbolRef.resolve(symbol_str)
+            if dsym is not None:
+                dsym.refresh()
         return None
 
     def handle_upsert_symbol(self, request) -> Optional[Dict[str, Any]]:
@@ -586,6 +585,14 @@ class NotebookFlow(singletons.NotebookFlow):
             self.out_of_order_usage_detected_counter = max(
                 (cell.position, cell.cell_ctr) for cell in unsafe_order_cells
             )[1]
+
+    def _add_parents_for_override_live_refs(self) -> None:
+        for live_sym_ref in cells().current_cell().override_live_refs or []:
+            sym = SymbolRef.resolve(live_sym_ref)
+            if sym is not None:
+                self.add_static_data_dep(
+                    Timestamp(self.cell_counter(), 0), sym.timestamp, sym
+                )
 
     def _resync_symbols(self, symbols: Iterable[DataSymbol]):
         for dsym in symbols:

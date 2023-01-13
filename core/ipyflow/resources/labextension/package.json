@@ -55,7 +55,8 @@
     "eslint-plugin-prettier": "^4.0.0",
     "prettier": "2.6.0",
     "rimraf": "^3.0.2",
-    "typescript": "4.3.5"
+    "typescript": "4.3.5",
+    "webpack": "^5.75.0"
   },
   "sideEffects": [
     "style/*.css"
@@ -64,7 +65,7 @@
     "extension": true,
     "outputDir": "../../core/ipyflow/resources/labextension/",
     "_build": {
-      "load": "static/remoteEntry.1537f3d9b283fabe0099.js",
+      "load": "static/remoteEntry.6594ca7c19e7b1354435.js",
       "extension": "./extension",
       "style": "./style"
     }

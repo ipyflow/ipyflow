@@ -1,6 +1,15 @@
 History
 =======
 
+0.0.155 (2022-01-12)
+--------------------
+* Basic integration with %%capture magic;
+* Improve ipywidgets integration;
+* Support periodic content notifications to kernel;
+* Ensure override_live_refs are included as static parents for dag scheduling;
+* Misc bugfixes around cascading reactivity;
+* Misc other bugfixes;
+
 0.0.154 (2022-01-02)
 --------------------
 * Hide verbose / developer logging behind an environment variable shared with pyccolo;

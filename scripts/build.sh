@@ -10,7 +10,7 @@ set -euxo pipefail
 mkdir -p ./core/ipyflow/resources/labextension
 mkdir -p ./core/ipyflow/resources/nbextension
 pushd ./frontend/labextension
-yarn install --frozen-lockfile && npm run build:prod
+yarn install --frozen-lockfile && npm run build
 popd
 pushd ./frontend/nbextension
 yarn install --frozen-lockfile && npm run build

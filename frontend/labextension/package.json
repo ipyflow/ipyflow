@@ -33,6 +33,8 @@
     "clean:lib": "rimraf lib tsconfig.tsbuildinfo",
     "eslint": "eslint . --ext .ts,.tsx --fix",
     "eslint:check": "eslint . --ext .ts,.tsx",
+    "format": "prettier --write 'src/*.ts'",
+    "lint": "prettier --check 'src/*.ts'",
     "install:extension": "jupyter labextension develop --overwrite .",
     "prepare": "npm run clean && npm run build",
     "watch": "run-p watch:src watch:labextension",

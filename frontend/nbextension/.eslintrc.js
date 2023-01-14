@@ -12,9 +12,17 @@ module.exports = {
   },
   plugins: ['@typescript-eslint'],
   rules: {
-    '@typescript-eslint/interface-name-prefix': [
-      'error',
-      { prefixWithI: 'always' }
+    // ref: https://stackoverflow.com/questions/62915344/eslint-error-when-adding-rule-typescript-eslint-interface-name-prefix
+    "@typescript-eslint/naming-convention": [
+      "error",
+      {
+        "selector": "interface",
+        "format": ["PascalCase"],
+        "custom": {
+          "regex": "^I[A-Z]",
+          "match": true
+        }
+      }
     ],
     '@typescript-eslint/no-unused-vars': ['warn', { args: 'none' }],
     '@typescript-eslint/no-explicit-any': 'off',

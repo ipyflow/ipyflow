@@ -30,7 +30,8 @@
     "eslint": "eslint . --ext .ts,.tsx --fix",
     "eslint:check": "eslint . --ext .ts,.tsx",
     "format": "prettier --write 'src/*.ts'",
-    "lint": "prettier --check 'src/*.ts'"
+    "lint": "prettier --check 'src/*.ts'",
+    "prepare": "npm run clean && npm run build"
   },
   "devDependencies": {
     "@types/webpack-env": "^1.16.0",

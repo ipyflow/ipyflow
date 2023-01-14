@@ -1,0 +1,1 @@
+{"argv": ["python", "-m", "ipyflow.kernel", "-f", "{connection_file}"], "codemirror_mode": "shell", "display_name": "Python 3 (ipyflow)", "language": "python"}

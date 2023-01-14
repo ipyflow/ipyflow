@@ -5,6 +5,8 @@
 **/.ipynb_checkpoints
 *.bundle.*
 *.tsbuildinfo
+core/ipyflow/resources/labextension/
+core/ipyflow/resources/nbextension/
 frontend/**/lib/
 frontend/**/node_modules/
 build/

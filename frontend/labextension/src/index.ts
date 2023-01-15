@@ -39,6 +39,7 @@ let cellPendingExecution: CodeCell = null;
 
 let lastExecutionMode: string = null;
 let isReactivelyExecuting = false;
+let isAltModeExecuting = false;
 let lastExecutionHighlights: Highlights = null;
 let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
@@ -64,7 +65,8 @@ const extension: JupyterFrontEndPlugin<void> = {
       isVisible: () => true,
       isToggled: () => false,
       execute: () => {
-        if (notebooks.activeCell.model.type === 'code') {
+        if (!isAltModeExecuting && notebooks.activeCell.model.type === 'code') {
+          isAltModeExecuting = true;
           const session = notebooks.currentWidget.sessionContext;
           if (session.isReady && notebooks.activeCell.model.type === 'code') {
             session.session.kernel
@@ -608,6 +610,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
         executedReactiveReadyCells = new Set();
         updateUI(notebook);
         isReactivelyExecuting = false;
+        isAltModeExecuting = false;
       } else {
         isReactivelyExecuting = true;
         onActiveCellChange(notebook, cellPendingExecution);

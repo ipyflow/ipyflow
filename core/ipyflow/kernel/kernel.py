@@ -546,7 +546,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
             prev_cell.captured_output.show()
         if prev_cell is not None:
             captured = prev_cell.captured_output
-            if (
+            if captured is not None and (
                 sum(
                     sum(len(datum) for datum in output.data.values())
                     for output in captured.outputs

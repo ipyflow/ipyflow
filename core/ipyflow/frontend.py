@@ -21,8 +21,8 @@ def _make_range_from_node(node: ast.AST) -> Dict[str, Any]:
             "character": node.col_offset,
         },
         "end": {
-            "line": node.end_lineno - 1,
-            "character": getattr(node, "end_col_offset", -1),
+            "line": getattr(node, "end_lineno", 0) - 1,
+            "character": getattr(node, "end_col_offset", 0) - 1,
         },
     }
 

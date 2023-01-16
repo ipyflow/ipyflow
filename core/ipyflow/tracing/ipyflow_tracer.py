@@ -6,7 +6,18 @@ import sys
 from collections import defaultdict
 from contextlib import contextmanager
 from types import FrameType, ModuleType
-from typing import TYPE_CHECKING, Any, cast, Dict, Generator, List, Optional, Set, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+    cast,
+)
 
 import pyccolo as pyc
 from IPython import get_ipython

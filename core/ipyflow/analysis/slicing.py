@@ -10,10 +10,12 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow
 from ipyflow.types import TimestampOrCounter
 
-if hasattr(ast, "unparse"):
+if TYPE_CHECKING:
+    import astunparse
+elif hasattr(ast, "unparse"):
     astunparse = ast
 else:
-    import astunparse  # type: ignore
+    import astunparse
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell

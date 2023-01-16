@@ -6,7 +6,7 @@ import sys
 from collections import defaultdict
 from contextlib import contextmanager
 from types import FrameType, ModuleType
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Union, cast
+from typing import TYPE_CHECKING, Any, cast, Dict, Generator, List, Optional, Set, Tuple, Union
 
 import pyccolo as pyc
 from IPython import get_ipython
@@ -35,10 +35,12 @@ from ipyflow.tracing.trace_stmt import TraceStatement
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import SupportedIndexType
 
-if hasattr(ast, "unparse"):
+if TYPE_CHECKING:
+    import astunparse
+elif hasattr(ast, "unparse"):
     astunparse = ast
 else:
-    import astunparse  # type: ignore
+    import astunparse
 
 AttrSubVal = SupportedIndexType
 NodeId = int

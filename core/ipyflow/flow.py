@@ -60,43 +60,88 @@ class NotebookFlow(singletons.NotebookFlow):
     ) -> None:
         super().__init__()
         cells().clear()
+        config = get_ipython().config.ipyflow
         self.settings: DataflowSettings = DataflowSettings(
             test_context=kwargs.pop("test_context", False),
             use_comm=use_comm,
             mark_waiting_symbol_usages_unsafe=kwargs.pop(
-                "mark_waiting_symbol_usages_unsafe", True
+                "mark_waiting_symbol_usages_unsafe",
+                getattr(config, "mark_waiting_symbol_usages_unsafe", True),
             ),
             mark_typecheck_failures_unsafe=kwargs.pop(
-                "mark_typecheck_failures_unsafe", False
+                "mark_typecheck_failures_unsafe",
+                getattr(config, "mark_typecheck_failures_unsafe", False),
             ),
             mark_phantom_cell_usages_unsafe=kwargs.pop(
-                "mark_phantom_cell_usages_unsafe", False
+                "mark_phantom_cell_usages_unsafe",
+                getattr(config, "mark_phantom_cell_usages_unsafe", False),
             ),
         )
         self.mut_settings: MutableDataflowSettings = MutableDataflowSettings(
             dataflow_enabled=kwargs.pop("dataflow_enabled", True),
             trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
             highlights=kwargs.pop("highlights", Highlights.EXECUTED),
-            static_slicing_enabled=kwargs.pop("static_slicing_enabled", True),
-            dynamic_slicing_enabled=kwargs.pop("dynamic_slicing_enabled", True),
-            exec_mode=ExecutionMode(kwargs.pop("exec_mode", ExecutionMode.NORMAL)),
+            static_slicing_enabled=kwargs.pop(
+                "static_slicing_enabled",
+                getattr(config, "static_slicing_enabled", True),
+            ),
+            dynamic_slicing_enabled=kwargs.pop(
+                "dynamic_slicing_enabled",
+                getattr(config, "dynamic_slicing_enabled", True),
+            ),
+            exec_mode=ExecutionMode(
+                kwargs.pop(
+                    "exec_mode",
+                    ExecutionMode(getattr(config, "exec_mode", ExecutionMode.NORMAL)),
+                )
+            ),
             exec_schedule=ExecutionSchedule(
-                kwargs.pop("exec_schedule", ExecutionSchedule.LIVENESS_BASED)
+                kwargs.pop(
+                    "exec_schedule",
+                    ExecutionSchedule(
+                        getattr(
+                            config, "exec_schedule", ExecutionSchedule.LIVENESS_BASED
+                        )
+                    ),
+                )
             ),
             flow_order=FlowDirection(
-                kwargs.pop("flow_direction", FlowDirection.IN_ORDER)
+                kwargs.pop(
+                    "flow_direction",
+                    FlowDirection(
+                        getattr(config, "flow_direction", FlowDirection.IN_ORDER)
+                    ),
+                )
             ),
-            warn_out_of_order_usages=kwargs.pop("warn_out_of_order_usages", False),
-            lint_out_of_order_usages=kwargs.pop("lint_out_of_order_usages", False),
+            warn_out_of_order_usages=kwargs.pop(
+                "warn_out_of_order_usages",
+                getattr(config, "warn_out_of_order_usages", False),
+            ),
+            lint_out_of_order_usages=kwargs.pop(
+                "lint_out_of_order_usages",
+                getattr(config, "lint_out_of_order_usages", False),
+            ),
             syntax_transforms_enabled=kwargs.pop(
-                "syntax_transforms_enabled", sys.version_info >= (3, 8)
+                "syntax_transforms_enabled",
+                getattr(
+                    config, "syntax_transforms_enabled", sys.version_info >= (3, 8)
+                ),
             ),
-            syntax_transforms_only=kwargs.pop("syntax_transforms_only", False),
+            syntax_transforms_only=kwargs.pop(
+                "syntax_transforms_only",
+                getattr(config, "syntax_transforms_only", False),
+            ),
             max_external_call_depth_for_tracing=kwargs.pop(
-                "max_external_call_depth_for_tracing", 3
+                "max_external_call_depth_for_tracing",
+                getattr(config, "max_external_call_depth_for_tracing", 3),
             ),
             is_dev_mode=kwargs.pop(
-                "is_dev_mode", os.environ.get(PYCCOLO_DEV_MODE_ENV_VAR) == "1"
+                "is_dev_mode",
+                getattr(
+                    config,
+                    "is_dev_mode",
+                    os.environ.get(PYCCOLO_DEV_MODE_ENV_VAR) == "1",
+                ),
             ),
         )
         if self.is_dev_mode:
@@ -175,31 +220,54 @@ class NotebookFlow(singletons.NotebookFlow):
         self._virtual_symbols_inited = True
 
     def initialize(self, *, entrypoint: Optional[str] = None, **kwargs) -> None:
-        self.mut_settings.dataflow_enabled = kwargs.get("dataflow_enabled", True)
-        self.mut_settings.syntax_transforms_enabled = kwargs.get(
-            "syntax_transforms_enabled", sys.version_info >= (3, 8)
+        config = get_ipython().config.ipyflow
+        self.mut_settings.dataflow_enabled = getattr(
+            config, "dataflow_enabled", kwargs.get("dataflow_enabled", True)
         )
-        self.mut_settings.syntax_transforms_only = kwargs.get(
-            "syntax_transforms_only", False
+        self.mut_settings.syntax_transforms_enabled = getattr(
+            config,
+            "syntax_transforms_enabled",
+            kwargs.get("syntax_transforms_enabled", sys.version_info >= (3, 8)),
+        )
+        self.mut_settings.syntax_transforms_only = getattr(
+            config,
+            "syntax_transforms_only",
+            kwargs.get("syntax_transforms_only", False),
         )
         self.mut_settings.exec_mode = ExecutionMode(
-            kwargs.get("exec_mode", ExecutionMode.NORMAL)
+            getattr(config, "exec_mode", kwargs.get("exec_mode", ExecutionMode.NORMAL))
         )
         self.mut_settings.exec_schedule = ExecutionSchedule(
-            kwargs.get("exec_schedule", ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED)
+            getattr(
+                config,
+                "exec_schedule",
+                kwargs.get(
+                    "exec_schedule", ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
+                ),
+            )
         )
         self.mut_settings.flow_order = FlowDirection(
-            kwargs.get("flow_order", FlowDirection.IN_ORDER)
+            getattr(
+                config,
+                "flow_direction",
+                kwargs.get("flow_direction", FlowDirection.IN_ORDER),
+            )
         )
         self.mut_settings.highlights = Highlights(
-            kwargs.get("highlights", Highlights.EXECUTED)
+            getattr(config, "highlights", kwargs.get("highlights", Highlights.EXECUTED))
         )
-        self.mut_settings.max_external_call_depth_for_tracing = kwargs.get(
+        self.mut_settings.max_external_call_depth_for_tracing = getattr(
+            config,
             "max_external_call_depth_for_tracing",
-            self.mut_settings.max_external_call_depth_for_tracing,
+            kwargs.get(
+                "max_external_call_depth_for_tracing",
+                self.mut_settings.max_external_call_depth_for_tracing,
+            ),
         )
-        self.mut_settings.is_dev_mode = kwargs.get(
-            "is_dev_mode", self.mut_settings.is_dev_mode
+        self.mut_settings.is_dev_mode = getattr(
+            config,
+            "is_dev_mode",
+            kwargs.get("is_dev_mode", self.mut_settings.is_dev_mode),
         )
         if self.is_dev_mode:
             os.environ[PYCCOLO_DEV_MODE_ENV_VAR] = "1"

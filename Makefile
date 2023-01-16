@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean black blackcheck imports build deploy_only deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel nbext
+.PHONY: clean black blackcheck eslint imports build deploy_only deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel nbext
 
 clean:
 	rm -rf __pycache__ core/__pycache__ build/ core/build/ core/dist/ dist/ ipyflow.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
@@ -48,7 +48,10 @@ coverage:
 xmlcov: coverage
 	coverage xml
 
-check: blackcheck typecheck check_no_typing
+eslint:
+	./scripts/eslint.sh
+
+check: eslint blackcheck typecheck check_no_typing
 
 test: check
 tests: check

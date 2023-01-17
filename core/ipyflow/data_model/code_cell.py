@@ -105,6 +105,7 @@ class CodeCell(CodeCellSlicingMixin):
             None if flow().settings.mark_typecheck_failures_unsafe else True
         )
         self._ready: bool = False
+        self._extra_stmt: Optional[ast.stmt] = None
 
     @classmethod
     def clear(cls):

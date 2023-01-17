@@ -17,6 +17,8 @@ from typing import (
     cast,
 )
 
+from pyccolo import fast
+
 from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.data_model import sizing
@@ -115,6 +117,7 @@ class DataSymbol:
         self._defined_cell_num = cells().exec_counter()
         self._cascading_reactive_cell_num = -1
         self._override_ready_liveness_cell_num = -1
+        self._override_timestamp: Optional[Timestamp] = None
         self.watchpoints = Watchpoints()
 
         # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
@@ -192,11 +195,14 @@ class DataSymbol:
 
     @property
     def timestamp_excluding_ns_descendents(self) -> Timestamp:
-        return self._timestamp
+        if self._override_timestamp is None:
+            return self._timestamp
+        else:
+            return max(self._timestamp, self._override_timestamp)
 
     @property
     def timestamp(self) -> Timestamp:
-        ts = self._timestamp
+        ts = self.timestamp_excluding_ns_descendents
         if self.is_import or self.is_module:
             return ts
         ns = self.namespace
@@ -205,7 +211,7 @@ class DataSymbol:
     def compute_namespace_timestamps(
         self, seen: Optional[Set["DataSymbol"]] = None
     ) -> Set[Timestamp]:
-        timestamps = {self._timestamp, self.timestamp}
+        timestamps = {self.timestamp_excluding_ns_descendents, self.timestamp}
         ns = self.namespace
         if ns is None:
             return timestamps
@@ -219,7 +225,7 @@ class DataSymbol:
         return timestamps
 
     def code(self) -> str:
-        ts = self._timestamp
+        ts = self.timestamp_excluding_ns_descendents
         if ts.cell_num == -1:
             timestamps = {Timestamp(self.defined_cell_num, ts.stmt_num)}
         else:
@@ -936,12 +942,21 @@ class DataSymbol:
     def _observe_widget(self, msg: Dict[str, Any]) -> None:
         if msg.get("name") != "value" or "new" not in msg:
             return
-        # newval = msg["new"]
         ns = self.namespace
         sym = ns.lookup_data_symbol_by_name_this_indentation("value")
         if sym is None:
             return
+        newval = msg["new"]
+        current_ts_cell = cells().from_timestamp(self._timestamp)
+        current_ts_cell._extra_stmt = ast.parse(f"{sym.readable_name} = {newval}").body[
+            0
+        ]
         sym._override_ready_liveness_cell_num = flow().cell_counter() + 1
+        sym._override_timestamp = Timestamp(
+            self._timestamp.cell_num, self._timestamp.stmt_num + 1
+        )
+        flow().add_dynamic_data_dep(sym._timestamp, sym._override_timestamp, sym)
+        flow().add_dynamic_data_dep(sym._override_timestamp, sym._timestamp, sym)
         _debounced_exec_schedule(cells().from_timestamp(self.timestamp).cell_id)
 
     def namespaced(self) -> "Namespace":
@@ -1020,12 +1035,13 @@ class DataSymbol:
         self._temp_disable_warnings = False
         if bump_version:
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
+            self._override_timestamp = None
             for cell in self.cells_where_live:
                 cell.add_used_cell_counter(self, self._timestamp.cell_num)
             ns = self.containing_namespace
             if ns is not None:
                 # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
-                ns.max_descendent_timestamp = self._timestamp
+                ns.max_descendent_timestamp = self.timestamp_excluding_ns_descendents
                 for alias in flow().aliases.get(ns.obj_id, []):
                     for cell in alias.cells_where_deep_live:
                         cell.add_used_cell_counter(alias, self._timestamp.cell_num)
@@ -1057,7 +1073,7 @@ class DataSymbol:
                         # )
                         dsym.refresh(
                             refresh_descendent_namespaces=True,
-                            timestamp=self._timestamp,
+                            timestamp=self.timestamp_excluding_ns_descendents,
                             seen=seen,
                         )
             if refresh_namespace_waiting:

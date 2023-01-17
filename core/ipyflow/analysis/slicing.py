@@ -243,7 +243,8 @@ class CodeCellSlicingMixin:
         stmts_by_cell_num = defaultdict(list)
         seen_stmt_ids = set()
         for ts in sorted(timestamps):
-            cell_stmts = cls.from_timestamp(ts.cell_num).to_ast().body
+            cell = cls.from_timestamp(ts)
+            cell_stmts = cell.to_ast().body + [cell._extra_stmt]
             if ts.stmt_num < len(cell_stmts):
                 stmt = cell_stmts[ts.stmt_num]
                 stmt_id = id(stmt)

@@ -243,9 +243,33 @@ class CallerMutation(ExternalCallHandler):
         self.mutate_caller(should_propagate=True)
 
 
+class CallerUpsert(ExternalCallHandler):
+    def handle(self) -> None:
+        for module_sym in flow().aliases.get(id(self.caller_self), []):
+            module_sym.update_deps(
+                self.arg_dsyms,
+                overwrite=True,
+                propagate_to_namespace_descendents=True,
+                refresh=True,
+            )
+            tracer().pending_usage_updates_by_sym.pop(module_sym, None)
+
+
 class ModuleMutation(ExternalCallHandler):
     def handle(self) -> None:
         self.mutate_module(should_propagate=True)
+
+
+class ModuleUpsert(ExternalCallHandler):
+    def handle(self) -> None:
+        for module_sym in flow().aliases.get(id(self.module), []):
+            module_sym.update_deps(
+                self.arg_dsyms,
+                overwrite=True,
+                propagate_to_namespace_descendents=True,
+                refresh=True,
+            )
+            tracer().pending_usage_updates_by_sym.pop(module_sym, None)
 
 
 class NamespaceClear(StandardMutation):

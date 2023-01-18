@@ -10,13 +10,15 @@ import sys
 from types import ModuleType
 from typing import Dict, List, Optional, Set, Tuple, Type, Union
 
-from ipyflow.annotations.annotations import Mutate
+from ipyflow.annotations.annotations import Mutate, UpsertSymbol
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,
     REGISTERED_HANDLER_BY_METHOD,
     CallerMutation,
+    CallerUpsert,
     ExternalCallHandler,
     ModuleMutation,
+    ModuleUpsert,
     external_call_handler_by_name,
 )
 from ipyflow.utils.ast_utils import subscript_to_slice
@@ -30,7 +32,7 @@ REGISTERED_FUNCTION_SPECS: Dict[str, List[ast.FunctionDef]] = {}
 
 @functools.lru_cache(maxsize=None)
 def _mutate_argument(
-    pos: Optional[int], name: Optional[str]
+    pos: Optional[int], name: Optional[str], overwrite: bool = False
 ) -> Type[ExternalCallHandler]:
     if pos is None and name is None:
         raise ValueError("pos and name cannot both be None")
@@ -48,7 +50,7 @@ def _mutate_argument(
             dsym = next(iter(dsyms))
             if dsym is None:
                 return
-            dsym.update_deps(set(), overwrite=False, mutated=True)
+            dsym.update_deps(set(), overwrite=overwrite, mutated=not overwrite)
 
     return MutateArgument
 
@@ -79,18 +81,25 @@ def _arg_position_in_signature(
 
 
 def _make_mutate_name_handler(
-    func: ast.FunctionDef, is_method: bool, name: str
+    func: ast.FunctionDef, is_method: bool, name: str, overwrite: bool = False
 ) -> Type[ExternalCallHandler]:
     if name == "__module__":
-        return ModuleMutation
+        if overwrite:
+            return ModuleUpsert
+        else:
+            return ModuleMutation
     elif name == "self":
         if is_method:
-            return CallerMutation
+            if overwrite:
+                return CallerUpsert
+            else:
+                return CallerMutation
     else:
         pos, is_posonly = _arg_position_in_signature(func, name, is_method=is_method)
         return _mutate_argument(
             pos=pos,
             name=None if is_posonly else name,
+            overwrite=overwrite,
         )
 
 
@@ -114,10 +123,14 @@ def compile_function_handler(
         sub_value = ret.value
         slice_value = subscript_to_slice(ret)
         if isinstance(sub_value, ast.Name):
-            if sub_value.id == Mutate.__name__:
+            if sub_value.id == Mutate.__name__ or sub_value.id == UpsertSymbol.__name__:
+                overwrite = sub_value.id == UpsertSymbol.__name__
                 if isinstance(slice_value, ast.Name):
                     return _make_mutate_name_handler(
-                        func, is_method=is_method, name=slice_value.id
+                        func,
+                        is_method=is_method,
+                        name=slice_value.id,
+                        overwrite=overwrite,
                     )
                 elif isinstance(slice_value, ast.Tuple):
                     handlers = []
@@ -126,7 +139,10 @@ def compile_function_handler(
                             break
                         handlers.append(
                             _make_mutate_name_handler(
-                                func, is_method=is_method, name=elt.id
+                                func,
+                                is_method=is_method,
+                                name=elt.id,
+                                overwrite=overwrite,
                             )
                         )
                     else:

@@ -452,7 +452,7 @@ class CodeCell(CodeCellSlicingMixin):
                             min_allowed_cell_position_by_symbol is None
                             or used_cell_position
                             >= min_allowed_cell_position_by_symbol.get(
-                                sym.dsym, float("inf")
+                                sym.dsym, cast(int, float("inf"))
                             )
                         ):
                             max_used_cell_ctr = max(

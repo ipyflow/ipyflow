@@ -55,26 +55,28 @@ class ResolveRvalSymbols(
         finally:
             self.dead -= not_present_before
 
-    def _update_usage_info(
+    def _add_to_resolved(
         self,
         symbols: Iterable[DataSymbol],
         used_node: ast.AST,
         should_extend: bool = True,
+        should_update_usage_info: bool = True,
     ) -> None:
         symbols = set(symbols)
         if self._in_kill_context:
             self.dead |= set(symbols)
         elif self.update_usage_info:
             symbols = [symbol for symbol in symbols if symbol not in self.dead]
-            Timestamp.update_usage_info(
-                symbols, used_node=used_node, exclude_ns=self.exclude_ns
-            )
+            if should_update_usage_info:
+                Timestamp.update_usage_info(
+                    symbols, used_node=used_node, exclude_ns=self.exclude_ns
+                )
             if should_extend:
                 self.symbols.extend(symbols)
 
     def visit_Name(self, node: ast.Name):
         resolved = tracer().resolve_loaded_symbols(node)
-        self._update_usage_info(resolved, node)
+        self._add_to_resolved(resolved, node)
 
     def visit_Tuple(self, node: ast.Tuple):
         self.visit_List_or_Tuple(node)
@@ -90,7 +92,7 @@ class ResolveRvalSymbols(
             self.generic_visit(node.keys)
             self.generic_visit(node.values)
         else:
-            self._update_usage_info(resolved, node)
+            self._add_to_resolved(resolved, node)
 
     def visit_List_or_Tuple(self, node: Union[ast.List, ast.Tuple]):
         resolved = tracer().resolve_loaded_symbols(node)
@@ -99,7 +101,7 @@ class ResolveRvalSymbols(
             # only descend if tracer failed to create literal symbol
             self.generic_visit(node.elts)
         else:
-            self._update_usage_info(resolved, node)
+            self._add_to_resolved(resolved, node)
 
     def visit_AugAssign_or_AnnAssign(self, node):
         self.visit(node.value)
@@ -114,9 +116,9 @@ class ResolveRvalSymbols(
         if isinstance(node.func, (ast.Attribute, ast.Subscript)):
             self.visit(node.func)
         resolved = tracer().resolve_loaded_symbols(node.func)
-        self._update_usage_info(resolved, node.func)
+        self._add_to_resolved(resolved, node.func)
         resolved = tracer().resolve_loaded_symbols(node)
-        self._update_usage_info(resolved, node)
+        self._add_to_resolved(resolved, node)
         self.generic_visit([node.args, node.keywords])
 
     def _get_attr_or_subscript_namespace(
@@ -132,7 +134,8 @@ class ResolveRvalSymbols(
             self.visit(node.value)
         symbols = tracer().resolve_loaded_symbols(node)
         if len(symbols) > 0:
-            self._update_usage_info(symbols, node)
+            # don't update usage info for attributes; tracer is responsible for that
+            self._add_to_resolved(symbols, node, should_update_usage_info=False)
             return
         # TODO: this path lacks coverage
         try:
@@ -143,7 +146,7 @@ class ResolveRvalSymbols(
                 node.attr, is_subscript=False
             )
             if dsym is not None:
-                self._update_usage_info([dsym], node)
+                self._add_to_resolved([dsym], node)
         except Exception:
             logger.exception(
                 "Exception occurred while resolving node %s", ast.dump(node)
@@ -153,7 +156,7 @@ class ResolveRvalSymbols(
         if isinstance(node.value, ast.Call):
             self.visit(node.value)
         symbols = tracer().resolve_loaded_symbols(node)
-        self._update_usage_info(symbols, node, should_extend=False)
+        self._add_to_resolved(symbols, node, should_extend=False)
         # add slice to RHS to avoid propagating to it
         symbols.extend(self._resolve_symbols_without_side_effects(node.slice))
         if len(symbols) > 0:
@@ -181,7 +184,7 @@ class ResolveRvalSymbols(
                 except TypeError:
                     dsym = None
             if dsym is not None:
-                self._update_usage_info([dsym], node)
+                self._add_to_resolved([dsym], node)
         except Exception:
             logger.exception(
                 "Exception occurred while resolving node %s", ast.dump(node)
@@ -221,7 +224,7 @@ class ResolveRvalSymbols(
 
     def visit_arg(self, node: ast.arg):
         resolved = tracer().resolve_loaded_symbols(node.arg)
-        self._update_usage_info(resolved, node)
+        self._add_to_resolved(resolved, node)
 
     def visit_For(self, node: ast.For):
         # skip body -- will have dummy since this visitor works line-by-line
@@ -258,7 +261,7 @@ class ResolveRvalSymbols(
         # important: this needs to skip the body
         if node.type is not None:
             resolved = tracer().resolve_loaded_symbols(node.type)
-            self._update_usage_info(resolved, node.type)
+            self._add_to_resolved(resolved, node.type)
 
     def visit_Import(self, node: ast.Import):
         pass

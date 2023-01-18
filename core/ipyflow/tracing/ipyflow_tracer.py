@@ -167,6 +167,7 @@ class DataflowTracer(StackFrameManager):
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
         self.this_stmt_updated_symbols: Set[DataSymbol] = set()
+        self.pending_usage_updates_by_sym: Dict[DataSymbol, bool] = {}
         try:
             self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
                 cells().current_cell().sanitized_content(),
@@ -272,6 +273,9 @@ class DataflowTracer(StackFrameManager):
         self._seen_functions_ids.clear()
         self.is_external_call_pending_return = False
         self.calling_symbol = None
+        for sym, exclude_ns in self.pending_usage_updates_by_sym.items():
+            sym.update_usage_info(exclude_ns=exclude_ns)
+        self.pending_usage_updates_by_sym.clear()
         # don't clear the lexical stacks because line magics can
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
@@ -814,10 +818,11 @@ class DataflowTracer(StackFrameManager):
                 )
             except TypeError:
                 data_sym = None
-            if data_sym is None:
-                sym_for_obj.update_usage_info()
-            else:
-                sym_for_obj.update_usage_info(exclude_ns=True)
+            self.pending_usage_updates_by_sym[
+                sym_for_obj
+            ] = self.pending_usage_updates_by_sym.get(sym_for_obj, False) or (
+                data_sym is not None
+            )
 
         obj_id = id(obj)
         if self.top_level_node_id_for_chain is None:
@@ -1279,7 +1284,7 @@ class DataflowTracer(StackFrameManager):
             flow().global_scope.upsert_data_symbol_for_name(
                 "_",
                 ret,
-                resolve_rval_symbols(stmt),
+                resolve_rval_symbols(stmt, should_update_usage_info=False),
                 stmt,
             )
         self._module_stmt_counter += 1

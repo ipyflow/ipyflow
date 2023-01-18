@@ -1,6 +1,13 @@
 History
 =======
 
+0.0.156 (2022-01-17)
+--------------------
+* Better support for backward slicing with ipywidgets;
+* Support profile-based configuration;
+* Slicing improvements for external calls that update module state;
+* Misc bugfixes;
+
 0.0.155 (2022-01-12)
 --------------------
 * Basic integration with %%capture magic;

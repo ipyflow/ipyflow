@@ -72,6 +72,20 @@ to all dependencies in the chain, recursively:
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
 </p>
 
+### Integration with ipywidgets
+
+`ipyflow`'s reactive execution engine, as well as its APIs (see "State API" below)
+are fully compatible with `ipywidgets`, allowing cells to respond to slider changes,
+button clicks, and other events:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipywidgets-integration.gif" />
+</p>
+
+This functionality can be paired with other extensions like
+[stickyland](https://github.com/xiaohk/stickyland) to build fully reactive
+dashboards on top of JupyterLab + `ipyflow`.
+
 ## State API
 
 `ipyflow` must understand the underlying execution state at a deep level in

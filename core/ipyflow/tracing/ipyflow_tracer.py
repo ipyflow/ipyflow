@@ -820,7 +820,7 @@ class DataflowTracer(StackFrameManager):
                 data_sym = None
             self.pending_usage_updates_by_sym[
                 sym_for_obj
-            ] = self.pending_usage_updates_by_sym.get(sym_for_obj, False) or (
+            ] = self.pending_usage_updates_by_sym.get(sym_for_obj, True) and (
                 data_sym is not None
             )
 

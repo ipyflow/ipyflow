@@ -156,9 +156,9 @@ Finally, `ipyflow` also comes with some rudimentary support for watchpoints:
 from ipyflow import watchpoints
 
 def watchpoint(obj, position, symbol_name):
-    cell, line = position
     if obj <= 42:
         return
+    cell, line = position
     print(f"{symbol_name} = {obj} exceeds 42 at {cell=}, {line=}")
 
 # Cell 2

@@ -246,7 +246,7 @@ class FrontendCheckerResult(NamedTuple):
             )
             if max_used_live_sym_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 is_ready = True
-                if max_used_live_sym_ctr > flow_.cell_counter():
+                if max_used_live_sym_ctr >= flow_.cell_counter():
                     is_new_ready = True
         elif (
             not is_new_ready

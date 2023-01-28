@@ -25,13 +25,14 @@ a given interactive session. Here are some of its main features:
 ### Execution Suggestions
 
 To keep the execution state consistent with the code in cells, rerun the
-turquoise cells, and avoid the red cells:
+turquoise-highlighted cells, and avoid the red-highlighted cells:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
 </p>
 
-A turquoise input with red output just means that the output may be out-of-sync.
+A turquoise-highlighted input with red-highlighted output just means that the
+output may be out-of-sync.
 
 ### Reactivity
 

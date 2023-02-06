@@ -525,16 +525,15 @@ def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
     run_cell("f()")
     run_cell("sink = f()")
     slice_text = make_slice_text(compute_unparsed_slice_stmts(4), blacken=True).strip()
+    # just make it invariant to extra lines
+    slice_text = "\n".join(line for line in slice_text.splitlines() if line)
     expected = textwrap.dedent(
         """
         # Cell 1
         y = 3
-        
         # Cell 2
         def f():
             return y + 5
-
-
         # Cell 4
         sink = f()
         """

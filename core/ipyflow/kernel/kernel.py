@@ -275,6 +275,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             all_tracers.insert(0, ModuleIniter.instance())
             for tracer in all_tracers:
                 tracer.reset()
+            if DataflowTracer.instance() in all_tracers:
+                DataflowTracer.instance().init_symtab()
             with pyc.multi_context(
                 [self._patch_tracer_filters(tracer) for tracer in all_tracers]
             ):

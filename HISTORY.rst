@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.157 (2022-02-05)
+--------------------
+* Fix initialization race that caused execution to hang sometimes;
+* Bugfix for hybrid dag liveness;
+
 0.0.156 (2022-01-17)
 --------------------
 * Better support for backward slicing with ipywidgets;

@@ -168,18 +168,7 @@ class DataflowTracer(StackFrameManager):
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
         self.this_stmt_updated_symbols: Set[DataSymbol] = set()
         self.pending_usage_updates_by_sym: Dict[DataSymbol, bool] = {}
-        try:
-            self.cur_cell_symtab: symtable.SymbolTable = symtable.symtable(
-                cells().current_cell().sanitized_content(),
-                f"<cell-{cells().exec_counter()}>",
-                "exec",
-            )
-        except:
-            # it'll just give a syntax error anyway when we try to execute;
-            # do this just for the benefit of the type checker
-            self.cur_cell_symtab = symtable.symtable(
-                "", f"<cell-{cells().exec_counter()}>", "exec"
-            )
+        self.cur_cell_symtab: Optional[symtable.SymbolTable] = None
 
         self.calling_symbol: Optional[DataSymbol] = None
         self.call_stack: pyc.TraceStack = self.make_stack()
@@ -216,6 +205,16 @@ class DataflowTracer(StackFrameManager):
                 with self.lexical_literal_stack.register_stack_state():
                     # `None` means use 'cur_frame_original_scope'
                     self.active_literal_scope: Optional[Namespace] = None
+
+    def init_symtab(self) -> None:
+        try:
+            self.cur_cell_symtab = symtable.symtable(
+                cells().current_cell().sanitized_content(),
+                f"<cell-{cells().exec_counter()}>",
+                "exec",
+            )
+        except Exception:
+            pass
 
     @contextmanager
     def dataflow_tracing_disabled(self) -> Generator[None, None, None]:

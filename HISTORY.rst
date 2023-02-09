@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.158 (2022-02-08)
+--------------------
+* Use proper input transformation for ipython syntax extensions during checking;
+
 0.0.157 (2022-02-05)
 --------------------
 * Fix initialization race that caused execution to hang sometimes;

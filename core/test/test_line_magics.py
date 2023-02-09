@@ -115,21 +115,20 @@ def test_make_slice():
     run_cell("logging.info(y)")
     run_cell("%flow slice 4")
     cell5 = cells().from_id(5)
-    assert (
-        cell5.captured_output.stdout.strip()
-        == textwrap.dedent(
-            """
+    slice_text = "\n".join(
+        line for line in cell5.captured_output.stdout.splitlines() if line
+    )
+    expected = textwrap.dedent(
+        """
         # Cell 1
         x = 0
-        
         # Cell 2
         y = x + 1
-        
         # Cell 4
         logging.info(y)
         """
-        ).strip()
-    ), ("got %s" % cell5.captured_output)
+    ).strip()
+    assert slice_text == expected, "got %s instead of %s" % (slice_text, expected)
 
 
 def test_set_exec_mode():

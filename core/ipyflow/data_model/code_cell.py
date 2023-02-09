@@ -48,9 +48,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-_NB_MAGIC_PATTERN = re.compile(r"(^%|^!|^cd |\?$)")
-
-
 class CheckerResult(NamedTuple):
     live: Set[ResolvedDataSymbol]  # all live symbols in the cell
     unresolved_live_refs: Set[LiveSymbolRef]  # any live symbol we couldn't resolve
@@ -360,14 +357,9 @@ class CodeCell(CodeCellSlicingMixin):
         return cls._cells_by_tag.get(tag, set())
 
     def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
-        lines = []
-        for line in self.current_content.strip().split("\n"):
-            # TODO: figure out more robust strategy for filtering / transforming lines for the ast parser
-            # we filter line magics, but for %time, we would ideally like to trace the statement being timed
-            # TODO: how to do this?
-            if _NB_MAGIC_PATTERN.search(line.strip()) is None:
-                lines.append(line)
-        content = "\n".join(lines)
+        # we transform magics, but for %time, we would ideally like to trace the statement being timed
+        # TODO: how to do this?
+        content = get_ipython().transform_cell(self.current_content)
         ast_rewriter, syntax_augmenters = kernel().make_rewriter_and_syntax_augmenters()
         for aug in syntax_augmenters:
             content = aug(content)

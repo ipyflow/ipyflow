@@ -60,7 +60,8 @@ def test_simple():
         0: "x = 0",
         1: "y = x + 1",
         2: "logging.info(y)",
-        3: "x = 42",
+        3: "'''?\n.'''",  # this is to ensure that we got rid of brittle magic filtering
+        4: "x = 42",
     }
     run_all_cells(cells)
     response = flow().check_and_link_multiple_cells()

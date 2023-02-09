@@ -275,7 +275,9 @@ class FrontendCheckerResult(NamedTuple):
             checker_result = cell.check_and_resolve_symbols(
                 update_liveness_time_versions=update_liveness_time_versions
             )
-        except SyntaxError:
+        except Exception:
+            if flow_.is_dev_mode:
+                logger.exception("exception occurred during checking")
             return None
         cell_id = cell.cell_id
         if (

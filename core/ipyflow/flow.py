@@ -140,7 +140,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 getattr(
                     config,
                     "is_dev_mode",
-                    os.environ.get(PYCCOLO_DEV_MODE_ENV_VAR) == "1",
+                    os.getenv(PYCCOLO_DEV_MODE_ENV_VAR) == "1",
                 ),
             ),
         )

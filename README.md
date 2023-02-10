@@ -14,36 +14,10 @@ About
 -----
 `ipyflow` is a next-generation Python kernel for Jupyter and other notebook
 interfaces that tracks dataflow relationships between symbols and cells during
-a given interactive session. It aims to help notebook users reason about state
-and avoid gotchas from out-of-order execution by providing features like
-execution suggestions and reactivity. Keep reading to learn how. :)
-
-Quick Start
------------
-To install, run:
-```bash
-pip install ipyflow
-```
-
-To run an `ipyflow` kernel in JupyterLab, select "Python 3 (ipyflow)" from the
-list of available kernels in the Launcher tab. For classic Jupyter, similarly
-select "Python 3 (ipyflow)" from the list of notebook types in the "New"
-dropdown dialogue.
-
-JupyterLab  Entrypoint:          |  Classic Jupyter Entrypoint:
-:-------------------------------:|:---------------------------:
-![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png)
-
-Similarly, you can switch to / from ipyflow from an existing notebook by
-navigating to the "Change kernel" file menu item in either JupyterLab or
-classic Jupyter:
-
-JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
-:-------------------------------:|:--------------------------------:
-![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-notebook.png)
-
-Note: reactive execution features are not yet supported in classic Jupyter
-notebooks, but we are working on it!
+a given interactive session. If you'd like to skip the elevator pitch and skip
+straight to installation / activation instructions, jump to
+[quick start](#quick-start)
+below; otherwise, keep reading to learn about `ipyflow`'s features.
 
 Features
 --------
@@ -206,6 +180,33 @@ y += 10
 y += 20
 # y = 44 exceeds 42 at cell=4, line=1
 ```
+
+Quick Start
+-----------
+To install, run:
+```bash
+pip install ipyflow
+```
+
+To run an `ipyflow` kernel in JupyterLab, select "Python 3 (ipyflow)" from the
+list of available kernels in the Launcher tab. For classic Jupyter, similarly
+select "Python 3 (ipyflow)" from the list of notebook types in the "New"
+dropdown dialogue.
+
+JupyterLab  Entrypoint:          |  Classic Jupyter Entrypoint:
+:-------------------------------:|:---------------------------:
+![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png)
+
+Similarly, you can switch to / from ipyflow from an existing notebook by
+navigating to the "Change kernel" file menu item in either JupyterLab or
+classic Jupyter:
+
+JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
+:-------------------------------:|:--------------------------------:
+![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-notebook.png)
+
+Note: reactive execution features are not yet supported in classic Jupyter
+notebooks, but we are working on it!
 
 Citing
 ------

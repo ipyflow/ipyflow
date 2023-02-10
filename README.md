@@ -14,8 +14,9 @@ About
 -----
 `ipyflow` is a next-generation Python kernel for Jupyter and other notebook
 interfaces that tracks dataflow relationships between symbols and cells during
-a given interactive session. If you'd like to skip the elevator pitch and skip
-straight to installation / activation instructions, jump to
+a given interactive session, thereby making it easier to reason about notebook
+state. If you'd like to skip the elevator pitch and skip straight to
+installation / activation instructions, jump to
 [quick start](#quick-start)
 below; otherwise, keep reading to learn about `ipyflow`'s features.
 

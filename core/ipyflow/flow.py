@@ -150,7 +150,6 @@ class NotebookFlow(singletons.NotebookFlow):
             os.environ.pop(PYCCOLO_DEV_MODE_ENV_VAR, None)
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
-        # TODO: wrap this in something that clears the dict entry when the set is 0 length
         self.aliases: Dict[int, Set[DataSymbol]] = {}
         self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
         self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = {}

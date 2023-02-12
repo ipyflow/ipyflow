@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
-import re
 import shlex
 import subprocess
 from collections import defaultdict

@@ -237,9 +237,13 @@ class FrontendCheckerResult(NamedTuple):
                         if sym.timestamp.cell_num == flow_.cell_counter():
                             is_new_ready = True
                             break
-        if not is_new_ready and flow_.mut_settings.exec_schedule in (
-            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
-            ExecutionSchedule.LIVENESS_BASED,
+        if not is_new_ready and (
+            flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
+            or (
+                flow_.mut_settings.exec_schedule
+                == ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
+                and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
+            )
         ):
             max_used_live_sym_ctr = cell.get_max_used_live_symbol_cell_counter(
                 checker_result.live

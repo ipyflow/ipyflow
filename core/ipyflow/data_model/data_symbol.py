@@ -93,7 +93,7 @@ class DataSymbol:
         self.cached_obj_type = None
         if refresh_cached_obj:
             self._refresh_cached_obj()
-        self.containing_scope = containing_scope
+        self.containing_scope = containing_scope or flow().global_scope
         self.call_scope: Optional[Scope] = None
         self.func_def_stmt: Optional[ast.stmt] = None
         self.stmt_node = self.update_stmt_node(stmt_node)
@@ -502,7 +502,9 @@ class DataSymbol:
             logger.warning(
                 "could not find symbol %s in its scope %s", self, self.containing_scope
             )
-        self.containing_scope = None
+        # TODO: remove from static / dynamic parent / children edges
+        # need to keep this around for readable_name to work
+        # self.containing_scope = None
 
     # def update_type(self, new_type):
     #     self.symbol_type = new_type

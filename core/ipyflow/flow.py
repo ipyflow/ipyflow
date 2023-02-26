@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import itertools
 import logging
 import os
 import sys
@@ -697,6 +698,23 @@ class NotebookFlow(singletons.NotebookFlow):
             cleanup_discard(self.aliases, dsym.obj_id, dsym)
             self.aliases.setdefault(id(obj), set()).add(dsym)
             dsym.update_obj_ref(obj)
+
+    def _add_applicable_prev_cell_parents_to_current(self) -> None:
+        cell = cells().from_counter(self.cell_counter())
+        prev_cell = cell.prev_cell
+        if prev_cell is None:
+            return
+        used_symbols = {
+            sym
+            for _, sym in itertools.chain(cell._dynamic_parents, cell._static_parents)
+        }
+        for prev_parents, cur_parents in [
+            (prev_cell._dynamic_parents, cell._dynamic_parents),
+            (prev_cell._static_parents, cell._static_parents),
+        ]:
+            for cell_id, sym in prev_parents:
+                if sym in used_symbols and cells().from_id(cell_id).is_current_for_id:
+                    cur_parents.add((cell_id, sym))
 
     @property
     def cell_magic_name(self):

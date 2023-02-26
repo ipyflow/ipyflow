@@ -576,6 +576,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
                 if sym.timestamp.cell_num == cells().exec_counter()
             ]
         )
+        flow_._add_applicable_prev_cell_parents_to_current()
         flow_.gc()
 
     def on_exception(self, e: Union[None, str, Exception]) -> None:

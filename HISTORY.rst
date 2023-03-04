@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.159 (2022-03-04)
+--------------------
+* Better behavior around dependency tracking between cells;
+
 0.0.158 (2022-02-08)
 --------------------
 * Use proper input transformation for ipython syntax extensions during checking;

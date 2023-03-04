@@ -49,6 +49,7 @@
   },
   "devDependencies": {
     "@jupyterlab/builder": "^3.4.3",
+    "@types/lodash": "^4.14.191",
     "@typescript-eslint/eslint-plugin": "^5.15.0",
     "@typescript-eslint/parser": "^5.15.0",
     "@wdio/cli": "^8.3.5",
@@ -66,5 +67,5 @@
     "extension": true,
     "outputDir": "../../core/ipyflow/resources/labextension/"
   },
-  "version": "0.0.158"
+  "version": "0.0.159"
 }

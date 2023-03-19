@@ -114,7 +114,7 @@ const addUnsafeCellInteraction = (
 };
 
 const clearCellState = (Jupyter: any) => {
-  Jupyter.notebook.get_cells().forEach((cell: any, idx: any) => {
+  Jupyter.notebook.get_cells().forEach((cell: any) => {
     cell.element[0].classList.remove(waitingClass);
     cell.element[0].classList.remove(readyMakingClass);
     cell.element[0].classList.remove(readyClass);
@@ -196,10 +196,10 @@ const connectToComm = (Jupyter: any, code_cell: any) => {
       code_cell.CodeCell.prototype.execute = codecell_execute;
     } else if (msg.content.data.type === 'compute_exec_schedule') {
       clearCellState(Jupyter);
-      const waitingCells: any = msg.content.data['waiting_cells'];
-      const readyCells: any = msg.content.data['ready_cells'];
-      const waiterLinks: any = msg.content.data['waiter_links'];
-      const readyMakerLinks: any = msg.content.data['ready_maker_links'];
+      const waitingCells: any = msg.content.data['waiting_cells'] ?? [];
+      const readyCells: any = msg.content.data['ready_cells'] ?? [];
+      const waiterLinks: any = msg.content.data['waiter_links'] ?? {};
+      const readyMakerLinks: any = msg.content.data['ready_maker_links'] ?? {};
       const cellsById: { [id: string]: HTMLElement } = {};
       Jupyter.notebook.get_cells().forEach((cell: any) => {
         cellsById[cell.cell_id] = cell.element[0];

@@ -24,6 +24,8 @@ const readyMakingInputClass = 'ready-making-input-cell';
 const linkedWaitingClass = 'linked-waiting';
 const linkedReadyMakerClass = 'linked-ready-maker';
 
+const cleanup = new Event('cleanup');
+
 // ipyflow frontend state
 const dirtyCells: Set<string> = new Set();
 let waitingCells: Set<string> = new Set();
@@ -44,8 +46,6 @@ let lastExecutionHighlights: Highlights = null;
 let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
 let forcedReactiveCells: Set<string> = new Set();
-
-const cleanup = new Event('cleanup');
 
 /**
  * Initialization data for the jupyterlab-ipyflow extension.

@@ -34,7 +34,7 @@ module.exports = {
       { avoidEscape: true, allowTemplateLiterals: false }
     ],
     curly: ['error', 'all'],
-    eqeqeq: 'error',
+    eqeqeq: ['error', 'allow-null'],
     'prefer-arrow-callback': 'error'
   }
 };

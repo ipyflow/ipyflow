@@ -1,6 +1,8 @@
 import '../style/index.css';
 // import "jqueryui";
 
+type Highlights = 'all' | 'none' | 'executed' | 'reactive';
+
 const waitingClass = 'waiting-cell';
 const readyClass = 'ready-cell';
 const readyMakingClass = 'ready-making-cell';
@@ -11,6 +13,26 @@ const linkedReadyMakingClass = 'linked-ready-making';
 
 let codecell_execute: any = null;
 const cleanup = new Event('cleanup');
+
+// ipyflow frontend state
+let waitingCells: Set<string> = new Set();
+let readyCells: Set<string> = new Set();
+let waiterLinks: { [id: string]: string[] } = {};
+let readyMakerLinks: { [id: string]: string[] } = {};
+let activeCell: any | null = null;
+let activeCellToReturnToAfterReactiveExecution: any | null = null;
+let cellsById: { [id: string]: HTMLElement } = {};
+let cellModelsById: { [id: string]: any } = {};
+let orderIdxById: { [id: string]: number } = {};
+let cellPendingExecution: any | null = null;
+let cellPendingExecutionIdx: number | null = null;
+
+let lastExecutionMode: string | null = null;
+let isReactivelyExecuting = false;
+let lastExecutionHighlights: Highlights | null = null;
+let executedReactiveReadyCells: Set<string> = new Set();
+let newReadyCells: Set<string> = new Set();
+let forcedReactiveCells: Set<string> = new Set();
 
 function getCellInputSection(elem: HTMLElement): Element | null {
   if (elem === null) {
@@ -98,7 +120,7 @@ function addReadyInteractions(elem: HTMLElement): void {
 
 function addUnsafeCellInteraction(
   elem: Element,
-  linkedElems: [string],
+  linkedElems: string[],
   cellsById: { [id: string]: HTMLElement },
   evt: 'mouseover' | 'mouseout',
   add_or_remove: 'add' | 'remove',
@@ -115,7 +137,7 @@ function addUnsafeCellInteraction(
 
 function addUnsafeCellInteractions(
   elem: HTMLElement,
-  linkedElems: [string],
+  linkedElems: string[],
   cellsById: { [id: string]: HTMLElement }
 ): void {
   addUnsafeCellInteraction(
@@ -157,7 +179,7 @@ function addUnsafeCellInteractions(
 
 function addReadyMakerCellInteractions(
   elem: HTMLElement,
-  linkedElems: [string],
+  linkedElems: string[],
   cellsById: { [id: string]: HTMLElement }
 ): void {
   addUnsafeCellInteraction(
@@ -197,25 +219,82 @@ function addReadyMakerCellInteractions(
   );
 }
 
+function refreshNodeMapping(Jupyter: any): void {
+  cellsById = {};
+  cellModelsById = {};
+  orderIdxById = {};
+
+  Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
+    cellsById[cell.cell_id] = cell.element[0];
+    cellModelsById[cell.cell_id] = cell;
+    orderIdxById[cell.cell_id] = idx;
+  });
+}
+
+function clearOneCellState(cell: any): void {
+  const elem = cell.element[0];
+  elem.classList.remove(waitingClass);
+  elem.classList.remove(readyMakingClass);
+  elem.classList.remove(readyClass);
+  elem.classList.remove(readyMakingInputClass);
+  elem.classList.remove(linkedWaitingClass);
+  elem.classList.remove(linkedReadyClass);
+  elem.classList.remove(linkedReadyMakingClass);
+
+  const cellInput = getCellInputSection(elem);
+  if (cellInput !== null) {
+    cellInput.dispatchEvent(cleanup);
+  }
+
+  const cellOutput = getCellOutputSection(elem);
+  if (cellOutput !== null) {
+    cellOutput.dispatchEvent(cleanup);
+  }
+}
+
 function clearCellState(Jupyter: any): void {
   Jupyter.notebook.get_cells().forEach((cell: any) => {
-    cell.element[0].classList.remove(waitingClass);
-    cell.element[0].classList.remove(readyMakingClass);
-    cell.element[0].classList.remove(readyClass);
-    cell.element[0].classList.remove(readyMakingInputClass);
-    cell.element[0].classList.remove(linkedWaitingClass);
-    cell.element[0].classList.remove(linkedReadyClass);
-    cell.element[0].classList.remove(linkedReadyMakingClass);
+    clearOneCellState(cell);
+  });
+}
 
-    const cellInput = getCellInputSection(cell.element[0]);
-    if (cellInput !== null) {
-      cellInput.dispatchEvent(cleanup);
-    }
+function updateOneCellUI(cell: any): void {
+  clearOneCellState(cell);
+  const id = cell.cell_id;
+  const elem = cell.element[0];
+  if (waitingCells.has(id)) {
+    elem.classList.add(waitingClass);
+    elem.classList.add(readyClass);
+    elem.classList.remove(readyMakingInputClass);
+  } else if (readyCells.has(id)) {
+    elem.classList.add(readyMakingInputClass);
+    elem.classList.add(readyClass);
+    addReadyInteractions(elem);
+  }
 
-    const cellOutput = getCellOutputSection(cell.element[0]);
-    if (cellOutput !== null) {
-      cellOutput.dispatchEvent(cleanup);
-    }
+  if (lastExecutionMode === 'reactive') {
+    return;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(waiterLinks, id)) {
+    addUnsafeCellInteractions(elem, waiterLinks[id], cellsById);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(readyMakerLinks, id)) {
+    elem.classList.add(readyMakingClass);
+    elem.classList.add(readyClass);
+    addReadyInteractions(elem);
+    addReadyMakerCellInteractions(elem, readyMakerLinks[id], cellsById);
+  }
+}
+
+function updateUI(Jupyter: any): void {
+  if (lastExecutionHighlights === 'none') {
+    return;
+  }
+  refreshNodeMapping(Jupyter);
+  Jupyter.notebook.get_cells().forEach((cell: any) => {
+    updateOneCellUI(cell);
   });
 }
 
@@ -243,6 +322,7 @@ function gatherCellMetadataById(Jupyter: any): CellMetadataMap {
 }
 
 function connectToComm(Jupyter: any, code_cell: any): () => void {
+  let disconnected = false;
   const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {
     // exec_schedule: 'liveness_based',
   });
@@ -260,13 +340,12 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
   };
   const onSelect = (evt: any, data: { cell: any }) => {
     let active_cell_order_idx: number = null;
-    let cur_idx = 0;
-    Jupyter.notebook.get_cells().forEach((cell: any) => {
+    Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
       if (data.cell.cell_id === cell.cell_id) {
-        active_cell_order_idx = cur_idx;
+        active_cell_order_idx = idx;
       }
-      cur_idx += 1;
     });
+    activeCell = data.cell;
     comm.send({
       type: 'change_active_cell',
       active_cell_id: data.cell.cell_id,
@@ -276,42 +355,123 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
   comm.on_msg((msg: any) => {
     // console.log('comm got msg: ');
     // console.log(msg.content.data)
-    if (msg.content.data.type === 'establish') {
+    const payload = msg.content.data;
+    if (disconnected || !(payload.success ?? false)) {
+      return;
+    }
+    if (payload.type === 'establish') {
       Jupyter.notebook.events.on('execute.CodeCell', onExecution);
       Jupyter.notebook.events.on('select.Cell', onSelect);
       code_cell.CodeCell.prototype.execute = codecell_execute;
-    } else if (msg.content.data.type === 'compute_exec_schedule') {
-      clearCellState(Jupyter);
-      const waitingCells: any = msg.content.data['waiting_cells'] ?? [];
-      const readyCells: any = msg.content.data['ready_cells'] ?? [];
-      const waiterLinks: any = msg.content.data['waiter_links'] ?? {};
-      const readyMakerLinks: any = msg.content.data['ready_maker_links'] ?? {};
-      const cellsById: { [id: string]: HTMLElement } = {};
-      Jupyter.notebook.get_cells().forEach((cell: any) => {
-        cellsById[cell.cell_id] = cell.element[0];
-      });
-      for (const [id, elem] of Object.entries(cellsById)) {
-        if (waitingCells.indexOf(id) > -1) {
-          elem.classList.add(waitingClass);
-          elem.classList.add(readyClass);
-          elem.classList.remove(readyMakingInputClass);
-        } else if (readyCells.indexOf(id) > -1) {
-          elem.classList.add(readyMakingInputClass);
-          elem.classList.add(readyClass);
-
-          addReadyInteractions(elem);
+    } else if (payload.type === 'change_active_cell') {
+      if (cellPendingExecutionIdx != null) {
+        const idxToExec = cellPendingExecutionIdx;
+        cellPendingExecution = cellPendingExecutionIdx = null;
+        // 100 ms delay so that the dom has time to update css styling on the executing cell
+        setTimeout(() => {
+          Jupyter.notebook.execute_cells([idxToExec]);
+        }, 100);
+      }
+    } else if (payload.type === 'compute_exec_schedule') {
+      refreshNodeMapping(Jupyter);
+      waitingCells = new Set((payload['waiting_cells'] ?? []) as string[]);
+      readyCells = new Set((payload['ready_cells'] ?? []) as string[]);
+      newReadyCells = new Set([
+        ...newReadyCells,
+        ...(payload.new_ready_cells as string[])
+      ]);
+      forcedReactiveCells = new Set([
+        ...forcedReactiveCells,
+        ...(payload.forced_reactive_cells as string[])
+      ]);
+      waiterLinks = payload.waiter_links as { [id: string]: string[] };
+      readyMakerLinks = payload.ready_maker_links as { [id: string]: string[] };
+      cellPendingExecution = null;
+      cellPendingExecutionIdx = null;
+      const exec_mode = payload.exec_mode as string;
+      isReactivelyExecuting = isReactivelyExecuting || exec_mode === 'reactive';
+      const flow_order = payload.flow_order;
+      const exec_schedule = payload.exec_schedule;
+      lastExecutionMode = exec_mode;
+      lastExecutionHighlights = payload.highlights as Highlights;
+      const lastExecutedCellId = payload.last_executed_cell_id as string;
+      executedReactiveReadyCells.add(lastExecutedCellId);
+      const last_execution_was_error = payload.last_execution_was_error as boolean;
+      if (!last_execution_was_error) {
+        let loopBreak = false;
+        let lastExecutedCellIdSeen = false;
+        Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
+          if (loopBreak) {
+            return;
+          }
+          if (!lastExecutedCellIdSeen) {
+            lastExecutedCellIdSeen = cell.cell_id === lastExecutedCellId;
+            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+              return;
+            }
+          }
+          if (
+            cell.cell_type !== 'code' ||
+            executedReactiveReadyCells.has(cell.cell_id)
+          ) {
+            return;
+          }
+          if (!newReadyCells.has(cell.cell_id)) {
+            return;
+          }
+          if (
+            !forcedReactiveCells.has(cell.cell_id) &&
+            exec_mode !== 'reactive'
+          ) {
+            return;
+          }
+          if (cellPendingExecution == null) {
+            if (activeCellToReturnToAfterReactiveExecution == null) {
+              activeCellToReturnToAfterReactiveExecution = activeCell;
+            }
+            cellPendingExecution = cell;
+            cellPendingExecutionIdx = idx;
+            // break early if using one of the order-based semantics
+            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+              loopBreak = true;
+              return;
+            }
+          } else if (cell.input_prompt_number == null) {
+            // pass
+          } else if (
+            cell.input_prompt_number < cellPendingExecution.input_prompt_number
+          ) {
+            // otherwise, execute in order of earliest execution counter
+            cellPendingExecution = cell;
+          }
+        });
+      }
+      if (cellPendingExecution == null) {
+        if (isReactivelyExecuting) {
+          if (lastExecutionHighlights === 'reactive') {
+            readyCells = executedReactiveReadyCells;
+          }
+          if (activeCellToReturnToAfterReactiveExecution != null) {
+            Jupyter.notebook.events.trigger('select.Cell', {
+              cell: activeCellToReturnToAfterReactiveExecution
+            });
+            activeCellToReturnToAfterReactiveExecution = null;
+          }
+          comm.send({ type: 'reactivity_cleanup' });
         }
-
-        if (Object.prototype.hasOwnProperty.call(waiterLinks, id)) {
-          addUnsafeCellInteractions(elem, waiterLinks[id], cellsById);
-        }
-
-        if (Object.prototype.hasOwnProperty.call(readyMakerLinks, id)) {
-          elem.classList.add(readyMakingClass);
-          elem.classList.add(readyClass);
-          addReadyInteractions(elem);
-          addReadyMakerCellInteractions(elem, readyMakerLinks[id], cellsById);
-        }
+        forcedReactiveCells = new Set();
+        newReadyCells = new Set();
+        executedReactiveReadyCells = new Set();
+        updateUI(Jupyter);
+        isReactivelyExecuting = false;
+      } else {
+        isReactivelyExecuting = true;
+        updateOneCellUI(cellPendingExecution);
+        comm.send({
+          type: 'change_active_cell',
+          active_cell_id: cellPendingExecution.cell_id,
+          active_cell_order_idx: cellPendingExecutionIdx
+        });
       }
     }
   });
@@ -320,6 +480,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
     cell_metadata_by_id: gatherCellMetadataById(Jupyter)
   });
   return () => {
+    disconnected = true;
     clearCellState(Jupyter);
     Jupyter.notebook.events.unbind('execute.CodeCell', onExecution);
     Jupyter.notebook.events.unbind('select.Cell', onSelect);

@@ -20,6 +20,7 @@ let readyCells: Set<string> = new Set();
 let waiterLinks: { [id: string]: string[] } = {};
 let readyMakerLinks: { [id: string]: string[] } = {};
 let activeCell: any | null = null;
+let activeCellIdx: number | null = null;
 let activeCellToReturnToAfterReactiveExecution: any | null = null;
 let cellsById: { [id: string]: HTMLElement } = {};
 let cellModelsById: { [id: string]: any } = {};
@@ -29,6 +30,7 @@ let cellPendingExecutionIdx: number | null = null;
 
 let lastExecutionMode: string | null = null;
 let isReactivelyExecuting = false;
+let isAltModeExecuting = false;
 let lastExecutionHighlights: Highlights | null = null;
 let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
@@ -339,17 +341,16 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
     });
   };
   const onSelect = (evt: any, data: { cell: any }) => {
-    let active_cell_order_idx: number = null;
     Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
       if (data.cell.cell_id === cell.cell_id) {
-        active_cell_order_idx = idx;
+        activeCell = data.cell;
+        activeCellIdx = idx;
       }
     });
-    activeCell = data.cell;
     comm.send({
       type: 'change_active_cell',
       active_cell_id: data.cell.cell_id,
-      active_cell_order_idx: active_cell_order_idx
+      active_cell_order_idx: activeCellIdx
     });
   };
   comm.on_msg((msg: any) => {
@@ -363,19 +364,42 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       Jupyter.notebook.events.on('execute.CodeCell', onExecution);
       Jupyter.notebook.events.on('select.Cell', onSelect);
       code_cell.CodeCell.prototype.execute = codecell_execute;
+      const keybinding = {
+        help: 'alt mode execute',
+        help_index: 'zz',
+        handler: () => {
+          if (!isAltModeExecuting && activeCell?.cell_type === 'code') {
+            isAltModeExecuting = true;
+            Jupyter.notebook.kernel.execute(
+              '%flow toggle-reactivity-until-next-reset',
+              {
+                silent: true,
+                store_history: false
+              }
+            );
+            Jupyter.notebook.execute_cells([activeCellIdx]);
+          }
+        }
+      };
+      Jupyter.keyboard_manager.command_shortcuts.add_shortcuts({
+        'cmd-shift-enter': keybinding,
+        'ctrl-shift-enter': keybinding
+      });
+      Jupyter.keyboard_manager.edit_shortcuts.add_shortcuts({
+        'cmd-shift-enter': keybinding,
+        'ctrl-shift-enter': keybinding
+      });
     } else if (payload.type === 'change_active_cell') {
       if (cellPendingExecutionIdx != null) {
         const idxToExec = cellPendingExecutionIdx;
         cellPendingExecution = cellPendingExecutionIdx = null;
         // 100 ms delay so that the dom has time to update css styling on the executing cell
-        setTimeout(() => {
-          Jupyter.notebook.execute_cells([idxToExec]);
-        }, 100);
+        Jupyter.notebook.execute_cells([idxToExec]);
       }
     } else if (payload.type === 'compute_exec_schedule') {
       refreshNodeMapping(Jupyter);
-      waitingCells = new Set((payload['waiting_cells'] ?? []) as string[]);
-      readyCells = new Set((payload['ready_cells'] ?? []) as string[]);
+      waitingCells = new Set((payload.waiting_cells ?? []) as string[]);
+      readyCells = new Set((payload.ready_cells ?? []) as string[]);
       newReadyCells = new Set([
         ...newReadyCells,
         ...(payload.new_ready_cells as string[])
@@ -464,9 +488,10 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         executedReactiveReadyCells = new Set();
         updateUI(Jupyter);
         isReactivelyExecuting = false;
+        isAltModeExecuting = false;
       } else {
         isReactivelyExecuting = true;
-        updateOneCellUI(cellPendingExecution);
+        updateUI(Jupyter);
         comm.send({
           type: 'change_active_cell',
           active_cell_id: cellPendingExecution.cell_id,

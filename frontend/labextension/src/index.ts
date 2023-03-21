@@ -246,7 +246,7 @@ const refreshNodeMapping = (notebook: Notebook) => {
 };
 
 const clearCellState = (notebook: Notebook) => {
-  notebook.widgets.forEach((cell, idx) => {
+  notebook.widgets.forEach((cell) => {
     cell.node.classList.remove(waitingClass);
     cell.node.classList.remove(readyMakingClass);
     cell.node.classList.remove(readyClass);
@@ -348,7 +348,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
-    notebook.widgets.forEach((itercell, idx) => {
+    notebook.widgets.forEach((itercell) => {
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(readyClass);
         itercell.node.classList.remove(readyMakingInputClass);

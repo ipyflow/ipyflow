@@ -12,7 +12,7 @@ const linkedReadyMakingClass = 'linked-ready-making';
 let codecell_execute: any = null;
 const cleanup = new Event('cleanup');
 
-const getCellInputSection = (elem: HTMLElement) => {
+function getCellInputSection(elem: HTMLElement): Element | null {
   if (elem === null) {
     return null;
   }
@@ -23,9 +23,9 @@ const getCellInputSection = (elem: HTMLElement) => {
     return null;
   }
   return elem.firstElementChild.firstElementChild.firstElementChild;
-};
+}
 
-const getCellOutputSection = (elem: HTMLElement) => {
+function getCellOutputSection(elem: HTMLElement): Element | null {
   if (elem === null) {
     return null;
   }
@@ -33,7 +33,7 @@ const getCellOutputSection = (elem: HTMLElement) => {
     return null;
   }
   return elem.children.item(1).firstElementChild;
-};
+}
 
 const attachCleanupListener = (
   elem: any,
@@ -48,13 +48,13 @@ const attachCleanupListener = (
   elem.addEventListener('cleanup', cleanupListener);
 };
 
-const addReadyInteraction = (
-  elem: Element,
+function addReadyInteraction(
+  elem: Element | null,
   linkedElem: Element,
   evt: 'mouseover' | 'mouseout',
   add_or_remove: 'add' | 'remove',
   css: string
-) => {
+): void {
   if (elem === null) {
     return;
   }
@@ -62,9 +62,9 @@ const addReadyInteraction = (
     linkedElem.classList[add_or_remove](css);
   };
   attachCleanupListener(elem, evt, listener);
-};
+}
 
-const addReadyInteractions = (elem: HTMLElement) => {
+function addReadyInteractions(elem: HTMLElement): void {
   addReadyInteraction(
     getCellInputSection(elem),
     elem,
@@ -94,16 +94,16 @@ const addReadyInteractions = (elem: HTMLElement) => {
     'remove',
     linkedReadyMakingClass
   );
-};
+}
 
-const addUnsafeCellInteraction = (
+function addUnsafeCellInteraction(
   elem: Element,
   linkedElems: [string],
   cellsById: { [id: string]: HTMLElement },
   evt: 'mouseover' | 'mouseout',
   add_or_remove: 'add' | 'remove',
   css: string
-) => {
+): void {
   const listener = () => {
     for (const linkedId of linkedElems) {
       cellsById[linkedId].classList[add_or_remove](css);
@@ -111,9 +111,93 @@ const addUnsafeCellInteraction = (
   };
   elem.addEventListener(evt, listener);
   attachCleanupListener(elem, evt, listener);
-};
+}
 
-const clearCellState = (Jupyter: any) => {
+function addUnsafeCellInteractions(
+  elem: HTMLElement,
+  linkedElems: [string],
+  cellsById: { [id: string]: HTMLElement }
+): void {
+  addUnsafeCellInteraction(
+    getCellInputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseover',
+    'add',
+    linkedReadyMakingClass
+  );
+
+  addUnsafeCellInteraction(
+    getCellOutputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseover',
+    'add',
+    linkedReadyMakingClass
+  );
+
+  addUnsafeCellInteraction(
+    getCellInputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseout',
+    'remove',
+    linkedReadyMakingClass
+  );
+
+  addUnsafeCellInteraction(
+    getCellOutputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseout',
+    'remove',
+    linkedReadyMakingClass
+  );
+}
+
+function addReadyMakerCellInteractions(
+  elem: HTMLElement,
+  linkedElems: [string],
+  cellsById: { [id: string]: HTMLElement }
+): void {
+  addUnsafeCellInteraction(
+    getCellInputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseover',
+    'add',
+    linkedWaitingClass
+  );
+
+  addUnsafeCellInteraction(
+    getCellInputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseover',
+    'add',
+    linkedReadyClass
+  );
+
+  addUnsafeCellInteraction(
+    getCellInputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseout',
+    'remove',
+    linkedWaitingClass
+  );
+
+  addUnsafeCellInteraction(
+    getCellInputSection(elem),
+    linkedElems,
+    cellsById,
+    'mouseout',
+    'remove',
+    linkedReadyClass
+  );
+}
+
+function clearCellState(Jupyter: any): void {
   Jupyter.notebook.get_cells().forEach((cell: any) => {
     cell.element[0].classList.remove(waitingClass);
     cell.element[0].classList.remove(readyMakingClass);
@@ -133,16 +217,18 @@ const clearCellState = (Jupyter: any) => {
       cellOutput.dispatchEvent(cleanup);
     }
   });
+}
+
+type CellMetadataMap = {
+  [id: string]: {
+    index: number;
+    content: string;
+    type: string;
+  };
 };
 
-const gatherCellMetadataById = (Jupyter: any) => {
-  const cell_metadata_by_id: {
-    [id: string]: {
-      index: number;
-      content: string;
-      type: string;
-    };
-  } = {};
+function gatherCellMetadataById(Jupyter: any): CellMetadataMap {
+  const cell_metadata_by_id: CellMetadataMap = {};
   Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
     if (cell.cell_type !== 'code') {
       return;
@@ -154,9 +240,9 @@ const gatherCellMetadataById = (Jupyter: any) => {
     };
   });
   return cell_metadata_by_id;
-};
+}
 
-const connectToComm = (Jupyter: any, code_cell: any) => {
+function connectToComm(Jupyter: any, code_cell: any): () => void {
   const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {
     // exec_schedule: 'liveness_based',
   });
@@ -217,82 +303,14 @@ const connectToComm = (Jupyter: any, code_cell: any) => {
         }
 
         if (Object.prototype.hasOwnProperty.call(waiterLinks, id)) {
-          addUnsafeCellInteraction(
-            getCellInputSection(elem),
-            waiterLinks[id],
-            cellsById,
-            'mouseover',
-            'add',
-            linkedReadyMakingClass
-          );
-
-          addUnsafeCellInteraction(
-            getCellOutputSection(elem),
-            waiterLinks[id],
-            cellsById,
-            'mouseover',
-            'add',
-            linkedReadyMakingClass
-          );
-
-          addUnsafeCellInteraction(
-            getCellInputSection(elem),
-            waiterLinks[id],
-            cellsById,
-            'mouseout',
-            'remove',
-            linkedReadyMakingClass
-          );
-
-          addUnsafeCellInteraction(
-            getCellOutputSection(elem),
-            waiterLinks[id],
-            cellsById,
-            'mouseout',
-            'remove',
-            linkedReadyMakingClass
-          );
+          addUnsafeCellInteractions(elem, waiterLinks[id], cellsById);
         }
 
         if (Object.prototype.hasOwnProperty.call(readyMakerLinks, id)) {
           elem.classList.add(readyMakingClass);
           elem.classList.add(readyClass);
           addReadyInteractions(elem);
-          addUnsafeCellInteraction(
-            getCellInputSection(elem),
-            readyMakerLinks[id],
-            cellsById,
-            'mouseover',
-            'add',
-            linkedWaitingClass
-          );
-
-          addUnsafeCellInteraction(
-            getCellInputSection(elem),
-            readyMakerLinks[id],
-            cellsById,
-            'mouseover',
-            'add',
-            linkedReadyClass
-          );
-
-          addUnsafeCellInteraction(
-            getCellInputSection(elem),
-            readyMakerLinks[id],
-            cellsById,
-            'mouseout',
-            'remove',
-            linkedWaitingClass
-          );
-
-          addUnsafeCellInteraction(
-            getCellInputSection(elem),
-            readyMakerLinks[id],
-            cellsById,
-            'mouseout',
-            'remove',
-            linkedReadyClass
-          );
+          addReadyMakerCellInteractions(elem, readyMakerLinks[id], cellsById);
         }
       }
     }
@@ -309,7 +327,7 @@ const connectToComm = (Jupyter: any, code_cell: any) => {
       // make execution a no-op while comm not connected
     };
   };
-};
+}
 
 __non_webpack_require__(
   ['base/js/namespace', 'notebook/js/codecell'],

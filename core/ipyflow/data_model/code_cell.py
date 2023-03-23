@@ -36,7 +36,7 @@ from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.ipython_utils import _IPY, CapturedIO
 from ipyflow.ipython_utils import cell_counter as ipy_cell_counter
-from ipyflow.singletons import flow, kernel
+from ipyflow.singletons import _CodeCellContainer, cells, flow, kernel
 from ipyflow.types import CellId, TimestampOrCounter
 
 if TYPE_CHECKING:
@@ -47,6 +47,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+# just want to get rid of unused warning
+_override_unused_warning_cells = cells
+
+
 class CheckerResult(NamedTuple):
     live: Set[ResolvedDataSymbol]  # all live symbols in the cell
     unresolved_live_refs: Set[LiveSymbolRef]  # any live symbol we couldn't resolve
@@ -54,10 +58,6 @@ class CheckerResult(NamedTuple):
     live_cells: Set[int]  # cells that define a symbol that was called in the cell
     dead: Set["DataSymbol"]  # symbols that are definitely assigned to
     typechecks: bool  # whether the cell typechecks successfully
-
-
-def cells() -> Type["CodeCell"]:
-    return CodeCell
 
 
 class CodeCell(CodeCellSlicingMixin):
@@ -179,6 +179,22 @@ class CodeCell(CodeCellSlicingMixin):
         self._static_parents.add((pid, sym))
         parent = self.from_id(pid)
         parent._static_children.add((self.cell_id, sym))
+
+    def remove_static_parent(
+        self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
+    ) -> None:
+        pid = parent.cell_id if isinstance(parent, CodeCell) else parent
+        self._static_parents.discard((pid, sym))
+        parent = self.from_id(pid)
+        parent._static_children.discard((self.cell_id, sym))
+
+    def remove_dynamic_parent(
+        self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
+    ) -> None:
+        pid = parent.cell_id if isinstance(parent, CodeCell) else parent
+        self._dynamic_parents.discard((pid, sym))
+        parent = self.from_id(pid)
+        parent._dynamic_children.discard((self.cell_id, sym))
 
     @property
     def dynamic_parents(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
@@ -570,3 +586,9 @@ class CodeCell(CodeCellSlicingMixin):
 
     def invalidate_typecheck_result(self):
         self._cached_typecheck_result = None
+
+
+if len(_CodeCellContainer) == 0:
+    _CodeCellContainer.append(CodeCell)
+else:
+    _CodeCellContainer[0] = CodeCell

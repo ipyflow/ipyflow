@@ -61,7 +61,6 @@ class DataSymbolType(Enum):
 
 
 class DataSymbol:
-
     NULL = object()
 
     # object for virtual display symbol
@@ -996,19 +995,22 @@ class DataSymbol:
             if is_static
             else self.timestamp_by_used_time
         )
-        if (
-            ts_to_use.is_initialized
-            and used_time not in timestamp_by_used_time
-            and ts_to_use < used_time
-        ):
-            timestamp_by_used_time[used_time] = ts_to_use
-            if not is_blocking:
-                if is_static:
-                    flow().add_static_data_dep(used_time, ts_to_use, self)
+        if ts_to_use.is_initialized and not is_blocking:
+            is_usage = False
+            if is_static:
+                if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
+                    is_usage = ts_to_use.positional < used_time.positional
                 else:
-                    flow().add_dynamic_data_dep(used_time, ts_to_use, self)
-            if used_node is not None:
-                self.used_node_by_used_time[used_time] = used_node
+                    is_usage = ts_to_use < used_time
+                if is_usage:
+                    flow().add_static_data_dep(used_time, ts_to_use, self)
+            elif not is_static and ts_to_use < used_time:
+                is_usage = True
+                flow().add_dynamic_data_dep(used_time, ts_to_use, self)
+            if is_usage:
+                timestamp_by_used_time[used_time] = ts_to_use
+                if used_node is not None:
+                    self.used_node_by_used_time[used_time] = used_node
         ns = None if exclude_ns else self.namespace
         if ns is not None and seen is None:
             seen = set()

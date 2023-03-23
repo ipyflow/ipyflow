@@ -34,7 +34,7 @@ def debounce(wait: float) -> Callable[[Callable[..., None]], Callable[..., None]
 
             try:
                 debounced.t.cancel()  # type: ignore
-            except (AttributeError):
+            except AttributeError:
                 pass
             debounced.t = Timer(wait, call_it)  # type: ignore
             debounced.t.start()  # type: ignore

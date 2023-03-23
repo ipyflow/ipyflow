@@ -6,9 +6,9 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
 
 
-def create_dag_metadata() -> Dict[
-    int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]
-]:
+def create_dag_metadata() -> (
+    Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]]
+):
     flow_ = flow()
     cell_num_to_used_imports: Dict[int, Set[DataSymbol]] = defaultdict(set)
     cell_num_to_dynamic_inputs: Dict[int, Set[DataSymbol]] = defaultdict(set)

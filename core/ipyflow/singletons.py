@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Type
 
 import pyccolo as pyc
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
+    from ipyflow.data_model.code_cell import CodeCell
     from ipyflow.flow import NotebookFlow as NotebookFlowInstance
     from ipyflow.kernel.kernel import IPyflowKernelBase as IPyflowKernelInstance
     from ipyflow.tracing.ipyflow_tracer import DataflowTracer as TracerInstance
+
+_CodeCellContainer: "List[Type[CodeCell]]" = []
 
 
 class NotebookFlow(SingletonConfigurable):
@@ -26,6 +29,10 @@ class IPyflowKernel(SingletonConfigurable):
 
 class SingletonBaseTracer(pyc.BaseTracer):
     pass
+
+
+def cells() -> "Type[CodeCell]":
+    return _CodeCellContainer[0]
 
 
 def kernel() -> "IPyflowKernelInstance":

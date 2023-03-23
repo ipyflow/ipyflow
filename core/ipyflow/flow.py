@@ -413,6 +413,14 @@ class NotebookFlow(singletons.NotebookFlow):
             try:
                 cell.current_content = content
                 cell.to_ast()
+                # to ensure that static data deps get refreshed
+                prev_static_parents = set(cell._static_parents)
+                for pid, dsym in prev_static_parents:
+                    cell.remove_static_parent(pid, dsym)
+                cell.check_and_resolve_symbols(update_liveness_time_versions=True)
+                for pid, dsym in prev_static_parents:
+                    if (pid, dsym) not in cell._static_parents:
+                        cell.remove_dynamic_parent(pid, dsym)
             except SyntaxError:
                 cell.current_content = prev_content
 

@@ -4,7 +4,7 @@ import logging
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator, Iterable, NamedTuple, Optional, Union
 
-from ipyflow.singletons import flow, tracer
+from ipyflow.singletons import cells, flow, tracer
 
 if TYPE_CHECKING:
     # avoid circular imports
@@ -32,6 +32,10 @@ class Timestamp(NamedTuple):
             flow().cell_counter() + _cell_offset,
             tracer().module_stmt_counter() + _stmt_offset,
         )
+
+    @property
+    def positional(self) -> "Timestamp":
+        return Timestamp(cells().from_counter(self.cell_num).position, self.stmt_num)
 
     @classmethod
     def uninitialized(cls) -> "Timestamp":

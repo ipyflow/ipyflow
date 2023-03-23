@@ -328,7 +328,12 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
   const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {
     // exec_schedule: 'liveness_based',
   });
+
   const onExecution = (evt: any, data: { cell: any }) => {
+    if (disconnected) {
+      Jupyter.notebook.events.unbind('execute.CodeCell', onExecution);
+      return;
+    }
     if (data.cell.notebook !== Jupyter.notebook) {
       return;
     }
@@ -340,7 +345,12 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       cell_metadata_by_id: gatherCellMetadataById(Jupyter)
     });
   };
+
   const onSelect = (evt: any, data: { cell: any }) => {
+    if (disconnected) {
+      Jupyter.notebook.events.unbind('select.Cell', onSelect);
+      return;
+    }
     Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
       if (data.cell.cell_id === cell.cell_id) {
         activeCell = data.cell;
@@ -363,6 +373,17 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
     if (payload.type === 'establish') {
       Jupyter.notebook.events.on('execute.CodeCell', onExecution);
       Jupyter.notebook.events.on('select.Cell', onSelect);
+      const notifyContents = () => {
+        if (disconnected) {
+          return;
+        }
+        comm.send({
+          type: 'notify_content_changed',
+          cell_metadata_by_id: gatherCellMetadataById(Jupyter)
+        });
+        setTimeout(notifyContents, 2000);
+      };
+      notifyContents();
       code_cell.CodeCell.prototype.execute = codecell_execute;
       const keybinding = {
         help: 'alt mode execute',
@@ -388,6 +409,10 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       Jupyter.keyboard_manager.edit_shortcuts.add_shortcuts({
         'cmd-shift-enter': keybinding,
         'ctrl-shift-enter': keybinding
+      });
+      comm.send({
+        type: 'compute_exec_schedule',
+        cell_metadata_by_id: gatherCellMetadataById(Jupyter)
       });
     } else if (payload.type === 'change_active_cell') {
       if (cellPendingExecutionIdx != null) {
@@ -500,15 +525,9 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       }
     }
   });
-  comm.send({
-    type: 'compute_exec_schedule',
-    cell_metadata_by_id: gatherCellMetadataById(Jupyter)
-  });
   return () => {
     disconnected = true;
     clearCellState(Jupyter);
-    Jupyter.notebook.events.unbind('execute.CodeCell', onExecution);
-    Jupyter.notebook.events.unbind('select.Cell', onSelect);
     code_cell.CodeCell.prototype.execute = function() {
       // make execution a no-op while comm not connected
     };

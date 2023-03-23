@@ -2,7 +2,6 @@ ipyflow-core==0.0.159
 jupyter
 jupyterlab>=3.0,<4.0
 nbclassic>=0.2.8
-# ref: https://discourse.jupyter.org/t/jupyter-notebook-zmq-message-arrived-on-closed-channel-error/17869/17
 tornado==6.1
 jupyter_client==7.3.4
 jupyter_server==1.23.6

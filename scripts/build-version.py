@@ -26,7 +26,10 @@ def main(args):
     with open('./requirements.txt.in', 'r') as f:
         template = f.read()
     with open('./requirements.txt', 'w') as f:
-        f.write(template.format(version=version))
+        for line in template.splitlines(keepends=True):
+            if line.startswith("#"):
+                continue
+            f.write(line.format(version=version))
     return 0
 
 

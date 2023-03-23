@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.160 (2022-03-04)
+--------------------
+* Even better behavior around dependency tracking between cells;
+* Bring nbextension to parity with labextension mostly;
+* Misc stability improvements around kernel switching / restarting;
+
 0.0.159 (2022-03-04)
 --------------------
 * Better behavior around dependency tracking between cells;

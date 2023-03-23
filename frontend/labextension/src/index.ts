@@ -27,7 +27,7 @@ const linkedReadyMakerClass = 'linked-ready-maker';
 const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
-const dirtyCells: Set<string> = new Set();
+let dirtyCells: Set<string> = new Set();
 let waitingCells: Set<string> = new Set();
 let readyCells: Set<string> = new Set();
 let waiterLinks: { [id: string]: string[] } = {};
@@ -47,6 +47,27 @@ let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
 let forcedReactiveCells: Set<string> = new Set();
 
+function resetState(): void {
+  dirtyCells = new Set();
+  waitingCells = new Set();
+  readyCells = new Set();
+  waiterLinks = {};
+  readyMakerLinks = {};
+  activeCell = null;
+  activeCellId = null;
+  cellsById = {};
+  cellModelsById = {};
+  orderIdxById = {};
+  cellPendingExecution = null;
+  lastExecutionMode = null;
+  isReactivelyExecuting = false;
+  isAltModeExecuting = false;
+  lastExecutionHighlights = null;
+  executedReactiveReadyCells = new Set();
+  newReadyCells = new Set();
+  forcedReactiveCells = new Set();
+}
+
 /**
  * Initialization data for the jupyterlab-ipyflow extension.
  */
@@ -65,20 +86,28 @@ const extension: JupyterFrontEndPlugin<void> = {
       isVisible: () => true,
       isToggled: () => false,
       execute: () => {
-        if (!isAltModeExecuting && notebooks.activeCell.model.type === 'code') {
+        const session = notebooks.currentWidget.sessionContext;
+        if (!session.isReady) {
+          return;
+        }
+        if (session.session.kernel.name !== IPYFLOW_KERNEL_NAME) {
+          app.commands.execute('notebook:enter-command-mode');
+          CodeCell.execute(notebooks.activeCell as CodeCell, session);
+        } else if (
+          !isAltModeExecuting &&
+          notebooks.activeCell.model.type === 'code'
+        ) {
           isAltModeExecuting = true;
-          const session = notebooks.currentWidget.sessionContext;
-          if (session.isReady && notebooks.activeCell.model.type === 'code') {
-            session.session.kernel
-              .requestExecute({
-                code: '%flow toggle-reactivity-until-next-reset',
-                silent: true,
-                store_history: false,
-              })
-              .done.then(() => {
-                CodeCell.execute(notebooks.activeCell as CodeCell, session);
-              });
-          }
+          app.commands.execute('notebook:enter-command-mode');
+          session.session.kernel
+            .requestExecute({
+              code: '%flow toggle-reactivity-until-next-reset',
+              silent: true,
+              store_history: false,
+            })
+            .done.then(() => {
+              CodeCell.execute(notebooks.activeCell as CodeCell, session);
+            });
         }
       },
     });
@@ -97,48 +126,45 @@ const extension: JupyterFrontEndPlugin<void> = {
       category: 'execution',
       args: {},
     });
+    app.commands.addCommand('alt-execute', {
+      label: 'Alt Execute',
+      isEnabled: () => true,
+      isVisible: () => true,
+      isToggled: () => false,
+      execute: () => {
+        const session = notebooks.currentWidget.sessionContext;
+        if (session.isReady) {
+          app.commands.execute('notebook:enter-command-mode');
+          CodeCell.execute(notebooks.activeCell as CodeCell, session);
+        }
+      },
+    });
+    app.commands.addKeyBinding({
+      command: 'alt-execute',
+      keys: ['Accel Enter'],
+      selector: '.jp-Notebook',
+    });
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       session.ready.then(() => {
         clearCellState(nbPanel.content);
-        activeCell = nbPanel.content.activeCell;
-        activeCellId = nbPanel.content.activeCell.model.id;
-        let commDisconnectHandler = function () {
-          // do nothing if not connected.
-        };
+        let commDisconnectHandler = resetState;
         if (session.session.kernel.name === IPYFLOW_KERNEL_NAME) {
-          commDisconnectHandler = connectToComm(session, nbPanel.content);
+          session.ready.then(() => {
+            commDisconnectHandler = connectToComm(session, nbPanel.content);
+          });
         }
         session.kernelChanged.connect((_, args) => {
+          if (args.newValue == null) {
+            return;
+          }
+          resetState();
           clearCellState(nbPanel.content);
           commDisconnectHandler();
-          commDisconnectHandler = function () {
-            // do nothing if not connected.
-          };
-          if (
-            args.newValue !== null &&
-            args.newValue.name === IPYFLOW_KERNEL_NAME
-          ) {
-            commDisconnectHandler = connectToComm(session, nbPanel.content);
-          }
-        });
-        let shouldReconnect = false;
-        session.statusChanged.connect((session, status) => {
-          if (status === 'restarting' || status === 'autorestarting') {
-            shouldReconnect = true;
-          }
-
-          if ((status === 'idle' || status === 'busy') && shouldReconnect) {
-            shouldReconnect = false;
+          commDisconnectHandler = resetState;
+          if (args.newValue.name === IPYFLOW_KERNEL_NAME) {
             session.ready.then(() => {
-              clearCellState(nbPanel.content);
-              commDisconnectHandler();
-              commDisconnectHandler = function () {
-                // do nothing if not connected.
-              };
-              if (session.session.kernel.name === IPYFLOW_KERNEL_NAME) {
-                commDisconnectHandler = connectToComm(session, nbPanel.content);
-              }
+              commDisconnectHandler = connectToComm(session, nbPanel.content);
             });
           }
         });
@@ -299,6 +325,9 @@ const addUnsafeCellInteraction = (
 };
 
 const connectToComm = (session: ISessionContext, notebook: Notebook) => {
+  resetState();
+  activeCell = notebook.activeCell;
+  activeCellId = activeCell.model.id;
   const comm = session.session.kernel.createComm('ipyflow');
   let disconnected = false;
 
@@ -622,6 +651,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
   // return a disconnection handle
   return () => {
     disconnected = true;
+    resetState();
   };
 };
 

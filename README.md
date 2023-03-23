@@ -22,8 +22,8 @@ below; otherwise, keep reading to learn about `ipyflow`'s features.
 
 Features
 --------
-`ipyflow` ships with a JupyterLab extension that provides the following
-user-facing features.
+`ipyflow` ships with classic Jupyter + JupyterLab extensions that provide the
+following user-facing features.
 
 ### Execution Suggestions
 
@@ -205,9 +205,6 @@ classic Jupyter:
 JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
 :-------------------------------:|:--------------------------------:
 ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-notebook.png)
-
-Note: reactive execution features are not yet supported in classic Jupyter
-notebooks, but we are working on it!
 
 Citing
 ------

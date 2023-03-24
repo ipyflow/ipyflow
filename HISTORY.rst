@@ -1,7 +1,11 @@
 History
 =======
 
-0.0.160 (2022-03-04)
+0.0.161 (2022-03-24)
+--------------------
+* bugfix for kernel change state transition logic in nbextension
+
+0.0.160 (2022-03-23)
 --------------------
 * Even better behavior around dependency tracking between cells;
 * Bring nbextension to parity with labextension mostly;

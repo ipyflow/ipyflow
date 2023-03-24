@@ -542,16 +542,32 @@ __non_webpack_require__(
     code_cell.CodeCell.prototype.execute = function() {
       // make execution a no-op while comm not connected
     };
+    let commDisconnectHandler = function() {
+      // nothing to do by default
+    };
+    Jupyter.notebook.events.on('spec_changed.Kernel', () => {
+      // console.log('kernel changed');
+      code_cell.CodeCell.prototype.execute = function() {
+        // make execution a no-op while comm not connected
+      };
+      commDisconnectHandler();
+    });
+    Jupyter.notebook.events.on('kernel_restarting.Kernel', () => {
+      // console.log('kernel changed');
+      code_cell.CodeCell.prototype.execute = function() {
+        // make execution a no-op while comm not connected
+      };
+      commDisconnectHandler();
+    });
     Jupyter.notebook.events.on('kernel_ready.Kernel', () => {
-      const commDisconnectHandler = connectToComm(Jupyter, code_cell);
-      Jupyter.notebook.events.on('spec_changed.Kernel', () => {
-        // console.log('kernel changed');
-        commDisconnectHandler();
-      });
-      Jupyter.notebook.events.on('kernel_restarting.Kernel', () => {
-        // console.log('kernel changed');
-        commDisconnectHandler();
-      });
+      if (Jupyter.notebook.kernel.name === 'ipyflow') {
+        commDisconnectHandler = connectToComm(Jupyter, code_cell);
+      } else {
+        commDisconnectHandler = function() {
+          // reset to no-op
+        };
+        code_cell.CodeCell.prototype.execute = codecell_execute;
+      }
     });
   }
 );

@@ -26,7 +26,7 @@ setup(
                 'execution suggestions, syntax extensions, and more.',
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
-    url='https://github.com/nbsafety-project/nbsafety',
+    url='https://github.com/ipyflow/ipyflow',
     packages=[],
     include_package_data=True,
     data_files=[

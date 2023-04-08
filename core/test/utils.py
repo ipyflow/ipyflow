@@ -25,7 +25,7 @@ from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
 def should_skip_known_failing(reason="this test tests unimpled functionality"):
     return {
-        "condition": os.environ.get("SHOULD_SKIP_KNOWN_FAILING", True),
+        "condition": bool(int(os.getenv("SHOULD_SKIP_KNOWN_FAILING", "1"))),
         "reason": reason,
     }
 

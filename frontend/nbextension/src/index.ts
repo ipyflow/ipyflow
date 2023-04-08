@@ -351,6 +351,9 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       Jupyter.notebook.events.unbind('select.Cell', onSelect);
       return;
     }
+    if (data.cell == null) {
+      return;
+    }
     Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
       if (data.cell.cell_id === cell.cell_id) {
         activeCell = data.cell;
@@ -363,6 +366,20 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       active_cell_order_idx: activeCellIdx
     });
   };
+
+  // TODO: need a way to ensure this gets called immediately prior to cell execution
+  const notifyActiveCell = () => {
+    if (disconnected) {
+      Jupyter.notebook.events.unbind('create.Cell', notifyActiveCell);
+      Jupyter.notebook.events.unbind('delete.Cell', notifyActiveCell);
+      Jupyter.notebook.events.unbind('cut.Cell', notifyActiveCell);
+      Jupyter.notebook.events.unbind('copy.Cell', notifyActiveCell);
+      Jupyter.notebook.events.unbind('paste.Cell', notifyActiveCell);
+      Jupyter.notebook.events.unbind('move_up.Cell', notifyActiveCell);
+      Jupyter.notebook.events.unbind('move_down.Cell', notifyActiveCell);
+    }
+    onSelect(null, { cell: Jupyter.notebook.get_selected_cell() });
+  };
   comm.on_msg((msg: any) => {
     // console.log('comm got msg: ');
     // console.log(msg.content.data)
@@ -371,6 +388,13 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       return;
     }
     if (payload.type === 'establish') {
+      Jupyter.notebook.events.on('create.Cell', notifyActiveCell);
+      Jupyter.notebook.events.on('delete.Cell', notifyActiveCell);
+      Jupyter.notebook.events.on('cut.Cell', notifyActiveCell);
+      Jupyter.notebook.events.on('copy.Cell', notifyActiveCell);
+      Jupyter.notebook.events.on('paste.Cell', notifyActiveCell);
+      Jupyter.notebook.events.on('move_up.Cell', notifyActiveCell);
+      Jupyter.notebook.events.on('move_down.Cell', notifyActiveCell);
       Jupyter.notebook.events.on('execute.CodeCell', onExecution);
       Jupyter.notebook.events.on('select.Cell', onSelect);
       const notifyContents = () => {
@@ -514,6 +538,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         updateUI(Jupyter);
         isReactivelyExecuting = false;
         isAltModeExecuting = false;
+        notifyActiveCell();
       } else {
         isReactivelyExecuting = true;
         updateUI(Jupyter);

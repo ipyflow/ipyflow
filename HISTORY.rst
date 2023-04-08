@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.162 (2022-04-07)
+--------------------
+* bugfix for nbextension active cell notification;
+
 0.0.161 (2022-03-24)
 --------------------
 * bugfix for kernel change state transition logic in nbextension

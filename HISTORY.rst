@@ -1,13 +1,17 @@
 History
 =======
 
+0.0.163 (2022-04-09)
+--------------------
+* Allow for loading / unloading as an ipython extension;
+
 0.0.162 (2022-04-07)
 --------------------
-* bugfix for nbextension active cell notification;
+* Bugfix for nbextension active cell notification;
 
 0.0.161 (2022-03-24)
 --------------------
-* bugfix for kernel change state transition logic in nbextension
+* Bugfix for kernel change state transition logic in nbextension
 
 0.0.160 (2022-03-23)
 --------------------

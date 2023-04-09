@@ -90,11 +90,14 @@ class OutputRecorder(pyc.BaseTracer):
 
 class PyccoloKernelMixin(PyccoloKernelHooks):
     def __init__(self, **kwargs) -> None:
-        self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
-            store_history=kwargs.pop("store_history", True)
-        )
+        store_history = kwargs.pop("store_history", True)
         super().__init__(**kwargs)
+        self._initialize(store_history=store_history)
 
+    def _initialize(self, store_history: bool = True) -> None:
+        self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
+            store_history=store_history
+        )
         self.tee_output_tracer = OutputRecorder.instance()
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [
             OutputRecorder,
@@ -363,13 +366,43 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         class ZMQKernel(cls, IPythonKernel):  # type: ignore
             implementation = "kernel"
             implementation_version = __version__
+            prev_kernel_class: Optional[Type[IPythonKernel]] = None
+            replacement_class: Optional[Type[IPythonKernel]] = None
 
-            def __init__(self, **kwargs):
+            def __init__(self, **kwargs) -> None:
                 super().__init__(**kwargs)
+                # this needs to happen after IPythonKernel.__init__ completes,
+                # which means that we cannot put it in _initialize(), since at
+                # that point only PyccoloKernelHooks.__init__ will be finished
+                self.after_init_class()
+
+            def _initialize(self, **kwargs) -> None:
+                super()._initialize(**kwargs)
                 from ipyflow.kernel import patched_nest_asyncio
 
                 patched_nest_asyncio.apply()
-                self.after_init_class()
+
+            @classmethod
+            def inject(
+                zmq_kernel_class, prev_kernel_class: Type[IPythonKernel]
+            ) -> None:
+                ipy = get_ipython()
+                kernel = ipy.kernel
+                kernel.__class__ = zmq_kernel_class
+                if zmq_kernel_class.prev_kernel_class is None:
+                    kernel._initialize()
+                    kernel.after_init_class()
+                    for subclass in singletons.IPyflowKernel._walk_mro():
+                        subclass._instance = kernel
+                zmq_kernel_class.prev_kernel_class = prev_kernel_class
+                cells()._cell_counter = ipy.execution_count
+
+            @classmethod
+            def _maybe_eject(zmq_kernel_class) -> None:
+                if zmq_kernel_class.replacement_class is None:
+                    return
+                get_ipython().kernel.__class__ = zmq_kernel_class.replacement_class
+                zmq_kernel_class.replacement_class = None
 
             def init_metadata(self, parent):
                 """
@@ -409,6 +442,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                         ret = await self.pyc_execute(code, True, _run_cell_func)
                     if ret["status"] == "error":
                         self.on_exception(ret["ename"])
+                    self._maybe_eject()
                     return ret
 
             else:
@@ -439,6 +473,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                     )
                     if ret["status"] == "error":
                         self.on_exception(ret["ename"])
+                    self._maybe_eject()
                     return ret
 
         ZMQKernel.__name__ = name

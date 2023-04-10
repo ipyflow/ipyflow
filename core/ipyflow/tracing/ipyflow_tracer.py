@@ -817,9 +817,6 @@ class DataflowTracer(StackFrameManager):
                 )
             except TypeError:
                 data_sym = None
-            self.pending_usage_updates_by_sym.setdefault(
-                sym_for_obj, data_sym is not None
-            )
             self.pending_usage_updates_by_sym[
                 sym_for_obj
             ] = self.pending_usage_updates_by_sym.get(sym_for_obj, True) and (

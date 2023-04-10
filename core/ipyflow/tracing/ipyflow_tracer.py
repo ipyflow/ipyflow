@@ -820,6 +820,11 @@ class DataflowTracer(StackFrameManager):
             self.pending_usage_updates_by_sym.setdefault(
                 sym_for_obj, data_sym is not None
             )
+            self.pending_usage_updates_by_sym[
+                sym_for_obj
+            ] = self.pending_usage_updates_by_sym.get(sym_for_obj, True) and (
+                data_sym is not None
+            )
             if data_sym is not None and event in (
                 pyc.before_attribute_load,
                 pyc.before_subscript_load,

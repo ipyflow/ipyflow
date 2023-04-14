@@ -21,3 +21,4 @@ MANIFEST
 coverage.xml
 htmlcov/**
 .hypothesis
+*.iml

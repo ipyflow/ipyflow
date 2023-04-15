@@ -526,13 +526,15 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
             flow_._saved_debug_message = None
 
         cell_id, flow_._active_cell_id = flow_._active_cell_id, None
-        if cell_id is None:
+        placeholder_id = cell_id is None
+        if placeholder_id:
             cell_id = flow_.cell_counter()
         cell = cells().create_and_track(
             cell_id,
             cell_content,
             flow_._tags,
             validate_ipython_counter=self.settings.store_history,
+            placeholder_id=placeholder_id,
         )
 
         last_content, flow_.last_executed_content = (

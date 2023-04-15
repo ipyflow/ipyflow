@@ -505,12 +505,25 @@ class NotebookFlow(singletons.NotebookFlow):
             for cell_id, metadata in cell_metadata_by_id.items()
             if metadata.get("override_dead_refs")
         }
-        self._create_untracked_cells_for_content(content_by_cell_id)
         cells().set_cell_positions(order_index_by_id)
         cells().set_override_refs(
             override_live_refs_by_cell_id, override_dead_refs_by_cell_id
         )
         self._recompute_ast_for_dirty_cells(content_by_cell_id)
+        placeholder_cells = cells().with_placeholder_ids()
+        if len(placeholder_cells) > 0:
+            for _, cell_id in sorted(
+                (idx, cell_id) for cell_id, idx in order_index_by_id.items()
+            ):
+                if cells().from_id(cell_id) is not None:
+                    continue
+                content = content_by_cell_id[cell_id]
+                for candidate in list(placeholder_cells):
+                    if candidate.current_content == content:
+                        candidate.update_id(cell_id)
+                        placeholder_cells.remove(candidate)
+                        break
+        self._create_untracked_cells_for_content(content_by_cell_id)
         return None
 
     def handle_compute_exec_schedule(

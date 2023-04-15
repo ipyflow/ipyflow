@@ -76,6 +76,7 @@ class CodeCell(CodeCellSlicingMixin):
         content: str,
         tags: Tuple[str, ...],
         prev_cell: Optional["CodeCell"] = None,
+        placeholder_id: bool = False,
     ) -> None:
         self.cell_id: CellId = cell_id
         self.cell_ctr: int = cell_ctr
@@ -102,6 +103,7 @@ class CodeCell(CodeCellSlicingMixin):
         )
         self._ready: bool = False
         self._extra_stmt: Optional[ast.stmt] = None
+        self._placeholder_id = placeholder_id
 
     @classmethod
     def clear(cls):
@@ -112,6 +114,17 @@ class CodeCell(CodeCellSlicingMixin):
         cls._cells_by_tag.clear()
         cls._reactive_cells_by_tag.clear()
 
+    @classmethod
+    def with_placeholder_ids(cls):
+        return sorted(
+            (
+                cell
+                for cell in cls._current_cell_by_cell_id.values()
+                if cell._placeholder_id
+            ),
+            key=lambda cell: cell.cell_ctr,
+        )
+
     def __str__(self):
         return self.executed_content
 
@@ -120,6 +133,49 @@ class CodeCell(CodeCellSlicingMixin):
 
     def __hash__(self):
         return hash((self.cell_id, self.cell_ctr))
+
+    def update_id(self, new_id: CellId, update_edges: bool = True) -> None:
+        old_id = self.cell_id
+        self.cell_id = new_id
+        if self.prev_cell is not None:
+            self.prev_cell.update_id(new_id, update_edges=False)
+        if not update_edges:
+            return
+        pos = self._position_by_cell_id.pop(old_id, None)
+        if pos is not None:
+            self._position_by_cell_id[new_id] = pos
+        current_cell = self._current_cell_by_cell_id.pop(old_id, None)
+        if current_cell is not None:
+            assert current_cell is self
+            self._current_cell_by_cell_id[new_id] = current_cell
+        for reactive_cells in self._reactive_cells_by_tag.values():
+            if old_id in reactive_cells:
+                reactive_cells.discard(old_id)
+                reactive_cells.add(new_id)
+        for pid in self.dynamic_parent_ids:
+            parent = self.from_id(pid)
+            parent._dynamic_children = {
+                (new_id, sym) if cid == old_id else (cid, sym)
+                for cid, sym in parent._dynamic_children
+            }
+        for pid in self.static_parent_ids:
+            parent = self.from_id(pid)
+            parent._static_children = {
+                (new_id, sym) if cid == old_id else (cid, sym)
+                for cid, sym in parent._static_children
+            }
+        for cid in self.dynamic_children_ids:
+            child = self.from_id(cid)
+            child._dynamic_parents = {
+                (new_id, sym) if pid == old_id else (pid, sym)
+                for pid, sym in child._dynamic_parents
+            }
+        for cid in self.static_children_ids:
+            child = self.from_id(cid)
+            child._static_parents = {
+                (new_id, sym) if pid == old_id else (pid, sym)
+                for pid, sym in child._static_parents
+            }
 
     def add_used_cell_counter(self, sym: "DataSymbol", ctr: int) -> None:
         if ctr > 0:
@@ -266,6 +322,7 @@ class CodeCell(CodeCellSlicingMixin):
         tags: Tuple[str, ...],
         bump_cell_counter: bool = True,
         validate_ipython_counter: bool = True,
+        placeholder_id: bool = False,
     ) -> "CodeCell":
         if bump_cell_counter:
             cls._cell_counter += 1
@@ -286,7 +343,14 @@ class CodeCell(CodeCellSlicingMixin):
             assert prev_cell is None
         if prev_cell is not None:
             tags = tuple(set(tags) | set(prev_cell.tags))
-        cell = cls(cell_id, cell_ctr, content, tags, prev_cell=prev_cell)
+        cell = cls(
+            cell_id,
+            cell_ctr,
+            content,
+            tags,
+            prev_cell=prev_cell,
+            placeholder_id=placeholder_id,
+        )
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
             cell._dynamic_children = prev_cell._dynamic_children

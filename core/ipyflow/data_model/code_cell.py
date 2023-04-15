@@ -137,6 +137,7 @@ class CodeCell(CodeCellSlicingMixin):
     def update_id(self, new_id: CellId, update_edges: bool = True) -> None:
         old_id = self.cell_id
         self.cell_id = new_id
+        self._placeholder_id = False
         if self.prev_cell is not None:
             self.prev_cell.update_id(new_id, update_edges=False)
         if not update_edges:

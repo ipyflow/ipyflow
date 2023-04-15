@@ -11,7 +11,6 @@ const linkedWaitingClass = 'linked-waiting';
 const linkedReadyClass = 'linked-ready';
 const linkedReadyMakingClass = 'linked-ready-making';
 
-let codecell_execute: any = null;
 const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
@@ -408,7 +407,6 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         setTimeout(notifyContents, 2000);
       };
       notifyContents();
-      code_cell.CodeCell.prototype.execute = codecell_execute;
       const keybinding = {
         help: 'alt mode execute',
         help_index: 'zz',
@@ -553,9 +551,6 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
   return () => {
     disconnected = true;
     clearCellState(Jupyter);
-    code_cell.CodeCell.prototype.execute = function() {
-      // make execution a no-op while comm not connected
-    };
   };
 }
 
@@ -563,25 +558,15 @@ __non_webpack_require__(
   ['base/js/namespace', 'notebook/js/codecell'],
   (Jupyter: any, code_cell: any) => {
     // console.log('This is the current notebook application instance:', Jupyter.notebook);
-    codecell_execute = code_cell.CodeCell.prototype.execute;
-    code_cell.CodeCell.prototype.execute = function() {
-      // make execution a no-op while comm not connected
-    };
     let commDisconnectHandler = function() {
       // nothing to do by default
     };
     Jupyter.notebook.events.on('spec_changed.Kernel', () => {
       // console.log('kernel changed');
-      code_cell.CodeCell.prototype.execute = function() {
-        // make execution a no-op while comm not connected
-      };
       commDisconnectHandler();
     });
     Jupyter.notebook.events.on('kernel_restarting.Kernel', () => {
       // console.log('kernel changed');
-      code_cell.CodeCell.prototype.execute = function() {
-        // make execution a no-op while comm not connected
-      };
       commDisconnectHandler();
     });
     Jupyter.notebook.events.on('kernel_ready.Kernel', () => {
@@ -591,7 +576,6 @@ __non_webpack_require__(
         commDisconnectHandler = function() {
           // reset to no-op
         };
-        code_cell.CodeCell.prototype.execute = codecell_execute;
       }
     });
   }

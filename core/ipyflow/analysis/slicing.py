@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
+import textwrap
 from collections import defaultdict
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, TypeVar
 
 import black
+from ipywidgets import HTML
 
+from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.singletons import flow
+from ipyflow.singletons import cells, flow
 from ipyflow.types import TimestampOrCounter
 
 if TYPE_CHECKING:
@@ -19,6 +22,9 @@ else:
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
+
+
+FormatType = TypeVar("FormatType", HTML, str)
 
 
 logger = logging.getLogger(__name__)
@@ -146,16 +152,83 @@ def compute_slice_impl(
     return dependencies
 
 
-def make_slice_text(slice: Dict[int, str], blacken: bool = True) -> str:
-    slice_text = "\n\n".join(
+def format_slice(
+    slice: Dict[int, str],
+    blacken: bool = True,
+    format_type: Optional[Type[FormatType]] = None,
+) -> FormatType:
+    iface = flow().mut_settings.interface
+    if format_type is None:
+        if iface in (Interface.IPYTHON, Interface.UNKNOWN):
+            format_type = str
+        else:
+            format_type = HTML
+    assert format_type is not None
+    if blacken:
+        for cell_num, content in list(slice.items()):
+            try:
+                slice[cell_num] = black.format_str(
+                    content, mode=black.FileMode()
+                ).strip()
+            except Exception as e:
+                logger.info("call to black failed with exception: %s", e)
+    slice_text_cells = "\n\n".join(
         f"# Cell {cell_num}\n" + content for cell_num, content in sorted(slice.items())
     )
+    if format_type is str:
+        return slice_text_cells
+    slice_text_linked_cells = []
+    if iface == Interface.JUPYTER:
+        container_selector = "javascript:document.getElementById('notebook-container')"
+    elif iface == Interface.JUPYTERLAB:
+        container_selector = (
+            "javascript:document.getElementById("
+            "document.querySelector('.jp-mod-current').dataset.id).children[2]"
+        )
+    else:
+        container_selector = None
+    for cell_num, content in sorted(slice.items()):
+        cell = cells().from_counter(cell_num)
+        if (
+            container_selector is not None
+            and cell.is_current_for_id
+            and cell.position >= 0
+        ):
+            rendered_cell = (
+                f'# <a href="{container_selector}.children[{cell.position}].scrollIntoView()">'
+                f"Cell {cell_num}</a>"
+            )
+        else:
+            rendered_cell = f"# Cell {cell_num}"
+        slice_text_linked_cells.append(rendered_cell + f"\n{content}")
+    assert format_type is HTML
+    slice_text_no_cells = "\n".join(
+        content for _cell_num, content in sorted(slice.items())
+    )
     if blacken:
-        try:
-            slice_text = black.format_str(slice_text, mode=black.FileMode())
-        except Exception as e:
-            logger.info("call to black failed with exception: %s", e)
-    return slice_text
+        slice_text_no_cells = black.format_str(
+            slice_text_no_cells, mode=black.FileMode()
+        ).strip()
+    if iface == Interface.JUPYTER:
+        classes = "output_subarea output_text output_stream output_stdout"
+    elif iface == Interface.JUPYTERLAB:
+        classes = "lm-Widget p-Widget jp-RenderedText jp-OutputArea-output"
+    else:
+        classes = ""
+    return HTML(
+        textwrap.dedent(
+            f"""
+        <div class="{classes}">
+        <pre>
+        <a href="javascript:navigator.clipboard.writeText('{slice_text_no_cells.encode("unicode_escape").decode("utf-8")}')">Copy code</a>\
+ | <a href="javascript:navigator.clipboard.writeText('{slice_text_cells.encode("unicode_escape").decode("utf-8")}')">Copy cells</a>
+ 
+        {{code}}
+        </pre>
+        </div>
+        """
+        ).format(code="\n\n".join(slice_text_linked_cells))
+    )
 
 
 class CodeCellSlicingMixin:

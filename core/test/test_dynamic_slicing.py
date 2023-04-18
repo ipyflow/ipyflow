@@ -6,7 +6,7 @@ import textwrap
 from test.utils import make_flow_fixture
 from typing import Dict
 
-from ipyflow.analysis.slicing import make_slice_text
+from ipyflow.analysis.slicing import format_slice
 from ipyflow.config import FlowDirection
 from ipyflow.data_model.code_cell import cells
 from ipyflow.singletons import flow
@@ -59,7 +59,7 @@ def compute_unparsed_slice(cell_num: int) -> Dict[int, str]:
     return cells().from_timestamp(cell_num).compute_slice()
 
 
-def compute_unparsed_slice_stmts(cell_num: int) -> str:
+def compute_unparsed_slice_stmts(cell_num: int) -> Dict[int, str]:
     return cells().from_timestamp(cell_num).compute_slice(stmt_level=True)
 
 
@@ -232,13 +232,12 @@ def test_tuple_unpack_used_in_funcall_before_after_update_one():
     assert deps == {2, 5, 6, 7}, "got %s" % deps
     slice_size = num_stmts_in_slice(7)
     assert slice_size == 4, "got %d" % slice_size
-    slice_text = make_slice_text(compute_unparsed_slice_stmts(7), blacken=True).strip()
+    slice_text = format_slice(compute_unparsed_slice_stmts(7), blacken=True).strip()
     expected = textwrap.dedent(
         """
         # Cell 2
         def get_sum():
             return x + y
-            
             
         # Cell 5
         x, y = 0, 1
@@ -524,7 +523,7 @@ def test_anonymous_symbols_attached_on_fun_return_do_not_interfere():
     run_cell("def f(): return y + 5")
     run_cell("f()")
     run_cell("sink = f()")
-    slice_text = make_slice_text(compute_unparsed_slice_stmts(4), blacken=True).strip()
+    slice_text = format_slice(compute_unparsed_slice_stmts(4), blacken=True).strip()
     # just make it invariant to extra lines
     slice_text = "\n".join(line for line in slice_text.splitlines() if line)
     expected = textwrap.dedent(
@@ -560,9 +559,7 @@ if sys.version_info >= (3, 8):
         run_cell("x = 0")
         run_cell("y = $x + 1")
         run_cell("logging.info($y)")
-        slice_text = make_slice_text(
-            compute_unparsed_slice_stmts(3), blacken=True
-        ).strip()
+        slice_text = format_slice(compute_unparsed_slice_stmts(3), blacken=True).strip()
         expected = textwrap.dedent(
             """
             # Cell 1

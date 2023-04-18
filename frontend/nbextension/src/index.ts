@@ -325,7 +325,7 @@ function gatherCellMetadataById(Jupyter: any): CellMetadataMap {
 function connectToComm(Jupyter: any, code_cell: any): () => void {
   let disconnected = false;
   const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {
-    // exec_schedule: 'liveness_based',
+    interface: 'jupyter'
   });
 
   const onExecution = (evt: any, data: { cell: any }) => {

@@ -647,7 +647,9 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       }
     }
   };
-  comm.open({});
+  comm.open({
+    interface: 'jupyterlab',
+  });
   // return a disconnection handle
   return () => {
     disconnected = true;

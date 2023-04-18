@@ -13,7 +13,7 @@ import pyccolo as pyc
 from IPython import get_ipython
 from IPython.core.magic import register_line_magic
 
-from ipyflow.analysis.slicing import make_slice_text
+from ipyflow.analysis.slicing import format_slice
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.annotations.compiler import (
     register_annotations_directory,
@@ -330,7 +330,7 @@ def make_slice(line: str) -> Optional[str]:
     elif len(slice_cells) == 0 and tag is not None:
         warn(f"No cell(s) for tag: {tag}")
     else:
-        return make_slice_text(
+        return format_slice(
             cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt),
             blacken=args.stmt or args.blacken,
         )

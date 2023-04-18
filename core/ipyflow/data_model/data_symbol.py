@@ -17,9 +17,7 @@ from typing import (
     cast,
 )
 
-from pyccolo import fast
-
-from ipyflow.analysis.slicing import compute_slice_impl, make_slice_text
+from ipyflow.analysis.slicing import FormatType, compute_slice_impl, format_slice
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.data_model import sizing
 from ipyflow.data_model.annotation_utils import (
@@ -223,7 +221,7 @@ class DataSymbol:
             timestamps |= dsym.compute_namespace_timestamps(seen=seen)
         return timestamps
 
-    def code(self) -> str:
+    def code(self, format_type: Optional[Type[FormatType]] = None) -> FormatType:
         ts = self.timestamp_excluding_ns_descendents
         if ts.cell_num == -1:
             timestamps = {Timestamp(self.defined_cell_num, ts.stmt_num)}
@@ -232,7 +230,9 @@ class DataSymbol:
         ts_deps = compute_slice_impl(list(timestamps), match_seed_stmts=True)
         stmts_by_cell_num = CodeCell.compute_slice_stmts_for_timestamps(ts_deps)
         stmt_text_by_cell_num = CodeCell.get_stmt_text(stmts_by_cell_num)
-        return make_slice_text(stmt_text_by_cell_num, blacken=True)
+        return format_slice(
+            stmt_text_by_cell_num, blacken=True, format_type=format_type
+        )
 
     def cascading_reactive_cell_num(
         self,
@@ -417,7 +417,10 @@ class DataSymbol:
 
     @property
     def namespace(self) -> Optional["Namespace"]:
-        return flow().namespaces.get(self.obj_id, None)
+        ns = flow().namespaces.get(self.obj_id, None)
+        if ns is None or (self.name != "_" and ns.full_path[-1] == "_"):
+            return None
+        return ns
 
     @property
     def containing_namespace(self) -> Optional["Namespace"]:

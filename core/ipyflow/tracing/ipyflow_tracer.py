@@ -927,7 +927,7 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
     def handle_lift_argument(self, arg_obj: Any, arg_node: ast.AST, *_, **__):
-        if self.cur_function not in (
+        if self.num_args_seen > 0 or self.cur_function not in (
             api_code,
             api_deps,
             api_lift,

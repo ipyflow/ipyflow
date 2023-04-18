@@ -32,6 +32,7 @@ from ipyflow.config import (
     ExecutionSchedule,
     FlowDirection,
     Highlights,
+    Interface,
     MutableDataflowSettings,
 )
 from ipyflow.data_model.code_cell import CodeCell, cells
@@ -82,6 +83,7 @@ class NotebookFlow(singletons.NotebookFlow):
             dataflow_enabled=kwargs.pop("dataflow_enabled", True),
             trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
             highlights=kwargs.pop("highlights", Highlights.EXECUTED),
+            interface=kwargs.pop("interface", Interface.IPYTHON),
             static_slicing_enabled=kwargs.pop(
                 "static_slicing_enabled",
                 getattr(config, "static_slicing_enabled", True),
@@ -219,8 +221,13 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self._virtual_symbols_inited = True
 
-    def initialize(self, *, entrypoint: Optional[str] = None, **kwargs) -> None:
+    def initialize(self, *, interface: Optional[str] = None, **kwargs) -> None:
         config = get_ipython().config.ipyflow
+        try:
+            iface = Interface(interface)
+        except ValueError:
+            iface = Interface.UNKNOWN
+        self.mut_settings.interface = iface
         self.mut_settings.dataflow_enabled = getattr(
             config, "dataflow_enabled", kwargs.get("dataflow_enabled", True)
         )

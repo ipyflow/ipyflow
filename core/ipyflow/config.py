@@ -28,6 +28,14 @@ class Highlights(Enum):
     REACTIVE = "reactive"
 
 
+class Interface(Enum):
+    IPYTHON = "ipython"
+    JUPYTER = "jupyter"
+    JUPYTERLAB = "jupyterlab"
+    VSCODE = "vscode"
+    UNKNOWN = "unknown"
+
+
 class DataflowSettings(NamedTuple):
     test_context: bool
     use_comm: bool
@@ -41,6 +49,7 @@ class MutableDataflowSettings:
     dataflow_enabled: bool
     trace_messages_enabled: bool
     highlights: Highlights
+    interface: Interface
     static_slicing_enabled: bool
     dynamic_slicing_enabled: bool
     exec_mode: ExecutionMode

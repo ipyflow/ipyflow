@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Set, cast
+from typing import Any, List, Set, Union, cast
+
+from ipywidgets import HTML
 
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.timestamp import Timestamp
@@ -23,7 +25,7 @@ def lift(sym: Any) -> DataSymbol:
     return _validate(sym)
 
 
-def code(sym: Any) -> str:
+def code(sym: Any, **kwargs: Any) -> Union[HTML, str]:
     """
     Given the programmatic usage of some symbol,
     look up the corresponding code for that symbol.
@@ -31,7 +33,7 @@ def code(sym: Any) -> str:
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
-    return _validate(sym).code()
+    return _validate(sym).code(**kwargs)
 
 
 def timestamp(sym: Any) -> Timestamp:

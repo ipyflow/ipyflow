@@ -417,10 +417,7 @@ class DataSymbol:
 
     @property
     def namespace(self) -> Optional["Namespace"]:
-        ns = flow().namespaces.get(self.obj_id, None)
-        if ns is None or (self.name != "_" and ns.full_path[-1] == "_"):
-            return None
-        return ns
+        return flow().namespaces.get(self.obj_id)
 
     @property
     def containing_namespace(self) -> Optional["Namespace"]:

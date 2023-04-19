@@ -1284,8 +1284,18 @@ class DataflowTracer(StackFrameManager):
         ret = self._saved_stmt_ret_expr
         self._saved_stmt_ret_expr = None
         if ret is not None:
+            flow_ = flow()
+            # clean up prev _ namespace
+            prev_underscore_sym = (
+                flow_.global_scope.lookup_data_symbol_by_name_this_indentation("_")
+            )
+            prev_underscore_id = (
+                None if prev_underscore_sym is None else prev_underscore_sym.obj_id
+            )
+            if prev_underscore_id is not None:
+                flow_.namespaces.pop(prev_underscore_id, None)
             stmt: ast.stmt = self.ast_node_by_id[node_id]
-            flow().global_scope.upsert_data_symbol_for_name(
+            flow_.global_scope.upsert_data_symbol_for_name(
                 "_",
                 ret,
                 resolve_rval_symbols(stmt, should_update_usage_info=False),

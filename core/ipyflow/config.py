@@ -28,11 +28,18 @@ class Highlights(Enum):
     REACTIVE = "reactive"
 
 
+# TODO: figure out how to represent different versions of
+#  same interface (e.g. jupyterlab 4.0, notebook v7, etc)
 class Interface(Enum):
+    COLAB = "colab"  # TODO
+    DATALORE = "datalore"  # TODO
+    DEEPNOTE = "deepnote"  # TODO
+    HEX = "hex"  # TODO
     IPYTHON = "ipython"
     JUPYTER = "jupyter"
     JUPYTERLAB = "jupyterlab"
-    VSCODE = "vscode"
+    NOTEABLE = "noteable"  # TODO
+    VSCODE = "vscode"  # TODO
     UNKNOWN = "unknown"
 
 

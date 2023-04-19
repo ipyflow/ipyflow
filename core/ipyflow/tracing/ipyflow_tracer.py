@@ -550,7 +550,7 @@ class DataflowTracer(StackFrameManager):
         self, obj: Any, obj_name: Optional[str] = None
     ) -> Namespace:
         obj_id = id(obj)
-        ns = flow().namespaces.get(obj_id, None)
+        ns = flow().namespaces.get(obj_id)
         if ns is not None:
             return ns
         class_scope = flow().namespaces.get(id(obj.__class__), None)
@@ -1292,7 +1292,10 @@ class DataflowTracer(StackFrameManager):
             prev_underscore_id = (
                 None if prev_underscore_sym is None else prev_underscore_sym.obj_id
             )
-            if prev_underscore_id is not None:
+            if (
+                prev_underscore_id is not None
+                and len(flow_.aliases.get(prev_underscore_id, [])) <= 1
+            ):
                 flow_.namespaces.pop(prev_underscore_id, None)
             stmt: ast.stmt = self.ast_node_by_id[node_id]
             flow_.global_scope.upsert_data_symbol_for_name(

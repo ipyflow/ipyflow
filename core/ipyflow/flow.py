@@ -313,17 +313,15 @@ class NotebookFlow(singletons.NotebookFlow):
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
         self.dynamic_data_deps.setdefault(child, set()).add(parent)
-        cells().from_timestamp(child).add_dynamic_parent(
-            cells().from_timestamp(parent), sym
+        cells().at_timestamp(child).add_dynamic_parent(
+            cells().at_timestamp(parent), sym
         )
 
     def add_static_data_dep(
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
         self.static_data_deps.setdefault(child, set()).add(parent)
-        cells().from_timestamp(child).add_static_parent(
-            cells().from_timestamp(parent), sym
-        )
+        cells().at_timestamp(child).add_static_parent(cells().at_timestamp(parent), sym)
 
     def is_updated_reactive(self, sym: DataSymbol) -> bool:
         return (
@@ -731,7 +729,7 @@ class NotebookFlow(singletons.NotebookFlow):
             dsym.update_obj_ref(obj)
 
     def _add_applicable_prev_cell_parents_to_current(self) -> None:
-        cell = cells().from_counter(self.cell_counter())
+        cell = cells().at_counter(self.cell_counter())
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
@@ -771,7 +769,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def gc(self):
         # Need to do the garbage marking and the collection separately
-        prev_cell = cells().from_counter(self.cell_counter()).prev_cell
+        prev_cell = cells().at_counter(self.cell_counter()).prev_cell
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
         if prev_cell_ctr > 0:
             for sym in self.all_data_symbols():

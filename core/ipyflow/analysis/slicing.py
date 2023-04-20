@@ -10,7 +10,7 @@ from ipywidgets import HTML
 
 from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.models import cells
+from ipyflow.models import cells, stmts
 from ipyflow.singletons import flow
 from ipyflow.types import TimestampOrCounter
 
@@ -189,7 +189,7 @@ def format_slice(
     else:
         container_selector = None
     for cell_num, content in sorted(slice.items()):
-        cell = cells().from_counter(cell_num)
+        cell = cells().at_counter(cell_num)
         if (
             container_selector is not None
             and cell.is_current_for_id
@@ -301,7 +301,7 @@ class CodeCellSlicingMixin:
             return ret
         else:
             deps: Set[int] = compute_slice_impl([cell.cell_ctr for cell in cells])
-            return {dep: cls.from_timestamp(dep).sanitized_content() for dep in deps}
+            return {dep: cls.at_timestamp(dep).sanitized_content() for dep in deps}
 
     def compute_slice_stmts(  # type: ignore
         self: "CodeCell",
@@ -319,13 +319,8 @@ class CodeCellSlicingMixin:
         for ts in sorted(timestamps):
             if ts.stmt_num == -1:
                 continue
-            cell = cls.from_timestamp(ts)
-            cell_stmts = cell.to_ast().body + [cell._extra_stmt]
-            if ts.stmt_num < len(cell_stmts):
-                stmt = cell_stmts[ts.stmt_num]
-                stmt_id = id(stmt)
-            else:
-                stmt = stmt_id = None
+            stmt = stmts().module_stmt_node_at_timestamp(ts, include_extra=True)
+            stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue
             seen_stmt_ids.add(stmt_id)

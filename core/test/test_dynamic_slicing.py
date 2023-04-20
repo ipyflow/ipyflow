@@ -52,15 +52,15 @@ def run_cell(cell, **kwargs):
 
 
 def compute_slice_stmts(cell_num):
-    return cells().from_timestamp(cell_num).compute_slice_stmts()
+    return cells().at_timestamp(cell_num).compute_slice_stmts()
 
 
 def compute_unparsed_slice(cell_num: int) -> Dict[int, str]:
-    return cells().from_timestamp(cell_num).compute_slice()
+    return cells().at_timestamp(cell_num).compute_slice()
 
 
 def compute_unparsed_slice_stmts(cell_num: int) -> Dict[int, str]:
-    return cells().from_timestamp(cell_num).compute_slice(stmt_level=True)
+    return cells().at_timestamp(cell_num).compute_slice(stmt_level=True)
 
 
 def num_stmts_in_slice(cell_num: int) -> int:

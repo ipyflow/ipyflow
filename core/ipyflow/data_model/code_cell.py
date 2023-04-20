@@ -418,15 +418,15 @@ class CodeCell(CodeCellSlicingMixin):
         yield from cls._current_cell_by_cell_id.values()
 
     @classmethod
-    def from_counter(cls, ctr: int) -> "CodeCell":
+    def at_counter(cls, ctr: int) -> "CodeCell":
         return cls._cell_by_cell_ctr[ctr]
 
     @classmethod
-    def from_timestamp(cls, ts: TimestampOrCounter) -> "CodeCell":
+    def at_timestamp(cls, ts: TimestampOrCounter) -> "CodeCell":
         if isinstance(ts, Timestamp):
-            return cls.from_counter(ts.cell_num)
+            return cls.at_counter(ts.cell_num)
         else:
-            return cls.from_counter(ts)
+            return cls.at_counter(ts)
 
     @classmethod
     def from_id(cls, cell_id: CellId) -> Optional["CodeCell"]:
@@ -516,7 +516,7 @@ class CodeCell(CodeCellSlicingMixin):
                     live_sym_updated_cell_ctr
                     in self._used_cell_counters_by_live_symbol.get(sym.dsym, set())
                 ):
-                    used_cell_position = self.from_timestamp(
+                    used_cell_position = self.at_timestamp(
                         live_sym_updated_cell_ctr
                     ).position
                     if this_cell_pos >= used_cell_position:
@@ -597,7 +597,7 @@ class CodeCell(CodeCellSlicingMixin):
         used_cell_counters_by_cell_id = defaultdict(set)
         used_cell_counters_by_cell_id[self.cell_id].add(self.exec_counter())
         for cell_num in used_cells:
-            used_cell_counters_by_cell_id[self.from_timestamp(cell_num).cell_id].add(
+            used_cell_counters_by_cell_id[self.at_timestamp(cell_num).cell_id].add(
                 cell_num
             )
         return {
@@ -612,9 +612,9 @@ class CodeCell(CodeCellSlicingMixin):
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level
         live_cell_counters = {self.cell_ctr}
         for live_cell_num in live_cell_ctrs:
-            if self.from_timestamp(live_cell_num).is_current_for_id:
+            if self.at_timestamp(live_cell_num).is_current_for_id:
                 live_cell_counters.add(live_cell_num)
-        live_cells = [self.from_timestamp(ctr) for ctr in sorted(live_cell_counters)]
+        live_cells = [self.at_timestamp(ctr) for ctr in sorted(live_cell_counters)]
         top_level_symbols = {sym.dsym.get_top_level() for sym in live_symbols}
         top_level_symbols.discard(None)
         return "{type_declarations}\n\n{content}".format(

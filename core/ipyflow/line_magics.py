@@ -319,7 +319,7 @@ def make_slice(line: str) -> Optional[str]:
         if tag is None:
             cell_num = cells().exec_counter() - 1
     if cell_num is not None:
-        slice_cells = {cells().from_timestamp(cell_num)}
+        slice_cells = {cells().at_timestamp(cell_num)}
     elif args.tag is not None:
         if tag.startswith("$"):
             tag = tag[1:]
@@ -353,7 +353,7 @@ def tag(line: str) -> None:
     if args.cell is None:
         cell = cells().current_cell()
     else:
-        cell = cells().from_counter(args.cell)
+        cell = cells().at_counter(args.cell)
     cell_tags = set(cell.tags)
     if args.remove:
         cell.tags = tuple(cell_tags - {tag})
@@ -377,7 +377,7 @@ def show_tags(line: str) -> None:
     if args.cell is None:
         cell = cells().current_cell()
     else:
-        cell = cells().from_counter(args.cell)
+        cell = cells().at_counter(args.cell)
     print_("Cell has tags:", cell.tags)
     return None
 

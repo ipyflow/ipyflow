@@ -763,11 +763,11 @@ class DataSymbol:
     def _is_ready_or_waiting_at_position_impl(self, pos: int, deep: bool) -> bool:
         for par, timestamps in self.parents.items():
             for ts in timestamps:
-                dep_introduced_pos = cells().from_timestamp(ts).position
+                dep_introduced_pos = cells().at_timestamp(ts).position
                 if dep_introduced_pos > pos:
                     continue
                 for updated_ts in par.updated_timestamps:
-                    if cells().from_timestamp(updated_ts).position > dep_introduced_pos:
+                    if cells().at_timestamp(updated_ts).position > dep_introduced_pos:
                         continue
                     if updated_ts.cell_num > ts.cell_num or par.is_waiting_at_position(
                         dep_introduced_pos
@@ -953,7 +953,7 @@ class DataSymbol:
         if sym is None:
             return
         newval = msg["new"]
-        current_ts_cell = cells().from_timestamp(self._timestamp)
+        current_ts_cell = cells().at_timestamp(self._timestamp)
         current_ts_cell._extra_stmt = ast.parse(f"{sym.readable_name} = {newval}").body[
             0
         ]
@@ -963,7 +963,7 @@ class DataSymbol:
         )
         flow().add_dynamic_data_dep(sym._timestamp, sym._override_timestamp, sym)
         flow().add_dynamic_data_dep(sym._override_timestamp, sym._timestamp, sym)
-        _debounced_exec_schedule(cells().from_timestamp(self.timestamp).cell_id)
+        _debounced_exec_schedule(cells().at_timestamp(self.timestamp).cell_id)
 
     def namespaced(self) -> "Namespace":
         ns = self.namespace

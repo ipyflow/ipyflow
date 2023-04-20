@@ -2,7 +2,15 @@
 import ast
 import logging
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, Iterable, NamedTuple, Optional, Union
+from typing import (
+    TYPE_CHECKING,
+    Generator,
+    Iterable,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from ipyflow.models import _TimestampContainer, cells, timestamps
 from ipyflow.singletons import flow, tracer
@@ -40,7 +48,7 @@ class Timestamp(NamedTuple):
 
     @property
     def positional(self) -> "Timestamp":
-        return Timestamp(cells().from_counter(self.cell_num).position, self.stmt_num)
+        return Timestamp(cells().at_counter(self.cell_num).position, self.stmt_num)
 
     @classmethod
     def uninitialized(cls) -> "Timestamp":
@@ -49,6 +57,11 @@ class Timestamp(NamedTuple):
     @property
     def is_initialized(self) -> bool:
         return self > Timestamp.uninitialized()
+
+    def plus(self, cell_num_delta: int, stmt_num_delta: int) -> "Timestamp":
+        return self.__class__(
+            self.cell_num + cell_num_delta, self.stmt_num + stmt_num_delta
+        )
 
     @staticmethod
     @contextmanager

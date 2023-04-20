@@ -291,7 +291,7 @@ class FrontendCheckerResult(NamedTuple):
             for live_sym in checker_result.live:
                 if not live_sym.is_deep or not live_sym.timestamp.is_initialized:
                     continue
-                updated_cell = cells().from_timestamp(live_sym.timestamp)
+                updated_cell = cells().at_timestamp(live_sym.timestamp)
                 if updated_cell.position > cell.position:
                     self.unsafe_order_cells[cell_id].add(updated_cell)
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
@@ -362,7 +362,7 @@ class FrontendCheckerResult(NamedTuple):
                 cell = cell_by_ctr.get(used_ts.cell_num, None)
                 if cell is None:
                     continue
-                if cells().from_timestamp(ts_when_used).position <= cell.position:
+                if cells().at_timestamp(ts_when_used).position <= cell.position:
                     continue
                 used_node = sym.used_node_by_used_time.get(used_ts, None)
                 if used_node is None or not all(

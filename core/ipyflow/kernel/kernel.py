@@ -575,7 +575,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         prev_cell = None
         cell = cells().current_cell()
         if len(cell.history) >= 2:
-            prev_cell = cells().from_timestamp(cell.history[-2])
+            prev_cell = cells().at_timestamp(cell.history[-2])
         if (
             flow_.mut_settings.warn_out_of_order_usages
             and flow_.out_of_order_usage_detected_counter is not None

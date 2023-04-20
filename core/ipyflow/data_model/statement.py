@@ -4,7 +4,7 @@ import builtins
 import logging
 import sys
 from types import FrameType
-from typing import Dict, List, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, cast
 
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
@@ -15,10 +15,14 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.models import _StatementContainer, stmts
+from ipyflow.models import _StatementContainer, cells, stmts
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
+
+if TYPE_CHECKING:
+    from ipyflow.data_model.code_cell import CodeCell
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -51,10 +55,32 @@ class Statement:
         cls._stmt_by_ts = {}
 
     @classmethod
-    def from_timestamp(cls, ts: Timestamp) -> Optional["Statement"]:
+    def at_timestamp(cls, ts: Timestamp) -> List["Statement"]:
+        return cls._stmt_by_ts.get(ts, [])
+
+    @classmethod
+    def first_at_timestamp(cls, ts: Timestamp) -> Optional["Statement"]:
         stmts = cls._stmt_by_ts.get(ts, [])
-        # the first one will be the module-level stmt
         return stmts[0] if stmts else None
+
+    @classmethod
+    def module_stmt_node_at_timestamp(
+        cls, ts: Timestamp, include_extra: bool = False
+    ) -> Optional[ast.stmt]:
+        stmt = cls.first_at_timestamp(ts)
+        if stmt:
+            # the first one will be the module-level stmt
+            return stmt.stmt_node
+        elif include_extra and ts.plus(0, -1) in cls._stmt_by_ts:
+            return cells().at_timestamp(ts)._extra_stmt
+        else:
+            return None
+
+    @property
+    def containing_cell(self) -> "CodeCell":
+        cell = cells().at_timestamp(self.timestamp)
+        assert cell is not None
+        return cell
 
     @property
     def lineno(self) -> int:

@@ -31,7 +31,9 @@ class Highlights(Enum):
 # TODO: figure out how to represent different versions of
 #  same interface (e.g. jupyterlab 4.0, notebook v7, etc)
 class Interface(Enum):
+    BENTO = "bento"  # ~TODO
     COLAB = "colab"  # TODO
+    DATABRICKS = "databricks"  # TODO
     DATALORE = "datalore"  # TODO
     DEEPNOTE = "deepnote"  # TODO
     HEX = "hex"  # TODO

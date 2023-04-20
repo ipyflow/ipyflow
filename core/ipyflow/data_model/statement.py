@@ -4,7 +4,7 @@ import builtins
 import logging
 import sys
 from types import FrameType
-from typing import List, Optional, Set, Union, cast
+from typing import Dict, List, Optional, Set, Union, cast
 
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
@@ -14,7 +14,8 @@ from ipyflow.data_model import DUPED_ATTRSUB_CLASSES
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
-from ipyflow.singletons import flow, tracer
+from ipyflow.data_model.timestamp import Timestamp
+from ipyflow.singletons import _StatementContainer, flow, stmts, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 
@@ -22,14 +23,37 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class TraceStatement:
+# just want to get rid of unused warning
+_override_unused_warning_stmts = stmts
+
+
+class Statement:
+    _stmt_by_ts: Dict[Timestamp, List["Statement"]] = {}
+
     def __init__(self, frame: FrameType, stmt_node: ast.stmt) -> None:
         self.frame: FrameType = frame
-        self.stmt_node = stmt_node
+        self.stmt_node: ast.stmt = stmt_node
+        self.timestamp = Timestamp.current()
         self.class_scope: Optional[Namespace] = None
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
         self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
+
+    @classmethod
+    def create_and_track(cls, frame: FrameType, stmt_node: ast.stmt) -> "Statement":
+        stmt = cls(frame, stmt_node)
+        cls._stmt_by_ts.setdefault(stmt.timestamp, []).append(stmt)
+        return stmt
+
+    @classmethod
+    def clear(cls):
+        cls._stmt_by_ts = {}
+
+    @classmethod
+    def from_timestamp(cls, ts: Timestamp) -> Optional["Statement"]:
+        stmts = cls._stmt_by_ts.get(ts, [])
+        # the first one will be the module-level stmt
+        return stmts[0] if stmts else None
 
     @property
     def lineno(self) -> int:
@@ -460,3 +484,9 @@ class TraceStatement:
             if passing_watchpoints:
                 flow().active_watchpoints.append((passing_watchpoints, sym))
         tracer().after_stmt_reset_hook()
+
+
+if len(_StatementContainer) == 0:
+    _StatementContainer.append(Statement)
+else:
+    _StatementContainer[0] = Statement

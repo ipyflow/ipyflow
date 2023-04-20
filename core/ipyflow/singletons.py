@@ -6,11 +6,13 @@ from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
+    from ipyflow.data_model.statement import Statement
     from ipyflow.flow import NotebookFlow as NotebookFlowInstance
     from ipyflow.kernel.kernel import IPyflowKernelBase as IPyflowKernelInstance
     from ipyflow.tracing.ipyflow_tracer import DataflowTracer as TracerInstance
 
-_CodeCellContainer: "List[Type[CodeCell]]" = []
+_CodeCellContainer: List[Type["CodeCell"]] = []
+_StatementContainer: List[Type["Statement"]] = []
 
 
 class NotebookFlow(SingletonConfigurable):
@@ -31,7 +33,7 @@ class SingletonBaseTracer(pyc.BaseTracer):
     pass
 
 
-def cells() -> "Type[CodeCell]":
+def cells() -> Type["CodeCell"]:
     return _CodeCellContainer[0]
 
 
@@ -43,6 +45,10 @@ def kernel() -> "IPyflowKernelInstance":
 def flow() -> "NotebookFlowInstance":
     assert NotebookFlow.initialized()
     return NotebookFlow.instance()
+
+
+def stmts() -> Type["Statement"]:
+    return _StatementContainer[0]
 
 
 def tracer() -> "TracerInstance":

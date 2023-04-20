@@ -39,6 +39,7 @@ from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
+from ipyflow.data_model.statement import stmts
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
@@ -62,6 +63,7 @@ class NotebookFlow(singletons.NotebookFlow):
     ) -> None:
         super().__init__()
         cells().clear()
+        stmts().clear()
         config = get_ipython().config.ipyflow
         self.settings: DataflowSettings = DataflowSettings(
             test_context=kwargs.pop("test_context", False),
@@ -347,6 +349,7 @@ class NotebookFlow(singletons.NotebookFlow):
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time.clear()
         cells().clear()
+        stmts().clear()
 
     def get_and_set_exception_raised_during_execution(
         self, new_val: Union[None, str, Exception] = None

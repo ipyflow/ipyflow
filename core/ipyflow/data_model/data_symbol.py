@@ -17,16 +17,16 @@ from typing import (
     cast,
 )
 
+import ipyflow.data_model.utils.sizing_utils as sizing
 from ipyflow.analysis.slicing import FormatType, compute_slice_impl, format_slice
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
-from ipyflow.data_model import sizing
-from ipyflow.data_model.annotation_utils import (
+from ipyflow.data_model.code_cell import CodeCell, cells
+from ipyflow.data_model.timestamp import Timestamp
+from ipyflow.data_model.utils.annotation_utils import (
     get_type_annotation,
     make_annotation_string,
 )
-from ipyflow.data_model.code_cell import CodeCell, cells
-from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.update_protocol import UpdateProtocol
+from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, CellId, SupportedIndexType

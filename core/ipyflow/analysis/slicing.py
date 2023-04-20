@@ -43,7 +43,7 @@ def _get_ts_dependencies(
 
     Args:
         - timestamp (ts_or_int): current timestamp / cell to get dependencies for
-        - dependencies (set<ts_or_int>): set of timestamps / cell coutners so far that exist
+        - dependencies (set<ts_or_int>): set of timestamps / cell counters so far that exist
         - cell_num_to_dynamic_deps (dict<ts_or_int, set<ts_or_int>>): mapping from used timestamp
         to timestamp of symbol definition
         - timestamp_to_static_ts_deps (dict<ts_or_int, set<ts_or_int>>): mapping from used timestamp
@@ -316,6 +316,8 @@ class CodeCellSlicingMixin:
         stmts_by_cell_num = defaultdict(list)
         seen_stmt_ids = set()
         for ts in sorted(timestamps):
+            if ts.stmt_num == -1:
+                continue
             cell = cls.from_timestamp(ts)
             cell_stmts = cell.to_ast().body + [cell._extra_stmt]
             if ts.stmt_num < len(cell_stmts):

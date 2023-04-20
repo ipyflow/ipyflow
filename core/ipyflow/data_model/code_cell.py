@@ -15,7 +15,6 @@ from typing import (
     Optional,
     Set,
     Tuple,
-    Type,
     Union,
     cast,
 )
@@ -34,10 +33,10 @@ from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.ipython_utils import _IPY, CapturedIO
-from ipyflow.ipython_utils import cell_counter as ipy_cell_counter
 from ipyflow.singletons import _CodeCellContainer, cells, flow, kernel
 from ipyflow.types import CellId, TimestampOrCounter
+from ipyflow.utils.ipython_utils import _IPY, CapturedIO
+from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
 
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol

@@ -23,18 +23,18 @@ from IPython.core.magic import register_cell_magic
 from ipyflow import singletons
 from ipyflow.data_model.code_cell import cells
 from ipyflow.flow import NotebookFlow
-from ipyflow.ipython_utils import (
-    ast_transformer_context,
-    capture_output_tee,
-    input_transformer_context,
-    run_cell,
-    save_number_of_currently_executing_cell,
-)
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
     DataflowTracer,
     ModuleIniter,
     StackFrameManager,
+)
+from ipyflow.utils.ipython_utils import (
+    ast_transformer_context,
+    capture_output_tee,
+    input_transformer_context,
+    run_cell,
+    save_number_of_currently_executing_cell,
 )
 from ipyflow.version import __version__
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from ipyflow.data_model.annotation_utils import (
+from ipyflow.data_model.utils.annotation_utils import (
     get_type_annotation,
     make_annotation_string,
 )

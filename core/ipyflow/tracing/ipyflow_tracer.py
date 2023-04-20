@@ -36,13 +36,13 @@ from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
+from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
-from ipyflow.tracing.trace_stmt import TraceStatement
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import SupportedIndexType
 
@@ -157,9 +157,9 @@ class DataflowTracer(StackFrameManager):
         self._seen_loop_ids: Set[NodeId] = set()
         self._seen_functions_ids: Set[NodeId] = set()
         self.prev_event: Optional[pyc.TraceEvent] = None
-        self.prev_trace_stmt: Optional[TraceStatement] = None
+        self.prev_trace_stmt: Optional[Statement] = None
         self.seen_stmts: Set[NodeId] = set()
-        self.traced_statements: Dict[NodeId, TraceStatement] = {}
+        self.traced_statements: Dict[NodeId, Statement] = {}
         self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = {}
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
         self.node_id_to_saved_live_subscript_refs: Dict[NodeId, Set[DataSymbol]] = {}
@@ -174,7 +174,7 @@ class DataflowTracer(StackFrameManager):
         self.call_stack: pyc.TraceStack = self.make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
-            self.prev_trace_stmt_in_cur_frame: Optional[TraceStatement] = None
+            self.prev_trace_stmt_in_cur_frame: Optional[Statement] = None
             self.prev_node_id_in_cur_frame: Optional[NodeId] = None
             self.external_calls: List[ExternalCallHandler] = []
             self.is_external_call_pending_return: bool = False
@@ -279,7 +279,7 @@ class DataflowTracer(StackFrameManager):
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
 
-    def _handle_call_transition(self, trace_stmt: TraceStatement):
+    def _handle_call_transition(self, trace_stmt: Statement):
         if (
             self.external_call_depth
             >= flow().mut_settings.max_external_call_depth_for_tracing
@@ -301,7 +301,7 @@ class DataflowTracer(StackFrameManager):
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _check_prev_stmt_done_executing_hook(
-        self, event: pyc.TraceEvent, trace_stmt: TraceStatement
+        self, event: pyc.TraceEvent, trace_stmt: Statement
     ):
         if event == pyc.after_stmt:  # and self.is_tracing_enabled:
             trace_stmt.finished_execution_hook()
@@ -321,11 +321,11 @@ class DataflowTracer(StackFrameManager):
         self.tracing_disabled_since_last_module_stmt = True
         super()._disable_tracing(*args, **kwargs)
 
-    def _handle_return_transition(self, trace_stmt: TraceStatement, ret: Any):
+    def _handle_return_transition(self, trace_stmt: Statement, ret: Any):
         try:
             inside_anonymous_call = self.inside_anonymous_call
             try:
-                return_to_stmt: TraceStatement = self.call_stack.get_field(
+                return_to_stmt: Statement = self.call_stack.get_field(
                     "prev_trace_stmt_in_cur_frame"
                 )
             except IndexError:
@@ -425,7 +425,7 @@ class DataflowTracer(StackFrameManager):
     def state_transition_hook(
         self,
         event: pyc.TraceEvent,
-        trace_stmt: TraceStatement,
+        trace_stmt: Statement,
         ret: Any,
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
@@ -1323,7 +1323,7 @@ class DataflowTracer(StackFrameManager):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         trace_stmt = self.traced_statements.get(stmt_id, None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(
+            trace_stmt = Statement.create_and_track(
                 frame, cast(ast.stmt, self.ast_node_by_id[stmt_id])
             )
             self.traced_statements[stmt_id] = trace_stmt
@@ -1372,15 +1372,15 @@ class DataflowTracer(StackFrameManager):
 
     def _get_or_make_trace_stmt(
         self, stmt_node: ast.stmt, frame: FrameType
-    ) -> TraceStatement:
+    ) -> Statement:
         trace_stmt = self.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
-            trace_stmt = TraceStatement(frame, stmt_node)
+            trace_stmt = Statement.create_and_track(frame, stmt_node)
             self.traced_statements[id(stmt_node)] = trace_stmt
         return trace_stmt
 
     def _maybe_log_event(
-        self, event: pyc.TraceEvent, stmt_node: ast.stmt, trace_stmt: TraceStatement
+        self, event: pyc.TraceEvent, stmt_node: ast.stmt, trace_stmt: Statement
     ):
         if flow().trace_messages_enabled:
             codeline = astunparse.unparse(stmt_node).strip("\n").split("\n")[0]

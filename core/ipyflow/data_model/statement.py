@@ -36,7 +36,7 @@ class Statement:
     _stmt_by_ts: Dict[Timestamp, List["Statement"]] = {}
 
     def __init__(self, frame: FrameType, stmt_node: ast.stmt) -> None:
-        self.frame: FrameType = frame
+        self.frame: Optional[FrameType] = frame
         self.stmt_node: ast.stmt = stmt_node
         self.timestamp = Timestamp.current()
         self.class_scope: Optional[Namespace] = None
@@ -511,6 +511,8 @@ class Statement:
             if passing_watchpoints:
                 flow().active_watchpoints.append((passing_watchpoints, sym))
         tracer().after_stmt_reset_hook()
+        # avoid keeping dangling references to stack frames once we're done with them
+        self.frame = None
 
 
 if len(_StatementContainer) == 0:

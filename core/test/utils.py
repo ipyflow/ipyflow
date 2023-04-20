@@ -112,7 +112,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         )
         NotebookFlow.clear_instance()
         NotebookFlow.instance(
-            cell_magic_name="_SAFETY_CELL_MAGIC",
+            cell_magic_name="_FLOW_CELL_MAGIC",
             test_context=test_context,
             flow_direction=flow_direction,
             **kwargs,

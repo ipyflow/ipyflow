@@ -27,6 +27,7 @@ from ipyflow.data_model.utils.annotation_utils import (
     make_annotation_string,
 )
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
+from ipyflow.models import _SymbolContainer, symbols
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, CellId, SupportedIndexType
@@ -39,6 +40,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
+
+
+# just want to get rid of unused warning
+_override_unused_warning_symbols = symbols
 
 
 @debounce(0.1)
@@ -1082,3 +1087,9 @@ class DataSymbol:
                         )
             if refresh_namespace_waiting:
                 self.namespace_waiting_symbols.clear()
+
+
+if len(_SymbolContainer) == 0:
+    _SymbolContainer.append(DataSymbol)
+else:
+    _SymbolContainer[0] = DataSymbol

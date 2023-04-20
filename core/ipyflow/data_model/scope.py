@@ -16,6 +16,7 @@ from typing import (
 
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.data_symbol import DataSymbol, DataSymbolType
+from ipyflow.models import _ScopeContainer, scopes
 from ipyflow.singletons import tracer
 from ipyflow.types import SupportedIndexType
 
@@ -25,6 +26,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
+
+
+# just want to get rid of unused warning
+_override_unused_warning_scopes = scopes
 
 
 class Scope:
@@ -360,3 +365,9 @@ class Scope:
 
     def make_namespace_qualified_name(self, dsym: DataSymbol) -> str:
         return str(dsym.name)
+
+
+if len(_ScopeContainer) == 0:
+    _ScopeContainer.append(Scope)
+else:
+    _ScopeContainer[0] = Scope

@@ -18,11 +18,16 @@ from typing import (
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
+from ipyflow.models import _NamespaceContainer, namespaces
 from ipyflow.singletons import flow
 from ipyflow.types import SupportedIndexType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
+
+
+# just want to get rid of unused warning
+_override_unused_warning_namespaces = namespaces
 
 
 class Namespace(Scope):
@@ -386,3 +391,9 @@ class Namespace(Scope):
             self._subscript_data_symbol_by_name.pop(dsym.name, None)
             new_ns._subscript_data_symbol_by_name[dsym.name] = dsym
             dsym.containing_scope = new_ns
+
+
+if len(_NamespaceContainer) == 0:
+    _NamespaceContainer.append(Namespace)
+else:
+    _NamespaceContainer[0] = Namespace

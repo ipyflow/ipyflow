@@ -10,7 +10,8 @@ from ipywidgets import HTML
 
 from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.singletons import cells, flow
+from ipyflow.models import cells
+from ipyflow.singletons import flow
 from ipyflow.types import TimestampOrCounter
 
 if TYPE_CHECKING:

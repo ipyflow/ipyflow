@@ -15,7 +15,8 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.singletons import _StatementContainer, flow, stmts, tracer
+from ipyflow.models import _StatementContainer, stmts
+from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 

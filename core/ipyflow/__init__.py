@@ -4,7 +4,8 @@ from IPython import InteractiveShell
 import ipyflow.api
 from ipyflow.api import *
 from ipyflow.kernel import IPyflowKernel
-from ipyflow.singletons import cells, flow, stmts, tracer
+from ipyflow.models import cells, stmts
+from ipyflow.singletons import flow, tracer
 
 
 # Jupyter Extension points

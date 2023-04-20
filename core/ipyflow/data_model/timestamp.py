@@ -4,7 +4,8 @@ import logging
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator, Iterable, NamedTuple, Optional, Union
 
-from ipyflow.singletons import cells, flow, tracer
+from ipyflow.models import _TimestampContainer, cells, timestamps
+from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:
     # avoid circular imports
@@ -14,6 +15,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
+
+
+# just want to get rid of unused warning
+_override_unused_warning_timestamps = timestamps
 
 
 _cell_offset = 0
@@ -92,3 +97,9 @@ class Timestamp(NamedTuple):
                 sym.update_usage_info(
                     used_time=used_time, used_node=used_node, exclude_ns=exclude_ns
                 )
+
+
+if len(_TimestampContainer) == 0:
+    _TimestampContainer.append(Timestamp)
+else:
+    _TimestampContainer[0] = Timestamp

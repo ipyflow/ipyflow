@@ -16,20 +16,20 @@ def test_simple():
     with dynamic_context():
         run_cell("x = 0")
         run_cell("y = x + 1")
-        assert cells().from_id(2).parent_ids == {1}
-        assert cells().from_id(1).children_ids == {2}, (
+        assert cells().from_id(2)._parents.keys() == {1}
+        assert cells().from_id(1)._children.keys() == {2}, (
             "got %s" % cells().from_id(1)._dynamic_children
         )
         run_cell("z = x + y + 2")
-        assert cells().from_id(3).parent_ids == {1, 2}
-        assert cells().from_id(1).children_ids == {2, 3}
-        assert cells().from_id(2).children_ids == {3}
+        assert cells().from_id(3)._parents.keys() == {1, 2}
+        assert cells().from_id(1)._children.keys() == {2, 3}
+        assert cells().from_id(2)._children.keys() == {3}
         run_cell("x = 42")
-        assert cells().from_id(3).parent_ids == {1, 2}
-        assert cells().from_id(1).children_ids == {2, 3}
-        assert cells().from_id(2).children_ids == {3}
+        assert cells().from_id(3)._parents.keys() == {1, 2}
+        assert cells().from_id(1)._children.keys() == {2, 3}
+        assert cells().from_id(2)._children.keys() == {3}
         run_cell("y = x + 1")
-        assert cells().from_id(3).parent_ids == {1, 2}
-        assert cells().from_id(1).children_ids == {2, 3}
-        assert cells().from_id(2).children_ids == {3}
-        assert cells().from_id(5).parent_ids == {4}
+        assert cells().from_id(3)._parents.keys() == {1, 2}
+        assert cells().from_id(1)._children.keys() == {2, 3}
+        assert cells().from_id(2)._children.keys() == {3}
+        assert cells().from_id(5)._parents.keys() == {4}

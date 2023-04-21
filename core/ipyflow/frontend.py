@@ -114,9 +114,10 @@ class FrontendCheckerResult(NamedTuple):
                 ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
             ):
                 for _ in flow_.mut_settings.iter_dep_contexts():
-                    ready_making_cell_ids |= {
-                        pid for pid, _ in cells().from_id(waiting_cell_id).parents
-                    } & eligible_ready_making_for_dag
+                    ready_making_cell_ids |= (
+                        cells().from_id(waiting_cell_id).parents.keys()
+                        & eligible_ready_making_for_dag
+                    )
             else:
                 waiting_syms = waiting_symbols_by_cell_id.get(waiting_cell_id, set())
                 ready_making_cell_ids = ready_making_cell_ids.union(
@@ -175,9 +176,7 @@ class FrontendCheckerResult(NamedTuple):
                 if cell.cell_id in self.waiting_cells:
                     continue
                 for _ in flow_.mut_settings.iter_dep_contexts():
-                    if {pid for pid, _ in cell.parents} & (
-                        self.ready_cells | self.waiting_cells
-                    ):
+                    if cell.parents.keys() & (self.ready_cells | self.waiting_cells):
                         self.waiting_cells.add(cell.cell_id)
                         continue
             if prev_waiting_cells == self.waiting_cells:
@@ -205,20 +204,20 @@ class FrontendCheckerResult(NamedTuple):
             for _ in flow_.mut_settings.iter_dep_contexts():
                 if is_new_ready:
                     break
-                for pid, sym in cell.parents:
+                for pid, syms in cell.parents.items():
                     par = cells().from_id(pid)
                     if (
                         flow_order == flow_order.IN_ORDER
                         and par.position >= cell.position
                     ):
                         continue
-                    if (
-                        max(cell.cell_ctr, flow_.min_timestamp)
-                        < par.cell_ctr
-                        == sym.timestamp.cell_num
-                    ):
+                    if max(
+                        cell.cell_ctr, flow_.min_timestamp
+                    ) < par.cell_ctr and par.cell_ctr in {
+                        sym.timestamp.cell_num for sym in syms
+                    }:
                         is_ready = True
-                        if sym.timestamp.cell_num == flow_.cell_counter():
+                        if par.cell_ctr == flow_.cell_counter():
                             is_new_ready = True
                             break
         if not is_new_ready and (

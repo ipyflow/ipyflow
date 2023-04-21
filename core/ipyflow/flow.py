@@ -42,8 +42,8 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import stmts
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.dep_ctx_utils import (
-    Dependency,
-    dep_ctx,
+    DependencyContext,
+    _dep_ctx_var,
     dynamic_context,
     static_context,
 )
@@ -317,11 +317,11 @@ class NotebookFlow(singletons.NotebookFlow):
 
     @property
     def data_deps(self) -> Dict[Timestamp, Set[Timestamp]]:
-        ctx = dep_ctx.get()
+        ctx = _dep_ctx_var.get()
         assert ctx is not None
-        if ctx == Dependency.DYNAMIC:
+        if ctx == DependencyContext.DYNAMIC:
             return self.dynamic_data_deps
-        elif ctx == Dependency.STATIC:
+        elif ctx == DependencyContext.STATIC:
             return self.static_data_deps
         else:
             assert False
@@ -431,15 +431,17 @@ class NotebookFlow(singletons.NotebookFlow):
                 cell.current_content = content
                 cell.to_ast()
                 # to ensure that static data deps get refreshed
-                prev_static_parents = set(cell._static_parents)
+                prev_static_parents = dict(cell._static_parents)
                 with static_context():
-                    for pid, dsym in prev_static_parents:
-                        cell.remove_parent(pid, dsym)
+                    for pid, syms in prev_static_parents.items():
+                        for dsym in syms:
+                            cell.remove_parent(pid, dsym)
                 cell.check_and_resolve_symbols(update_liveness_time_versions=True)
                 with dynamic_context():
-                    for pid, dsym in prev_static_parents:
-                        if (pid, dsym) not in cell._static_parents:
-                            cell.remove_parent(pid, dsym)
+                    for pid, syms in prev_static_parents.items():
+                        for dsym in syms:
+                            if dsym not in cell._static_parents.get(pid, set()):
+                                cell.remove_parent(pid, dsym)
             except SyntaxError:
                 cell.current_content = prev_content
 
@@ -745,17 +747,19 @@ class NotebookFlow(singletons.NotebookFlow):
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
-        used_symbols = {
-            sym
-            for _, sym in itertools.chain(cell._dynamic_parents, cell._static_parents)
-        }
-        for prev_parents, cur_parents in [
-            (prev_cell._dynamic_parents, cell._dynamic_parents),
-            (prev_cell._static_parents, cell._static_parents),
-        ]:
-            for cell_id, sym in prev_parents:
-                if sym in used_symbols and cells().from_id(cell_id).is_current_for_id:
-                    cur_parents.add((cell_id, sym))
+        used_symbols = set()
+        for syms in itertools.chain(
+            cell._dynamic_parents.values(), cell._static_parents.values()
+        ):
+            used_symbols |= syms
+        for _ in DependencyContext.iter_dep_contexts():
+            for cell_id, syms in prev_cell._parents.items():
+                for sym in syms:
+                    if (
+                        sym in used_symbols
+                        and cells().from_id(cell_id).is_current_for_id
+                    ):
+                        cell._parents.setdefault(cell_id, set()).add(sym)
 
     @property
     def cell_magic_name(self):

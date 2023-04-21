@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Generator, List, NamedTuple
 
-from ipyflow.data_model.utils.dep_ctx_utils import Dependency, iter_dep_contexts
+from ipyflow.data_model.utils.dep_ctx_utils import DependencyContext, iter_dep_contexts
 
 
 class ExecutionMode(Enum):
@@ -74,14 +74,14 @@ class MutableDataflowSettings:
     is_dev_mode: bool
 
     @property
-    def dep_types(self) -> List[Dependency]:
-        ret: List[Dependency] = []
+    def dep_contexts(self) -> List[DependencyContext]:
+        ret: List[DependencyContext] = []
         if self.dynamic_slicing_enabled:
-            ret.append(Dependency.DYNAMIC)
+            ret.append(DependencyContext.DYNAMIC)
         if self.static_slicing_enabled:
-            ret.append(Dependency.STATIC)
+            ret.append(DependencyContext.STATIC)
         return ret
 
     def iter_dep_contexts(self) -> Generator[None, None, None]:
-        for _ in iter_dep_contexts(*self.dep_types):
+        for _ in iter_dep_contexts(*self.dep_contexts):
             yield

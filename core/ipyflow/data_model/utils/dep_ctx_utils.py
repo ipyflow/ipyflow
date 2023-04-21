@@ -7,7 +7,7 @@ from typing import Generator, Optional
 from ipyflow.utils.misc_utils import yield_in_loop
 
 
-class Dependency(Enum):
+class DependencyContext(Enum):
     DYNAMIC = "dynamic"
     STATIC = "static"
 
@@ -17,30 +17,32 @@ class Dependency(Enum):
             yield
 
 
-dep_ctx: ContextVar[Optional[Dependency]] = ContextVar("dep_ctx", default=None)
+_dep_ctx_var: ContextVar[Optional[DependencyContext]] = ContextVar(
+    "_dep_ctx_var", default=None
+)
 
 
 @contextmanager
-def set_dep_context(dep_type: Dependency) -> Generator[None, None, None]:
-    token = dep_ctx.set(dep_type)
+def set_dep_context(dep_ctx: DependencyContext) -> Generator[None, None, None]:
+    token = _dep_ctx_var.set(dep_ctx)
     try:
         yield
     finally:
-        dep_ctx.reset(token)
+        _dep_ctx_var.reset(token)
 
 
 @contextmanager
 def dynamic_context() -> Generator[None, None, None]:
-    with set_dep_context(Dependency.DYNAMIC):
+    with set_dep_context(DependencyContext.DYNAMIC):
         yield
 
 
 @contextmanager
 def static_context() -> Generator[None, None, None]:
-    with set_dep_context(Dependency.STATIC):
+    with set_dep_context(DependencyContext.STATIC):
         yield
 
 
-def iter_dep_contexts(*dep_types: Dependency) -> Generator[None, None, None]:
-    for _ in yield_in_loop(*[set_dep_context(dep_type) for dep_type in dep_types]):
+def iter_dep_contexts(*dep_contexts: DependencyContext) -> Generator[None, None, None]:
+    for _ in yield_in_loop(*[set_dep_context(dep_ctx) for dep_ctx in dep_contexts]):
         yield

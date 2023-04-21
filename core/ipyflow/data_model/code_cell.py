@@ -33,7 +33,7 @@ from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.dep_ctx_utils import Dependency, dep_ctx
+from ipyflow.data_model.utils.dep_ctx_utils import DependencyContext, _dep_ctx_var
 from ipyflow.models import _CodeCellContainer, cells
 from ipyflow.singletons import flow, kernel
 from ipyflow.types import CellId, TimestampOrCounter
@@ -91,10 +91,10 @@ class CodeCell(CodeCellSlicingMixin):
         self.override_live_refs: Optional[List[str]] = None
         self.override_dead_refs: Optional[List[str]] = None
         self.reactive_tags: Set[str] = set()
-        self._dynamic_parents: Set[Tuple[CellId, "DataSymbol"]] = set()
-        self._dynamic_children: Set[Tuple[CellId, "DataSymbol"]] = set()
-        self._static_parents: Set[Tuple[CellId, "DataSymbol"]] = set()
-        self._static_children: Set[Tuple[CellId, "DataSymbol"]] = set()
+        self._dynamic_parents: Dict[CellId, Set["DataSymbol"]] = {}
+        self._dynamic_children: Dict[CellId, Set["DataSymbol"]] = {}
+        self._static_parents: Dict[CellId, Set["DataSymbol"]] = {}
+        self._static_children: Dict[CellId, Set["DataSymbol"]] = {}
         self._used_cell_counters_by_live_symbol: Dict[
             "DataSymbol", Set[int]
         ] = defaultdict(set)
@@ -154,18 +154,18 @@ class CodeCell(CodeCellSlicingMixin):
             if old_id in reactive_cells:
                 reactive_cells.discard(old_id)
                 reactive_cells.add(new_id)
-        for _ in Dependency.iter_dep_contexts():
-            for pid in self.parent_ids:
+        for _ in DependencyContext.iter_dep_contexts():
+            for pid in self._parents.keys():
                 parent = self.from_id(pid)
                 parent._children = {
-                    (new_id, sym) if cid == old_id else (cid, sym)
-                    for cid, sym in parent._children
+                    (new_id if cid == old_id else cid): syms
+                    for cid, syms in parent._children.items()
                 }
-            for cid in self.children_ids:
+            for cid in self._children.keys():
                 child = self.from_id(cid)
                 child._parents = {
-                    (new_id, sym) if pid == old_id else (pid, sym)
-                    for pid, sym in child._parents
+                    (new_id if pid == old_id else pid): syms
+                    for pid, syms in child._parents.items()
                 }
 
     def add_used_cell_counter(self, sym: "DataSymbol", ctr: int) -> None:
@@ -200,97 +200,92 @@ class CodeCell(CodeCellSlicingMixin):
         if pid == self.cell_id:
             # in this case, inherit the previous parents, if any
             if self.prev_cell is not None:
-                for prev_pid, prev_sym in self.prev_cell._parents:
-                    if sym is prev_sym:
-                        self._parents.add((prev_pid, sym))
+                for prev_pid, prev_syms in self.prev_cell._parents.items():
+                    if sym in prev_syms:
+                        self._parents.setdefault(prev_pid, set()).add(sym)
             return
-        self._parents.add((pid, sym))
+        self._parents.setdefault(pid, set()).add(sym)
         parent = self.from_id(pid)
-        parent._children.add((self.cell_id, sym))
+        parent._children.setdefault(self.cell_id, set()).add(sym)
 
     def remove_parent(
         self, parent: Union["CodeCell", CellId], sym: "DataSymbol"
     ) -> None:
         pid = parent.cell_id if isinstance(parent, CodeCell) else parent
-        self._parents.discard((pid, sym))
         parent = self.from_id(pid)
-        parent._children.discard((self.cell_id, sym))
+        for edges in (self._parents, parent._children):
+            syms = edges.get(pid, set())
+            if syms:
+                syms.discard(sym)
+                if not syms:
+                    del self._parents[pid]
 
     @property
-    def _parents(self) -> Set[Tuple[CellId, "DataSymbol"]]:
-        ctx = dep_ctx.get()
+    def _parents(self) -> Dict[CellId, Set["DataSymbol"]]:
+        ctx = _dep_ctx_var.get()
         assert ctx is not None
-        if ctx == Dependency.DYNAMIC:
+        if ctx == DependencyContext.DYNAMIC:
             return self._dynamic_parents
-        elif ctx == Dependency.STATIC:
+        elif ctx == DependencyContext.STATIC:
             return self._static_parents
         else:
             assert False
 
     @_parents.setter
-    def _parents(self, new_parents: Set[Tuple[CellId, "DataSymbol"]]) -> None:
-        ctx = dep_ctx.get()
+    def _parents(self, new_parents: Dict[CellId, Set["DataSymbol"]]) -> None:
+        ctx = _dep_ctx_var.get()
         assert ctx is not None
-        if ctx == Dependency.DYNAMIC:
+        if ctx == DependencyContext.DYNAMIC:
             self._dynamic_parents = new_parents
-        elif ctx == Dependency.STATIC:
+        elif ctx == DependencyContext.STATIC:
             self._static_parents = new_parents
         else:
             assert False
 
     @property
-    def _children(self) -> Set[Tuple[CellId, "DataSymbol"]]:
-        ctx = dep_ctx.get()
+    def _children(self) -> Dict[CellId, Set["DataSymbol"]]:
+        ctx = _dep_ctx_var.get()
         assert ctx is not None
-        if ctx == Dependency.DYNAMIC:
+        if ctx == DependencyContext.DYNAMIC:
             return self._dynamic_children
-        elif ctx == Dependency.STATIC:
+        elif ctx == DependencyContext.STATIC:
             return self._static_children
         else:
             assert False
 
     @_children.setter
-    def _children(self, new_children: Set[Tuple[CellId, "DataSymbol"]]) -> None:
-        ctx = dep_ctx.get()
+    def _children(self, new_children: Dict[CellId, Set["DataSymbol"]]) -> None:
+        ctx = _dep_ctx_var.get()
         assert ctx is not None
-        if ctx == Dependency.DYNAMIC:
+        if ctx == DependencyContext.DYNAMIC:
             self._dynamic_children = new_children
-        elif ctx == Dependency.STATIC:
+        elif ctx == DependencyContext.STATIC:
             self._static_children = new_children
         else:
             assert False
 
     @property
-    def parents(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
+    def parents(self) -> Dict[CellId, FrozenSet["DataSymbol"]]:
         # trick to catch some mutations at typecheck time w/out runtime overhead
         parents = self._parents
         if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
             parents = {
-                (cell_id, syms)
-                for cell_id, syms in parents
+                cell_id: syms
+                for cell_id, syms in parents.items()
                 if self.position > self.from_id(cell_id).position
             }
-        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", parents)
+        return cast("Dict[CellId, FrozenSet[DataSymbol]]", parents)
 
     @property
-    def children(self) -> FrozenSet[Tuple[CellId, "DataSymbol"]]:
+    def children(self) -> Dict[CellId, FrozenSet["DataSymbol"]]:
         children = self._children
         if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
             children = {
-                (cell_id, syms)
-                for cell_id, syms in children
+                cell_id: syms
+                for cell_id, syms in children.items()
                 if self.position < self.from_id(cell_id).position
             }
-        return cast("FrozenSet[Tuple[CellId, DataSymbol]]", children)
-
-    @property
-    def parent_ids(self) -> FrozenSet[CellId]:
-        # trick to catch some mutations at typecheck time w/out runtime overhead
-        return cast("FrozenSet[CellId]", {pid for pid, _ in self._parents})
-
-    @property
-    def children_ids(self) -> FrozenSet[CellId]:
-        return cast("FrozenSet[CellId]", {cid for cid, _ in self._children})
+        return cast("Dict[CellId, FrozenSet[DataSymbol]]", children)
 
     @classmethod
     def create_and_track(
@@ -470,12 +465,13 @@ class CodeCell(CodeCellSlicingMixin):
             and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
         ):
             min_allowed_cell_position_by_symbol = {}
-            for _ in Dependency.iter_dep_contexts():
-                for pid, dsym in self.parents:
-                    min_allowed_cell_position_by_symbol[dsym] = max(
-                        min_allowed_cell_position_by_symbol.get(dsym, -1),
-                        self.from_id(pid).position,
-                    )
+            for _ in DependencyContext.iter_dep_contexts():
+                for pid, syms in self.parents.items():
+                    for dsym in syms:
+                        min_allowed_cell_position_by_symbol[dsym] = max(
+                            min_allowed_cell_position_by_symbol.get(dsym, -1),
+                            self.from_id(pid).position,
+                        )
         with self._override_position_index_for_current_flow_semantics():
             max_used_cell_ctr = -1
             this_cell_pos = self.position

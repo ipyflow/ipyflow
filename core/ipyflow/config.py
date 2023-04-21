@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
 from enum import Enum
-from typing import NamedTuple
+from typing import List, NamedTuple
+
+from ipyflow.data_model.utils.deps import Dependency
 
 
 class ExecutionMode(Enum):
@@ -70,3 +72,12 @@ class MutableDataflowSettings:
     syntax_transforms_only: bool
     max_external_call_depth_for_tracing: int
     is_dev_mode: bool
+
+    @property
+    def dep_types(self) -> List[Dependency]:
+        ret: List[Dependency] = []
+        if self.dynamic_slicing_enabled:
+            ret.append(Dependency.DYNAMIC)
+        if self.static_slicing_enabled:
+            ret.append(Dependency.STATIC)
+        return ret

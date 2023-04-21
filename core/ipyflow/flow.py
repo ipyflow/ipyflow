@@ -41,6 +41,12 @@ from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import stmts
 from ipyflow.data_model.timestamp import Timestamp
+from ipyflow.data_model.utils.deps import (
+    Dependency,
+    dep_ctx,
+    dynamic_context,
+    static_context,
+)
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
@@ -309,19 +315,22 @@ class NotebookFlow(singletons.NotebookFlow):
     def cell_counter() -> int:
         return cells().exec_counter()
 
-    def add_dynamic_data_dep(
-        self, child: Timestamp, parent: Timestamp, sym: DataSymbol
-    ) -> None:
-        self.dynamic_data_deps.setdefault(child, set()).add(parent)
-        cells().at_timestamp(child).add_dynamic_parent(
-            cells().at_timestamp(parent), sym
-        )
+    @property
+    def data_deps(self) -> Dict[Timestamp, Set[Timestamp]]:
+        ctx = dep_ctx.get()
+        assert ctx is not None
+        if ctx == Dependency.DYNAMIC:
+            return self.dynamic_data_deps
+        elif ctx == Dependency.STATIC:
+            return self.static_data_deps
+        else:
+            assert False
 
-    def add_static_data_dep(
+    def add_data_dep(
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
-        self.static_data_deps.setdefault(child, set()).add(parent)
-        cells().at_timestamp(child).add_static_parent(cells().at_timestamp(parent), sym)
+        self.data_deps.setdefault(child, set()).add(parent)
+        cells().at_timestamp(child).add_parent(cells().at_timestamp(parent), sym)
 
     def is_updated_reactive(self, sym: DataSymbol) -> bool:
         return (
@@ -423,12 +432,14 @@ class NotebookFlow(singletons.NotebookFlow):
                 cell.to_ast()
                 # to ensure that static data deps get refreshed
                 prev_static_parents = set(cell._static_parents)
-                for pid, dsym in prev_static_parents:
-                    cell.remove_static_parent(pid, dsym)
+                with static_context():
+                    for pid, dsym in prev_static_parents:
+                        cell.remove_parent(pid, dsym)
                 cell.check_and_resolve_symbols(update_liveness_time_versions=True)
-                for pid, dsym in prev_static_parents:
-                    if (pid, dsym) not in cell._static_parents:
-                        cell.remove_dynamic_parent(pid, dsym)
+                with dynamic_context():
+                    for pid, dsym in prev_static_parents:
+                        if (pid, dsym) not in cell._static_parents:
+                            cell.remove_parent(pid, dsym)
             except SyntaxError:
                 cell.current_content = prev_content
 
@@ -687,9 +698,10 @@ class NotebookFlow(singletons.NotebookFlow):
         for live_sym_ref in cells().current_cell().override_live_refs or []:
             sym = SymbolRef.resolve(live_sym_ref)
             if sym is not None:
-                self.add_static_data_dep(
-                    Timestamp(self.cell_counter(), 0), sym.timestamp, sym
-                )
+                with static_context():
+                    self.add_data_dep(
+                        Timestamp(self.cell_counter(), 0), sym.timestamp, sym
+                    )
 
     def _resync_symbols(self, symbols: Iterable[DataSymbol]):
         for dsym in symbols:

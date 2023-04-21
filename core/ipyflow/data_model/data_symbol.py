@@ -26,6 +26,7 @@ from ipyflow.data_model.utils.annotation_utils import (
     get_type_annotation,
     make_annotation_string,
 )
+from ipyflow.data_model.utils.deps import dynamic_context, static_context
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, symbols
 from ipyflow.singletons import flow, tracer
@@ -961,8 +962,9 @@ class DataSymbol:
         sym._override_timestamp = Timestamp(
             self._timestamp.cell_num, self._timestamp.stmt_num + 1
         )
-        flow().add_dynamic_data_dep(sym._timestamp, sym._override_timestamp, sym)
-        flow().add_dynamic_data_dep(sym._override_timestamp, sym._timestamp, sym)
+        with dynamic_context():
+            flow().add_data_dep(sym._timestamp, sym._override_timestamp, sym)
+            flow().add_data_dep(sym._override_timestamp, sym._timestamp, sym)
         _debounced_exec_schedule(cells().at_timestamp(self.timestamp).cell_id)
 
     def namespaced(self) -> "Namespace":
@@ -1008,10 +1010,12 @@ class DataSymbol:
                 else:
                     is_usage = ts_to_use < used_time
                 if is_usage:
-                    flow().add_static_data_dep(used_time, ts_to_use, self)
+                    with static_context():
+                        flow().add_data_dep(used_time, ts_to_use, self)
             elif not is_static and ts_to_use < used_time:
                 is_usage = True
-                flow().add_dynamic_data_dep(used_time, ts_to_use, self)
+                with dynamic_context():
+                    flow().add_data_dep(used_time, ts_to_use, self)
             if is_usage:
                 timestamp_by_used_time[used_time] = ts_to_use
                 if used_node is not None:

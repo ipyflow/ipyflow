@@ -41,7 +41,7 @@ from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import stmts
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.deps import (
+from ipyflow.data_model.utils.dep_ctx_utils import (
     Dependency,
     dep_ctx,
     dynamic_context,

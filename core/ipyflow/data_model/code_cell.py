@@ -33,7 +33,7 @@ from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.analysis.slicing import CodeCellSlicingMixin
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.deps import Dependency, dep_ctx, set_dep_ctx
+from ipyflow.data_model.utils.dep_ctx_utils import Dependency, dep_ctx
 from ipyflow.models import _CodeCellContainer, cells
 from ipyflow.singletons import flow, kernel
 from ipyflow.types import CellId, TimestampOrCounter
@@ -154,20 +154,19 @@ class CodeCell(CodeCellSlicingMixin):
             if old_id in reactive_cells:
                 reactive_cells.discard(old_id)
                 reactive_cells.add(new_id)
-        for dep_type in Dependency:
-            with set_dep_ctx(dep_type):
-                for pid in self.parent_ids:
-                    parent = self.from_id(pid)
-                    parent._children = {
-                        (new_id, sym) if cid == old_id else (cid, sym)
-                        for cid, sym in parent._children
-                    }
-                for cid in self.children_ids:
-                    child = self.from_id(cid)
-                    child._parents = {
-                        (new_id, sym) if pid == old_id else (pid, sym)
-                        for pid, sym in child._parents
-                    }
+        for _ in Dependency.iter_dep_contexts():
+            for pid in self.parent_ids:
+                parent = self.from_id(pid)
+                parent._children = {
+                    (new_id, sym) if cid == old_id else (cid, sym)
+                    for cid, sym in parent._children
+                }
+            for cid in self.children_ids:
+                child = self.from_id(cid)
+                child._parents = {
+                    (new_id, sym) if pid == old_id else (pid, sym)
+                    for pid, sym in child._parents
+                }
 
     def add_used_cell_counter(self, sym: "DataSymbol", ctr: int) -> None:
         if ctr > 0:
@@ -471,13 +470,12 @@ class CodeCell(CodeCellSlicingMixin):
             and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
         ):
             min_allowed_cell_position_by_symbol = {}
-            for dep_type in Dependency:
-                with set_dep_ctx(dep_type):
-                    for pid, dsym in self.parents:
-                        min_allowed_cell_position_by_symbol[dsym] = max(
-                            min_allowed_cell_position_by_symbol.get(dsym, -1),
-                            self.from_id(pid).position,
-                        )
+            for _ in Dependency.iter_dep_contexts():
+                for pid, dsym in self.parents:
+                    min_allowed_cell_position_by_symbol[dsym] = max(
+                        min_allowed_cell_position_by_symbol.get(dsym, -1),
+                        self.from_id(pid).position,
+                    )
         with self._override_position_index_for_current_flow_semantics():
             max_used_cell_ctr = -1
             this_cell_pos = self.position

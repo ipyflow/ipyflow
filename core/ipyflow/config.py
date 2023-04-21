@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, NamedTuple
+from typing import Generator, List, NamedTuple
 
-from ipyflow.data_model.utils.deps import Dependency
+from ipyflow.data_model.utils.dep_ctx_utils import Dependency, iter_dep_contexts
 
 
 class ExecutionMode(Enum):
@@ -81,3 +81,7 @@ class MutableDataflowSettings:
         if self.static_slicing_enabled:
             ret.append(Dependency.STATIC)
         return ret
+
+    def iter_dep_contexts(self) -> Generator[None, None, None]:
+        for _ in iter_dep_contexts(*self.dep_types):
+            yield

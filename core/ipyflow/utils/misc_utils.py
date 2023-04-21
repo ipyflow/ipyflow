@@ -42,3 +42,9 @@ def debounce(wait: float) -> Callable[[Callable[..., None]], Callable[..., None]
         return debounced
 
     return decorator
+
+
+def yield_in_loop(*gens):
+    for gen in gens:
+        with gen:
+            yield

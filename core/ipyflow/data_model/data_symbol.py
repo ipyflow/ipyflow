@@ -26,7 +26,7 @@ from ipyflow.data_model.utils.annotation_utils import (
     get_type_annotation,
     make_annotation_string,
 )
-from ipyflow.data_model.utils.deps import dynamic_context, static_context
+from ipyflow.data_model.utils.dep_ctx_utils import dynamic_context, static_context
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, symbols
 from ipyflow.singletons import flow, tracer

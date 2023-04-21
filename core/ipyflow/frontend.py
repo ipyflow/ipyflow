@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
-from ipyflow.data_model.utils.deps import set_dep_ctx
 from ipyflow.singletons import flow
 from ipyflow.types import CellId
 
@@ -114,11 +113,10 @@ class FrontendCheckerResult(NamedTuple):
                 ExecutionSchedule.DAG_BASED,
                 ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
             ):
-                for dep_type in flow_.mut_settings.dep_types:
-                    with set_dep_ctx(dep_type):
-                        ready_making_cell_ids |= {
-                            pid for pid, _ in cells().from_id(waiting_cell_id).parents
-                        } & eligible_ready_making_for_dag
+                for _ in flow_.mut_settings.iter_dep_contexts():
+                    ready_making_cell_ids |= {
+                        pid for pid, _ in cells().from_id(waiting_cell_id).parents
+                    } & eligible_ready_making_for_dag
             else:
                 waiting_syms = waiting_symbols_by_cell_id.get(waiting_cell_id, set())
                 ready_making_cell_ids = ready_making_cell_ids.union(
@@ -176,13 +174,12 @@ class FrontendCheckerResult(NamedTuple):
             for cell in cells_to_check:
                 if cell.cell_id in self.waiting_cells:
                     continue
-                for dep_type in flow_.mut_settings.dep_types:
-                    with set_dep_ctx(dep_type):
-                        if {pid for pid, _ in cell.parents} & (
-                            self.ready_cells | self.waiting_cells
-                        ):
-                            self.waiting_cells.add(cell.cell_id)
-                            continue
+                for _ in flow_.mut_settings.iter_dep_contexts():
+                    if {pid for pid, _ in cell.parents} & (
+                        self.ready_cells | self.waiting_cells
+                    ):
+                        self.waiting_cells.add(cell.cell_id)
+                        continue
             if prev_waiting_cells == self.waiting_cells:
                 break
             prev_waiting_cells = set(self.waiting_cells)
@@ -205,26 +202,25 @@ class FrontendCheckerResult(NamedTuple):
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
         ):
             flow_order = flow_.mut_settings.flow_order
-            for dep_type in flow_.mut_settings.dep_types:
+            for _ in flow_.mut_settings.iter_dep_contexts():
                 if is_new_ready:
                     break
-                with set_dep_ctx(dep_type):
-                    for pid, sym in cell.parents:
-                        par = cells().from_id(pid)
-                        if (
-                            flow_order == flow_order.IN_ORDER
-                            and par.position >= cell.position
-                        ):
-                            continue
-                        if (
-                            max(cell.cell_ctr, flow_.min_timestamp)
-                            < par.cell_ctr
-                            == sym.timestamp.cell_num
-                        ):
-                            is_ready = True
-                            if sym.timestamp.cell_num == flow_.cell_counter():
-                                is_new_ready = True
-                                break
+                for pid, sym in cell.parents:
+                    par = cells().from_id(pid)
+                    if (
+                        flow_order == flow_order.IN_ORDER
+                        and par.position >= cell.position
+                    ):
+                        continue
+                    if (
+                        max(cell.cell_ctr, flow_.min_timestamp)
+                        < par.cell_ctr
+                        == sym.timestamp.cell_num
+                    ):
+                        is_ready = True
+                        if sym.timestamp.cell_num == flow_.cell_counter():
+                            is_new_ready = True
+                            break
         if not is_new_ready and (
             flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
             or (

@@ -111,24 +111,12 @@ def compute_slice_impl(
     timestamp_to_static_ts_deps: Dict[
         TimestampOrCounter, Set[TimestampOrCounter]
     ] = defaultdict(set)
-    if flow().mut_settings.dynamic_slicing_enabled:
+    for _ in flow().mut_settings.iter_dep_contexts():
         if isinstance(seeds[0], Timestamp):
-            timestamp_to_ts_deps = _graph_union(
-                timestamp_to_ts_deps, flow().dynamic_data_deps
-            )
+            timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, flow().data_deps)
         else:
             timestamp_to_ts_deps = _graph_union(
-                timestamp_to_ts_deps, _coarsen_timestamps(flow().dynamic_data_deps)
-            )
-    if flow().mut_settings.static_slicing_enabled:
-        if isinstance(seeds[0], Timestamp):
-            timestamp_to_static_ts_deps = _graph_union(
-                timestamp_to_static_ts_deps, flow().static_data_deps
-            )
-        else:
-            timestamp_to_static_ts_deps = _graph_union(
-                timestamp_to_static_ts_deps,
-                _coarsen_timestamps(flow().static_data_deps),
+                timestamp_to_ts_deps, _coarsen_timestamps(flow().data_deps)
             )
 
     # ensure we at least get the static deps

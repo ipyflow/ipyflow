@@ -72,15 +72,21 @@ class SlicingMixin(Protocol):
     # end abstract section
     #############
 
+    @classmethod
+    def _parent_from_ref(
+        cls, parent_ref: Union["SlicingMixin", IdType, Timestamp]
+    ) -> "SlicingMixin":
+        if isinstance(parent_ref, Timestamp):
+            return cls.at_timestamp(parent_ref)
+        elif isinstance(parent_ref, (int, str)):
+            return cls.from_id(parent_ref)
+        else:
+            return parent_ref
+
     def add_parent(
         self, parent_ref: Union["SlicingMixin", IdType, Timestamp], sym: "DataSymbol"
     ) -> None:
-        if isinstance(parent_ref, Timestamp):
-            parent = self.at_timestamp(parent_ref)
-        elif isinstance(parent_ref, (int, str)):
-            parent = self.from_id(parent_ref)
-        else:
-            parent = parent_ref
+        parent = self._parent_from_ref(parent_ref)
         pid = parent.id
         if pid in self.children:
             return
@@ -97,12 +103,7 @@ class SlicingMixin(Protocol):
     def remove_parent(
         self, parent_ref: Union["SlicingMixin", IdType, Timestamp], sym: "DataSymbol"
     ) -> None:
-        if isinstance(parent_ref, Timestamp):
-            parent = self.at_timestamp(parent_ref)
-        elif isinstance(parent_ref, (int, str)):
-            parent = self.from_id(parent_ref)
-        else:
-            parent = parent_ref
+        parent = self._parent_from_ref(parent_ref)
         pid = parent.id
         for edges in (self.parents, parent.children):
             syms = edges.get(pid, set())

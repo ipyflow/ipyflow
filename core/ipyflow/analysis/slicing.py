@@ -105,13 +105,13 @@ class SlicingMixin(Protocol):
     ) -> None:
         parent = self._parent_from_ref(parent_ref)
         pid = parent.id
-        for edges in (self.parents, parent.children):
-            syms = edges.get(pid, set())
+        for edges, eid in ((self.parents, pid), (parent.children, self.id)):
+            syms = edges.get(eid, set())
             if not syms:
                 continue
             syms.discard(sym)
             if not syms:
-                del self.parents[pid]
+                del edges[eid]
 
     @property
     def parents(self) -> Dict[IdType, Set["DataSymbol"]]:

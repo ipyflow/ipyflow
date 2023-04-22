@@ -444,15 +444,15 @@ class NotebookFlow(singletons.NotebookFlow):
                 # to ensure that static data deps get refreshed
                 prev_static_parents = dict(cell._static_parents)
                 with static_context():
-                    for pid, syms in prev_static_parents.items():
-                        for dsym in syms:
-                            cell.remove_parent(pid, dsym)
+                    for pid, sym_edges in prev_static_parents.items():
+                        for sym in set(sym_edges):
+                            cell.remove_parent(pid, sym)
                 cell.check_and_resolve_symbols(update_liveness_time_versions=True)
                 with dynamic_context():
-                    for pid, syms in prev_static_parents.items():
-                        for dsym in syms:
-                            if dsym not in cell._static_parents.get(pid, set()):
-                                cell.remove_parent(pid, dsym)
+                    for pid, sym_edges in prev_static_parents.items():
+                        for sym in set(sym_edges):
+                            if sym not in cell._static_parents.get(pid, set()):
+                                cell.remove_parent(pid, sym)
             except SyntaxError:
                 cell.current_content = prev_content
 
@@ -764,13 +764,12 @@ class NotebookFlow(singletons.NotebookFlow):
         ):
             used_symbols |= syms
         for _ in DependencyContext.iter_dep_contexts():
-            for cell_id, syms in prev_cell.parents.items():
-                for sym in syms:
-                    if (
-                        sym in used_symbols
-                        and cells().from_id(cell_id).is_current_for_id
-                    ):
-                        cell.parents.setdefault(cell_id, set()).add(sym)
+            for cell_id, sym_edges in prev_cell.parents.items():
+                if not cells().from_id(cell_id).is_current_for_id:
+                    continue
+                for sym in sym_edges:
+                    if sym in used_symbols:
+                        cell.add_parent(cell_id, sym)
 
     @property
     def cell_magic_name(self):

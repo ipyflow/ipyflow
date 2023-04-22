@@ -56,7 +56,7 @@ def compute_slice_stmts(cell_num):
 
 
 def compute_unparsed_slice(cell_num: int) -> Dict[int, str]:
-    return cells().at_timestamp(cell_num).compute_slice()
+    return cells().at_timestamp(cell_num).compute_slice(stmt_level=False)
 
 
 def compute_unparsed_slice_stmts(cell_num: int) -> Dict[int, str]:

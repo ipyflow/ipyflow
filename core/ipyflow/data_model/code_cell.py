@@ -30,7 +30,7 @@ from ipyflow.analysis.live_refs import (
     get_symbols_for_references,
 )
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
-from ipyflow.analysis.slicing import CodeCellSlicingMixin
+from ipyflow.analysis.slicing import SlicingMixin
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.dep_ctx_utils import DependencyContext, _dep_ctx_var
@@ -61,7 +61,7 @@ class CheckerResult(NamedTuple):
     typechecks: bool  # whether the cell typechecks successfully
 
 
-class CodeCell(CodeCellSlicingMixin):
+class CodeCell(SlicingMixin):
     _current_cell_by_cell_id: Dict[CellId, "CodeCell"] = {}
     _cell_by_cell_ctr: Dict[int, "CodeCell"] = {}
     _cell_counter: int = 0
@@ -105,6 +105,10 @@ class CodeCell(CodeCellSlicingMixin):
         self._ready: bool = False
         self._extra_stmt: Optional[ast.stmt] = None
         self._placeholder_id = placeholder_id
+
+    @property
+    def timestamp(self) -> Timestamp:
+        return Timestamp(self.cell_ctr, -1)
 
     @classmethod
     def clear(cls):

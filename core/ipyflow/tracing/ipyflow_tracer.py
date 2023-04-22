@@ -1312,8 +1312,10 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_raw_handler(pyc.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
         self.next_stmt_node_id = stmt_id
-        trace_stmt = self.traced_statements.get(stmt_id)
-        if trace_stmt is not None and trace_stmt.finished:
+        trace_stmt = self._get_or_make_trace_stmt(
+            cast(ast.stmt, self.ast_node_by_id[stmt_id]), frame=frame
+        )
+        if trace_stmt.finished:
             return
         # logger.warning('reenable tracing: %s', site_id)
         if self.prev_trace_stmt_in_cur_frame is not None:
@@ -1323,11 +1325,6 @@ class DataflowTracer(StackFrameManager):
                 prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)
             ):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
-        assert trace_stmt is None
-        trace_stmt = Statement.create_and_track(
-            cast(ast.stmt, self.ast_node_by_id[stmt_id]), frame=frame
-        )
-        self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
         if not self.is_tracing_enabled and self._should_attempt_to_reenable_tracing(
             frame
@@ -1374,7 +1371,7 @@ class DataflowTracer(StackFrameManager):
     def _get_or_make_trace_stmt(
         self, stmt_node: ast.stmt, frame: FrameType
     ) -> Statement:
-        trace_stmt = self.traced_statements.get(id(stmt_node), None)
+        trace_stmt = self.traced_statements.get(id(stmt_node))
         if trace_stmt is None:
             trace_stmt = Statement.create_and_track(stmt_node, frame=frame)
             self.traced_statements[id(stmt_node)] = trace_stmt

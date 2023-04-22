@@ -5,7 +5,7 @@ from typing import Set
 
 from ipyflow.data_model.code_cell import cells
 from ipyflow.singletons import flow
-from ipyflow.types import CellId
+from ipyflow.types import IdType
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -21,7 +21,7 @@ def run_cell(cell, cell_id=None, **kwargs):
     run_cell_(cell, **kwargs)
 
 
-def get_cell_ids_needing_typecheck() -> Set[CellId]:
+def get_cell_ids_needing_typecheck() -> Set[IdType]:
     return {
         cell.cell_id
         for cell in cells().all_cells_most_recently_run_for_each_id()

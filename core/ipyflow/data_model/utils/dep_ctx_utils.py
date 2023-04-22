@@ -17,18 +17,18 @@ class DependencyContext(Enum):
             yield
 
 
-_dep_ctx_var: ContextVar[Optional[DependencyContext]] = ContextVar(
-    "_dep_ctx_var", default=None
+dep_ctx_var: ContextVar[Optional[DependencyContext]] = ContextVar(
+    "dep_ctx_var", default=None
 )
 
 
 @contextmanager
 def set_dep_context(dep_ctx: DependencyContext) -> Generator[None, None, None]:
-    token = _dep_ctx_var.set(dep_ctx)
+    token = dep_ctx_var.set(dep_ctx)
     try:
         yield
     finally:
-        _dep_ctx_var.reset(token)
+        dep_ctx_var.reset(token)
 
 
 @contextmanager

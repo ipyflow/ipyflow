@@ -158,7 +158,6 @@ class DataflowTracer(StackFrameManager):
         self._seen_functions_ids: Set[NodeId] = set()
         self.prev_event: Optional[pyc.TraceEvent] = None
         self.prev_trace_stmt: Optional[Statement] = None
-        self.seen_stmts: Set[NodeId] = set()
         self.traced_statements: Dict[NodeId, Statement] = {}
         self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = {}
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
@@ -303,19 +302,21 @@ class DataflowTracer(StackFrameManager):
     def _check_prev_stmt_done_executing_hook(
         self, event: pyc.TraceEvent, trace_stmt: Statement
     ):
-        if event == pyc.after_stmt:  # and self.is_tracing_enabled:
-            trace_stmt.finished_execution_hook()
-        elif event == pyc.return_ and self.prev_event not in (
-            pyc.call,
-            pyc.exception,
+        if (
+            event == pyc.return_
+            and self.prev_event
+            not in (
+                pyc.call,
+                pyc.exception,
+            )
+            and self.prev_trace_stmt is not None
         ):
             # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
-            if self.prev_trace_stmt is not None:
-                self.prev_trace_stmt.finished_execution_hook()
-            # prev_overall = self.prev_trace_stmt
-            # if prev_overall is not None and prev_overall is not self._stack[-1][0]:
-            #     # this condition ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
-            #     prev_overall.finished_execution_hook()
+            self.prev_trace_stmt.finished_execution_hook()
+        if event == pyc.after_stmt or (
+            event == pyc.return_ and isinstance(trace_stmt.stmt_node, ast.Return)
+        ):
+            trace_stmt.finished_execution_hook()
 
     def _disable_tracing(self, *args, **kwargs) -> None:
         self.tracing_disabled_since_last_module_stmt = True
@@ -1260,7 +1261,7 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
-        if stmt_id in self.seen_stmts:
+        if Statement.has_id(stmt_id) and Statement.from_id(stmt_id).finished:
             return ret_expr
         self._saved_stmt_ret_expr = ret_expr
         stmt = self.ast_node_by_id.get(stmt_id, None)
@@ -1311,7 +1312,8 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_raw_handler(pyc.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
         self.next_stmt_node_id = stmt_id
-        if stmt_id in self.seen_stmts:
+        trace_stmt = self.traced_statements.get(stmt_id)
+        if trace_stmt is not None and trace_stmt.finished:
             return
         # logger.warning('reenable tracing: %s', site_id)
         if self.prev_trace_stmt_in_cur_frame is not None:
@@ -1321,12 +1323,11 @@ class DataflowTracer(StackFrameManager):
                 prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)
             ):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
-        trace_stmt = self.traced_statements.get(stmt_id, None)
-        if trace_stmt is None:
-            trace_stmt = Statement.create_and_track(
-                frame, cast(ast.stmt, self.ast_node_by_id[stmt_id])
-            )
-            self.traced_statements[stmt_id] = trace_stmt
+        assert trace_stmt is None
+        trace_stmt = Statement.create_and_track(
+            cast(ast.stmt, self.ast_node_by_id[stmt_id]), frame=frame
+        )
+        self.traced_statements[stmt_id] = trace_stmt
         self.prev_trace_stmt_in_cur_frame = trace_stmt
         if not self.is_tracing_enabled and self._should_attempt_to_reenable_tracing(
             frame
@@ -1375,7 +1376,7 @@ class DataflowTracer(StackFrameManager):
     ) -> Statement:
         trace_stmt = self.traced_statements.get(id(stmt_node), None)
         if trace_stmt is None:
-            trace_stmt = Statement.create_and_track(frame, stmt_node)
+            trace_stmt = Statement.create_and_track(stmt_node, frame=frame)
             self.traced_statements[id(stmt_node)] = trace_stmt
         return trace_stmt
 

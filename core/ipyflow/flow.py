@@ -39,11 +39,11 @@ from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
-from ipyflow.data_model.statement import stmts
+from ipyflow.data_model.statement import statements
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.dep_ctx_utils import (
     DependencyContext,
-    _dep_ctx_var,
+    dep_ctx_var,
     dynamic_context,
     static_context,
 )
@@ -51,7 +51,7 @@ from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.tracing.watchpoint import Watchpoint
-from ipyflow.types import CellId, SupportedIndexType
+from ipyflow.types import IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard
 
 logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ class NotebookFlow(singletons.NotebookFlow):
     ) -> None:
         super().__init__()
         cells().clear()
-        stmts().clear()
+        statements().clear()
         config = get_ipython().config.ipyflow
         self.settings: DataflowSettings = DataflowSettings(
             test_context=kwargs.pop("test_context", False),
@@ -164,6 +164,9 @@ class NotebookFlow(singletons.NotebookFlow):
         self.aliases: Dict[int, Set[DataSymbol]] = {}
         self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
         self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
+        self.stmt_deferred_static_parents: Dict[
+            Timestamp, Set[Tuple[Timestamp, DataSymbol]]
+        ] = {}
         self.global_scope: Scope = Scope()
         self.virtual_symbols: Scope = Scope()
         self._virtual_symbols_inited: bool = False
@@ -175,7 +178,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], DataSymbol]] = []
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
         self.statement_to_func_cell: Dict[int, DataSymbol] = {}
-        self._active_cell_id: Optional[CellId] = None
+        self._active_cell_id: Optional[IdType] = None
         self.waiter_usage_detected = False
         self.out_of_order_usage_detected_counter: Optional[int] = None
         if cell_magic_name is None:
@@ -194,7 +197,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.min_cascading_reactive_cell_num = -1
         self._tags: Tuple[str, ...] = ()
         self.last_executed_content: Optional[str] = None
-        self.last_executed_cell_id: Optional[CellId] = None
+        self.last_executed_cell_id: Optional[IdType] = None
         self._comm_handlers: Dict[
             str, Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]
         ] = {}
@@ -214,7 +217,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.fs: Namespace = None
         self.display_sym: DataSymbol = None
         self._comm: Optional[Comm] = None
-        self._prev_cell_metadata_by_id: Optional[Dict[CellId, Dict[str, Any]]] = None
+        self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -317,7 +320,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     @property
     def data_deps(self) -> Dict[Timestamp, Set[Timestamp]]:
-        ctx = _dep_ctx_var.get()
+        ctx = dep_ctx_var.get()
         assert ctx is not None
         if ctx == DependencyContext.DYNAMIC:
             return self.dynamic_data_deps
@@ -330,6 +333,14 @@ class NotebookFlow(singletons.NotebookFlow):
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
         self.data_deps.setdefault(child, set()).add(parent)
+        if dep_ctx_var.get() == DependencyContext.DYNAMIC:
+            statements().at_timestamp(child).add_parent(
+                statements().at_timestamp(parent), sym
+            )
+        else:
+            self.stmt_deferred_static_parents.setdefault(child, set()).add(
+                (parent, sym)
+            )
         cells().at_timestamp(child).add_parent(cells().at_timestamp(parent), sym)
 
     def is_updated_reactive(self, sym: DataSymbol) -> bool:
@@ -356,7 +367,7 @@ class NotebookFlow(singletons.NotebookFlow):
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time.clear()
         cells().clear()
-        stmts().clear()
+        statements().clear()
 
     def get_and_set_exception_raised_during_execution(
         self, new_val: Union[None, str, Exception] = None
@@ -396,7 +407,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping
 
-    def set_active_cell(self, cell_id: CellId) -> None:
+    def set_active_cell(self, cell_id: IdType) -> None:
         self._active_cell_id = cell_id
 
     def set_tags(self, tags: Tuple[str, ...]) -> None:
@@ -413,7 +424,7 @@ class NotebookFlow(singletons.NotebookFlow):
         comm.send({"type": "establish", "success": True})
 
     @staticmethod
-    def _create_untracked_cells_for_content(content_by_cell_id: Dict[CellId, str]):
+    def _create_untracked_cells_for_content(content_by_cell_id: Dict[IdType, str]):
         for cell_id, content in content_by_cell_id.items():
             cell = cells().from_id(cell_id)
             if cell is not None:
@@ -421,7 +432,7 @@ class NotebookFlow(singletons.NotebookFlow):
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
     @staticmethod
-    def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[CellId, str]):
+    def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[IdType, str]):
         for cell_id, content in content_by_cell_id.items():
             cell = cells().from_id(cell_id)
             if cell is None or cell.current_content == content:
@@ -662,7 +673,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self,
         cells_to_check: Optional[Iterable[CodeCell]] = None,
         update_liveness_time_versions: bool = False,
-        last_executed_cell_id: Optional[CellId] = None,
+        last_executed_cell_id: Optional[IdType] = None,
     ) -> FrontendCheckerResult:
         result = FrontendCheckerResult.empty()
         try:
@@ -753,13 +764,13 @@ class NotebookFlow(singletons.NotebookFlow):
         ):
             used_symbols |= syms
         for _ in DependencyContext.iter_dep_contexts():
-            for cell_id, syms in prev_cell._parents.items():
+            for cell_id, syms in prev_cell.parents.items():
                 for sym in syms:
                     if (
                         sym in used_symbols
                         and cells().from_id(cell_id).is_current_for_id
                     ):
-                        cell._parents.setdefault(cell_id, set()).add(sym)
+                        cell.parents.setdefault(cell_id, set()).add(sym)
 
     @property
     def cell_magic_name(self):

@@ -21,7 +21,7 @@ from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
 
 from ipyflow import singletons
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.code_cell import CodeCell
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
@@ -395,7 +395,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                     for subclass in singletons.IPyflowKernel._walk_mro():
                         subclass._instance = kernel
                 zmq_kernel_class.prev_kernel_class = prev_kernel_class
-                cells()._cell_counter = ipy.execution_count
+                CodeCell._cell_counter = ipy.execution_count
 
             @classmethod
             def _maybe_eject(zmq_kernel_class) -> None:
@@ -529,7 +529,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         placeholder_id = cell_id is None
         if placeholder_id:
             cell_id = flow_.cell_counter()
-        cell = cells().create_and_track(
+        cell = CodeCell.create_and_track(
             cell_id,
             cell_content,
             flow_._tags,
@@ -573,9 +573,9 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
     def _handle_output(self) -> None:
         flow_ = singletons.flow()
         prev_cell = None
-        cell = cells().current_cell()
+        cell = CodeCell.current_cell()
         if len(cell.history) >= 2:
-            prev_cell = cells().at_timestamp(cell.history[-2])
+            prev_cell = CodeCell.at_timestamp(cell.history[-2])
         if (
             flow_.mut_settings.warn_out_of_order_usages
             and flow_.out_of_order_usage_detected_counter is not None
@@ -610,7 +610,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
                 # TODO: avoid bad performance by only iterating over symbols updated in this cell
                 sym
                 for sym in flow_.all_data_symbols()
-                if sym.timestamp.cell_num == cells().exec_counter()
+                if sym.timestamp.cell_num == CodeCell.exec_counter()
             ]
         )
         flow_._add_applicable_prev_cell_parents_to_current()

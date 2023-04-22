@@ -7,6 +7,7 @@ from types import FrameType
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, cast
 
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
+from ipyflow.analysis.slicing import SlicingMixin
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
@@ -15,10 +16,19 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.models import _StatementContainer, cells, stmts
+from ipyflow.data_model.utils.dep_ctx_utils import static_context
+from ipyflow.models import _StatementContainer, cells, statements
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
+from ipyflow.types import IdType, TimestampOrCounter
+
+if TYPE_CHECKING:
+    import astunparse
+elif hasattr(ast, "unparse"):
+    astunparse = ast
+else:
+    import astunparse
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
@@ -29,58 +39,113 @@ logger.setLevel(logging.WARNING)
 
 
 # just want to get rid of unused warning
-_override_unused_warning_stmts = stmts
+_override_unused_warning_stmts = statements
 
 
-class Statement:
-    _stmt_by_ts: Dict[Timestamp, List["Statement"]] = {}
+class Statement(SlicingMixin):
+    _stmts_by_ts: Dict[Timestamp, List["Statement"]] = {}
+    _stmt_by_id: Dict[IdType, "Statement"] = {}
 
-    def __init__(self, frame: FrameType, stmt_node: ast.stmt) -> None:
-        self.frame: Optional[FrameType] = frame
+    def __init__(
+        self,
+        stmt_node: ast.stmt,
+        frame: Optional[FrameType] = None,
+        timestamp: Optional[Timestamp] = None,
+        prev_stmt: Optional["Statement"] = None,
+    ) -> None:
         self.stmt_node: ast.stmt = stmt_node
-        self.timestamp = Timestamp.current()
+        self.frame: Optional[FrameType] = frame
+        self._timestamp = timestamp or Timestamp.current()
+        self._finished: bool = False
+        self.prev_stmt = prev_stmt
         self.class_scope: Optional[Namespace] = None
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
         self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
+        self._dynamic_parents: Dict[IdType, Set[DataSymbol]] = {}
+        self._dynamic_children: Dict[IdType, Set[DataSymbol]] = {}
+        self._static_parents: Dict[IdType, Set[DataSymbol]] = {}
+        self._static_children: Dict[IdType, Set[DataSymbol]] = {}
+
+    @property
+    def id(self) -> IdType:
+        return self.stmt_id
+
+    @property
+    def timestamp(self) -> Timestamp:
+        return self._timestamp
+
+    @property
+    def prev(self) -> Optional["Statement"]:
+        return self.prev_stmt
+
+    @property
+    def stmt_text(self) -> str:
+        return astunparse.unparse(self.stmt_node)
 
     @classmethod
-    def create_and_track(cls, frame: FrameType, stmt_node: ast.stmt) -> "Statement":
-        stmt = cls(frame, stmt_node)
-        cls._stmt_by_ts.setdefault(stmt.timestamp, []).append(stmt)
+    def create_and_track(
+        cls,
+        stmt_node: ast.stmt,
+        frame: Optional[FrameType] = None,
+        timestamp: Optional[Timestamp] = None,
+        override: bool = False,
+    ) -> "Statement":
+        stmt_id = id(stmt_node)
+        prev_stmt = cls.from_id(stmt_id) if cls.has_id(stmt_id) else None
+        stmt = cls(stmt_node, frame=frame, timestamp=timestamp, prev_stmt=prev_stmt)
+        if override and cls._stmts_by_ts.get(timestamp):
+            prev = cls.at_timestamp(timestamp)
+            cls._stmt_by_id.pop(prev.id, None)
+            cls._stmts_by_ts[stmt.timestamp] = [stmt]
+        else:
+            cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
+        cls._stmt_by_id[stmt.stmt_id] = stmt
+        with static_context():
+            for parent, sym in flow().stmt_deferred_static_parents.get(
+                stmt.timestamp, []
+            ):
+                stmt.add_parent(parent, sym)
+        flow().stmt_deferred_static_parents.pop(stmt.timestamp, None)
         return stmt
 
     @classmethod
     def clear(cls):
-        cls._stmt_by_ts = {}
+        cls._stmts_by_ts = {}
 
     @classmethod
-    def at_timestamp(cls, ts: Timestamp) -> List["Statement"]:
-        return cls._stmt_by_ts.get(ts, [])
+    def at_timestamp(cls, ts: TimestampOrCounter) -> "Statement":
+        assert isinstance(ts, Timestamp)
+        return cls._stmts_by_ts[ts][0]
 
     @classmethod
-    def first_at_timestamp(cls, ts: Timestamp) -> Optional["Statement"]:
-        stmts = cls._stmt_by_ts.get(ts, [])
-        return stmts[0] if stmts else None
+    def from_id(cls, stmt_id: IdType) -> "Statement":
+        return cls._stmt_by_id[stmt_id]
+
+    @classmethod
+    def has_id(cls, stmt_id: IdType) -> bool:
+        return stmt_id in cls._stmt_by_id
+
+    @classmethod
+    def all_at_timestamp(cls, ts: Timestamp) -> List["Statement"]:
+        return cls._stmts_by_ts.get(ts, [])
 
     @classmethod
     def module_stmt_node_at_timestamp(
         cls, ts: Timestamp, include_extra: bool = False
     ) -> Optional[ast.stmt]:
-        stmt = cls.first_at_timestamp(ts)
+        stmt = cls.at_timestamp(ts)
         if stmt:
             # the first one will be the module-level stmt
             return stmt.stmt_node
-        elif include_extra and ts.plus(0, -1) in cls._stmt_by_ts:
+        elif include_extra and ts.plus(0, -1) in cls._stmts_by_ts:
             return cells().at_timestamp(ts)._extra_stmt
         else:
             return None
 
     @property
     def containing_cell(self) -> "CodeCell":
-        cell = cells().at_timestamp(self.timestamp)
-        assert cell is not None
-        return cell
+        return cells().at_timestamp(self.timestamp)
 
     @property
     def lineno(self) -> int:
@@ -88,7 +153,7 @@ class Statement:
 
     @property
     def finished(self) -> bool:
-        return self.stmt_id in tracer().seen_stmts
+        return self._finished
 
     @property
     def stmt_id(self) -> int:
@@ -495,9 +560,9 @@ class Statement:
             resolve_rval_symbols(self.stmt_node)
 
     def finished_execution_hook(self) -> None:
-        if self.finished:
+        if self._finished:
             return
-        tracer().seen_stmts.add(self.stmt_id)
+        self._finished = True
         self.handle_dependencies()
         for sym in list(tracer().this_stmt_updated_symbols):
             passing_watchpoints = sym.watchpoints(

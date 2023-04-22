@@ -8,7 +8,7 @@ from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, High
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.singletons import flow
-from ipyflow.types import CellId
+from ipyflow.types import IdType
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -28,16 +28,16 @@ def _make_range_from_node(node: ast.AST) -> Dict[str, Any]:
 
 
 class FrontendCheckerResult(NamedTuple):
-    waiting_cells: Set[CellId]
-    ready_cells: Set[CellId]
-    new_ready_cells: Set[CellId]
-    forced_reactive_cells: Set[CellId]
-    typecheck_error_cells: Set[CellId]
-    unsafe_order_cells: Dict[CellId, Set[CodeCell]]
-    unsafe_order_symbol_usage: Dict[CellId, List[Dict[str, Any]]]
-    waiter_links: Dict[CellId, Set[CellId]]
-    ready_maker_links: Dict[CellId, Set[CellId]]
-    phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]]
+    waiting_cells: Set[IdType]
+    ready_cells: Set[IdType]
+    new_ready_cells: Set[IdType]
+    forced_reactive_cells: Set[IdType]
+    typecheck_error_cells: Set[IdType]
+    unsafe_order_cells: Dict[IdType, Set[CodeCell]]
+    unsafe_order_symbol_usage: Dict[IdType, List[Dict[str, Any]]]
+    waiter_links: Dict[IdType, Set[IdType]]
+    ready_maker_links: Dict[IdType, Set[IdType]]
+    phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]]
 
     @classmethod
     def empty(cls):
@@ -101,21 +101,21 @@ class FrontendCheckerResult(NamedTuple):
 
     def _compute_ready_making_cells(
         self,
-        waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
-        last_executed_cell_id: Optional[CellId],
+        waiting_symbols_by_cell_id: Dict[IdType, Set[DataSymbol]],
+        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[IdType]],
+        last_executed_cell_id: Optional[IdType],
     ) -> None:
         flow_ = flow()
         eligible_ready_making_for_dag = self.ready_cells | self.waiting_cells
         for waiting_cell_id in self.waiting_cells:
-            ready_making_cell_ids: Set[CellId] = set()
+            ready_making_cell_ids: Set[IdType] = set()
             if flow_.mut_settings.exec_schedule in (
                 ExecutionSchedule.DAG_BASED,
                 ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
             ):
                 for _ in flow_.mut_settings.iter_dep_contexts():
                     ready_making_cell_ids |= (
-                        cells().from_id(waiting_cell_id).parents.keys()
+                        cells().from_id(waiting_cell_id).directional_parents.keys()
                         & eligible_ready_making_for_dag
                     )
             else:
@@ -139,7 +139,7 @@ class FrontendCheckerResult(NamedTuple):
 
     def _compute_reactive_cells_for_reactive_symbols(
         self,
-        checker_results_by_cid: Dict[CellId, CheckerResult],
+        checker_results_by_cid: Dict[IdType, CheckerResult],
         last_executed_cell_pos: int,
     ) -> None:
         flow_ = flow()
@@ -170,13 +170,15 @@ class FrontendCheckerResult(NamedTuple):
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
         ):
             return
-        prev_waiting_cells: Set[CellId] = set()
+        prev_waiting_cells: Set[IdType] = set()
         while True:
             for cell in cells_to_check:
                 if cell.cell_id in self.waiting_cells:
                     continue
                 for _ in flow_.mut_settings.iter_dep_contexts():
-                    if cell.parents.keys() & (self.ready_cells | self.waiting_cells):
+                    if cell.directional_parents.keys() & (
+                        self.ready_cells | self.waiting_cells
+                    ):
                         self.waiting_cells.add(cell.cell_id)
                         continue
             if prev_waiting_cells == self.waiting_cells:
@@ -204,7 +206,7 @@ class FrontendCheckerResult(NamedTuple):
             for _ in flow_.mut_settings.iter_dep_contexts():
                 if is_new_ready:
                     break
-                for pid, syms in cell.parents.items():
+                for pid, syms in cell.directional_parents.items():
                     par = cells().from_id(pid)
                     if (
                         flow_order == flow_order.IN_ORDER
@@ -253,9 +255,9 @@ class FrontendCheckerResult(NamedTuple):
         cell: CodeCell,
         update_liveness_time_versions: bool,
         last_executed_cell_pos: int,
-        waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]],
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]],
-        phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]],
+        waiting_symbols_by_cell_id: Dict[IdType, Set[DataSymbol]],
+        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[IdType]],
+        phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]],
     ) -> Optional[CheckerResult]:
         flow_ = flow()
         try:
@@ -320,7 +322,7 @@ class FrontendCheckerResult(NamedTuple):
 
     def _get_last_executed_pos_and_handle_reactive_tags(
         self,
-        last_executed_cell_id: Optional[CellId],
+        last_executed_cell_id: Optional[IdType],
     ) -> Optional[int]:
         if last_executed_cell_id is None:
             return None
@@ -370,15 +372,15 @@ class FrontendCheckerResult(NamedTuple):
         self,
         cells_to_check: Optional[Iterable[CodeCell]] = None,
         update_liveness_time_versions: bool = False,
-        last_executed_cell_id: Optional[CellId] = None,
+        last_executed_cell_id: Optional[IdType] = None,
     ) -> "FrontendCheckerResult":
         flow_ = flow()
         if last_executed_cell_id is None:
             last_executed_cell_id = flow_.last_executed_cell_id
-        waiting_symbols_by_cell_id: Dict[CellId, Set[DataSymbol]] = {}
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[CellId]] = defaultdict(set)
-        phantom_cell_info: Dict[CellId, Dict[CellId, Set[int]]] = {}
-        checker_results_by_cid: Dict[CellId, CheckerResult] = {}
+        waiting_symbols_by_cell_id: Dict[IdType, Set[DataSymbol]] = {}
+        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[IdType]] = defaultdict(set)
+        phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]] = {}
+        checker_results_by_cid: Dict[IdType, CheckerResult] = {}
         last_executed_cell_pos = self._get_last_executed_pos_and_handle_reactive_tags(
             last_executed_cell_id
         )

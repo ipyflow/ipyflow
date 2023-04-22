@@ -4,7 +4,7 @@ from IPython import InteractiveShell
 import ipyflow.api
 from ipyflow.api import *
 from ipyflow.kernel import IPyflowKernel
-from ipyflow.models import cells, stmts
+from ipyflow.models import cells, statements
 from ipyflow.singletons import flow, tracer
 
 

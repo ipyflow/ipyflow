@@ -28,10 +28,10 @@ from ipyflow.data_model.utils.annotation_utils import (
 )
 from ipyflow.data_model.utils.dep_ctx_utils import dynamic_context, static_context
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
-from ipyflow.models import _SymbolContainer, symbols
+from ipyflow.models import _SymbolContainer, statements, symbols
 from ipyflow.singletons import flow, tracer
 from ipyflow.tracing.watchpoint import Watchpoints
-from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, CellId, SupportedIndexType
+from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard, debounce
 
 if TYPE_CHECKING:
@@ -48,7 +48,7 @@ _override_unused_warning_symbols = symbols
 
 
 @debounce(0.1)
-def _debounced_exec_schedule(executed_cell_id: CellId) -> None:
+def _debounced_exec_schedule(executed_cell_id: IdType) -> None:
     flow().handle(
         {"type": "compute_exec_schedule", "executed_cell_id": executed_cell_id}
     )
@@ -92,8 +92,8 @@ class DataSymbol:
         self.obj = obj
         self._tombstone = False
         self._cached_out_of_sync = True
-        self.cached_obj_id = None
-        self.cached_obj_type = None
+        self.cached_obj_id: Optional[int] = None
+        self.cached_obj_type: Optional[Type[object]] = None
         if refresh_cached_obj:
             self._refresh_cached_obj()
         self.containing_scope = containing_scope or flow().global_scope
@@ -960,7 +960,12 @@ class DataSymbol:
         ]
         sym._override_ready_liveness_cell_num = flow().cell_counter() + 1
         sym._override_timestamp = Timestamp(
-            self._timestamp.cell_num, self._timestamp.stmt_num + 1
+            self._timestamp.cell_num, current_ts_cell.num_stmts
+        )
+        statements().create_and_track(
+            current_ts_cell._extra_stmt,
+            timestamp=sym._override_timestamp,
+            override=True,
         )
         with dynamic_context():
             flow().add_data_dep(sym._timestamp, sym._override_timestamp, sym)

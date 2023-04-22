@@ -34,7 +34,7 @@ def symbols() -> Type["DataSymbol"]:
     return _SymbolContainer[0]
 
 
-def stmts() -> Type["Statement"]:
+def statements() -> Type["Statement"]:
     return _StatementContainer[0]
 
 

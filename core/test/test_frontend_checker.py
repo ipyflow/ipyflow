@@ -626,3 +626,40 @@ def test_dag_edge_hybrid():
         response = flow().check_and_link_multiple_cells()
         assert response.ready_cells == {4}
         assert response.waiting_cells == {5}
+
+
+def test_dag_edge_changes():
+    cells_to_run = {
+        0: "x = 0",
+        1: "y = 1",
+        2: "z = x + 42",
+        3: "logging.info(z)",
+    }
+    with override_settings(
+        exec_schedule=ExecutionSchedule.DAG_BASED, flow_order=FlowDirection.IN_ORDER
+    ):
+        run_all_cells(cells_to_run)
+        cells_to_run[2] = "z = y + 42"
+        flow()._recompute_ast_for_dirty_cells({2: cells_to_run[2]})
+        run_cell("y = 2", 1)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {2}
+        assert response.waiting_cells == {3}, response.waiting_cells
+        run_cell(cells_to_run[2], 2)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {3}
+        assert response.waiting_cells == set()
+        run_cell(cells_to_run[3], 3)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == set()
+        assert response.waiting_cells == set()
+        run_cell("x = 99", 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == set(), response.ready_cells
+        assert response.waiting_cells == set()
+        cells_to_run[2] = "z = x + 42"
+        flow()._recompute_ast_for_dirty_cells({2: cells_to_run[2]})
+        run_cell("x = 100", 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {2}
+        assert response.waiting_cells == {3}

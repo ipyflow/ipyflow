@@ -442,15 +442,18 @@ class NotebookFlow(singletons.NotebookFlow):
                 cell.current_content = content
                 cell.to_ast()
                 # to ensure that static data deps get refreshed
-                prev_static_parents = dict(cell._static_parents)
+                prev_static_parents = {
+                    pid: set(sym_edges)
+                    for pid, sym_edges in cell._static_parents.items()
+                }
                 with static_context():
                     for pid, sym_edges in prev_static_parents.items():
-                        for sym in set(sym_edges):
+                        for sym in sym_edges:
                             cell.remove_parent(pid, sym)
                 cell.check_and_resolve_symbols(update_liveness_time_versions=True)
                 with dynamic_context():
                     for pid, sym_edges in prev_static_parents.items():
-                        for sym in set(sym_edges):
+                        for sym in sym_edges:
                             if sym not in cell._static_parents.get(pid, set()):
                                 cell.remove_parent(pid, sym)
             except SyntaxError:

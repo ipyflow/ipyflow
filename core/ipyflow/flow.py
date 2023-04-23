@@ -162,8 +162,6 @@ class NotebookFlow(singletons.NotebookFlow):
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = {}
-        self.dynamic_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
-        self.static_data_deps: Dict[Timestamp, Set[Timestamp]] = {}
         self.stmt_deferred_static_parents: Dict[
             Timestamp, Set[Tuple[Timestamp, DataSymbol]]
         ] = {}
@@ -318,21 +316,10 @@ class NotebookFlow(singletons.NotebookFlow):
     def cell_counter() -> int:
         return cells().exec_counter()
 
-    @property
-    def data_deps(self) -> Dict[Timestamp, Set[Timestamp]]:
-        ctx = slicing_ctx_var.get()
-        assert ctx is not None
-        if ctx == SlicingContext.DYNAMIC:
-            return self.dynamic_data_deps
-        elif ctx == SlicingContext.STATIC:
-            return self.static_data_deps
-        else:
-            assert False
-
     def add_data_dep(
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
-        self.data_deps.setdefault(child, set()).add(parent)
+        cells().at_timestamp(child).add_parent(cells().at_timestamp(parent), sym)
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
             statements().at_timestamp(child).add_parent(
                 statements().at_timestamp(parent), sym
@@ -341,7 +328,6 @@ class NotebookFlow(singletons.NotebookFlow):
             self.stmt_deferred_static_parents.setdefault(child, set()).add(
                 (parent, sym)
             )
-        cells().at_timestamp(child).add_parent(cells().at_timestamp(parent), sym)
 
     def is_updated_reactive(self, sym: DataSymbol) -> bool:
         return (
@@ -358,8 +344,6 @@ class NotebookFlow(singletons.NotebookFlow):
     def reset_cell_counter(self):
         # only called in test context
         assert not singletons.kernel().settings.store_history
-        self.dynamic_data_deps.clear()
-        self.static_data_deps.clear()
         for sym in self.all_data_symbols():
             sym._timestamp = (
                 sym._max_inner_timestamp

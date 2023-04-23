@@ -29,7 +29,7 @@ from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, statements, symbols
 from ipyflow.singletons import flow, tracer
 from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
-from ipyflow.slicing.mixin import FormatType, compute_slice_impl, format_slice
+from ipyflow.slicing.mixin import FormatType
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard, debounce
@@ -957,7 +957,7 @@ class DataSymbol:
         ]
         sym._override_ready_liveness_cell_num = flow().cell_counter() + 1
         sym._override_timestamp = Timestamp(
-            self._timestamp.cell_num, current_ts_cell.num_stmts
+            self._timestamp.cell_num, current_ts_cell.num_original_stmts
         )
         statements().create_and_track(
             current_ts_cell._extra_stmt,

@@ -137,9 +137,14 @@ class Statement(SlicingMixin):
                     for sym in sym_edges:
                         prev.remove_parent(pid, sym)
                         stmt.add_parent(pid, sym)
+            cls._stmt_by_id[stmt.stmt_id] = stmt
         else:
+            # TODO: duplicating the frame will have a memory leak; fix this
+            if prev_stmt is not None:
+                prev_stmt._finished = False
+                prev_stmt.frame = frame
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
-        cls._stmt_by_id[stmt.stmt_id] = stmt
+            cls._stmt_by_id.setdefault(stmt.stmt_id, stmt)
         with static_slicing_context():
             for parent, sym in flow().stmt_deferred_static_parents.get(
                 stmt.timestamp, []

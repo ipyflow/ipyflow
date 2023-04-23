@@ -10,6 +10,7 @@ from typing import (
     Dict,
     FrozenSet,
     Generator,
+    Iterable,
     List,
     Mapping,
     NamedTuple,
@@ -32,7 +33,7 @@ from ipyflow.analysis.live_refs import (
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.models import _CodeCellContainer, cells
+from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, kernel
 from ipyflow.slicing.context import SlicingContext
 from ipyflow.slicing.mixin import SlicingMixin
@@ -42,6 +43,7 @@ from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
 
 if TYPE_CHECKING:
     from ipyflow.data_model.data_symbol import DataSymbol
+    from ipyflow.data_model.statement import Statement
 
 
 logger = logging.getLogger(__name__)
@@ -396,8 +398,12 @@ class CodeCell(SlicingMixin):
         return self._cached_ast
 
     @property
-    def num_stmts(self) -> int:
+    def num_original_stmts(self) -> int:
         return len(self.to_ast().body)
+
+    @property
+    def num_stmts(self) -> int:
+        return self.num_original_stmts + (self._extra_stmt is not None)
 
     @property
     def is_current_for_id(self) -> bool:
@@ -577,6 +583,24 @@ class CodeCell(SlicingMixin):
 
     def invalidate_typecheck_result(self):
         self._cached_typecheck_result = None
+
+    def _get_stmt_timestamps(self) -> Set[Timestamp]:
+        return {Timestamp(self.cell_ctr, i) for i in range(self.num_stmts)}
+
+    @classmethod
+    def compute_multi_slice_stmts(
+        cls, slice_cells: Iterable["CodeCell"]
+    ) -> List["Statement"]:
+        timestamps: Set[Timestamp] = set()
+        for cell in slice_cells:
+            timestamps |= cell._get_stmt_timestamps()
+        return cast(
+            "List[Statement]",
+            statements().make_multi_slice(timestamps),
+        )
+
+    def compute_slice_stmts(self) -> List["Statement"]:
+        return self.compute_multi_slice_stmts([self])
 
 
 if len(_CodeCellContainer) == 0:

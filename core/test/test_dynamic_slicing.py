@@ -56,15 +56,15 @@ def compute_slice_stmts(cell_num):
 
 
 def compute_unparsed_slice(cell_num: int) -> Dict[int, str]:
-    return cells().at_timestamp(cell_num).compute_slice(stmt_level=False)
+    return cells().at_timestamp(cell_num).make_cell_dict_slice()
 
 
 def compute_unparsed_slice_stmts(cell_num: int) -> Dict[int, str]:
-    return cells().at_timestamp(cell_num).compute_slice(stmt_level=True)
+    return cells().make_cell_dict_from_closure(compute_slice_stmts(cell_num))
 
 
 def num_stmts_in_slice(cell_num: int) -> int:
-    return sum(len(stmts) for stmts in compute_slice_stmts(cell_num).values())
+    return len(compute_slice_stmts(cell_num))
 
 
 def test_simple():

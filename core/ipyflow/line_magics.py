@@ -7,7 +7,7 @@ import os.path
 import re
 import shlex
 import sys
-from typing import TYPE_CHECKING, Iterable, Optional, Type, cast
+from typing import TYPE_CHECKING, Iterable, Optional, Sequence, Type, cast
 
 import pyccolo as pyc
 from IPython import get_ipython
@@ -23,7 +23,7 @@ from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, kernel
-from ipyflow.slicing.mixin import format_slice
+from ipyflow.slicing.mixin import SlicingMixin, format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
 if TYPE_CHECKING:
@@ -330,8 +330,14 @@ def make_slice(line: str) -> Optional[str]:
     elif len(slice_cells) == 0 and tag is not None:
         warn(f"No cell(s) for tag: {tag}")
     else:
+        if args.stmt:
+            closure: Sequence[SlicingMixin] = cells().compute_multi_slice_stmts(
+                slice_cells
+            )
+        else:
+            closure = cells().make_multi_slice(slice_cells)
         return format_slice(
-            cells().compute_slice_for_cells(slice_cells, stmt_level=args.stmt),
+            cells().make_cell_dict_from_closure(closure),
             blacken=args.stmt or args.blacken,
         )
     return None

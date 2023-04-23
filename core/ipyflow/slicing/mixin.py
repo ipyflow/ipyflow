@@ -42,6 +42,10 @@ logger.setLevel(logging.WARNING)
 
 
 class SlicingMixin(Protocol):
+    """
+    Common slicing functionality shared between CodeCell and Statement
+    """
+
     #############
     # subclasses must implement the following:
 

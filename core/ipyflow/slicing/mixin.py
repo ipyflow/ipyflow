@@ -264,7 +264,7 @@ class SlicingMixin(Protocol):
         for ts in sorted(timestamps):
             if ts.stmt_num == -1:
                 continue
-            stmt = statements().module_stmt_node_at_timestamp(ts, include_extra=True)
+            stmt = statements().at_timestamp(ts).stmt_node
             stmt_id = id(stmt)
             if stmt is None or stmt_id in seen_stmt_ids:
                 continue

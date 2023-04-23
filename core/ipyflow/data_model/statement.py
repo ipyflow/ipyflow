@@ -152,19 +152,6 @@ class Statement(SlicingMixin):
     def all_at_timestamp(cls, ts: Timestamp) -> List["Statement"]:
         return cls._stmts_by_ts.get(ts, [])
 
-    @classmethod
-    def module_stmt_node_at_timestamp(
-        cls, ts: Timestamp, include_extra: bool = False
-    ) -> Optional[ast.stmt]:
-        stmt = cls.at_timestamp(ts)
-        if stmt:
-            # the first one will be the module-level stmt
-            return stmt.stmt_node
-        elif include_extra and ts.plus(0, -1) in cls._stmts_by_ts:
-            return cells().at_timestamp(ts)._extra_stmt
-        else:
-            return None
-
     @property
     def containing_cell(self) -> "CodeCell":
         return cells().at_timestamp(self.timestamp)

@@ -339,6 +339,7 @@ def make_slice(line: str) -> Optional[str]:
         return format_slice(
             cells().make_cell_dict_from_closure(closure),
             blacken=args.stmt or args.blacken,
+            format_type=str,
         )
     return None
 

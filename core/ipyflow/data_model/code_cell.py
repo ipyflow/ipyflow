@@ -122,7 +122,7 @@ class CodeCell(SlicingMixin):
 
     @property
     def text(self) -> str:
-        return self.sanitized_content()
+        return self.sanitized_content().strip()
 
     @property
     def position(self) -> int:

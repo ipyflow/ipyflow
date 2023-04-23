@@ -4,7 +4,17 @@ import logging
 import sys
 import textwrap
 from collections import defaultdict
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, TypeVar, Union
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import black
 from ipywidgets import HTML
@@ -163,15 +173,25 @@ class SlicingMixin(Protocol):
                 self.from_id(pid)._make_slice_helper(closure)
 
     def make_slice(self) -> List["SlicingMixin"]:
+        return self.make_multi_slice([self])
+
+    @classmethod
+    def make_multi_slice(
+        cls, seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]]
+    ) -> List["SlicingMixin"]:
         closure: Set["SlicingMixin"] = set()
-        self._make_slice_helper(closure)
+        for seed in seeds:
+            slice_seed = (
+                cls.at_timestamp(seed) if isinstance(seed, (Timestamp, int)) else seed
+            )
+            slice_seed._make_slice_helper(closure)
         return sorted(closure, key=lambda dep: dep.timestamp)
 
-    def make_cell_dict_slice(
-        self, closure: Optional[List["SlicingMixin"]] = None
+    @classmethod
+    def make_cell_dict_multi_slice(
+        cls, seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]]
     ) -> Dict[int, str]:
-        if closure is None:
-            closure = self.make_slice()
+        closure = cls.make_multi_slice(seeds)
         slice_text_by_cell_num: Dict[int, List[str]] = {}
         for sliceable in closure:
             slice_text_by_cell_num.setdefault(sliceable.timestamp.cell_num, []).append(
@@ -182,14 +202,29 @@ class SlicingMixin(Protocol):
             for cell_num, text in slice_text_by_cell_num.items()
         }
 
-    def format_slice(
-        self,
-        closure: Optional[List["SlicingMixin"]] = None,
+    def make_cell_dict_slice(self) -> Dict[int, str]:
+        return self.make_cell_dict_multi_slice([self])
+
+    @classmethod
+    def format_multi_slice(
+        cls,
+        seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
         blacken: bool = True,
         format_type: Optional[Type[FormatType]] = None,
     ) -> FormatType:
         return format_slice(
-            self.make_cell_dict_slice(closure=closure),
+            cls.make_cell_dict_multi_slice(seeds),
+            blacken=blacken,
+            format_type=format_type,
+        )
+
+    def format_slice(
+        self,
+        blacken: bool = True,
+        format_type: Optional[Type[FormatType]] = None,
+    ) -> FormatType:
+        return self.format_multi_slice(
+            [self],
             blacken=blacken,
             format_type=format_type,
         )

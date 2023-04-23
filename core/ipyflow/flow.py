@@ -766,7 +766,7 @@ class NotebookFlow(singletons.NotebookFlow):
             cell._dynamic_parents.values(), cell._static_parents.values()
         ):
             used_symbols |= syms
-        for _ in SlicingContext.iter_dep_contexts():
+        for _ in SlicingContext.iter_slicing_contexts():
             for cell_id, sym_edges in prev_cell.parents.items():
                 if not cells().from_id(cell_id).is_current_for_id:
                     continue

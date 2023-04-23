@@ -197,7 +197,7 @@ class CodeCell(SlicingMixin):
             if old_id in reactive_cells:
                 reactive_cells.discard(old_id)
                 reactive_cells.add(new_id)
-        for _ in SlicingContext.iter_dep_contexts():
+        for _ in SlicingContext.iter_slicing_contexts():
             for pid in self.parents.keys():
                 parent = self.from_id(pid)
                 parent.children = {
@@ -418,7 +418,7 @@ class CodeCell(SlicingMixin):
             and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
         ):
             min_allowed_cell_position_by_symbol = {}
-            for _ in SlicingContext.iter_dep_contexts():
+            for _ in SlicingContext.iter_slicing_contexts():
                 for pid, syms in self.directional_parents.items():
                     for dsym in syms:
                         min_allowed_cell_position_by_symbol[dsym] = max(

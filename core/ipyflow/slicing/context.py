@@ -12,7 +12,7 @@ class SlicingContext(Enum):
     STATIC = "static"
 
     @classmethod
-    def iter_dep_contexts(cls) -> Generator[None, None, None]:
+    def iter_slicing_contexts(cls) -> Generator[None, None, None]:
         for _ in iter_slicing_contexts(*cls):
             yield
 

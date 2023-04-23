@@ -17,7 +17,7 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _StatementContainer, cells, statements
 from ipyflow.singletons import flow, tracer
-from ipyflow.slicing.context import static_slicing_context
+from ipyflow.slicing.context import SlicingContext, static_slicing_context
 from ipyflow.slicing.mixin import SlicingMixin
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
@@ -120,6 +120,23 @@ class Statement(SlicingMixin):
             prev = cls.at_timestamp(timestamp)
             cls._stmt_by_id.pop(prev.id, None)
             cls._stmts_by_ts[stmt.timestamp] = [stmt]
+            # TODO: simply / refactor repetitive code
+            for _ in SlicingContext.iter_slicing_contexts():
+                prev_children = {
+                    cid: set(sym_edges) for cid, sym_edges in prev.children.items()
+                }
+                for cid, sym_edges in prev_children.items():
+                    child = cls.from_id(cid)
+                    for sym in sym_edges:
+                        child.remove_parent(prev, sym)
+                        child.add_parent(stmt, sym)
+                prev_parents = {
+                    pid: set(sym_edges) for pid, sym_edges in prev.parents.items()
+                }
+                for pid, sym_edges in prev_parents.items():
+                    for sym in sym_edges:
+                        prev.remove_parent(pid, sym)
+                        stmt.add_parent(pid, sym)
         else:
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
         cls._stmt_by_id[stmt.stmt_id] = stmt

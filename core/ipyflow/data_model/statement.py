@@ -139,10 +139,6 @@ class Statement(SlicingMixin):
                         stmt.add_parent(pid, sym)
             cls._stmt_by_id[stmt.stmt_id] = stmt
         else:
-            # TODO: duplicating the frame will have a memory leak; fix this
-            if prev_stmt is not None:
-                prev_stmt._finished = False
-                prev_stmt.frame = frame
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
             cls._stmt_by_id.setdefault(stmt.stmt_id, stmt)
         with static_slicing_context():
@@ -590,10 +586,14 @@ class Statement(SlicingMixin):
             # make sure usage timestamps get bumped
             resolve_rval_symbols(self.stmt_node)
 
+    def mark_finished(self) -> None:
+        self._finished = True
+        # avoid keeping dangling references to stack frames once we're done with them
+        self.frame = None
+
     def finished_execution_hook(self) -> None:
         if self._finished:
             return
-        self._finished = True
         self.handle_dependencies()
         for sym in list(tracer().this_stmt_updated_symbols):
             passing_watchpoints = sym.watchpoints(
@@ -607,8 +607,7 @@ class Statement(SlicingMixin):
             if passing_watchpoints:
                 flow().active_watchpoints.append((passing_watchpoints, sym))
         tracer().after_stmt_reset_hook()
-        # avoid keeping dangling references to stack frames once we're done with them
-        self.frame = None
+        self.mark_finished()
 
 
 if len(_StatementContainer) == 0:

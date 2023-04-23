@@ -278,6 +278,10 @@ class DataflowTracer(StackFrameManager):
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
 
+    def finish_cell_hook(self) -> None:
+        for stmt in self.traced_statements.values():
+            stmt.mark_finished()
+
     def _handle_call_transition(self, trace_stmt: Statement):
         if (
             self.external_call_depth
@@ -1261,8 +1265,11 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
-        if Statement.has_id(stmt_id) and Statement.from_id(stmt_id).finished:
-            return ret_expr
+        if (
+            stmt_id in self.traced_statements
+            and self.traced_statements[stmt_id].finished
+        ):
+            return
         self._saved_stmt_ret_expr = ret_expr
         stmt = self.ast_node_by_id.get(stmt_id, None)
         if stmt is not None:

@@ -303,6 +303,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                         with self._patch_pyccolo_exec_eval():
                             with self.inner_tracing_context():
                                 yield
+                if DataflowTracer.instance() in all_tracers:
+                    DataflowTracer.instance().finish_cell_hook()
                 if self.tracer_cleanup_pending:
                     self.cleanup_tracers()
                 else:

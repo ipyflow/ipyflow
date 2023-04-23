@@ -89,9 +89,9 @@ class Statement(SlicingMixin):
             for node in self.stmt_node.targets + [self.stmt_node.value]:
                 components.append(astunparse.unparse(node).strip())
                 components[-1] = self._strip_tuple_parens(node, components[-1])
-            return " = ".join(components)
+            return " = ".join(components).strip()
         else:
-            return astunparse.unparse(self.stmt_node)
+            return astunparse.unparse(self.stmt_node).strip()
 
     @staticmethod
     def _strip_tuple_parens(node: ast.AST, text: str) -> str:

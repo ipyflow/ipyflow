@@ -22,13 +22,6 @@ else:
     Protocol = object
 
 if TYPE_CHECKING:
-    import astunparse
-elif hasattr(ast, "unparse"):
-    astunparse = ast
-else:
-    import astunparse
-
-if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
     from ipyflow.data_model.data_symbol import DataSymbol
 
@@ -161,34 +154,44 @@ class SlicingMixin(Protocol):
         else:
             assert False
 
-    def _compute_parent_transitive_closure_helper(
-        self, closure: Set["SlicingMixin"]
-    ) -> None:
+    def _make_slice_helper(self, closure: Set["SlicingMixin"]) -> None:
         if self in closure:
             return
         closure.add(self)
         for _ in flow().mut_settings.iter_slicing_contexts():
             for pid in self.parents.keys():
-                self.from_id(pid)._compute_parent_transitive_closure_helper(closure)
+                self.from_id(pid)._make_slice_helper(closure)
 
-    def compute_parent_transitive_closure(self) -> List["SlicingMixin"]:
+    def make_slice(self) -> List["SlicingMixin"]:
         closure: Set["SlicingMixin"] = set()
-        self._compute_parent_transitive_closure_helper(closure)
+        self._make_slice_helper(closure)
         return sorted(closure, key=lambda dep: dep.timestamp)
 
-    def format_slice(self, closure: Optional[List["SlicingMixin"]] = None):
+    def make_cell_dict_slice(
+        self, closure: Optional[List["SlicingMixin"]] = None
+    ) -> Dict[int, str]:
         if closure is None:
-            closure = self.compute_parent_transitive_closure()
+            closure = self.make_slice()
         slice_text_by_cell_num: Dict[int, List[str]] = {}
         for sliceable in closure:
             slice_text_by_cell_num.setdefault(sliceable.timestamp.cell_num, []).append(
                 sliceable.text
             )
+        return {
+            cell_num: "\n".join(text)
+            for cell_num, text in slice_text_by_cell_num.items()
+        }
+
+    def format_slice(
+        self,
+        closure: Optional[List["SlicingMixin"]] = None,
+        blacken: bool = True,
+        format_type: Optional[Type[FormatType]] = None,
+    ) -> FormatType:
         return format_slice(
-            {
-                cell_num: "\n".join(text)
-                for cell_num, text in slice_text_by_cell_num.items()
-            }
+            self.make_cell_dict_slice(closure=closure),
+            blacken=blacken,
+            format_type=format_type,
         )
 
     def compute_slice_stmts(self) -> Dict[int, List[ast.stmt]]:
@@ -210,38 +213,13 @@ class SlicingMixin(Protocol):
             assert stmt_level
             return self.get_stmt_text(self.compute_slice_stmts())
 
-    @staticmethod
-    def _strip_tuple_parens(node: ast.AST, text: str) -> str:
-        if (
-            isinstance(node, (ast.BinOp, ast.Tuple))
-            and len(text) >= 2
-            and text[0] == "("
-            and text[-1] == ")"
-        ):
-            return text[1:-1]
-        else:
-            return text
-
-    @classmethod
-    def _unparse(cls, stmt: ast.stmt) -> str:
-        if isinstance(stmt, ast.Assign) and stmt.lineno == max(
-            getattr(nd, "lineno", stmt.lineno) for nd in ast.walk(stmt)
-        ):
-            components = []
-            for node in stmt.targets + [stmt.value]:
-                components.append(astunparse.unparse(node).strip())
-                components[-1] = cls._strip_tuple_parens(node, components[-1])
-            return " = ".join(components)
-        else:
-            return astunparse.unparse(stmt)
-
     @classmethod
     def get_stmt_text(
         cls,
         stmts_by_cell_num: Dict[int, List[ast.stmt]],
     ) -> Dict[int, str]:
         return {
-            ctr: "\n".join(cls._unparse(stmt).strip() for stmt in stmts)
+            ctr: "\n".join(statements().from_id(id(stmt)).text for stmt in stmts)
             for ctr, stmts in stmts_by_cell_num.items()
         }
 

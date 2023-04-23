@@ -13,7 +13,6 @@ import pyccolo as pyc
 from IPython import get_ipython
 from IPython.core.magic import register_line_magic
 
-from ipyflow.analysis.slicing import format_slice
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.annotations.compiler import (
     register_annotations_directory,
@@ -24,6 +23,7 @@ from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, kernel
+from ipyflow.slicing.mixin import format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
 if TYPE_CHECKING:

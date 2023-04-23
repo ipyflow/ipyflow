@@ -30,12 +30,12 @@ from ipyflow.analysis.live_refs import (
     get_symbols_for_references,
 )
 from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
-from ipyflow.analysis.slicing import SlicingMixin
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.dep_ctx_utils import DependencyContext
 from ipyflow.models import _CodeCellContainer, cells
 from ipyflow.singletons import flow, kernel
+from ipyflow.slicing.context import SlicingContext
+from ipyflow.slicing.mixin import SlicingMixin
 from ipyflow.types import IdType, TimestampOrCounter
 from ipyflow.utils.ipython_utils import _IPY, CapturedIO
 from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
@@ -119,6 +119,10 @@ class CodeCell(SlicingMixin):
         return self.prev_cell
 
     @property
+    def text(self) -> str:
+        return self.sanitized_content()
+
+    @property
     def position(self) -> int:
         return self._position_by_cell_id.get(self.cell_id, -1)
 
@@ -193,7 +197,7 @@ class CodeCell(SlicingMixin):
             if old_id in reactive_cells:
                 reactive_cells.discard(old_id)
                 reactive_cells.add(new_id)
-        for _ in DependencyContext.iter_dep_contexts():
+        for _ in SlicingContext.iter_dep_contexts():
             for pid in self.parents.keys():
                 parent = self.from_id(pid)
                 parent.children = {
@@ -414,7 +418,7 @@ class CodeCell(SlicingMixin):
             and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
         ):
             min_allowed_cell_position_by_symbol = {}
-            for _ in DependencyContext.iter_dep_contexts():
+            for _ in SlicingContext.iter_dep_contexts():
                 for pid, syms in self.directional_parents.items():
                     for dsym in syms:
                         min_allowed_cell_position_by_symbol[dsym] = max(

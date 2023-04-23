@@ -6,10 +6,10 @@ import textwrap
 from test.utils import make_flow_fixture
 from typing import Dict
 
-from ipyflow.analysis.slicing import format_slice
 from ipyflow.config import FlowDirection
 from ipyflow.data_model.code_cell import cells
 from ipyflow.singletons import flow
+from ipyflow.slicing.mixin import format_slice
 
 logging.basicConfig(level=logging.ERROR)
 

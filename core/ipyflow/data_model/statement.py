@@ -7,7 +7,6 @@ from types import FrameType
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, cast
 
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
-from ipyflow.analysis.slicing import SlicingMixin
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
@@ -16,9 +15,10 @@ from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.dep_ctx_utils import static_context
 from ipyflow.models import _StatementContainer, cells, statements
 from ipyflow.singletons import flow, tracer
+from ipyflow.slicing.context import static_slicing_context
+from ipyflow.slicing.mixin import SlicingMixin
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import IdType, TimestampOrCounter
@@ -80,8 +80,30 @@ class Statement(SlicingMixin):
         return self.prev_stmt
 
     @property
-    def stmt_text(self) -> str:
-        return astunparse.unparse(self.stmt_node)
+    def text(self) -> str:
+        if isinstance(self.stmt_node, ast.Assign) and self.stmt_node.lineno == max(
+            getattr(nd, "lineno", self.stmt_node.lineno)
+            for nd in ast.walk(self.stmt_node)
+        ):
+            components = []
+            for node in self.stmt_node.targets + [self.stmt_node.value]:
+                components.append(astunparse.unparse(node).strip())
+                components[-1] = self._strip_tuple_parens(node, components[-1])
+            return " = ".join(components)
+        else:
+            return astunparse.unparse(self.stmt_node)
+
+    @staticmethod
+    def _strip_tuple_parens(node: ast.AST, text: str) -> str:
+        if (
+            isinstance(node, (ast.BinOp, ast.Tuple))
+            and len(text) >= 2
+            and text[0] == "("
+            and text[-1] == ")"
+        ):
+            return text[1:-1]
+        else:
+            return text
 
     @classmethod
     def create_and_track(
@@ -101,7 +123,7 @@ class Statement(SlicingMixin):
         else:
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
         cls._stmt_by_id[stmt.stmt_id] = stmt
-        with static_context():
+        with static_slicing_context():
             for parent, sym in flow().stmt_deferred_static_parents.get(
                 stmt.timestamp, []
             ):

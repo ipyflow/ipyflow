@@ -41,14 +41,14 @@ from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import statements
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.dep_ctx_utils import (
-    DependencyContext,
-    dep_ctx_var,
-    dynamic_context,
-    static_context,
-)
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
+from ipyflow.slicing.context import (
+    SlicingContext,
+    dynamic_slicing_context,
+    slicing_ctx_var,
+    static_slicing_context,
+)
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.tracing.watchpoint import Watchpoint
 from ipyflow.types import IdType, SupportedIndexType
@@ -320,11 +320,11 @@ class NotebookFlow(singletons.NotebookFlow):
 
     @property
     def data_deps(self) -> Dict[Timestamp, Set[Timestamp]]:
-        ctx = dep_ctx_var.get()
+        ctx = slicing_ctx_var.get()
         assert ctx is not None
-        if ctx == DependencyContext.DYNAMIC:
+        if ctx == SlicingContext.DYNAMIC:
             return self.dynamic_data_deps
-        elif ctx == DependencyContext.STATIC:
+        elif ctx == SlicingContext.STATIC:
             return self.static_data_deps
         else:
             assert False
@@ -333,7 +333,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
         self.data_deps.setdefault(child, set()).add(parent)
-        if dep_ctx_var.get() == DependencyContext.DYNAMIC:
+        if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
             statements().at_timestamp(child).add_parent(
                 statements().at_timestamp(parent), sym
             )
@@ -446,12 +446,12 @@ class NotebookFlow(singletons.NotebookFlow):
                     pid: set(sym_edges)
                     for pid, sym_edges in cell._static_parents.items()
                 }
-                with static_context():
+                with static_slicing_context():
                     for pid, sym_edges in prev_static_parents.items():
                         for sym in sym_edges:
                             cell.remove_parent(pid, sym)
                 cell.check_and_resolve_symbols(update_liveness_time_versions=True)
-                with dynamic_context():
+                with dynamic_slicing_context():
                     for pid, sym_edges in prev_static_parents.items():
                         for sym in sym_edges:
                             if sym not in cell._static_parents.get(pid, set()):
@@ -714,7 +714,7 @@ class NotebookFlow(singletons.NotebookFlow):
         for live_sym_ref in cells().current_cell().override_live_refs or []:
             sym = SymbolRef.resolve(live_sym_ref)
             if sym is not None:
-                with static_context():
+                with static_slicing_context():
                     self.add_data_dep(
                         Timestamp(self.cell_counter(), 0), sym.timestamp, sym
                     )
@@ -766,7 +766,7 @@ class NotebookFlow(singletons.NotebookFlow):
             cell._dynamic_parents.values(), cell._static_parents.values()
         ):
             used_symbols |= syms
-        for _ in DependencyContext.iter_dep_contexts():
+        for _ in SlicingContext.iter_dep_contexts():
             for cell_id, sym_edges in prev_cell.parents.items():
                 if not cells().from_id(cell_id).is_current_for_id:
                     continue

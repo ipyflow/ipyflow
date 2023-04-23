@@ -18,7 +18,6 @@ from typing import (
 )
 
 import ipyflow.data_model.utils.sizing_utils as sizing
-from ipyflow.analysis.slicing import FormatType, compute_slice_impl, format_slice
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
 from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.timestamp import Timestamp
@@ -26,10 +25,11 @@ from ipyflow.data_model.utils.annotation_utils import (
     get_type_annotation,
     make_annotation_string,
 )
-from ipyflow.data_model.utils.dep_ctx_utils import dynamic_context, static_context
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, statements, symbols
 from ipyflow.singletons import flow, tracer
+from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
+from ipyflow.slicing.mixin import FormatType, compute_slice_impl, format_slice
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard, debounce
@@ -967,7 +967,7 @@ class DataSymbol:
             timestamp=sym._override_timestamp,
             override=True,
         )
-        with dynamic_context():
+        with dynamic_slicing_context():
             flow().add_data_dep(sym._timestamp, sym._override_timestamp, sym)
             flow().add_data_dep(sym._override_timestamp, sym._timestamp, sym)
         _debounced_exec_schedule(cells().at_timestamp(self.timestamp).cell_id)
@@ -1015,11 +1015,11 @@ class DataSymbol:
                 else:
                     is_usage = ts_to_use < used_time
                 if is_usage:
-                    with static_context():
+                    with static_slicing_context():
                         flow().add_data_dep(used_time, ts_to_use, self)
             elif not is_static and ts_to_use < used_time:
                 is_usage = True
-                with dynamic_context():
+                with dynamic_slicing_context():
                     flow().add_data_dep(used_time, ts_to_use, self)
             if is_usage:
                 timestamp_by_used_time[used_time] = ts_to_use

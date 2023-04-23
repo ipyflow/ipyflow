@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Generator, List, NamedTuple
 
-from ipyflow.data_model.utils.dep_ctx_utils import DependencyContext, iter_dep_contexts
+from ipyflow.slicing.context import SlicingContext, iter_slicing_contexts
 
 
 class ExecutionMode(Enum):
@@ -73,15 +73,14 @@ class MutableDataflowSettings:
     max_external_call_depth_for_tracing: int
     is_dev_mode: bool
 
-    @property
-    def dep_contexts(self) -> List[DependencyContext]:
-        ret: List[DependencyContext] = []
+    def slicing_contexts(self) -> List[SlicingContext]:
+        ret: List[SlicingContext] = []
         if self.dynamic_slicing_enabled:
-            ret.append(DependencyContext.DYNAMIC)
+            ret.append(SlicingContext.DYNAMIC)
         if self.static_slicing_enabled:
-            ret.append(DependencyContext.STATIC)
+            ret.append(SlicingContext.STATIC)
         return ret
 
-    def iter_dep_contexts(self) -> Generator[None, None, None]:
-        for _ in iter_dep_contexts(*self.dep_contexts):
+    def iter_slicing_contexts(self) -> Generator[None, None, None]:
+        for _ in iter_slicing_contexts(*self.slicing_contexts()):
             yield

@@ -11,9 +11,9 @@ from ipywidgets import HTML
 
 from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.data_model.utils.dep_ctx_utils import DependencyContext, dep_ctx_var
 from ipyflow.models import cells, statements
 from ipyflow.singletons import flow
+from ipyflow.slicing.context import SlicingContext, slicing_ctx_var
 from ipyflow.types import IdType, TimestampOrCounter
 
 if sys.version_info >= (3, 8):
@@ -69,6 +69,10 @@ class SlicingMixin(Protocol):
     def prev(self) -> Optional["SlicingMixin"]:
         ...
 
+    @property
+    def text(self) -> str:
+        ...
+
     # end abstract section
     #############
 
@@ -115,47 +119,77 @@ class SlicingMixin(Protocol):
 
     @property
     def parents(self) -> Dict[IdType, Set["DataSymbol"]]:
-        ctx = dep_ctx_var.get()
+        ctx = slicing_ctx_var.get()
         assert ctx is not None
-        if ctx == DependencyContext.DYNAMIC:
+        if ctx == SlicingContext.DYNAMIC:
             return self._dynamic_parents
-        elif ctx == DependencyContext.STATIC:
+        elif ctx == SlicingContext.STATIC:
             return self._static_parents
         else:
             assert False
 
     @parents.setter
     def parents(self, new_parents: Dict[IdType, Set["DataSymbol"]]) -> None:
-        ctx = dep_ctx_var.get()
+        ctx = slicing_ctx_var.get()
         assert ctx is not None
-        if ctx == DependencyContext.DYNAMIC:
+        if ctx == SlicingContext.DYNAMIC:
             self._dynamic_parents = new_parents
-        elif ctx == DependencyContext.STATIC:
+        elif ctx == SlicingContext.STATIC:
             self._static_parents = new_parents
         else:
             assert False
 
     @property
     def children(self) -> Dict[IdType, Set["DataSymbol"]]:
-        ctx = dep_ctx_var.get()
+        ctx = slicing_ctx_var.get()
         assert ctx is not None
-        if ctx == DependencyContext.DYNAMIC:
+        if ctx == SlicingContext.DYNAMIC:
             return self._dynamic_children
-        elif ctx == DependencyContext.STATIC:
+        elif ctx == SlicingContext.STATIC:
             return self._static_children
         else:
             assert False
 
     @children.setter
     def children(self, new_children: Dict[IdType, Set["DataSymbol"]]) -> None:
-        ctx = dep_ctx_var.get()
+        ctx = slicing_ctx_var.get()
         assert ctx is not None
-        if ctx == DependencyContext.DYNAMIC:
+        if ctx == SlicingContext.DYNAMIC:
             self._dynamic_children = new_children
-        elif ctx == DependencyContext.STATIC:
+        elif ctx == SlicingContext.STATIC:
             self._static_children = new_children
         else:
             assert False
+
+    def _compute_parent_transitive_closure_helper(
+        self, closure: Set["SlicingMixin"]
+    ) -> None:
+        if self in closure:
+            return
+        closure.add(self)
+        for _ in flow().mut_settings.iter_slicing_contexts():
+            for pid in self.parents.keys():
+                self.from_id(pid)._compute_parent_transitive_closure_helper(closure)
+
+    def compute_parent_transitive_closure(self) -> List["SlicingMixin"]:
+        closure: Set["SlicingMixin"] = set()
+        self._compute_parent_transitive_closure_helper(closure)
+        return sorted(closure, key=lambda dep: dep.timestamp)
+
+    def format_slice(self, closure: Optional[List["SlicingMixin"]] = None):
+        if closure is None:
+            closure = self.compute_parent_transitive_closure()
+        slice_text_by_cell_num: Dict[int, List[str]] = {}
+        for sliceable in closure:
+            slice_text_by_cell_num.setdefault(sliceable.timestamp.cell_num, []).append(
+                sliceable.text
+            )
+        return format_slice(
+            {
+                cell_num: "\n".join(text)
+                for cell_num, text in slice_text_by_cell_num.items()
+            }
+        )
 
     def compute_slice_stmts(self) -> Dict[int, List[ast.stmt]]:
         if self.timestamp.stmt_num == -1:
@@ -355,7 +389,7 @@ def compute_slice_impl(
     timestamp_to_static_ts_deps: Dict[
         TimestampOrCounter, Set[TimestampOrCounter]
     ] = defaultdict(set)
-    for _ in flow().mut_settings.iter_dep_contexts():
+    for _ in flow().mut_settings.iter_slicing_contexts():
         if isinstance(seeds[0], Timestamp):
             timestamp_to_ts_deps = _graph_union(timestamp_to_ts_deps, flow().data_deps)
         else:

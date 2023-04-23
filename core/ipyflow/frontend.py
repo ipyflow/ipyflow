@@ -113,7 +113,7 @@ class FrontendCheckerResult(NamedTuple):
                 ExecutionSchedule.DAG_BASED,
                 ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
             ):
-                for _ in flow_.mut_settings.iter_dep_contexts():
+                for _ in flow_.mut_settings.iter_slicing_contexts():
                     ready_making_cell_ids |= (
                         cells().from_id(waiting_cell_id).directional_parents.keys()
                         & eligible_ready_making_for_dag
@@ -175,7 +175,7 @@ class FrontendCheckerResult(NamedTuple):
             for cell in cells_to_check:
                 if cell.cell_id in self.waiting_cells:
                     continue
-                for _ in flow_.mut_settings.iter_dep_contexts():
+                for _ in flow_.mut_settings.iter_slicing_contexts():
                     if cell.directional_parents.keys() & (
                         self.ready_cells | self.waiting_cells
                     ):
@@ -203,7 +203,7 @@ class FrontendCheckerResult(NamedTuple):
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
         ):
             flow_order = flow_.mut_settings.flow_order
-            for _ in flow_.mut_settings.iter_dep_contexts():
+            for _ in flow_.mut_settings.iter_slicing_contexts():
                 if is_new_ready:
                     break
                 for pid, syms in cell.directional_parents.items():

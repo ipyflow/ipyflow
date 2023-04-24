@@ -410,7 +410,7 @@ class NotebookFlow(singletons.NotebookFlow):
     @staticmethod
     def _create_untracked_cells_for_content(content_by_cell_id: Dict[IdType, str]):
         for cell_id, content in content_by_cell_id.items():
-            cell = cells().from_id(cell_id)
+            cell = cells().from_id_nullable(cell_id)
             if cell is not None:
                 continue
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
@@ -418,7 +418,7 @@ class NotebookFlow(singletons.NotebookFlow):
     @staticmethod
     def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[IdType, str]):
         for cell_id, content in content_by_cell_id.items():
-            cell = cells().from_id(cell_id)
+            cell = cells().from_id_nullable(cell_id)
             if cell is None or cell.current_content == content:
                 continue
             prev_content = cell.current_content
@@ -534,7 +534,7 @@ class NotebookFlow(singletons.NotebookFlow):
             for _, cell_id in sorted(
                 (idx, cell_id) for cell_id, idx in order_index_by_id.items()
             ):
-                if cells().from_id(cell_id) is not None:
+                if cells().has_id(cell_id):
                     continue
                 content = content_by_cell_id[cell_id]
                 for candidate in list(placeholder_cells):
@@ -566,7 +566,9 @@ class NotebookFlow(singletons.NotebookFlow):
             return {"success": False, "error": f"null value for {', '.join(null_vals)}"}
         cells_to_check = (
             cell
-            for cell in (cells().from_id(cell_id) for cell_id in cell_metadata_by_id)
+            for cell in (
+                cells().from_id_nullable(cell_id) for cell_id in cell_metadata_by_id
+            )
             if cell is not None
         )
         response = self.check_and_link_multiple_cells(

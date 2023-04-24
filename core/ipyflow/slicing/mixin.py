@@ -64,6 +64,10 @@ class SlicingMixin(Protocol):
     def from_id(cls, sid: IdType) -> "SlicingMixin":
         ...
 
+    @classmethod
+    def from_id_nullable(cls, sid: IdType) -> Optional["SlicingMixin"]:
+        ...
+
     @property
     def timestamp(self) -> Timestamp:
         ...

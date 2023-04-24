@@ -262,7 +262,7 @@ class CodeCell(SlicingMixin):
                 cell_ctr = cls._cell_counter = _IPY.cell_counter = actual_counter
         else:
             cell_ctr = -1
-        prev_cell = cls.from_id(cell_id) if cls.has_id(cell_id) else None
+        prev_cell = cls.from_id_nullable(cell_id)
         if cell_ctr == -1:
             assert prev_cell is None
         if prev_cell is not None:
@@ -353,6 +353,10 @@ class CodeCell(SlicingMixin):
     @classmethod
     def from_id(cls, cell_id: IdType) -> "CodeCell":
         return cls._current_cell_by_cell_id[cell_id]
+
+    @classmethod
+    def from_id_nullable(cls, cell_id: IdType) -> Optional["CodeCell"]:
+        return cls._current_cell_by_cell_id.get(cell_id)
 
     @classmethod
     def has_id(cls, cell_id: IdType):

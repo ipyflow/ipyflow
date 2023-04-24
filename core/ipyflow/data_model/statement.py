@@ -161,13 +161,19 @@ class Statement(SlicingMixin):
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
     ) -> "Statement":
         assert isinstance(ts, Timestamp) or stmt_num is not None
-        if not isinstance(ts, Timestamp):
-            ts = Timestamp(ts, stmt_num)
-        return cls._stmts_by_ts[ts][0]
+        if isinstance(ts, Timestamp):
+            ts_to_use = ts
+        else:
+            ts_to_use = Timestamp(ts, stmt_num)
+        return cls._stmts_by_ts[ts_to_use][0]
 
     @classmethod
     def from_id(cls, stmt_id: IdType) -> "Statement":
         return cls._stmts_by_id[stmt_id][0]
+
+    @classmethod
+    def from_id_nullable(cls, stmt_id: IdType) -> Optional["Statement"]:
+        return cls._stmts_by_id.get(stmt_id, [None])[0]
 
     @classmethod
     def has_id(cls, stmt_id: IdType) -> bool:

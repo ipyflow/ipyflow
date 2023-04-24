@@ -306,6 +306,7 @@ class DataflowTracer(StackFrameManager):
     def _check_prev_stmt_done_executing_hook(
         self, event: pyc.TraceEvent, trace_stmt: Statement
     ):
+        num_finished_stmts = 0
         if (
             event == pyc.return_
             and self.prev_event
@@ -317,10 +318,14 @@ class DataflowTracer(StackFrameManager):
         ):
             # ensuring prev != call ensures we're not inside of a stmt with multiple calls (such as map w/ lambda)
             self.prev_trace_stmt.finished_execution_hook()
+            num_finished_stmts += 1
         if event == pyc.after_stmt or (
             event == pyc.return_ and isinstance(trace_stmt.stmt_node, ast.Return)
         ):
             trace_stmt.finished_execution_hook()
+            num_finished_stmts += 1
+        if num_finished_stmts > 0:
+            self.after_stmt_reset_hook()
 
     def _disable_tracing(self, *args, **kwargs) -> None:
         self.tracing_disabled_since_last_module_stmt = True

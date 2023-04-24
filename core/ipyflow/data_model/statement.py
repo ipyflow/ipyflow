@@ -606,7 +606,6 @@ class Statement(SlicingMixin):
             )
             if passing_watchpoints:
                 flow().active_watchpoints.append((passing_watchpoints, sym))
-        tracer().after_stmt_reset_hook()
         self.mark_finished()
 
 

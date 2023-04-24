@@ -43,6 +43,7 @@ _override_unused_warning_stmts = statements
 
 
 class Statement(SlicingMixin):
+    _TEXT_REPR_MAX_LENGTH: int = 70
     _stmts_by_ts: Dict[Timestamp, List["Statement"]] = {}
     _stmts_by_id: Dict[IdType, List["Statement"]] = {}
 
@@ -156,8 +157,12 @@ class Statement(SlicingMixin):
         cls._stmts_by_ts = {}
 
     @classmethod
-    def at_timestamp(cls, ts: TimestampOrCounter) -> "Statement":
-        assert isinstance(ts, Timestamp)
+    def at_timestamp(
+        cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
+    ) -> "Statement":
+        assert isinstance(ts, Timestamp) or stmt_num is not None
+        if not isinstance(ts, Timestamp):
+            ts = Timestamp(ts, stmt_num)
         return cls._stmts_by_ts[ts][0]
 
     @classmethod
@@ -187,6 +192,12 @@ class Statement(SlicingMixin):
     @property
     def stmt_id(self) -> int:
         return id(self.stmt_node)
+
+    def __str__(self):
+        return self.text
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__}[ts={self.timestamp},text={repr(self.text[:self._TEXT_REPR_MAX_LENGTH])}]>"
 
     @property
     def stmt_contains_cascading_reactive_rval(self) -> bool:

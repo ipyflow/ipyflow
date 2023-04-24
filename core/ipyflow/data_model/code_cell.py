@@ -341,7 +341,10 @@ class CodeCell(SlicingMixin):
         return cls._cell_by_cell_ctr[ctr]
 
     @classmethod
-    def at_timestamp(cls, ts: TimestampOrCounter) -> "CodeCell":
+    def at_timestamp(
+        cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
+    ) -> "CodeCell":
+        assert stmt_num is None
         if isinstance(ts, Timestamp):
             return cls.at_counter(ts.cell_num)
         else:

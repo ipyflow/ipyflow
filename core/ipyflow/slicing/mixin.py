@@ -55,7 +55,9 @@ class SlicingMixin(Protocol):
     _static_children: Dict[IdType, Set["DataSymbol"]]
 
     @classmethod
-    def at_timestamp(cls, ts: TimestampOrCounter) -> "SlicingMixin":
+    def at_timestamp(
+        cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
+    ) -> "SlicingMixin":
         ...
 
     @classmethod

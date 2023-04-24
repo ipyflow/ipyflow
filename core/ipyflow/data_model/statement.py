@@ -44,7 +44,7 @@ _override_unused_warning_stmts = statements
 
 class Statement(SlicingMixin):
     _stmts_by_ts: Dict[Timestamp, List["Statement"]] = {}
-    _stmt_by_id: Dict[IdType, "Statement"] = {}
+    _stmts_by_id: Dict[IdType, List["Statement"]] = {}
 
     def __init__(
         self,
@@ -118,8 +118,11 @@ class Statement(SlicingMixin):
         stmt = cls(stmt_node, frame=frame, timestamp=timestamp, prev_stmt=prev_stmt)
         if override and cls._stmts_by_ts.get(timestamp):
             prev = cls.at_timestamp(timestamp)
-            cls._stmt_by_id.pop(prev.id, None)
+            all_with_prev_id = cls._stmts_by_id.pop(prev.id)
+            assert len(all_with_prev_id) == 1
+            assert not cls.has_id(stmt.stmt_id)
             cls._stmts_by_ts[stmt.timestamp] = [stmt]
+            cls._stmts_by_id[stmt.stmt_id] = [stmt]
             # TODO: simply / refactor repetitive code
             for _ in SlicingContext.iter_slicing_contexts():
                 prev_children = {
@@ -137,10 +140,9 @@ class Statement(SlicingMixin):
                     for sym in sym_edges:
                         prev.remove_parent(pid, sym)
                         stmt.add_parent(pid, sym)
-            cls._stmt_by_id[stmt.stmt_id] = stmt
         else:
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
-            cls._stmt_by_id.setdefault(stmt.stmt_id, stmt)
+            cls._stmts_by_id.setdefault(stmt.stmt_id, []).append(stmt)
         with static_slicing_context():
             for parent, sym in flow().stmt_deferred_static_parents.get(
                 stmt.timestamp, []
@@ -160,11 +162,11 @@ class Statement(SlicingMixin):
 
     @classmethod
     def from_id(cls, stmt_id: IdType) -> "Statement":
-        return cls._stmt_by_id[stmt_id]
+        return cls._stmts_by_id[stmt_id][0]
 
     @classmethod
     def has_id(cls, stmt_id: IdType) -> bool:
-        return stmt_id in cls._stmt_by_id
+        return len(cls._stmts_by_id.get(stmt_id, [])) > 0
 
     @classmethod
     def all_at_timestamp(cls, ts: Timestamp) -> List["Statement"]:

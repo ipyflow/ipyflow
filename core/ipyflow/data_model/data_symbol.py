@@ -612,7 +612,7 @@ class DataSymbol:
             # TODO: in the case of lambdas, there will not necessarily be one
             #  symbol for a given statement. We need a more precise way to determine
             #  the symbol being called than by looking at the stmt in question.
-            flow().statement_to_func_cell[id(stmt_node)] = self
+            flow().statement_to_func_sym[id(stmt_node)] = self
             self.call_scope = self.containing_scope.make_child_scope(self.name)
             self.func_def_stmt = stmt_node
         return stmt_node
@@ -985,7 +985,7 @@ class DataSymbol:
         seen: Optional[Set["DataSymbol"]] = None,
         is_static: bool = False,
         is_blocking: bool = False,
-    ) -> None:
+    ) -> "DataSymbol":
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
@@ -1026,7 +1026,7 @@ class DataSymbol:
         if ns is not None and seen is None:
             seen = set()
         if ns is None or self in seen:
-            return
+            return self
         seen.add(self)
         for dsym in ns.all_data_symbols_this_indentation():
             dsym.update_usage_info(
@@ -1037,6 +1037,7 @@ class DataSymbol:
                 is_static=is_static,
                 is_blocking=is_blocking,
             )
+        return self
 
     def refresh(
         self,

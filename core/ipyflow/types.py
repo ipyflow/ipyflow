@@ -1,4 +1,4 @@
-from typing import Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Tuple, TypeVar, Union
 
 from ipyflow.data_model.timestamp import Timestamp
 

@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
 
 FormatType = TypeVar("FormatType", HTML, str)
+SliceRefType = Union["SlicingMixin", IdType, Timestamp]
 
 
 logger = logging.getLogger(__name__)
@@ -88,9 +89,7 @@ class SlicingMixin(Protocol):
     #############
 
     @classmethod
-    def _parent_from_ref(
-        cls, parent_ref: Union["SlicingMixin", IdType, Timestamp]
-    ) -> "SlicingMixin":
+    def _from_ref(cls, parent_ref: SliceRefType) -> "SlicingMixin":
         if isinstance(parent_ref, Timestamp):
             return cls.at_timestamp(parent_ref)
         elif isinstance(parent_ref, (int, str)):
@@ -98,10 +97,12 @@ class SlicingMixin(Protocol):
         else:
             return parent_ref
 
-    def add_parent(
-        self, parent_ref: Union["SlicingMixin", IdType, Timestamp], sym: "DataSymbol"
+    def add_parent_edges(
+        self, parent_ref: SliceRefType, syms: Set["DataSymbol"]
     ) -> None:
-        parent = self._parent_from_ref(parent_ref)
+        if not syms:
+            return
+        parent = self._from_ref(parent_ref)
         pid = parent.id
         if pid in self.children:
             return
@@ -109,24 +110,53 @@ class SlicingMixin(Protocol):
             # in this case, inherit the previous parents, if any
             if self.prev is not None:
                 for prev_pid, prev_syms in self.prev.parents.items():
-                    if sym in prev_syms:
-                        self.parents.setdefault(prev_pid, set()).add(sym)
+                    common = syms & prev_syms
+                    if common:
+                        self.parents.setdefault(prev_pid, set()).update(common)
             return
-        self.parents.setdefault(pid, set()).add(sym)
-        parent.children.setdefault(self.id, set()).add(sym)
+        self.parents.setdefault(pid, set()).update(syms)
+        parent.children.setdefault(self.id, set()).update(syms)
 
-    def remove_parent(
-        self, parent_ref: Union["SlicingMixin", IdType, Timestamp], sym: "DataSymbol"
+    def add_parent_edge(self, parent_ref: SliceRefType, sym: "DataSymbol") -> None:
+        self.add_parent_edges(parent_ref, {sym})
+
+    def remove_parent_edges(
+        self, parent_ref: SliceRefType, syms: Set["DataSymbol"]
     ) -> None:
-        parent = self._parent_from_ref(parent_ref)
+        if not syms:
+            return
+        parent = self._from_ref(parent_ref)
         pid = parent.id
         for edges, eid in ((self.parents, pid), (parent.children, self.id)):
-            syms = edges.get(eid, set())
-            if not syms:
+            sym_edges = edges.get(eid, set())
+            if not sym_edges:
                 continue
-            syms.discard(sym)
-            if not syms:
+            sym_edges.difference_update(syms)
+            if not sym_edges:
                 del edges[eid]
+
+    def remove_parent_edge(self, parent_ref: SliceRefType, sym: "DataSymbol") -> None:
+        self.remove_parent_edges(parent_ref, {sym})
+
+    def replace_parent_edges(
+        self, prev_parent_ref: SliceRefType, new_parent_ref: SliceRefType
+    ) -> None:
+        prev_parent = self._from_ref(prev_parent_ref)
+        new_parent = self._from_ref(new_parent_ref)
+        syms = self.parents.pop(prev_parent.id)
+        prev_parent.children.pop(self.id)
+        self.parents.setdefault(new_parent.id, set()).update(syms)
+        new_parent.children.setdefault(self.id, set()).update(syms)
+
+    def replace_child_edges(
+        self, prev_child_ref: SliceRefType, new_child_ref: SliceRefType
+    ) -> None:
+        prev_child = self._from_ref(prev_child_ref)
+        new_child = self._from_ref(new_child_ref)
+        syms = self.children.pop(prev_child.id)
+        prev_child.parents.pop(self.id)
+        self.children.setdefault(new_child.id, set()).update(syms)
+        new_child.parents.setdefault(self.id, set()).update(syms)
 
     @property
     def parents(self) -> Dict[IdType, Set["DataSymbol"]]:

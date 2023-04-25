@@ -163,7 +163,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.namespaces: Dict[int, Namespace] = {}
         self.aliases: Dict[int, Set[DataSymbol]] = {}
         self.stmt_deferred_static_parents: Dict[
-            Timestamp, Set[Tuple[Timestamp, DataSymbol]]
+            Timestamp, Dict[Timestamp, Set[DataSymbol]]
         ] = {}
         self.global_scope: Scope = Scope()
         self.virtual_symbols: Scope = Scope()
@@ -175,7 +175,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.updated_deep_reactive_symbols_last_cell: Set[DataSymbol] = set()
         self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], DataSymbol]] = []
         self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
-        self.statement_to_func_cell: Dict[int, DataSymbol] = {}
+        self.statement_to_func_sym: Dict[int, DataSymbol] = {}
         self._active_cell_id: Optional[IdType] = None
         self.waiter_usage_detected = False
         self.out_of_order_usage_detected_counter: Optional[int] = None
@@ -319,15 +319,15 @@ class NotebookFlow(singletons.NotebookFlow):
     def add_data_dep(
         self, child: Timestamp, parent: Timestamp, sym: DataSymbol
     ) -> None:
-        cells().at_timestamp(child).add_parent(cells().at_timestamp(parent), sym)
+        cells().at_timestamp(child).add_parent_edge(cells().at_timestamp(parent), sym)
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
-            statements().at_timestamp(child).add_parent(
+            statements().at_timestamp(child).add_parent_edge(
                 statements().at_timestamp(parent), sym
             )
         else:
-            self.stmt_deferred_static_parents.setdefault(child, set()).add(
-                (parent, sym)
-            )
+            self.stmt_deferred_static_parents.setdefault(child, {}).setdefault(
+                parent, set()
+            ).add(sym)
 
     def is_updated_reactive(self, sym: DataSymbol) -> bool:
         return (
@@ -416,7 +416,8 @@ class NotebookFlow(singletons.NotebookFlow):
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
     @staticmethod
-    def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[IdType, str]):
+    def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[IdType, str]) -> bool:
+        should_recompute_exec_schedule = False
         for cell_id, content in content_by_cell_id.items():
             cell = cells().from_id_nullable(cell_id)
             if cell is None or cell.current_content == content:
@@ -432,16 +433,17 @@ class NotebookFlow(singletons.NotebookFlow):
                 }
                 with static_slicing_context():
                     for pid, sym_edges in prev_static_parents.items():
-                        for sym in sym_edges:
-                            cell.remove_parent(pid, sym)
+                        cell.remove_parent_edges(pid, sym_edges)
                 cell.check_and_resolve_symbols(update_liveness_time_versions=True)
                 with dynamic_slicing_context():
                     for pid, sym_edges in prev_static_parents.items():
-                        for sym in sym_edges:
-                            if sym not in cell._static_parents.get(pid, set()):
-                                cell.remove_parent(pid, sym)
+                        cell.remove_parent_edges(
+                            pid, sym_edges - cell._static_parents.get(pid, set())
+                        )
+                should_recompute_exec_schedule = True
             except SyntaxError:
                 cell.current_content = prev_content
+        return should_recompute_exec_schedule
 
     def register_comm_handler(
         self,
@@ -528,7 +530,9 @@ class NotebookFlow(singletons.NotebookFlow):
         cells().set_override_refs(
             override_live_refs_by_cell_id, override_dead_refs_by_cell_id
         )
-        self._recompute_ast_for_dirty_cells(content_by_cell_id)
+        should_recompute_exec_schedule = self._recompute_ast_for_dirty_cells(
+            content_by_cell_id
+        )
         placeholder_cells = cells().with_placeholder_ids()
         if len(placeholder_cells) > 0:
             for _, cell_id in sorted(
@@ -543,14 +547,20 @@ class NotebookFlow(singletons.NotebookFlow):
                         placeholder_cells.remove(candidate)
                         break
         self._create_untracked_cells_for_content(content_by_cell_id)
-        return None
+        if should_recompute_exec_schedule:
+            return self.handle_compute_exec_schedule(
+                request, notify_content_changed=False
+            )
+        else:
+            return None
 
     def handle_compute_exec_schedule(
-        self, request: Dict[str, Any]
+        self, request: Dict[str, Any], notify_content_changed: bool = True
     ) -> Optional[Dict[str, Any]]:
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
-        self.handle_notify_content_changed(request)
+        if notify_content_changed:
+            self.handle_notify_content_changed(request)
         self._add_parents_for_override_live_refs()
         last_cell_id = request.get("executed_cell_id", self.last_executed_cell_id)
         cell_metadata_by_id = request.get(
@@ -756,9 +766,7 @@ class NotebookFlow(singletons.NotebookFlow):
             for cell_id, sym_edges in prev_cell.parents.items():
                 if not cells().from_id(cell_id).is_current_for_id:
                     continue
-                for sym in sym_edges:
-                    if sym in used_symbols:
-                        cell.add_parent(cell_id, sym)
+                cell.add_parent_edges(cell_id, sym_edges & used_symbols)
 
     @property
     def cell_magic_name(self):

@@ -359,7 +359,7 @@ class DataflowTracer(StackFrameManager):
                 ):
                     if not trace_stmt.lambda_call_point_deps_done_once:
                         trace_stmt.lambda_call_point_deps_done_once = True
-                        maybe_lambda_sym = flow().statement_to_func_cell.get(
+                        maybe_lambda_sym = flow().statement_to_func_sym.get(
                             id(trace_stmt.stmt_node), None
                         )
                         maybe_lambda_node = None
@@ -948,9 +948,13 @@ class DataflowTracer(StackFrameManager):
             api_watchpoints,
         ):
             return
-        resolved = [sym for sym in resolve_rval_symbols(arg_node) if sym.obj is arg_obj]
+        resolved = [
+            sym
+            for sym in resolve_rval_symbols(arg_node, should_update_usage_info=False)
+            if sym.obj is arg_obj
+        ]
         if len(resolved) == 1:
-            return next(iter(resolved))
+            return resolved[0].update_usage_info(used_node=arg_node)
         else:
             return pyc.Null
 

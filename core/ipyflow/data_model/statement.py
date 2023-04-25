@@ -124,31 +124,19 @@ class Statement(SlicingMixin):
             assert not cls.has_id(stmt.stmt_id)
             cls._stmts_by_ts[stmt.timestamp] = [stmt]
             cls._stmts_by_id[stmt.stmt_id] = [stmt]
-            # TODO: simply / refactor repetitive code
             for _ in SlicingContext.iter_slicing_contexts():
-                prev_children = {
-                    cid: set(sym_edges) for cid, sym_edges in prev.children.items()
-                }
-                for cid, sym_edges in prev_children.items():
-                    child = cls.from_id(cid)
-                    for sym in sym_edges:
-                        child.remove_parent(prev, sym)
-                        child.add_parent(stmt, sym)
-                prev_parents = {
-                    pid: set(sym_edges) for pid, sym_edges in prev.parents.items()
-                }
-                for pid, sym_edges in prev_parents.items():
-                    for sym in sym_edges:
-                        prev.remove_parent(pid, sym)
-                        stmt.add_parent(pid, sym)
+                for cid in list(prev.children.keys()):
+                    cls.from_id(cid).replace_parent_edges(prev, stmt)
+                for pid in list(prev.parents.keys()):
+                    cls.from_id(pid).replace_child_edges(prev, stmt)
         else:
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
             cls._stmts_by_id.setdefault(stmt.stmt_id, []).append(stmt)
         with static_slicing_context():
-            for parent, sym in flow().stmt_deferred_static_parents.get(
-                stmt.timestamp, []
+            for parent, syms in (
+                flow().stmt_deferred_static_parents.get(stmt.timestamp, {}).items()
             ):
-                stmt.add_parent(parent, sym)
+                stmt.add_parent_edges(parent, syms)
         flow().stmt_deferred_static_parents.pop(stmt.timestamp, None)
         return stmt
 
@@ -231,7 +219,7 @@ class Statement(SlicingMixin):
             func_name = None
         func_sym = tracer().calling_symbol
         if func_sym is None or func_sym.call_scope is None:
-            func_sym = flow().statement_to_func_cell.get(id(self.stmt_node), None)
+            func_sym = flow().statement_to_func_sym.get(id(self.stmt_node), None)
         if func_sym is None:
             # TODO: brittle; assumes any user-defined and traceable function will always be present; is this safe?
             return old_scope
@@ -614,17 +602,18 @@ class Statement(SlicingMixin):
         if self._finished:
             return
         self.handle_dependencies()
-        for sym in list(tracer().this_stmt_updated_symbols):
-            passing_watchpoints = sym.watchpoints(
-                sym.obj,
-                position=(
-                    flow().get_position(self.frame)[0],
-                    self.lineno,
-                ),
-                symbol_name=sym.readable_name,
-            )
-            if passing_watchpoints:
-                flow().active_watchpoints.append((passing_watchpoints, sym))
+        with tracer().dataflow_tracing_disabled():
+            for sym in list(tracer().this_stmt_updated_symbols):
+                passing_watchpoints = sym.watchpoints(
+                    sym.obj,
+                    position=(
+                        flow().get_position(self.frame)[0],
+                        self.lineno,
+                    ),
+                    symbol_name=sym.readable_name,
+                )
+                if passing_watchpoints:
+                    flow().active_watchpoints.append((passing_watchpoints, sym))
         self.mark_finished()
 
 

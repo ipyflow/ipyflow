@@ -412,6 +412,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         help_index: 'zz',
         handler: () => {
           if (!isAltModeExecuting && activeCell?.cell_type === 'code') {
+            notifyActiveCell();
             isAltModeExecuting = true;
             Jupyter.notebook.kernel.execute(
               '%flow toggle-reactivity-until-next-reset',

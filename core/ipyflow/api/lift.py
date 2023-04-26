@@ -114,3 +114,24 @@ def watchpoints(sym: Any) -> Watchpoints:
     look up the corresponding watchpoints for that symbol.
     """
     return _validate(sym).watchpoints
+
+
+def set_mark(sym: Any, value: str) -> None:
+    """
+    Add the mark `value` to the symbol.
+    """
+    _validate(sym).marks.add(value)
+
+
+def unset_mark(sym: Any, value: str) -> None:
+    """
+    Remove the mark `value` from the symbol.
+    """
+    _validate(sym).marks.discard(value)
+
+
+def has_mark(sym: Any, value: str) -> bool:
+    """
+    Test whether the symbol has the `value` mark.
+    """
+    return value in _validate(sym).marks

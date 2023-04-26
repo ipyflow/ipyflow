@@ -3,10 +3,13 @@ from ipyflow.api.cells import stderr, stdout
 from ipyflow.api.lift import (
     code,
     deps,
+    has_mark,
     lift,
     rdeps,
     rusers,
+    set_mark,
     timestamp,
+    unset_mark,
     users,
     watchpoints,
 )
@@ -14,12 +17,15 @@ from ipyflow.api.lift import (
 __all__ = [
     "code",
     "deps",
+    "has_mark",
     "lift",
     "rdeps",
     "rusers",
+    "set_mark",
     "stderr",
     "stdout",
     "timestamp",
+    "unset_mark",
     "users",
     "watchpoints",
 ]

@@ -2,15 +2,13 @@
 import logging
 from test.utils import make_flow_fixture
 
-from ipyflow.api import lift
-
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test
 # _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
 _flow_fixture, run_cell_ = make_flow_fixture(
     setup_stmts=[
-        "from ipyflow.api import code, deps, lift, rdeps, rusers, timestamp, users",
+        "from ipyflow.api import code, deps, has_mark, lift, rdeps, rusers, set_mark, timestamp, users, unset_mark",
         "import pyccolo as pyc",
     ]
 )
@@ -74,3 +72,18 @@ def test_rdeps_and_rusers():
     run_cell("assert set(rusers(x)) == {lift(y), lift(z)}")
     run_cell("assert rusers(y) == [lift(z)]")
     run_cell("assert rusers(z) == []")
+
+
+def test_marks():
+    run_cell("x = y = 0")
+    run_cell("assert not has_mark(x, 'foo')")
+    run_cell("assert not has_mark(y, 'foo')")
+    run_cell("set_mark(x, 'foo')")
+    run_cell("assert has_mark(x, 'foo')")
+    run_cell("assert not has_mark(y, 'foo')")
+    run_cell("unset_mark(x, 'foo')")
+    run_cell("assert not has_mark(x, 'foo')")
+    run_cell("assert not has_mark(y, 'foo')")
+    run_cell("unset_mark(y, 'foo')")
+    run_cell("assert not has_mark(x, 'foo')")
+    run_cell("assert not has_mark(y, 'foo')")

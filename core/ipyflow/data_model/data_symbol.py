@@ -90,6 +90,11 @@ class DataSymbol:
         self.name = name
         self.symbol_type = symbol_type
         self.obj = obj
+
+        # additional user-specific metadata
+        self.marks: Set[str] = set()
+        self.extra_metadata: Dict[str, Any] = {}
+
         self._tombstone = False
         self._cached_out_of_sync = True
         self.cached_obj_id: Optional[int] = None

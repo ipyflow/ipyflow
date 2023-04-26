@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.ERROR)
 # _flow_fixture, run_cell_ = make_flow_fixture(trace_messages_enabled=True)
 _flow_fixture, run_cell_ = make_flow_fixture(
     setup_stmts=[
-        "from ipyflow.api import code, deps, has_mark, lift, rdeps, rusers, set_mark, timestamp, users, unset_mark",
+        "from ipyflow.api import code, deps, has_tag, lift, rdeps, rusers, set_tag, timestamp, users, unset_tag",
         "import pyccolo as pyc",
     ]
 )
@@ -74,16 +74,16 @@ def test_rdeps_and_rusers():
     run_cell("assert rusers(z) == []")
 
 
-def test_marks():
+def test_tags():
     run_cell("x = y = 0")
-    run_cell("assert not has_mark(x, 'foo')")
-    run_cell("assert not has_mark(y, 'foo')")
-    run_cell("set_mark(x, 'foo')")
-    run_cell("assert has_mark(x, 'foo')")
-    run_cell("assert not has_mark(y, 'foo')")
-    run_cell("unset_mark(x, 'foo')")
-    run_cell("assert not has_mark(x, 'foo')")
-    run_cell("assert not has_mark(y, 'foo')")
-    run_cell("unset_mark(y, 'foo')")
-    run_cell("assert not has_mark(x, 'foo')")
-    run_cell("assert not has_mark(y, 'foo')")
+    run_cell("assert not has_tag(x, 'foo')")
+    run_cell("assert not has_tag(y, 'foo')")
+    run_cell("set_tag(x, 'foo')")
+    run_cell("assert has_tag(x, 'foo')")
+    run_cell("assert not has_tag(y, 'foo')")
+    run_cell("unset_tag(x, 'foo')")
+    run_cell("assert not has_tag(x, 'foo')")
+    run_cell("assert not has_tag(y, 'foo')")
+    run_cell("unset_tag(y, 'foo')")
+    run_cell("assert not has_tag(x, 'foo')")
+    run_cell("assert not has_tag(y, 'foo')")

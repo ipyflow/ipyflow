@@ -92,7 +92,7 @@ class DataSymbol:
         self.obj = obj
 
         # additional user-specific metadata
-        self.marks: Set[str] = set()
+        self._tags: Set[str] = set()
         self.extra_metadata: Dict[str, Any] = {}
 
         self._tombstone = False
@@ -185,6 +185,15 @@ class DataSymbol:
 
     def __hash__(self) -> int:
         return hash(id(self))
+
+    def add_tag(self, tag_value: str) -> None:
+        self._tags.add(tag_value)
+
+    def remove_tag(self, tag_value: str) -> None:
+        self._tags.discard(tag_value)
+
+    def has_tag(self, tag_value: str) -> bool:
+        return tag_value in self._tags
 
     def temporary_disable_warnings(self) -> None:
         self._temp_disable_warnings = True

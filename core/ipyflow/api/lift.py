@@ -116,22 +116,22 @@ def watchpoints(sym: Any) -> Watchpoints:
     return _validate(sym).watchpoints
 
 
-def set_mark(sym: Any, value: str) -> None:
+def set_tag(sym: Any, tag_value: str) -> None:
     """
-    Add the mark `value` to the symbol.
+    Add the tag `value` to the symbol.
     """
-    _validate(sym).marks.add(value)
+    _validate(sym).add_tag(tag_value)
 
 
-def unset_mark(sym: Any, value: str) -> None:
+def unset_tag(sym: Any, tag_value: str) -> None:
     """
-    Remove the mark `value` from the symbol.
+    Remove the tag `value` from the symbol.
     """
-    _validate(sym).marks.discard(value)
+    _validate(sym).remove_tag(tag_value)
 
 
-def has_mark(sym: Any, value: str) -> bool:
+def has_tag(sym: Any, tag_value: str) -> bool:
     """
-    Test whether the symbol has the `value` mark.
+    Test whether the symbol has the `value` tag.
     """
-    return value in _validate(sym).marks
+    return _validate(sym).has_tag(tag_value)

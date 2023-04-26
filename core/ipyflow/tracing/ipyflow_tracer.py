@@ -26,13 +26,13 @@ from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.annotations.compiler import compile_and_register_handlers_for_module
 from ipyflow.api.lift import code as api_code
 from ipyflow.api.lift import deps as api_deps
-from ipyflow.api.lift import has_mark as api_has_mark
+from ipyflow.api.lift import has_tag as api_has_tag
 from ipyflow.api.lift import lift as api_lift
 from ipyflow.api.lift import rdeps as api_rdeps
 from ipyflow.api.lift import rusers as api_rusers
-from ipyflow.api.lift import set_mark as api_set_mark
+from ipyflow.api.lift import set_tag as api_set_tag
 from ipyflow.api.lift import timestamp as api_timestamp
-from ipyflow.api.lift import unset_mark as api_unset_mark
+from ipyflow.api.lift import unset_tag as api_unset_tag
 from ipyflow.api.lift import users as api_users
 from ipyflow.api.lift import watchpoints as api_watchpoints
 from ipyflow.data_model.code_cell import cells
@@ -943,13 +943,13 @@ class DataflowTracer(StackFrameManager):
         if self.num_args_seen > 0 or self.cur_function not in (
             api_code,
             api_deps,
-            api_has_mark,
+            api_has_tag,
             api_lift,
             api_rdeps,
             api_rusers,
-            api_set_mark,
+            api_set_tag,
             api_timestamp,
-            api_unset_mark,
+            api_unset_tag,
             api_users,
             api_watchpoints,
         ):

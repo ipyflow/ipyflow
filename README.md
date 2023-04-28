@@ -113,7 +113,7 @@ x = 0
 y = x + 1
 
 # Cell 4
-print(code(y))
+code(y)
 
 # Output:
 """

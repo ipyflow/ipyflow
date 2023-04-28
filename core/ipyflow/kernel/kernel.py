@@ -129,6 +129,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         return register_cell_magic(cell_magic_func)
 
     def cleanup_tracers(self):
+        self._restore_meta_path()
         for cleanup in reversed(self.tracer_cleanup_callbacks):
             cleanup()
         self.tracer_cleanup_callbacks.clear()
@@ -253,6 +254,10 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         with input_transformer_context(all_syntax_augmenters):
             yield
 
+    def _restore_meta_path(self) -> None:
+        while self._saved_meta_path_entries:
+            sys.meta_path.insert(0, self._saved_meta_path_entries.pop())
+
     @contextmanager
     def _tracing_context(
         self, syntax_transforms_enabled: bool, should_capture_output: bool
@@ -271,8 +276,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 ):
                     yield
                 return
-            while self._saved_meta_path_entries:
-                sys.meta_path.insert(0, self._saved_meta_path_entries.pop())
+            else:
+                self._restore_meta_path()
             if any(tracer.has_sys_trace_events for tracer in all_tracers):
                 if not any(
                     isinstance(tracer, StackFrameManager) for tracer in all_tracers

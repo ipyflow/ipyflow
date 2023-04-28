@@ -2,6 +2,7 @@
 import asyncio
 import inspect
 import logging
+import sys
 from contextlib import contextmanager, suppress
 from typing import (
     Callable,
@@ -19,6 +20,7 @@ import pyccolo as pyc
 from ipykernel.ipkernel import IPythonKernel
 from IPython import get_ipython
 from IPython.core.magic import register_cell_magic
+from pyccolo.import_hooks import TraceFinder
 
 from ipyflow import singletons
 from ipyflow.data_model.code_cell import CodeCell
@@ -107,6 +109,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
         self.tracer_cleanup_pending: bool = False
         self.syntax_transforms_enabled: bool = True
         self.syntax_transforms_only: bool = False
+        self._saved_meta_path_entries: List[TraceFinder] = []
 
     def make_cell_magic(self, cell_magic_name, run_cell_func=None):
         if run_cell_func is None:
@@ -268,6 +271,8 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 ):
                     yield
                 return
+            while self._saved_meta_path_entries:
+                sys.meta_path.insert(0, self._saved_meta_path_entries.pop())
             if any(tracer.has_sys_trace_events for tracer in all_tracers):
                 if not any(
                     isinstance(tracer, StackFrameManager) for tracer in all_tracers
@@ -310,6 +315,10 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 else:
                     for tracer in reversed(all_tracers):
                         tracer._disable_tracing(check_enabled=False)
+                    # remove pyccolo meta path entries when not executing as they seem to
+                    # mess up completions
+                    while isinstance(sys.meta_path[0], TraceFinder):
+                        self._saved_meta_path_entries.append(sys.meta_path.pop(0))
         except Exception:
             logger.exception("encountered an exception")
             raise

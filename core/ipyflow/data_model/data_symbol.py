@@ -49,7 +49,9 @@ _override_unused_warning_symbols = symbols
 
 @debounce(0.1)
 def _debounced_exec_schedule(executed_cell_id: IdType) -> None:
-    flow().handle(
+    flow_ = flow()
+    flow_.get_and_set_exception_raised_during_execution(None)
+    flow_.handle(
         {"type": "compute_exec_schedule", "executed_cell_id": executed_cell_id}
     )
 

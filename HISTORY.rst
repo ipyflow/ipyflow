@@ -1,6 +1,18 @@
 History
 =======
 
+0.0.165 (2022-04-28)
+--------------------
+* Bugfix for restart / run all;
+* Bugfix for IPython version
+* Unify dependency management for statements and cells;
+* Bugfix for correct active cell use during nbextension active cell run;
+* Fix IPython dependency for different Python versions;
+* Allow exec schedule recomputation on cell content change;
+* Add API for symbol tagging;
+* Code HTML widget with links for jumping to cells / copying slice;
+* Misc other bugfixes;
+
 0.0.163 (2022-04-09)
 --------------------
 * Allow for loading / unloading as an ipython extension;

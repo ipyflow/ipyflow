@@ -435,7 +435,8 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       });
       comm.send({
         type: 'compute_exec_schedule',
-        cell_metadata_by_id: gatherCellMetadataById(Jupyter)
+        cell_metadata_by_id: gatherCellMetadataById(Jupyter),
+        is_reactively_executing: isReactivelyExecuting
       });
     } else if (payload.type === 'change_active_cell') {
       if (cellPendingExecutionIdx != null) {
@@ -461,7 +462,10 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       cellPendingExecution = null;
       cellPendingExecutionIdx = null;
       const exec_mode = payload.exec_mode as string;
-      isReactivelyExecuting = isReactivelyExecuting || exec_mode === 'reactive';
+      isReactivelyExecuting =
+        isReactivelyExecuting ||
+        exec_mode === 'reactive' ||
+        ((payload?.is_reactively_executing as boolean) ?? false);
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
       lastExecutionMode = exec_mode;

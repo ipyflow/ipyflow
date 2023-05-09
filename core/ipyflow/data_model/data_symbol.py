@@ -52,7 +52,11 @@ def _debounced_exec_schedule(executed_cell_id: IdType) -> None:
     flow_ = flow()
     flow_.get_and_set_exception_raised_during_execution(None)
     flow_.handle(
-        {"type": "compute_exec_schedule", "executed_cell_id": executed_cell_id}
+        {
+            "type": "compute_exec_schedule",
+            "executed_cell_id": executed_cell_id,
+            "is_reactively_executing": True,
+        }
     )
 
 

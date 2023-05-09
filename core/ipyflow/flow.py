@@ -492,7 +492,7 @@ class NotebookFlow(singletons.NotebookFlow):
         return None
 
     def handle_notify_content_changed(
-        self, request: Dict[str, Any]
+        self, request: Dict[str, Any], is_reactively_executing: bool = False
     ) -> Optional[Dict[str, Any]]:
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
@@ -530,9 +530,12 @@ class NotebookFlow(singletons.NotebookFlow):
         cells().set_override_refs(
             override_live_refs_by_cell_id, override_dead_refs_by_cell_id
         )
-        should_recompute_exec_schedule = self._recompute_ast_for_cells(
-            content_by_cell_id
-        )
+        if is_reactively_executing:
+            should_recompute_exec_schedule = False
+        else:
+            should_recompute_exec_schedule = self._recompute_ast_for_cells(
+                content_by_cell_id
+            )
         placeholder_cells = cells().with_placeholder_ids()
         if len(placeholder_cells) > 0:
             for _, cell_id in sorted(
@@ -557,10 +560,13 @@ class NotebookFlow(singletons.NotebookFlow):
     def handle_compute_exec_schedule(
         self, request: Dict[str, Any], notify_content_changed: bool = True
     ) -> Optional[Dict[str, Any]]:
+        is_reactively_executing = request.get("is_reactively_executing", False)
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
         if notify_content_changed:
-            self.handle_notify_content_changed(request)
+            self.handle_notify_content_changed(
+                request, is_reactively_executing=is_reactively_executing
+            )
         self._add_parents_for_override_live_refs()
         last_cell_id = request.get("executed_cell_id", self.last_executed_cell_id)
         cell_metadata_by_id = request.get(
@@ -593,6 +599,7 @@ class NotebookFlow(singletons.NotebookFlow):
         response["last_execution_was_error"] = (
             self._exception_raised_during_execution is not None
         )
+        response["is_reactively_executing"] = is_reactively_executing
         if (
             self._is_reactivity_toggled
             and self.mut_settings.exec_mode == ExecutionMode.NORMAL

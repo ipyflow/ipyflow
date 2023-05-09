@@ -366,6 +366,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       type: 'compute_exec_schedule',
       executed_cell_id: cell?.id,
       cell_metadata_by_id,
+      is_reactively_executing: isReactivelyExecuting,
     });
   };
 
@@ -574,7 +575,10 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       readyMakerLinks = payload.ready_maker_links as { [id: string]: string[] };
       cellPendingExecution = null;
       const exec_mode = payload.exec_mode as string;
-      isReactivelyExecuting = isReactivelyExecuting || exec_mode === 'reactive';
+      isReactivelyExecuting =
+        isReactivelyExecuting ||
+        exec_mode === 'reactive' ||
+        ((payload?.is_reactively_executing as boolean) ?? false);
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
       lastExecutionMode = exec_mode;

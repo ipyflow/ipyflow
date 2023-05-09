@@ -680,6 +680,7 @@ class NotebookFlow(singletons.NotebookFlow):
         cells_to_check: Optional[Iterable[CodeCell]] = None,
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[IdType] = None,
+        clear_updated_reactive_symbols: bool = False,
     ) -> FrontendCheckerResult:
         result = FrontendCheckerResult.empty()
         try:
@@ -694,8 +695,9 @@ class NotebookFlow(singletons.NotebookFlow):
                 last_executed_cell_id=last_executed_cell_id,
             )
         finally:
-            self.updated_reactive_symbols_last_cell.clear()
-            self.updated_deep_reactive_symbols_last_cell.clear()
+            if clear_updated_reactive_symbols:
+                self.updated_reactive_symbols_last_cell.clear()
+                self.updated_deep_reactive_symbols_last_cell.clear()
 
     def _safety_precheck_cell(self, cell: CodeCell) -> None:
         for tracer in singletons.kernel().registered_tracers:
@@ -704,6 +706,7 @@ class NotebookFlow(singletons.NotebookFlow):
         checker_result = self.check_and_link_multiple_cells(
             cells_to_check=[cell],
             update_liveness_time_versions=self.mut_settings.static_slicing_enabled,
+            clear_updated_reactive_symbols=True,
         )
         if cell.cell_id in checker_result.waiting_cells:
             self.waiter_usage_detected = True

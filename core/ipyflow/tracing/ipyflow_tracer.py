@@ -895,6 +895,14 @@ class DataflowTracer(StackFrameManager):
                 if not is_subscript:
                     if (
                         sym_for_obj is None
+                        and not self.active_scope.is_namespace_scope
+                        and obj_name is not None
+                    ):
+                        sym_for_obj = self.active_scope.lookup_data_symbol_by_name(
+                            obj_name, is_subscript=False
+                        )
+                    if (
+                        sym_for_obj is None
                         and self.prev_trace_stmt_in_cur_frame is not None
                     ):
                         sym_for_obj = self.active_scope.upsert_data_symbol_for_name(

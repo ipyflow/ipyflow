@@ -66,6 +66,7 @@ of execution mode):
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
 </p>
 
+<!--
 You can also use the `$` syntax in store contexts, which triggers cells that
 reference the corresponding symbol to re-execute, regardless of whether the
 reference is similarly `$`-prefixed:
@@ -80,6 +81,7 @@ to all dependencies in the chain, recursively:
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
 </p>
+-->
 
 ### Integration with ipywidgets
 

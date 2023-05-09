@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.166 (2022-05-09)
+--------------------
+* Always get freshest variable references during analysis and fix resulting reactivity bugs;
+
 0.0.165 (2022-04-28)
 --------------------
 * Bugfix for restart / run all;

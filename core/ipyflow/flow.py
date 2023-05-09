@@ -416,11 +416,11 @@ class NotebookFlow(singletons.NotebookFlow):
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
     @staticmethod
-    def _recompute_ast_for_dirty_cells(content_by_cell_id: Dict[IdType, str]) -> bool:
+    def _recompute_ast_for_cells(content_by_cell_id: Dict[IdType, str]) -> bool:
         should_recompute_exec_schedule = False
         for cell_id, content in content_by_cell_id.items():
             cell = cells().from_id_nullable(cell_id)
-            if cell is None or cell.current_content == content:
+            if cell is None:
                 continue
             prev_content = cell.current_content
             try:
@@ -530,7 +530,7 @@ class NotebookFlow(singletons.NotebookFlow):
         cells().set_override_refs(
             override_live_refs_by_cell_id, override_dead_refs_by_cell_id
         )
-        should_recompute_exec_schedule = self._recompute_ast_for_dirty_cells(
+        should_recompute_exec_schedule = self._recompute_ast_for_cells(
             content_by_cell_id
         )
         placeholder_cells = cells().with_placeholder_ids()

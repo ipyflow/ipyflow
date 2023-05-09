@@ -640,7 +640,7 @@ def test_dag_edge_changes():
     ):
         run_all_cells(cells_to_run)
         cells_to_run[2] = "z = y + 42"
-        flow()._recompute_ast_for_dirty_cells({2: cells_to_run[2]})
+        flow()._recompute_ast_for_cells({2: cells_to_run[2]})
         run_cell("y = 2", 1)
         response = flow().check_and_link_multiple_cells()
         assert response.ready_cells == {2}
@@ -658,7 +658,7 @@ def test_dag_edge_changes():
         assert response.ready_cells == set(), response.ready_cells
         assert response.waiting_cells == set()
         cells_to_run[2] = "z = x + 42"
-        flow()._recompute_ast_for_dirty_cells({2: cells_to_run[2]})
+        flow()._recompute_ast_for_cells({2: cells_to_run[2]})
         run_cell("x = 100", 0)
         response = flow().check_and_link_multiple_cells()
         assert response.ready_cells == {2}

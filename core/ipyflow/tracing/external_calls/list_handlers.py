@@ -68,7 +68,8 @@ class ListInsert(ListMethod):
         )
 
     def process_arg(self, insert_pos: int) -> None:
-        self.insert_pos = insert_pos
+        if self.insert_pos is None:
+            self.insert_pos = insert_pos
 
 
 class ListRemove(ListMethod):

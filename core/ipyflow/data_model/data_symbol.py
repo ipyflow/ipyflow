@@ -1005,6 +1005,7 @@ class DataSymbol:
         seen: Optional[Set["DataSymbol"]] = None,
         is_static: bool = False,
         is_blocking: bool = False,
+        add_data_dep_only_if_parent_new: bool = False,
     ) -> "DataSymbol":
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
@@ -1033,11 +1034,21 @@ class DataSymbol:
                     is_usage = ts_to_use < used_time
                 if is_usage:
                     with static_slicing_context():
-                        flow().add_data_dep(used_time, ts_to_use, self)
+                        flow().add_data_dep(
+                            used_time,
+                            ts_to_use,
+                            self,
+                            add_only_if_parent_new=add_data_dep_only_if_parent_new,
+                        )
             elif not is_static and ts_to_use < used_time:
                 is_usage = True
                 with dynamic_slicing_context():
-                    flow().add_data_dep(used_time, ts_to_use, self)
+                    flow().add_data_dep(
+                        used_time,
+                        ts_to_use,
+                        self,
+                        add_only_if_parent_new=add_data_dep_only_if_parent_new,
+                    )
             if is_usage:
                 timestamp_by_used_time[used_time] = ts_to_use
                 if used_node is not None:

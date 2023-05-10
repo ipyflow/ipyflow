@@ -317,9 +317,21 @@ class NotebookFlow(singletons.NotebookFlow):
         return cells().exec_counter()
 
     def add_data_dep(
-        self, child: Timestamp, parent: Timestamp, sym: DataSymbol
+        self,
+        child: Timestamp,
+        parent: Timestamp,
+        sym: DataSymbol,
+        add_only_if_parent_new: bool = True,
     ) -> None:
-        cells().at_timestamp(child).add_parent_edge(cells().at_timestamp(parent), sym)
+        parent_cell = cells().at_timestamp(parent)
+        # if it has already run, don't add the edge
+        if (
+            add_only_if_parent_new
+            and parent_cell.prev_cell is not None
+            and parent_cell.prev_cell.cell_ctr > 0
+        ):
+            return
+        cells().at_timestamp(child).add_parent_edge(parent_cell, sym)
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
             statements().at_timestamp(child).add_parent_edge(
                 statements().at_timestamp(parent), sym
@@ -423,6 +435,7 @@ class NotebookFlow(singletons.NotebookFlow):
             if cell is None:
                 continue
             prev_content = cell.current_content
+            is_same_content = prev_content == content
             try:
                 cell.current_content = content
                 cell.to_ast()
@@ -431,15 +444,20 @@ class NotebookFlow(singletons.NotebookFlow):
                     pid: set(sym_edges)
                     for pid, sym_edges in cell._static_parents.items()
                 }
-                with static_slicing_context():
-                    for pid, sym_edges in prev_static_parents.items():
-                        cell.remove_parent_edges(pid, sym_edges)
-                cell.check_and_resolve_symbols(update_liveness_time_versions=True)
-                with dynamic_slicing_context():
-                    for pid, sym_edges in prev_static_parents.items():
-                        cell.remove_parent_edges(
-                            pid, sym_edges - cell._static_parents.get(pid, set())
-                        )
+                if not is_same_content:
+                    with static_slicing_context():
+                        for pid, sym_edges in prev_static_parents.items():
+                            cell.remove_parent_edges(pid, sym_edges)
+                cell.check_and_resolve_symbols(
+                    update_liveness_time_versions=True,
+                    add_data_dep_only_if_parent_new=is_same_content,
+                )
+                if not is_same_content:
+                    with dynamic_slicing_context():
+                        for pid, sym_edges in prev_static_parents.items():
+                            cell.remove_parent_edges(
+                                pid, sym_edges - cell._static_parents.get(pid, set())
+                            )
                 should_recompute_exec_schedule = True
             except SyntaxError:
                 cell.current_content = prev_content

@@ -354,6 +354,7 @@ def get_live_symbols_and_cells_for_references(
     scope: "Scope",
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
+    add_data_dep_only_if_parent_new: bool = False,
 ) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
     live_symbols: Set[ResolvedDataSymbol] = set()
     unresolved_live_refs: Set[LiveSymbolRef] = set()
@@ -380,6 +381,7 @@ def get_live_symbols_and_cells_for_references(
                     used_time=liveness_time,
                     exclude_ns=not resolved.is_last,
                     is_static=True,
+                    add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
                 )
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))

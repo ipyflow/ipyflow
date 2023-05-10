@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.167 (2022-05-10)
+--------------------
+* Fix issue around spurious edge introduction for previously executed parent;
+
 0.0.166 (2022-05-09)
 --------------------
 * Always get freshest variable references during analysis and fix resulting reactivity bugs;

@@ -15,11 +15,14 @@ About
 `ipyflow` is a next-generation Python kernel for Jupyter and other notebook
 interfaces that tracks dataflow relationships between symbols and cells during
 a given interactive session, thereby making it easier to reason about notebook
-state. If you'd like to skip the elevator pitch and skip straight to
-installation / activation instructions (tl;dr `pip install ipyflow` and pick
-`Python 3 (ipyflow)` from the kernel dropdown), jump to [quick
-start](#quick-start) below; otherwise, keep reading to learn about `ipyflow`'s
-features.
+state. Here is a [slide
+deck](https://docs.google.com/presentation/d/1D9MSiIkwv7gjRr7jfNYZXki9TfkoUr4Yr-a06i0w_QU)
+from a presentation given during JupyterCon 2023 that introduces it.
+
+If you'd like to skip the elevator pitch and skip straight to installation /
+activation instructions (tl;dr `pip install ipyflow` and pick `Python 3
+(ipyflow)` from the kernel dropdown), jump to [quick start](#quick-start)
+below; otherwise, keep reading to learn about `ipyflow`'s features.
 
 Features
 --------
@@ -28,8 +31,11 @@ following user-facing features.
 
 ### Execution Suggestions
 
-To keep the execution state consistent with the code in cells, rerun the
-turquoise-highlighted cells, and avoid the red-highlighted cells:
+`ipyflow` understands exactly what data changed in your notebook, when it
+changed, and when it got referenced. This allows it to provide *execution
+suggestions* whenever running some upstream cell changes data that downstream
+cells depend on. To keep the execution state consistent with the code in cells,
+rerun the turquoise-highlighted cells, and avoid the red-highlighted cells:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />

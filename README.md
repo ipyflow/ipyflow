@@ -261,6 +261,16 @@ directly for that and anything else not covered by the previous publications:
 }
 ```
 
+Acknowledgements
+----------------
+Besides the amazing coathors on the above papers, this work has benefited from
+the support of folks from a number of companies -- both in the form of direct
+financial support ([Databricks](https://www.databricks.com/),
+[Hex](https://hex.tech/)) as well as indirect moral support and encouragement
+([Ponder](https://ponder.io/), [Meta](https://www.meta.com/)). And of course,
+none of this would be possible without the amazing contributions from the
+Jupyter community.
+
 License
 -------
 Code in this project licensed under the [BSD-3-Clause License](https://opensource.org/licenses/BSD-3-Clause).

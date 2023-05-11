@@ -16,9 +16,10 @@ About
 interfaces that tracks dataflow relationships between symbols and cells during
 a given interactive session, thereby making it easier to reason about notebook
 state. If you'd like to skip the elevator pitch and skip straight to
-installation / activation instructions, jump to
-[quick start](#quick-start)
-below; otherwise, keep reading to learn about `ipyflow`'s features.
+installation / activation instructions (tl;dr `pip install ipyflow` and pick
+`Python 3 (ipyflow)` from the kernel dropdown), jump to [quick
+start](#quick-start) below; otherwise, keep reading to learn about `ipyflow`'s
+features.
 
 Features
 --------
@@ -39,9 +40,12 @@ output may be out-of-sync.
 
 ### Reactivity
 
-Do you trust me? Good. It's time to free yourself of the burden of manual
-re-execution.  Use ctrl+shift+enter (on Mac, cmd+shift+enter also works) to
-execute a cell and its (recursive) dependencies reactively:
+IPyflow enables opt-in reactive execution for both Jupyter and JupyterLab
+(similar to [Observable](https://observablehq.com/) or
+[Pluto.jl](https://github.com/fonsp/Pluto.jl), wherein execution of cell `C`
+results in automatic re-execution of all of `C`'s dependents). Use
+ctrl+shift+enter (on Mac, cmd+shift+enter also works) to execute a cell and its
+(recursive) dependencies reactively:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactive-hotkey.gif" />

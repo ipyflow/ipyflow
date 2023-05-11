@@ -208,7 +208,7 @@ JupyterLab  Entrypoint:          |  Classic Jupyter Entrypoint:
 :-------------------------------:|:---------------------------:
 ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png)
 
-Similarly, you can switch to / from ipyflow from an existing notebook by
+Similarly, you can switch to / from IPyflow from an existing notebook by
 navigating to the "Change kernel" file menu item in either JupyterLab or
 classic Jupyter:
 
@@ -263,16 +263,17 @@ directly for that and anything else not covered by the previous publications:
 
 Acknowledgements
 ----------------
-IPyflow's reactive execution features are inspired by those of other excellent
-tools like [Hex](https://hex.tech/) notebooks,
+IPyflow would not have been possible without the amazing academic collaborators
+listed on the above papers. Its reactive execution features are inspired by
+those of other excellent tools like [Hex](https://hex.tech/) notebooks,
 [Pluto.jl](https://github.com/fonsp/Pluto.jl), and
-[Observable](https://observablehq.com/). Besides the amazing coathors on the
-above papers, this work has benefited from the support of folks from a number
-of companies -- both in the form of direct financial support
-([Databricks](https://www.databricks.com/), [Hex](https://hex.tech/)) as well
-as indirect moral support and encouragement ([Ponder](https://ponder.io/),
-[Meta](https://www.meta.com/)). And of course, none of this would be possible
-without the amazing contributions from the Jupyter community.
+[Observable](https://observablehq.com/). This work has benefited from the
+support of folks from a number of companies -- both in the form of direct
+financial contributions ([Databricks](https://www.databricks.com/),
+[Hex](https://hex.tech/)) as well as indirect moral support and encouragement
+([Ponder](https://ponder.io/), [Meta](https://www.meta.com/)). And of course,
+none of this would be possible without the amazing contributions from the
+Jupyter community.
 
 License
 -------

@@ -218,7 +218,7 @@ JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
 
 Citing
 ------
-IPyflow started its life under the name `nbsafety`, which provided the initial
+IPyflow started its life under the name nbsafety, which provided the initial
 suggestions and slicing functionality.
 
 For the [execution suggestions](http://www.vldb.org/pvldb/vol14/p1093-macke.pdf):

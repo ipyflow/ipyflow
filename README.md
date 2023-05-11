@@ -12,7 +12,7 @@
 
 About
 -----
-`ipyflow` is a next-generation Python kernel for Jupyter and other notebook
+IPyflow is a next-generation Python kernel for Jupyter and other notebook
 interfaces that tracks dataflow relationships between symbols and cells during
 a given interactive session, thereby making it easier to reason about notebook
 state. Here is a [slide
@@ -22,16 +22,16 @@ from a presentation given during JupyterCon 2023 that introduces it.
 If you'd like to skip the elevator pitch and skip straight to installation /
 activation instructions (tl;dr `pip install ipyflow` and pick `Python 3
 (ipyflow)` from the kernel dropdown), jump to [quick start](#quick-start)
-below; otherwise, keep reading to learn about `ipyflow`'s features.
+below; otherwise, keep reading to learn about IPyflow's features.
 
 Features
 --------
-`ipyflow` ships with classic Jupyter + JupyterLab extensions that provide the
+IPyflow ships with classic Jupyter + JupyterLab extensions that provide the
 following user-facing features.
 
 ### Execution Suggestions
 
-`ipyflow` understands exactly what data changed in your notebook, when it
+IPyflow understands exactly what data changed in your notebook, when it
 changed, and when it got referenced. This allows it to provide *execution
 suggestions* whenever running some upstream cell changes data that downstream
 cells depend on. To keep the execution state consistent with the code in cells,
@@ -93,7 +93,7 @@ to all dependencies in the chain, recursively:
 
 ### Integration with ipywidgets
 
-`ipyflow`'s reactive execution engine, as well as its APIs (see "State API" below)
+IPyflow's reactive execution engine, as well as its APIs (see "State API" below)
 are fully compatible with `ipywidgets`, allowing cells to respond to slider changes,
 button clicks, and other events:
 
@@ -103,11 +103,11 @@ button clicks, and other events:
 
 This functionality can be paired with other extensions like
 [stickyland](https://github.com/xiaohk/stickyland) to build fully reactive
-dashboards on top of JupyterLab + `ipyflow`.
+dashboards on top of JupyterLab + IPyflow.
 
 ## State API
 
-`ipyflow` must understand the underlying execution state at a deep level in
+IPyflow must understand the underlying execution state at a deep level in
 order to provide its features. It exposes an API for interacting with some of
 this state, including a `code` function for obtaining the code necessary to
 reconstruct some symbol:
@@ -158,7 +158,7 @@ users(x)
 ```
 
 If you want to elevate a symbol to the representation used internally by
-`ipyflow`, use the `lift` function (at your own risk, of course):
+IPyflow, use the `lift` function (at your own risk, of course):
 
 ```python
 from ipyflow import lift
@@ -168,7 +168,7 @@ y_sym.timestamp
 # Timestamp(cell_num=3, stmt_num=0)
 ```
 
-Finally, `ipyflow` also comes with some rudimentary support for watchpoints:
+Finally, IPyflow also comes with some rudimentary support for watchpoints:
 
 ```python
 # Cell 1
@@ -199,7 +199,7 @@ To install, run:
 pip install ipyflow
 ```
 
-To run an `ipyflow` kernel in JupyterLab, select "Python 3 (ipyflow)" from the
+To run an IPyflow kernel in JupyterLab, select "Python 3 (ipyflow)" from the
 list of available kernels in the Launcher tab. For classic Jupyter, similarly
 select "Python 3 (ipyflow)" from the list of notebook types in the "New"
 dropdown dialogue.
@@ -218,7 +218,7 @@ JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
 
 Citing
 ------
-`ipyflow` started its life under the name `nbsafety`, which provided the initial
+IPyflow started its life under the name `nbsafety`, which provided the initial
 suggestions and slicing functionality.
 
 For the [execution suggestions](http://www.vldb.org/pvldb/vol14/p1093-macke.pdf):
@@ -251,7 +251,7 @@ reactivity and for the `code` function, for example):
 ```
 
 We don't have a paper written yet for the syntax extensions that implement the
-reactive algebra, but in the mean time, you can cite the `ipyflow` repo
+reactive algebra, but in the mean time, you can cite the IPyflow repo
 directly for that and anything else not covered by the previous publications:
 ```bibtex
 @misc{ipyflow,
@@ -263,13 +263,16 @@ directly for that and anything else not covered by the previous publications:
 
 Acknowledgements
 ----------------
-Besides the amazing coathors on the above papers, this work has benefited from
-the support of folks from a number of companies -- both in the form of direct
-financial support ([Databricks](https://www.databricks.com/),
-[Hex](https://hex.tech/)) as well as indirect moral support and encouragement
-([Ponder](https://ponder.io/), [Meta](https://www.meta.com/)). And of course,
-none of this would be possible without the amazing contributions from the
-Jupyter community.
+IPyflow's reactive execution features are inspired by those of other excellent
+tools like [Hex](https://hex.tech/) notebooks,
+[Pluto.jl](https://github.com/fonsp/Pluto.jl), and
+[Observable](https://observablehq.com/). Besides the amazing coathors on the
+above papers, this work has benefited from the support of folks from a number
+of companies -- both in the form of direct financial support
+([Databricks](https://www.databricks.com/), [Hex](https://hex.tech/)) as well
+as indirect moral support and encouragement ([Ponder](https://ponder.io/),
+[Meta](https://www.meta.com/)). And of course, none of this would be possible
+without the amazing contributions from the Jupyter community.
 
 License
 -------

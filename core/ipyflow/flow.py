@@ -381,7 +381,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._last_exception_raised = None
         return ret
 
-    def get_position(self, frame: FrameType) -> Tuple[Optional[int], int]:
+    def get_position(self, frame: FrameType) -> Tuple[int, int]:
         try:
             cell_num = self._cell_name_to_cell_num_mapping.get(
                 frame.f_code.co_filename, None

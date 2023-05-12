@@ -4,6 +4,7 @@ import logging
 import symtable
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from contextlib import contextmanager
 from types import FrameType, ModuleType
 from typing import (
@@ -231,11 +232,17 @@ class DataflowTracer(StackFrameManager):
 
     @contextmanager
     def dataflow_tracing_disabled_patch(
-        self, obj: Any, attr: str
+        self,
+        obj: Any,
+        attr: str,
+        kwarg_transforms: Optional[Dict[str, Tuple[Any, Callable[[Any], Any]]]] = None,
     ) -> Generator[None, None, None]:
+        kwarg_transforms = kwarg_transforms or {}
         orig_func = getattr(obj, attr)
 
-        def new_func(*args, **kwargs):
+        def new_func(*args: Any, **kwargs: Any) -> Any:
+            for name, (default, transform) in kwarg_transforms.items():
+                kwargs[name] = transform(kwargs.get(name, default))
             with self.dataflow_tracing_disabled():
                 return orig_func(*args, **kwargs)
 

@@ -4,12 +4,12 @@ import logging
 import symtable
 import sys
 from collections import defaultdict
-from collections.abc import Callable
 from contextlib import contextmanager
 from types import FrameType, ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     Generator,
     List,

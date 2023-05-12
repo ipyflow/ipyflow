@@ -66,6 +66,16 @@ reactivity as the default execution mode:
 
 Disable by running `%flow mode normal`.
 
+If you'd like to make reactivity the default behavior (not recommended, unless
+you do not mind being surprised occasionally), you can add this to your IPython
+profile (default location typically at
+`~/.ipython/profile_default/ipython_conifg.py`:
+
+```python
+c = get_config()
+c.ipyflow.exec_mode = "reactive"
+```
+
 ### Syntax Extensions
 
 Prefixing a symbol with `$` in a load context will cause the referencing cell

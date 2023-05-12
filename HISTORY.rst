@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.168 (2022-05-12)
+0.0.169 (2022-05-12)
 --------------------
 * Fix _stack_depth issue on run_line_magic function;
 

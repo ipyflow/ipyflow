@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.168 (2022-05-12)
+--------------------
+* Fix _stack_depth issue on run_line_magic function;
+
 0.0.167 (2022-05-10)
 --------------------
 * Fix issue around spurious edge introduction for previously executed parent;

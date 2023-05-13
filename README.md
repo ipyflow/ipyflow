@@ -62,8 +62,8 @@ IPyflow enables opt-in reactive execution for both Jupyter and JupyterLab
 (similar to [Observable](https://observablehq.com/) or
 [Pluto.jl](https://github.com/fonsp/Pluto.jl), wherein execution of cell `C`
 results in automatic re-execution of all of `C`'s dependents). Use
-ctrl+shift+enter (on Mac, cmd+shift+enter also works) to execute a cell and its
-(recursive) dependencies reactively:
+ctrl+shift+enter (on Mac, cmd+shift+enter also works) to execute a cell and all of the cells that
+(recursively) depend on it reactively:
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactive-hotkey.gif" />

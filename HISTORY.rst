@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.170 (2022-05-13)
+--------------------
+* Fix alt mode execute when reactivity is default;
+* Future proofing in anticipitation of Notebook 7 / JupyterLab 4.0;
+
 0.0.169 (2022-05-12)
 --------------------
 * Fix _stack_depth issue on run_line_magic function;

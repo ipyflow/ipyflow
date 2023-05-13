@@ -411,9 +411,13 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         help: 'alt mode execute',
         help_index: 'zz',
         handler: () => {
-          if (!isAltModeExecuting && activeCell?.cell_type === 'code') {
-            notifyActiveCell();
-            isAltModeExecuting = true;
+          if (activeCell?.cell_type !== 'code') {
+            return;
+          }
+          notifyActiveCell();
+          if (isAltModeExecuting) {
+            // ensure that we keep exec_mode the same
+            // when next toggle runs
             Jupyter.notebook.kernel.execute(
               '%flow toggle-reactivity-until-next-reset',
               {
@@ -421,8 +425,16 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
                 store_history: false
               }
             );
-            Jupyter.notebook.execute_cells([activeCellIdx]);
           }
+          isAltModeExecuting = true;
+          Jupyter.notebook.kernel.execute(
+            '%flow toggle-reactivity-until-next-reset',
+            {
+              silent: true,
+              store_history: false
+            }
+          );
+          Jupyter.notebook.execute_cells([activeCellIdx]);
         }
       };
       Jupyter.keyboard_manager.command_shortcuts.add_shortcuts({
@@ -438,6 +450,9 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         cell_metadata_by_id: gatherCellMetadataById(Jupyter),
         is_reactively_executing: isReactivelyExecuting
       });
+    } else if (payload.type === 'set_exec_mode') {
+      isAltModeExecuting = false;
+      lastExecutionMode = payload.exec_mode as string;
     } else if (payload.type === 'change_active_cell') {
       if (cellPendingExecutionIdx != null) {
         const idxToExec = cellPendingExecutionIdx;
@@ -464,7 +479,6 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       const exec_mode = payload.exec_mode as string;
       isReactivelyExecuting =
         isReactivelyExecuting ||
-        exec_mode === 'reactive' ||
         ((payload?.is_reactively_executing as boolean) ?? false);
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
@@ -540,7 +554,9 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         executedReactiveReadyCells = new Set();
         updateUI(Jupyter);
         isReactivelyExecuting = false;
-        isAltModeExecuting = false;
+        if (lastExecutionMode === 'reactive') {
+          isAltModeExecuting = false;
+        }
         notifyActiveCell();
       } else {
         isReactivelyExecuting = true;

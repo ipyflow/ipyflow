@@ -188,7 +188,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Union[None, Exception, str] = None
         self._last_exception_raised: Union[None, str, Exception] = None
-        self._is_reactivity_toggled = False
+        self._reactivity_toggled_timestamp = -1
         self.exception_counter: int = 0
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
@@ -618,12 +618,6 @@ class NotebookFlow(singletons.NotebookFlow):
             self._exception_raised_during_execution is not None
         )
         response["is_reactively_executing"] = is_reactively_executing
-        if (
-            self._is_reactivity_toggled
-            and self.mut_settings.exec_mode == ExecutionMode.NORMAL
-        ):
-            self.toggle_reactivity()
-            self._is_reactivity_toggled = False
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> None:
@@ -631,11 +625,11 @@ class NotebookFlow(singletons.NotebookFlow):
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
         if (
-            self._is_reactivity_toggled
+            self._reactivity_toggled_timestamp > 0
             and self.mut_settings.exec_mode == ExecutionMode.REACTIVE
         ):
             self.toggle_reactivity()
-            self._is_reactivity_toggled = False
+            self._reactivity_toggled_timestamp = -1
 
     def toggle_reactivity(self):
         if self.mut_settings.exec_mode == ExecutionMode.NORMAL:
@@ -644,7 +638,7 @@ class NotebookFlow(singletons.NotebookFlow):
             self.mut_settings.exec_mode = ExecutionMode.NORMAL
         else:
             raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
-        self._is_reactivity_toggled = True
+        self._reactivity_toggled_timestamp = self.cell_counter()
 
     def handle_refresh_symbols(self, request) -> None:
         for symbol_str in request.get("symbols", []):

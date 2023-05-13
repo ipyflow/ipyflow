@@ -396,10 +396,16 @@ def set_exec_mode(line_: str) -> None:
     except ValueError:
         warn(usage)
         return
-    flow().mut_settings.exec_mode = exec_mode
+    flow_ = flow()
+    flow_.mut_settings.exec_mode = exec_mode
     if exec_mode == ExecutionMode.REACTIVE:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
+    comm = flow_._comm
+    if comm is not None:
+        comm.send(
+            {"type": "set_exec_mode", "exec_mode": exec_mode.value, "success": True}
+        )
 
 
 def set_exec_schedule(line_: str) -> None:

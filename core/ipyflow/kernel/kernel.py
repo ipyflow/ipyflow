@@ -23,6 +23,7 @@ from IPython.core.magic import register_cell_magic
 from pyccolo.import_hooks import TraceFinder
 
 from ipyflow import singletons
+from ipyflow.config import ExecutionMode
 from ipyflow.data_model.code_cell import CodeCell
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
@@ -535,6 +536,12 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
 
     def before_execute(self, cell_content: str) -> Optional[str]:
         flow_ = singletons.flow()
+        if (
+            -1 < flow_._reactivity_toggled_timestamp < flow_.cell_counter()
+            and flow_.mut_settings.exec_mode == ExecutionMode.NORMAL
+        ):
+            flow_.toggle_reactivity()
+            flow_._reactivity_toggled_timestamp = -1
         self.syntax_transforms_enabled = flow_.mut_settings.syntax_transforms_enabled
         self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
         flow_.test_and_clear_waiter_usage_detected()

@@ -93,21 +93,39 @@ const extension: JupyterFrontEndPlugin<void> = {
         if (session.session.kernel.name !== IPYFLOW_KERNEL_NAME) {
           app.commands.execute('notebook:enter-command-mode');
           CodeCell.execute(notebooks.activeCell as CodeCell, session);
-        } else if (
-          !isAltModeExecuting &&
-          notebooks.activeCell.model.type === 'code'
-        ) {
-          isAltModeExecuting = true;
+        } else if (notebooks.activeCell.model.type === 'code') {
           app.commands.execute('notebook:enter-command-mode');
-          session.session.kernel
-            .requestExecute({
-              code: '%flow toggle-reactivity-until-next-reset',
-              silent: true,
-              store_history: false,
-            })
-            .done.then(() => {
-              CodeCell.execute(notebooks.activeCell as CodeCell, session);
-            });
+          if (isAltModeExecuting) {
+            // run the toggle twice to get to the same exec mode, but with updated timestamp
+            session.session.kernel
+              .requestExecute({
+                code: '%flow toggle-reactivity-until-next-reset',
+                silent: true,
+                store_history: false,
+              })
+              .done.then(() => {
+                session.session.kernel
+                  .requestExecute({
+                    code: '%flow toggle-reactivity-until-next-reset',
+                    silent: true,
+                    store_history: false,
+                  })
+                  .done.then(() => {
+                    CodeCell.execute(notebooks.activeCell as CodeCell, session);
+                  });
+              });
+          } else {
+            isAltModeExecuting = true;
+            session.session.kernel
+              .requestExecute({
+                code: '%flow toggle-reactivity-until-next-reset',
+                silent: true,
+                store_history: false,
+              })
+              .done.then(() => {
+                CodeCell.execute(notebooks.activeCell as CodeCell, session);
+              });
+          }
         }
       },
     });
@@ -340,10 +358,11 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       };
     } = {};
     notebook.widgets.forEach((itercell, idx) => {
-      cell_metadata_by_id[itercell.model.id] = {
+      const model = itercell.model;
+      cell_metadata_by_id[model.id] = {
         index: idx,
-        content: itercell.model.value.text,
-        type: itercell.model.type,
+        content: model.sharedModel.getSource(),
+        type: model.type,
       };
     });
     return cell_metadata_by_id;
@@ -560,6 +579,9 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       notifyActiveCell(notebook.activeCell.model);
       notebook.model.contentChanged.connect(onContentChanged);
       requestComputeExecSchedule();
+    } else if (payload.type === 'set_exec_mode') {
+      isAltModeExecuting = false;
+      lastExecutionMode = payload.exec_mode as string;
     } else if (payload.type === 'compute_exec_schedule') {
       waitingCells = new Set(payload.waiting_cells as string[]);
       readyCells = new Set(payload.ready_cells as string[]);
@@ -577,7 +599,6 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       const exec_mode = payload.exec_mode as string;
       isReactivelyExecuting =
         isReactivelyExecuting ||
-        exec_mode === 'reactive' ||
         ((payload?.is_reactively_executing as boolean) ?? false);
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
@@ -643,7 +664,9 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
         executedReactiveReadyCells = new Set();
         updateUI(notebook);
         isReactivelyExecuting = false;
-        isAltModeExecuting = false;
+        if (lastExecutionMode === 'reactive') {
+          isAltModeExecuting = false;
+        }
       } else {
         isReactivelyExecuting = true;
         onActiveCellChange(notebook, cellPendingExecution);

@@ -1,7 +1,4 @@
 ipyflow-core==0.0.169
 jupyter
-jupyterlab>=3.0,<4.0
+jupyterlab>=3.0
 nbclassic>=0.2.8
-tornado==6.1
-jupyter_client==7.3.4
-jupyter_server==1.23.6

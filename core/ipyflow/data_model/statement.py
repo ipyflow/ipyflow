@@ -11,9 +11,9 @@ from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
 from ipyflow.data_model import DUPED_ATTRSUB_CLASSES
-from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _StatementContainer, cells, statements
 from ipyflow.singletons import flow, tracer
@@ -63,10 +63,10 @@ class Statement(SlicingMixin):
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
         self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
-        self._dynamic_parents: Dict[IdType, Set[DataSymbol]] = {}
-        self._dynamic_children: Dict[IdType, Set[DataSymbol]] = {}
-        self._static_parents: Dict[IdType, Set[DataSymbol]] = {}
-        self._static_children: Dict[IdType, Set[DataSymbol]] = {}
+        self._dynamic_parents: Dict[IdType, Set[Symbol]] = {}
+        self._dynamic_children: Dict[IdType, Set[Symbol]] = {}
+        self._static_parents: Dict[IdType, Set[Symbol]] = {}
+        self._static_children: Dict[IdType, Set[Symbol]] = {}
 
     @property
     def id(self) -> IdType:
@@ -286,7 +286,7 @@ class Statement(SlicingMixin):
     def _handle_assign_target_for_deps(
         self,
         target: ast.AST,
-        deps: Set[DataSymbol],
+        deps: Set[Symbol],
         maybe_fixup_literal_namespace: bool = False,
     ) -> None:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
@@ -346,7 +346,7 @@ class Statement(SlicingMixin):
                 namespace_for_upsert.parent_scope = scope
 
     def _handle_store_target_tuple_unpack_from_deps(
-        self, target: Union[ast.List, ast.Tuple], deps: Set[DataSymbol]
+        self, target: Union[ast.List, ast.Tuple], deps: Set[Symbol]
     ) -> None:
         for inner_target in target.elts:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
@@ -355,7 +355,7 @@ class Statement(SlicingMixin):
                 self._handle_assign_target_for_deps(inner_target, deps)
 
     def _handle_starred_store_target(
-        self, target: ast.Starred, inner_deps: List[Optional[DataSymbol]]
+        self, target: ast.Starred, inner_deps: List[Optional[Symbol]]
     ) -> None:
         try:
             scope, name, obj, is_subscript, _ = tracer().resolve_store_data_for_target(
@@ -394,7 +394,7 @@ class Statement(SlicingMixin):
         self,
         target: Union[ast.List, ast.Tuple],
         rhs_namespace: Namespace,
-        extra_deps: Set[DataSymbol],
+        extra_deps: Set[Symbol],
     ) -> None:
         saved_starred_node: Optional[ast.Starred] = None
         saved_starred_deps = []
@@ -446,7 +446,7 @@ class Statement(SlicingMixin):
                     target, resolve_rval_symbols(value)
                 )
             else:
-                extra_deps: Set[DataSymbol] = set()
+                extra_deps: Set[Symbol] = set()
                 if isinstance(value, ast.Call):
                     # in this case, every target should depend on whatever was called
                     extra_deps |= resolve_rval_symbols(value)

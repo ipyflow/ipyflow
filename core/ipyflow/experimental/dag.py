@@ -3,7 +3,7 @@ import itertools
 from collections import defaultdict
 from typing import Dict, List, Set, Union
 
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
 
 
@@ -11,9 +11,9 @@ def create_dag_metadata() -> (
     Dict[int, Dict[str, Union[List[int], List[str], Dict[str, Dict[str, str]]]]]
 ):
     flow_ = flow()
-    cell_num_to_used_imports: Dict[int, Set[DataSymbol]] = defaultdict(set)
-    cell_num_to_inputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
-    cell_num_to_outputs: Dict[int, Set[DataSymbol]] = defaultdict(set)
+    cell_num_to_used_imports: Dict[int, Set[Symbol]] = defaultdict(set)
+    cell_num_to_inputs: Dict[int, Set[Symbol]] = defaultdict(set)
+    cell_num_to_outputs: Dict[int, Set[Symbol]] = defaultdict(set)
     cell_num_to_cell_parents: Dict[int, Set[int]] = defaultdict(set)
     cell_num_to_cell_children: Dict[int, Set[int]] = defaultdict(set)
 

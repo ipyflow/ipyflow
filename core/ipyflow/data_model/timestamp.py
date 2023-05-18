@@ -9,8 +9,8 @@ from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:
     # avoid circular imports
-    from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
-    from ipyflow.data_model.data_symbol import DataSymbol
+    from ipyflow.analysis.resolved_symbols import ResolvedSymbol
+    from ipyflow.data_model.symbol import Symbol
 
 
 logger = logging.getLogger(__name__)
@@ -82,10 +82,10 @@ class Timestamp(NamedTuple):
     def update_usage_info(
         cls,
         symbols: Union[
-            Optional["DataSymbol"],
-            Iterable[Optional["DataSymbol"]],
-            Optional["ResolvedDataSymbol"],
-            Iterable[Optional["ResolvedDataSymbol"]],
+            Optional["Symbol"],
+            Iterable[Optional["Symbol"]],
+            Optional["ResolvedSymbol"],
+            Iterable[Optional["ResolvedSymbol"]],
         ],
         exclude_ns=False,
         used_node: Optional[ast.AST] = None,

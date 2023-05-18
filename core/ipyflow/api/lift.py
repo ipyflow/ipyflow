@@ -3,21 +3,21 @@ from typing import Any, List, Set, Union, cast
 
 from ipywidgets import HTML
 
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.tracing.watchpoint import Watchpoints
 
 
-def _validate(sym: Any) -> DataSymbol:
-    if sym is None or not isinstance(sym, DataSymbol):
+def _validate(sym: Any) -> Symbol:
+    if sym is None or not isinstance(sym, Symbol):
         raise ValueError("unable to lookup metadata for symbol")
-    return cast(DataSymbol, sym)
+    return cast(Symbol, sym)
 
 
-def lift(sym: Any) -> DataSymbol:
+def lift(sym: Any) -> Symbol:
     """
     Given the programmatic usage of some symbol,
-    look up the corresponding DataSymbol metadata.
+    look up the corresponding Symbol metadata.
     """
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
@@ -47,7 +47,7 @@ def timestamp(sym: Any) -> Timestamp:
     return _validate(sym).timestamp
 
 
-def deps(sym: Any) -> List[DataSymbol]:
+def deps(sym: Any) -> List[Symbol]:
     """
     Given the programmatic usage of some symbol,
     look up the corresponding dependencies for that symbol.
@@ -59,7 +59,7 @@ def deps(sym: Any) -> List[DataSymbol]:
     return [dep for dep in dsym.parents.keys() if not dep.is_anonymous]
 
 
-def users(sym: Any) -> List[DataSymbol]:
+def users(sym: Any) -> List[Symbol]:
     """
     Given the programmatic usage of some symbol,
     look up the corresponding users of that symbol.
@@ -71,7 +71,7 @@ def users(sym: Any) -> List[DataSymbol]:
     return [child for child in dsym.children.keys() if not child.is_anonymous]
 
 
-def _traverse(sym: DataSymbol, seen: Set[DataSymbol], attr: str) -> None:
+def _traverse(sym: Symbol, seen: Set[Symbol], attr: str) -> None:
     if sym in seen:
         return
     seen.add(sym)
@@ -79,7 +79,7 @@ def _traverse(sym: DataSymbol, seen: Set[DataSymbol], attr: str) -> None:
         _traverse(related, seen, attr)
 
 
-def rdeps(sym: Any) -> List[DataSymbol]:
+def rdeps(sym: Any) -> List[Symbol]:
     """
     Given the programmatic usage of some symbol, look up the
     corresponding recursive dependencies for that symbol.
@@ -88,12 +88,12 @@ def rdeps(sym: Any) -> List[DataSymbol]:
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
     dsym = _validate(sym)
-    seen: Set[DataSymbol] = set()
+    seen: Set[Symbol] = set()
     _traverse(dsym, seen, "parents")
     return [v for v in (seen - {dsym}) if not v.is_anonymous]
 
 
-def rusers(sym: Any) -> List[DataSymbol]:
+def rusers(sym: Any) -> List[Symbol]:
     """
     Given the programmatic usage of some symbol,
     look up the corresponding users of that symbol.
@@ -102,7 +102,7 @@ def rusers(sym: Any) -> List[DataSymbol]:
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
     dsym = _validate(sym)
-    seen: Set[DataSymbol] = set()
+    seen: Set[Symbol] = set()
     _traverse(dsym, seen, "children")
     ret = [v for v in (seen - {dsym}) if not v.is_anonymous]
     return ret

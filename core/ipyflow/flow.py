@@ -36,10 +36,10 @@ from ipyflow.config import (
     MutableDataflowSettings,
 )
 from ipyflow.data_model.code_cell import CodeCell, cells
-from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import statements
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
@@ -161,21 +161,21 @@ class NotebookFlow(singletons.NotebookFlow):
             os.environ.pop(PYCCOLO_DEV_MODE_ENV_VAR, None)
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
-        self.aliases: Dict[int, Set[DataSymbol]] = {}
+        self.aliases: Dict[int, Set[Symbol]] = {}
         self.stmt_deferred_static_parents: Dict[
-            Timestamp, Dict[Timestamp, Set[DataSymbol]]
+            Timestamp, Dict[Timestamp, Set[Symbol]]
         ] = {}
         self.global_scope: Scope = Scope()
         self.virtual_symbols: Scope = Scope()
         self._virtual_symbols_inited: bool = False
-        self.updated_symbols: Set[DataSymbol] = set()
-        self.updated_reactive_symbols: Set[DataSymbol] = set()
-        self.updated_deep_reactive_symbols: Set[DataSymbol] = set()
-        self.updated_reactive_symbols_last_cell: Set[DataSymbol] = set()
-        self.updated_deep_reactive_symbols_last_cell: Set[DataSymbol] = set()
-        self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], DataSymbol]] = []
-        self.blocked_reactive_timestamps_by_symbol: Dict[DataSymbol, int] = {}
-        self.statement_to_func_sym: Dict[int, DataSymbol] = {}
+        self.updated_symbols: Set[Symbol] = set()
+        self.updated_reactive_symbols: Set[Symbol] = set()
+        self.updated_deep_reactive_symbols: Set[Symbol] = set()
+        self.updated_reactive_symbols_last_cell: Set[Symbol] = set()
+        self.updated_deep_reactive_symbols_last_cell: Set[Symbol] = set()
+        self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], Symbol]] = []
+        self.blocked_reactive_timestamps_by_symbol: Dict[Symbol, int] = {}
+        self.statement_to_func_sym: Dict[int, Symbol] = {}
         self._active_cell_id: Optional[IdType] = None
         self.waiter_usage_detected = False
         self.out_of_order_usage_detected_counter: Optional[int] = None
@@ -184,7 +184,7 @@ class NotebookFlow(singletons.NotebookFlow):
         else:
             self._cell_magic = singletons.kernel().make_cell_magic(cell_magic_name)
         self._line_magic = make_line_magic(self)
-        self._prev_cell_waiting_symbols: Set[DataSymbol] = set()
+        self._prev_cell_waiting_symbols: Set[Symbol] = set()
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Union[None, Exception, str] = None
         self._last_exception_raised: Union[None, str, Exception] = None
@@ -213,7 +213,7 @@ class NotebookFlow(singletons.NotebookFlow):
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
         )
         self.fs: Namespace = None
-        self.display_sym: DataSymbol = None
+        self.display_sym: Symbol = None
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
         if use_comm:
@@ -226,7 +226,7 @@ class NotebookFlow(singletons.NotebookFlow):
             return
         self.fs = Namespace(Namespace.FILE_SYSTEM, "fs")
         self.display_sym = self.virtual_symbols.upsert_data_symbol_for_name(
-            "display", DataSymbol.DISPLAY
+            "display", Symbol.DISPLAY
         )
         self._virtual_symbols_inited = True
 
@@ -306,7 +306,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def trace_messages_enabled(self, new_val) -> None:
         self.mut_settings.trace_messages_enabled = new_val
 
-    def get_first_full_symbol(self, obj_id: int) -> Optional[DataSymbol]:
+    def get_first_full_symbol(self, obj_id: int) -> Optional[Symbol]:
         for alias in self.aliases.get(obj_id, []):
             if not alias.is_anonymous:
                 return alias
@@ -320,7 +320,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self,
         child: Timestamp,
         parent: Timestamp,
-        sym: DataSymbol,
+        sym: Symbol,
         add_only_if_parent_new: bool = True,
     ) -> None:
         parent_cell = cells().at_timestamp(parent)
@@ -341,13 +341,13 @@ class NotebookFlow(singletons.NotebookFlow):
                 parent, set()
             ).add(sym)
 
-    def is_updated_reactive(self, sym: DataSymbol) -> bool:
+    def is_updated_reactive(self, sym: Symbol) -> bool:
         return (
             sym in self.updated_reactive_symbols
             or sym in self.updated_reactive_symbols_last_cell
         )
 
-    def is_updated_deep_reactive(self, sym: DataSymbol) -> bool:
+    def is_updated_deep_reactive(self, sym: Symbol) -> bool:
         return (
             sym in self.updated_deep_reactive_symbols
             or sym in self.updated_deep_reactive_symbols_last_cell
@@ -737,7 +737,7 @@ class NotebookFlow(singletons.NotebookFlow):
                         Timestamp(self.cell_counter(), 0), sym.timestamp, sym
                     )
 
-    def _resync_symbols(self, symbols: Iterable[DataSymbol]):
+    def _resync_symbols(self, symbols: Iterable[Symbol]):
         for dsym in symbols:
             if not dsym.containing_scope.is_global:
                 continue
@@ -798,7 +798,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def line_magic_name(self):
         return self._line_magic.__name__
 
-    def all_data_symbols(self) -> Iterable[DataSymbol]:
+    def all_data_symbols(self) -> Iterable[Symbol]:
         for alias_set in self.aliases.values():
             yield from alias_set
 

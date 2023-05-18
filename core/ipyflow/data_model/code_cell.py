@@ -30,7 +30,7 @@ from ipyflow.analysis.live_refs import (
     get_live_symbols_and_cells_for_references,
     get_symbols_for_references,
 )
-from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
+from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _CodeCellContainer, cells, statements
@@ -42,8 +42,8 @@ from ipyflow.utils.ipython_utils import _IPY, CapturedIO
 from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
 
 if TYPE_CHECKING:
-    from ipyflow.data_model.data_symbol import DataSymbol
     from ipyflow.data_model.statement import Statement
+    from ipyflow.data_model.symbol import Symbol
 
 
 logger = logging.getLogger(__name__)
@@ -55,11 +55,11 @@ _override_unused_warning_cells = cells
 
 
 class CheckerResult(NamedTuple):
-    live: Set[ResolvedDataSymbol]  # all live symbols in the cell
+    live: Set[ResolvedSymbol]  # all live symbols in the cell
     unresolved_live_refs: Set[LiveSymbolRef]  # any live symbol we couldn't resolve
     used_cells: Set[int]  # last updated timestamps of the live symbols
     live_cells: Set[int]  # cells that define a symbol that was called in the cell
-    dead: Set["DataSymbol"]  # symbols that are definitely assigned to
+    dead: Set["Symbol"]  # symbols that are definitely assigned to
     typechecks: bool  # whether the cell typechecks successfully
 
 
@@ -93,13 +93,13 @@ class CodeCell(SlicingMixin):
         self.override_live_refs: Optional[List[str]] = None
         self.override_dead_refs: Optional[List[str]] = None
         self.reactive_tags: Set[str] = set()
-        self._dynamic_parents: Dict[IdType, Set["DataSymbol"]] = {}
-        self._dynamic_children: Dict[IdType, Set["DataSymbol"]] = {}
-        self._static_parents: Dict[IdType, Set["DataSymbol"]] = {}
-        self._static_children: Dict[IdType, Set["DataSymbol"]] = {}
-        self._used_cell_counters_by_live_symbol: Dict[
-            "DataSymbol", Set[int]
-        ] = defaultdict(set)
+        self._dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
+        self._dynamic_children: Dict[IdType, Set["Symbol"]] = {}
+        self._static_parents: Dict[IdType, Set["Symbol"]] = {}
+        self._static_children: Dict[IdType, Set["Symbol"]] = {}
+        self._used_cell_counters_by_live_symbol: Dict["Symbol", Set[int]] = defaultdict(
+            set
+        )
         self._cached_ast: Optional[ast.Module] = None
         self._cached_typecheck_result: Optional[bool] = (
             None if flow().settings.mark_typecheck_failures_unsafe else True
@@ -129,7 +129,7 @@ class CodeCell(SlicingMixin):
         return self._position_by_cell_id.get(self.cell_id, -1)
 
     @property
-    def directional_parents(self) -> Mapping[IdType, FrozenSet["DataSymbol"]]:
+    def directional_parents(self) -> Mapping[IdType, FrozenSet["Symbol"]]:
         # trick to catch some mutations at typecheck time w/out runtime overhead
         parents = self.parents
         if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
@@ -138,10 +138,10 @@ class CodeCell(SlicingMixin):
                 for sid, syms in parents.items()
                 if self.position > self.from_id(sid).position
             }
-        return cast("Mapping[IdType, FrozenSet[DataSymbol]]", parents)
+        return cast("Mapping[IdType, FrozenSet[Symbol]]", parents)
 
     @property
-    def directional_children(self) -> Mapping[IdType, FrozenSet["DataSymbol"]]:
+    def directional_children(self) -> Mapping[IdType, FrozenSet["Symbol"]]:
         children = self.children
         if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
             children = {
@@ -149,7 +149,7 @@ class CodeCell(SlicingMixin):
                 for cell_id, syms in children.items()
                 if self.position < self.from_id(cell_id).position
             }
-        return cast("Mapping[IdType, FrozenSet[DataSymbol]]", children)
+        return cast("Mapping[IdType, FrozenSet[Symbol]]", children)
 
     @classmethod
     def clear(cls):
@@ -213,7 +213,7 @@ class CodeCell(SlicingMixin):
                     for pid, syms in child.parents.items()
                 }
 
-    def add_used_cell_counter(self, sym: "DataSymbol", ctr: int) -> None:
+    def add_used_cell_counter(self, sym: "Symbol", ctr: int) -> None:
         if ctr > 0:
             self._used_cell_counters_by_live_symbol[sym].add(ctr)
 
@@ -421,9 +421,9 @@ class CodeCell(SlicingMixin):
         return cls._override_current_cell or cls._cell_by_cell_ctr[cls._cell_counter]
 
     def get_max_used_live_symbol_cell_counter(
-        self, live_symbols: Set[ResolvedDataSymbol], filter_to_reactive: bool = False
+        self, live_symbols: Set[ResolvedSymbol], filter_to_reactive: bool = False
     ) -> int:
-        min_allowed_cell_position_by_symbol: Optional[Dict["DataSymbol", int]] = None
+        min_allowed_cell_position_by_symbol: Optional[Dict["Symbol", int]] = None
         flow_ = flow()
         if (
             flow_.mut_settings.exec_schedule
@@ -549,7 +549,7 @@ class CodeCell(SlicingMixin):
         }
 
     def _build_typecheck_slice(
-        self, live_cell_ctrs: Set[int], live_symbols: Set[ResolvedDataSymbol]
+        self, live_cell_ctrs: Set[int], live_symbols: Set[ResolvedSymbol]
     ) -> str:
         # TODO: typecheck statically-resolvable nested symbols too, not just top-level
         live_cell_counters = {self.cell_ctr}
@@ -570,7 +570,7 @@ class CodeCell(SlicingMixin):
         )
 
     def _typechecks(
-        self, live_cell_ctrs: Set[int], live_symbols: Set[ResolvedDataSymbol]
+        self, live_cell_ctrs: Set[int], live_symbols: Set[ResolvedSymbol]
     ) -> bool:
         if self._cached_typecheck_result is not None:
             return self._cached_typecheck_result

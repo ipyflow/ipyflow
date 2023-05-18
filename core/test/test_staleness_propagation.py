@@ -76,7 +76,7 @@ def test_readme_example():
 
 # TODO: to get this working properly, post-call argument
 #  symbols need to have dependencies on pre-call argument
-#  symbols. The place to do this is in `DataSymbol.create_symbols_for_call_args(...)`
+#  symbols. The place to do this is in `Symbol.create_symbols_for_call_args(...)`
 def test_passed_sym_captured_as_dep_for_mutated_obj():
     run_cell(
         """
@@ -1464,7 +1464,7 @@ def test_lazy_class_scope_resolution():
     run_cell("y = 12")
     run_cell("logging.info(foo.shared)")
     assert_detected(
-        "`foo.shared` should point to same DataSymbol as `Foo.shared` and thus also has stale dep"
+        "`foo.shared` should point to same Symbol as `Foo.shared` and thus also has stale dep"
     )
     run_cell("foo.shared = 89")
     run_cell("logging.info(Foo.shared)")
@@ -1649,7 +1649,7 @@ def test_single_line_dictionary_literal_fix_stale_deps():
     assert_not_detected()
     run_cell("logging.info(d)")
     # assert_false_positive('`d`s stale dep fixed, but this is hard to detect '
-    #                       'since we did not yet have a DataSymbol for `d[foo]` when staleness introduced')
+    #                       'since we did not yet have a Symbol for `d[foo]` when staleness introduced')
     assert_not_detected("`d`s stale dep fixed")
     run_cell("foo = 8")
     run_cell("logging.info(d)")

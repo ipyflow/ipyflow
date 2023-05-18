@@ -6,7 +6,7 @@ from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
 from ipyflow.types import IdType
 
@@ -101,8 +101,8 @@ class FrontendCheckerResult(NamedTuple):
 
     def _compute_ready_making_cells(
         self,
-        waiting_symbols_by_cell_id: Dict[IdType, Set[DataSymbol]],
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[IdType]],
+        waiting_symbols_by_cell_id: Dict[IdType, Set[Symbol]],
+        killing_cell_ids_for_symbol: Dict[Symbol, Set[IdType]],
         last_executed_cell_id: Optional[IdType],
     ) -> None:
         flow_ = flow()
@@ -255,8 +255,8 @@ class FrontendCheckerResult(NamedTuple):
         cell: CodeCell,
         update_liveness_time_versions: bool,
         last_executed_cell_pos: int,
-        waiting_symbols_by_cell_id: Dict[IdType, Set[DataSymbol]],
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[IdType]],
+        waiting_symbols_by_cell_id: Dict[IdType, Set[Symbol]],
+        killing_cell_ids_for_symbol: Dict[Symbol, Set[IdType]],
         phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]],
     ) -> Optional[CheckerResult]:
         flow_ = flow()
@@ -377,8 +377,8 @@ class FrontendCheckerResult(NamedTuple):
         flow_ = flow()
         if last_executed_cell_id is None:
             last_executed_cell_id = flow_.last_executed_cell_id
-        waiting_symbols_by_cell_id: Dict[IdType, Set[DataSymbol]] = {}
-        killing_cell_ids_for_symbol: Dict[DataSymbol, Set[IdType]] = defaultdict(set)
+        waiting_symbols_by_cell_id: Dict[IdType, Set[Symbol]] = {}
+        killing_cell_ids_for_symbol: Dict[Symbol, Set[IdType]] = defaultdict(set)
         phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]] = {}
         checker_results_by_cid: Dict[IdType, CheckerResult] = {}
         last_executed_cell_pos = self._get_last_executed_pos_and_handle_reactive_tags(

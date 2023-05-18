@@ -11,15 +11,15 @@ from ipyflow.analysis.mixins import (
     SkipUnboundArgsMixin,
     VisitListsMixin,
 )
-from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
+from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.analysis.symbol_ref import Atom, LiveSymbolRef, SymbolRef
 from ipyflow.config import FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:
-    from ipyflow.data_model.data_symbol import DataSymbol
     from ipyflow.data_model.scope import Scope
+    from ipyflow.data_model.symbol import Symbol
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -137,7 +137,7 @@ class ComputeLiveSymbolRefs(
                 for x in (this_assign_dead, (live.ref for live in this_assign_live))
             ]
             if len(lhs) == 1 and len(rhs) == 1:
-                syms: List[DataSymbol] = [next(iter(x)) for x in (lhs, rhs)]
+                syms: List[Symbol] = [next(iter(x)) for x in (lhs, rhs)]
                 lhs_sym, rhs_sym = syms[0], syms[1]
                 # hack to avoid marking `b` as live when objects are same,
                 # or when it was detected that rhs symbol wasn't actually updated
@@ -335,9 +335,9 @@ class ComputeLiveSymbolRefs(
 def get_symbols_for_references(
     symbol_refs: Iterable[SymbolRef],
     scope: "Scope",
-) -> Tuple[Set["DataSymbol"], Set["DataSymbol"]]:
-    dsyms: Set[DataSymbol] = set()
-    called_dsyms: Set["DataSymbol"] = set()
+) -> Tuple[Set["Symbol"], Set["Symbol"]]:
+    dsyms: Set[Symbol] = set()
+    called_dsyms: Set["Symbol"] = set()
     for symbol_ref in symbol_refs:
         for resolved in symbol_ref.gen_resolved_symbols(
             scope, only_yield_final_symbol=True
@@ -355,10 +355,10 @@ def get_live_symbols_and_cells_for_references(
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
     add_data_dep_only_if_parent_new: bool = False,
-) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
-    live_symbols: Set[ResolvedDataSymbol] = set()
+) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
+    live_symbols: Set[ResolvedSymbol] = set()
     unresolved_live_refs: Set[LiveSymbolRef] = set()
-    called_syms: Set[Tuple[ResolvedDataSymbol, int]] = set()
+    called_syms: Set[Tuple[ResolvedSymbol, int]] = set()
     for live_symbol_ref in symbol_refs:
         chain = live_symbol_ref.ref.chain
         if len(chain) >= 1:
@@ -402,16 +402,16 @@ def get_live_symbols_and_cells_for_references(
 
 
 def _compute_call_chain_live_symbols_and_cells(
-    live_with_stmt_ctr: Set[Tuple[ResolvedDataSymbol, int]],
+    live_with_stmt_ctr: Set[Tuple[ResolvedSymbol, int]],
     cell_ctr: int,
     update_liveness_time_versions: bool,
-) -> Tuple[Set[ResolvedDataSymbol], Set[int], Set[LiveSymbolRef]]:
-    seen: Set[Tuple[ResolvedDataSymbol, int]] = set()
-    worklist: List[Tuple[ResolvedDataSymbol, int]] = list(live_with_stmt_ctr)
-    live: Set[ResolvedDataSymbol] = set()
+) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
+    seen: Set[Tuple[ResolvedSymbol, int]] = set()
+    worklist: List[Tuple[ResolvedSymbol, int]] = list(live_with_stmt_ctr)
+    live: Set[ResolvedSymbol] = set()
     unresolved: Set[LiveSymbolRef] = set()
     while len(worklist) > 0:
-        workitem: Tuple[ResolvedDataSymbol, int] = worklist.pop()
+        workitem: Tuple[ResolvedSymbol, int] = worklist.pop()
         if workitem in seen:
             continue
         called_sym, stmt_ctr = workitem
@@ -482,7 +482,7 @@ def compute_live_dead_symbol_refs(
 
 def static_resolve_rvals(
     code: Union[ast.AST, str], cell_ctr: int = -1, scope: Optional["Scope"] = None
-) -> Set[ResolvedDataSymbol]:
+) -> Set[ResolvedSymbol]:
     live_refs, *_ = compute_live_dead_symbol_refs(code)
     resolved_live_syms, *_ = get_live_symbols_and_cells_for_references(
         live_refs, scope or flow().global_scope, cell_ctr=cell_ctr

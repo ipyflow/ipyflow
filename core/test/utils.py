@@ -15,7 +15,7 @@ from ipyflow.annotations.compiler import (
 )
 from ipyflow.config import FlowDirection
 from ipyflow.data_model.code_cell import cells
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.flow import NotebookFlow
 from ipyflow.kernel.kernel import IPyflowKernelBase
 from ipyflow.singletons import flow
@@ -57,7 +57,7 @@ def clear_registered_annotations(clear_afterwards=False):
         REGISTERED_HANDLER_BY_FUNCTION.update(orig_handlers)
 
 
-def lookup_symbol_by_name(name: str) -> DataSymbol:
+def lookup_symbol_by_name(name: str) -> Symbol:
     ret = flow().global_scope.lookup_data_symbol_by_name_this_indentation(name)
     assert ret is not None, "got None for %s" % name
     return ret

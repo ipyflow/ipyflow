@@ -15,8 +15,8 @@ from typing import (
     Tuple,
 )
 
-from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.scope import Scope
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _NamespaceContainer, namespaces
 from ipyflow.singletons import flow
@@ -59,10 +59,10 @@ class Namespace(Scope):
         if obj is not self.PENDING_CLASS_PLACEHOLDER:
             flow().namespaces[id(obj)] = self
         self._tombstone = False
-        # this timestamp needs to be bumped in DataSymbol refresh()
+        # this timestamp needs to be bumped in Symbol refresh()
         self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()
-        self._subscript_data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
-        self.namespace_waiting_symbols: Set[DataSymbol] = set()
+        self._subscript_data_symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
+        self.namespace_waiting_symbols: Set[Symbol] = set()
 
     @property
     def is_namespace_scope(self):
@@ -83,11 +83,11 @@ class Namespace(Scope):
     def size(self) -> int:
         return len(self._subscript_data_symbol_by_name) + len(self._data_symbol_by_name)
 
-    def _iter_inner(self) -> Generator[Optional[DataSymbol], None, None]:
+    def _iter_inner(self) -> Generator[Optional[Symbol], None, None]:
         for i in range(len(self.obj)):
             yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
 
-    def __iter__(self) -> Iterator[Optional[DataSymbol]]:
+    def __iter__(self) -> Iterator[Optional[Symbol]]:
         if not isinstance(self.obj, (list, tuple)):  # pragma: no cover
             raise TypeError(
                 "tried to iterate through non-sequence namespace %s: %s", self, self.obj
@@ -95,13 +95,13 @@ class Namespace(Scope):
         # do the validation before starting the generator part so that we raise immediately
         return self._iter_inner()
 
-    def _items_inner(self) -> Generator[Tuple[Any, Optional[DataSymbol]], None, None]:
+    def _items_inner(self) -> Generator[Tuple[Any, Optional[Symbol]], None, None]:
         for key in self.obj.keys():
             yield key, self.lookup_data_symbol_by_name_this_indentation(
                 key, is_subscript=True
             )
 
-    def items(self) -> Iterator[Tuple[Any, Optional[DataSymbol]]]:
+    def items(self) -> Iterator[Tuple[Any, Optional[Symbol]]]:
         if not isinstance(self.obj, dict):  # pragma: no cover
             raise TypeError(
                 "tried to get iterate through items of non-dict namespace: %s", self.obj
@@ -156,7 +156,7 @@ class Namespace(Scope):
         else:
             return dsym.is_subscript
 
-    def max_cascading_reactive_cell_num(self, seen: Set[DataSymbol]) -> int:
+    def max_cascading_reactive_cell_num(self, seen: Set[Symbol]) -> int:
         return max(
             (
                 dsym.cascading_reactive_cell_num(
@@ -176,7 +176,7 @@ class Namespace(Scope):
 
     def data_symbol_by_name(
         self, is_subscript=False
-    ) -> Dict[SupportedIndexType, DataSymbol]:
+    ) -> Dict[SupportedIndexType, Symbol]:
         if is_subscript:
             return self._subscript_data_symbol_by_name
         else:
@@ -195,7 +195,7 @@ class Namespace(Scope):
     def fresh_copy(self, obj: Any) -> "Namespace":
         return Namespace(obj, self.scope_name, self.parent_scope)
 
-    def make_namespace_qualified_name(self, dsym: DataSymbol) -> str:
+    def make_namespace_qualified_name(self, dsym: Symbol) -> str:
         path = self.full_namespace_path
         name = str(dsym.name)
         if path:
@@ -206,7 +206,7 @@ class Namespace(Scope):
         else:
             return name
 
-    def _lookup_subscript(self, name: SupportedIndexType) -> Optional[DataSymbol]:
+    def _lookup_subscript(self, name: SupportedIndexType) -> Optional[Symbol]:
         ret = self._subscript_data_symbol_by_name.get(name, None)
         if (
             isinstance(self.obj, Sequence)
@@ -225,7 +225,7 @@ class Namespace(Scope):
         is_subscript: Optional[bool] = None,
         skip_cloned_lookup: bool = False,
         **kwargs: Any,
-    ) -> Optional[DataSymbol]:
+    ) -> Optional[Symbol]:
         if is_subscript is None:
             ret = self._data_symbol_by_name.get(name, None)
             if ret is None:
@@ -293,7 +293,7 @@ class Namespace(Scope):
 
     def all_data_symbols_this_indentation(
         self, exclude_class=False, is_subscript=None
-    ) -> Iterable[DataSymbol]:
+    ) -> Iterable[Symbol]:
         if is_subscript is None:
             dsym_collections_to_chain: List[Iterable] = [
                 self._data_symbol_by_name.values(),
@@ -309,7 +309,7 @@ class Namespace(Scope):
             )
         return itertools.chain(*dsym_collections_to_chain)
 
-    def put(self, name: SupportedIndexType, val: DataSymbol) -> None:
+    def put(self, name: SupportedIndexType, val: Symbol) -> None:
         if val.is_subscript:
             self._subscript_data_symbol_by_name[name] = val
         elif not isinstance(name, str):  # pragma: no cover

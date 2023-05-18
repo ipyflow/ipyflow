@@ -3,7 +3,7 @@ import os
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
 
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler, HasGetitem
 
@@ -50,7 +50,7 @@ class SymbolMatcher(metaclass=HasGetitem):
     def __init__(self, bind_name: str) -> None:
         self.bind_name = bind_name
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         """
         :param sym: the symbol against which the matcher is being tested
         :return: if `sym` matches, a dictionary (possibly empty) of any additional bindings; otherwise, None.
@@ -63,7 +63,7 @@ class Ref(SymbolMatcher):
         super().__init__(bind_name)
         self.existing_bindings = {}
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         if self.existing_bindings.get(self.bind_name) is sym:
             return {}
         else:
@@ -79,7 +79,7 @@ class AllOf(SymbolMatcher):
         super().__init__(bind_name)
         self.matchers = matchers
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         bindings = {}
         for matcher in self.matchers:
             matcher_bindings = matcher.matches(sym)
@@ -101,7 +101,7 @@ class AnyOf(SymbolMatcher):
         super().__init__(bind_name)
         self.matchers = matchers
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         bindings = None
         for matcher in self.matchers:
             matcher_bindings = matcher.matches(sym)
@@ -117,7 +117,7 @@ class Display(SymbolMatcher):
     Stub for referencing that a value represents stdout / stderr / display contents.
     """
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         if flow().display_sym is sym:
             return super().matches(sym)
         else:
@@ -133,7 +133,7 @@ class FileSystem(SymbolMatcher):
         super().__init__(bind_name)
         self.is_literal = is_literal
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         if sym.containing_namespace is not flow().fs:
             return None
         if self.is_literal:
@@ -167,7 +167,7 @@ class _Relation(SymbolMatcher):
         self.relation = relation
         self.matchers = matchers
         self.exact = exact
-        self._remaining_symbols: Optional[Set[DataSymbol]] = None
+        self._remaining_symbols: Optional[Set[Symbol]] = None
 
     def _matches_helper(self, idx: int) -> Optional[Dict[str, Any]]:
         if idx == len(self.matchers):
@@ -185,7 +185,7 @@ class _Relation(SymbolMatcher):
                 return bindings | rest_bindings
         return None
 
-    def matches(self, sym: DataSymbol) -> Optional[Dict[str, Any]]:
+    def matches(self, sym: Symbol) -> Optional[Dict[str, Any]]:
         if self.relation == MatcherRelation.PARENTS:
             self._remaining_symbols = {
                 par for par in sym.parents.keys() if not par.is_anonymous

@@ -20,7 +20,7 @@ from ipyflow.annotations.compiler import (
 )
 from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import cells
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, kernel
 from ipyflow.slicing.mixin import SlicingMixin, format_slice
@@ -250,7 +250,7 @@ def show_waiting(line_: str) -> Optional[str]:
     usage = "Usage: %flow show_waiting [global|all]"
     line = line_.split()
     if len(line) == 0 or line[0] == "global":
-        dsym_sets: Iterable[Iterable[DataSymbol]] = [
+        dsym_sets: Iterable[Iterable[Symbol]] = [
             flow().global_scope.all_data_symbols_this_indentation()
         ]
     elif line[0] == "all":

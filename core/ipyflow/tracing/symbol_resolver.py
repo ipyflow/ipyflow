@@ -12,8 +12,8 @@ from ipyflow.analysis.mixins import (
 )
 from ipyflow.analysis.symbol_ref import resolve_slice_to_constant
 from ipyflow.data_model.code_cell import cells
-from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 
@@ -25,17 +25,17 @@ class ResolveRvalSymbols(
     SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
 ):
     def __init__(self, update_usage_info: bool) -> None:
-        self.symbols: List[Optional[DataSymbol]] = []
+        self.symbols: List[Optional[Symbol]] = []
         self.update_usage_info = update_usage_info
-        self.dead: Set[DataSymbol] = set()
+        self.dead: Set[Symbol] = set()
         self._in_kill_context = False
         self.exclude_ns = False
 
-    def __call__(self, node: ast.AST) -> Set[DataSymbol]:
+    def __call__(self, node: ast.AST) -> Set[Symbol]:
         self.visit(node)
         return {sym for sym in self.symbols if sym is not None}
 
-    def _resolve_symbols_without_side_effects(self, node: ast.AST) -> List[DataSymbol]:
+    def _resolve_symbols_without_side_effects(self, node: ast.AST) -> List[Symbol]:
         with self.push_attributes(
             symbols=[], dead=set(), _in_kill_context=False, update_usage_info=False
         ):
@@ -57,7 +57,7 @@ class ResolveRvalSymbols(
 
     def _add_to_resolved(
         self,
-        symbols: Iterable[DataSymbol],
+        symbols: Iterable[Symbol],
         used_node: ast.AST,
         should_extend: bool = True,
         should_update_usage_info: bool = True,
@@ -272,7 +272,7 @@ class ResolveRvalSymbols(
 
 def resolve_rval_symbols(
     node: Union[str, ast.AST], should_update_usage_info: bool = True
-) -> Set[DataSymbol]:
+) -> Set[Symbol]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]
     if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):

@@ -14,7 +14,7 @@ from typing import (
     cast,
 )
 
-from ipyflow.analysis.resolved_symbols import ResolvedDataSymbol
+from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 from ipyflow.types import SupportedIndexType
@@ -22,7 +22,7 @@ from ipyflow.utils import CommonEqualityMixin
 from ipyflow.utils.ast_utils import subscript_to_slice
 
 if TYPE_CHECKING:
-    from ipyflow.data_model.data_symbol import DataSymbol, Scope
+    from ipyflow.data_model.symbol import Scope, Symbol
 
 
 logger = logging.getLogger(__name__)
@@ -331,7 +331,7 @@ class SymbolRef(CommonEqualityMixin):
         return cls(ast.parse(symbol_str, mode="eval").body)
 
     @classmethod
-    def resolve(cls, symbol_str: str) -> Optional["DataSymbol"]:
+    def resolve(cls, symbol_str: str) -> Optional["Symbol"]:
         ref = cls.from_string(symbol_str)
         for resolved in ref.gen_resolved_symbols(
             flow().global_scope, only_yield_final_symbol=True, yield_in_reverse=False
@@ -358,7 +358,7 @@ class SymbolRef(CommonEqualityMixin):
         yield_all_intermediate_symbols: bool = False,
         inherit_reactivity: bool = True,
         yield_in_reverse: bool = False,
-    ) -> Generator[ResolvedDataSymbol, None, None]:
+    ) -> Generator[ResolvedSymbol, None, None]:
         assert not (only_yield_final_symbol and yield_all_intermediate_symbols)
         assert not (yield_in_reverse and not yield_all_intermediate_symbols)
         dsym, atom, next_atom = None, None, None
@@ -366,7 +366,7 @@ class SymbolRef(CommonEqualityMixin):
         cascading_reactive_seen = False
         blocking_seen = False
         if yield_in_reverse:
-            gen: Iterable[Tuple["DataSymbol", Atom, Atom]] = [
+            gen: Iterable[Tuple["Symbol", Atom, Atom]] = [
                 (resolved.dsym, resolved.atom, resolved.next_atom)
                 for resolved in self.gen_resolved_symbols(
                     scope,
@@ -402,10 +402,10 @@ class SymbolRef(CommonEqualityMixin):
                 # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
                 #  Right now, yielding the intermediate elts of the chain will yield false positives in the
                 #  event of namespace stale children.
-                yield ResolvedDataSymbol(dsym, atom, next_atom)
+                yield ResolvedSymbol(dsym, atom, next_atom)
         if not yield_all_intermediate_symbols and dsym is not None:
             if next_atom is None or not only_yield_final_symbol:
-                yield ResolvedDataSymbol(dsym, atom, next_atom)
+                yield ResolvedSymbol(dsym, atom, next_atom)
 
 
 class LiveSymbolRef(CommonEqualityMixin):
@@ -422,7 +422,7 @@ class LiveSymbolRef(CommonEqualityMixin):
         return cls(SymbolRef.from_string(symbol_str), **kwargs)
 
     @staticmethod
-    def resolve(symbol_str: str) -> Optional["DataSymbol"]:
+    def resolve(symbol_str: str) -> Optional["Symbol"]:
         return SymbolRef.resolve(symbol_str)
 
     def __hash__(self) -> int:
@@ -442,7 +442,7 @@ class LiveSymbolRef(CommonEqualityMixin):
         only_yield_final_symbol: bool,
         yield_all_intermediate_symbols: bool = False,
         cell_ctr: int = -1,
-    ) -> Generator[ResolvedDataSymbol, None, None]:
+    ) -> Generator[ResolvedSymbol, None, None]:
         blocking_seen = False
         for resolved_sym in self.ref.gen_resolved_symbols(
             scope,

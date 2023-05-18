@@ -15,7 +15,7 @@ from typing import (
 )
 
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
-from ipyflow.data_model.data_symbol import DataSymbol, DataSymbolType
+from ipyflow.data_model.symbol import Symbol, SymbolType
 from ipyflow.models import _ScopeContainer, scopes
 from ipyflow.singletons import tracer
 from ipyflow.types import SupportedIndexType
@@ -44,7 +44,7 @@ class Scope:
         self.scope_name = str(scope_name)
         self.parent_scope = parent_scope  # None iff this is the global scope
         self.symtab = symtab
-        self._data_symbol_by_name: Dict[SupportedIndexType, DataSymbol] = {}
+        self._data_symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
 
     def __hash__(self):
         return hash(id(self))
@@ -84,13 +84,13 @@ class Scope:
                 pass
         return Scope(scope_name, parent_scope=self, symtab=child_symtab)
 
-    def put(self, name: SupportedIndexType, val: DataSymbol) -> None:
+    def put(self, name: SupportedIndexType, val: Symbol) -> None:
         self._data_symbol_by_name[name] = val
         val.containing_scope = self
 
     def lookup_data_symbol_by_name_this_indentation(
         self, name: SupportedIndexType, **_: Any
-    ) -> Optional[DataSymbol]:
+    ) -> Optional[Symbol]:
         return self._data_symbol_by_name.get(name, None)
 
     def all_data_symbols_this_indentation(self):
@@ -98,7 +98,7 @@ class Scope:
 
     def lookup_data_symbol_by_name(
         self, name: SupportedIndexType, **kwargs: Any
-    ) -> Optional[DataSymbol]:
+    ) -> Optional[Symbol]:
         ret = self.lookup_data_symbol_by_name_this_indentation(name, **kwargs)
         if ret is None and self.non_namespace_parent_scope is not None:
             ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(
@@ -108,7 +108,7 @@ class Scope:
 
     def gen_data_symbols_for_attrsub_chain(
         self, symbol_ref: SymbolRef
-    ) -> Generator[Tuple[DataSymbol, Atom, Optional[Atom]], None, None]:
+    ) -> Generator[Tuple[Symbol, Atom, Optional[Atom]], None, None]:
         """
         Generates progressive symbols appearing in an AttrSub chain until
         this can no longer be done semi-statically (e.g. because one of the
@@ -133,9 +133,9 @@ class Scope:
 
     def get_most_specific_data_symbol_for_attrsub_chain(
         self, chain: SymbolRef
-    ) -> Optional[Tuple[DataSymbol, Atom, Optional[Atom]]]:
+    ) -> Optional[Tuple[Symbol, Atom, Optional[Atom]]]:
         """
-        Get most specific DataSymbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
+        Get most specific Symbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
         ret = None
         for dsym, atom, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
@@ -156,31 +156,31 @@ class Scope:
         if is_function_def:
             assert overwrite
             assert not is_subscript
-            return DataSymbolType.FUNCTION
+            return SymbolType.FUNCTION
         elif is_import:
             assert overwrite
             assert not is_subscript
-            return DataSymbolType.IMPORT
+            return SymbolType.IMPORT
         elif is_module:
             assert overwrite
             assert not is_subscript
-            return DataSymbolType.MODULE
+            return SymbolType.MODULE
         elif class_scope is not None:
             assert overwrite
             assert not is_subscript
-            return DataSymbolType.CLASS
+            return SymbolType.CLASS
         elif is_subscript:
-            return DataSymbolType.SUBSCRIPT
+            return SymbolType.SUBSCRIPT
         elif is_anonymous:
-            return DataSymbolType.ANONYMOUS
+            return SymbolType.ANONYMOUS
         else:
-            return DataSymbolType.DEFAULT
+            return SymbolType.DEFAULT
 
     def upsert_data_symbol_for_name(
         self,
         name: SupportedIndexType,
         obj: Any,
-        deps: Optional[Iterable[DataSymbol]] = None,
+        deps: Optional[Iterable[Symbol]] = None,
         stmt_node: Optional[ast.stmt] = None,
         symbol_node: Optional[ast.AST] = None,
         overwrite: bool = True,
@@ -190,11 +190,11 @@ class Scope:
         is_module: bool = False,
         is_anonymous: bool = False,
         class_scope: Optional["Scope"] = None,
-        symbol_type: Optional[DataSymbolType] = None,
+        symbol_type: Optional[SymbolType] = None,
         propagate: bool = True,
         implicit: bool = False,
         is_cascading_reactive: Optional[bool] = None,
-    ) -> DataSymbol:
+    ) -> Symbol:
         symbol_type = symbol_type or self._resolve_symbol_type(
             overwrite=overwrite,
             is_subscript=is_subscript,
@@ -231,20 +231,20 @@ class Scope:
         self,
         name: SupportedIndexType,
         obj: Any,
-        deps: Set[DataSymbol],
-        symbol_type: DataSymbolType,
+        deps: Set[Symbol],
+        symbol_type: SymbolType,
         stmt_node: Optional[ast.stmt] = None,
         symbol_node: Optional[ast.AST] = None,
         implicit: bool = False,
-    ) -> Tuple[DataSymbol, Optional[DataSymbol], Optional[Any]]:
+    ) -> Tuple[Symbol, Optional[Symbol], Optional[Any]]:
         prev_obj = None
         prev_dsym = self.lookup_data_symbol_by_name_this_indentation(
             name,
-            is_subscript=symbol_type == DataSymbolType.SUBSCRIPT,
+            is_subscript=symbol_type == SymbolType.SUBSCRIPT,
             skip_cloned_lookup=True,
         )
         if prev_dsym is not None:
-            prev_obj = DataSymbol.NULL if prev_dsym.obj is None else prev_dsym.obj
+            prev_obj = Symbol.NULL if prev_dsym.obj is None else prev_dsym.obj
             # TODO: handle case where new dsym is of different type
             if (
                 name in self.data_symbol_by_name(prev_dsym.is_subscript)
@@ -277,7 +277,7 @@ class Scope:
         ns_self = self.namespace
         if (
             ns_self is not None
-            and symbol_type == DataSymbolType.DEFAULT
+            and symbol_type == SymbolType.DEFAULT
             and ns_self.cloned_from is not None
         ):
             # add the cloned symbol as a dependency of the symbol about to be created
@@ -286,7 +286,7 @@ class Scope:
             )
             if new_dep is not None:
                 deps.add(new_dep)
-        dsym = DataSymbol(
+        dsym = Symbol(
             name,
             symbol_type,
             obj,
@@ -363,7 +363,7 @@ class Scope:
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, dsym: DataSymbol) -> str:
+    def make_namespace_qualified_name(self, dsym: Symbol) -> str:
         return str(dsym.name)
 
 

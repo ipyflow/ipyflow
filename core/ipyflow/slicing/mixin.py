@@ -31,7 +31,7 @@ else:
     Protocol = object
 
 if TYPE_CHECKING:
-    from ipyflow.data_model.data_symbol import DataSymbol
+    from ipyflow.data_model.symbol import Symbol
 
 
 FormatType = TypeVar("FormatType", HTML, str)
@@ -50,10 +50,10 @@ class SlicingMixin(Protocol):
     #############
     # subclasses must implement the following:
 
-    _dynamic_parents: Dict[IdType, Set["DataSymbol"]]
-    _dynamic_children: Dict[IdType, Set["DataSymbol"]]
-    _static_parents: Dict[IdType, Set["DataSymbol"]]
-    _static_children: Dict[IdType, Set["DataSymbol"]]
+    _dynamic_parents: Dict[IdType, Set["Symbol"]]
+    _dynamic_children: Dict[IdType, Set["Symbol"]]
+    _static_parents: Dict[IdType, Set["Symbol"]]
+    _static_children: Dict[IdType, Set["Symbol"]]
 
     @classmethod
     def at_timestamp(
@@ -97,9 +97,7 @@ class SlicingMixin(Protocol):
         else:
             return parent_ref
 
-    def add_parent_edges(
-        self, parent_ref: SliceRefType, syms: Set["DataSymbol"]
-    ) -> None:
+    def add_parent_edges(self, parent_ref: SliceRefType, syms: Set["Symbol"]) -> None:
         if not syms:
             return
         parent = self._from_ref(parent_ref)
@@ -117,11 +115,11 @@ class SlicingMixin(Protocol):
         self.parents.setdefault(pid, set()).update(syms)
         parent.children.setdefault(self.id, set()).update(syms)
 
-    def add_parent_edge(self, parent_ref: SliceRefType, sym: "DataSymbol") -> None:
+    def add_parent_edge(self, parent_ref: SliceRefType, sym: "Symbol") -> None:
         self.add_parent_edges(parent_ref, {sym})
 
     def remove_parent_edges(
-        self, parent_ref: SliceRefType, syms: Set["DataSymbol"]
+        self, parent_ref: SliceRefType, syms: Set["Symbol"]
     ) -> None:
         if not syms:
             return
@@ -135,7 +133,7 @@ class SlicingMixin(Protocol):
             if not sym_edges:
                 del edges[eid]
 
-    def remove_parent_edge(self, parent_ref: SliceRefType, sym: "DataSymbol") -> None:
+    def remove_parent_edge(self, parent_ref: SliceRefType, sym: "Symbol") -> None:
         self.remove_parent_edges(parent_ref, {sym})
 
     def replace_parent_edges(
@@ -159,7 +157,7 @@ class SlicingMixin(Protocol):
         new_child.parents.setdefault(self.id, set()).update(syms)
 
     @property
-    def parents(self) -> Dict[IdType, Set["DataSymbol"]]:
+    def parents(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
@@ -170,7 +168,7 @@ class SlicingMixin(Protocol):
             assert False
 
     @parents.setter
-    def parents(self, new_parents: Dict[IdType, Set["DataSymbol"]]) -> None:
+    def parents(self, new_parents: Dict[IdType, Set["Symbol"]]) -> None:
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
@@ -181,7 +179,7 @@ class SlicingMixin(Protocol):
             assert False
 
     @property
-    def children(self) -> Dict[IdType, Set["DataSymbol"]]:
+    def children(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
@@ -192,7 +190,7 @@ class SlicingMixin(Protocol):
             assert False
 
     @children.setter
-    def children(self, new_children: Dict[IdType, Set["DataSymbol"]]) -> None:
+    def children(self, new_children: Dict[IdType, Set["Symbol"]]) -> None:
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:

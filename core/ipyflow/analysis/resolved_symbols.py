@@ -10,17 +10,17 @@ from ipyflow.utils import CommonEqualityMixin
 
 if TYPE_CHECKING:
     from ipyflow.analysis.symbol_ref import Atom
-    from ipyflow.data_model.data_symbol import DataSymbol
+    from ipyflow.data_model.symbol import Symbol
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class ResolvedDataSymbol(CommonEqualityMixin):
+class ResolvedSymbol(CommonEqualityMixin):
     def __init__(
         self,
-        dsym: "DataSymbol",
+        dsym: "Symbol",
         atom: "Atom",
         next_atom: Optional["Atom"],
         liveness_timestamp: Optional[Timestamp] = None,

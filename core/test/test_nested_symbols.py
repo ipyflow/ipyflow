@@ -3,7 +3,7 @@ import logging
 from test.utils import assert_bool, make_flow_fixture, skipif_known_failing
 from typing import Optional, Set
 
-from ipyflow.data_model.data_symbol import DataSymbol
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
 
 logging.basicConfig(level=logging.ERROR)
@@ -27,7 +27,7 @@ def assert_not_detected(msg=""):
     assert_bool(not waiter_detected(), msg=msg)
 
 
-def lookup_symbols(val) -> Optional[Set[DataSymbol]]:
+def lookup_symbols(val) -> Optional[Set[Symbol]]:
     flow_ = flow()
     alias_set = {
         alias for alias in flow_.aliases.get(id(val), []) if not alias.is_anonymous
@@ -37,7 +37,7 @@ def lookup_symbols(val) -> Optional[Set[DataSymbol]]:
     return alias_set
 
 
-def lookup_symbol(val) -> Optional[DataSymbol]:
+def lookup_symbol(val) -> Optional[Symbol]:
     alias_set = lookup_symbols(val)
     if alias_set is None or len(alias_set) == 0:
         return None

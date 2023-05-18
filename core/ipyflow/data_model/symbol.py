@@ -60,7 +60,7 @@ def _debounced_exec_schedule(executed_cell_id: IdType) -> None:
     )
 
 
-class DataSymbolType(Enum):
+class SymbolType(Enum):
     DEFAULT = "default"
     SUBSCRIPT = "subscript"
     FUNCTION = "function"
@@ -70,7 +70,7 @@ class DataSymbolType(Enum):
     ANONYMOUS = "anonymous"
 
 
-class DataSymbol:
+class Symbol:
     NULL = object()
 
     # object for virtual display symbol
@@ -81,7 +81,7 @@ class DataSymbol:
     def __init__(
         self,
         name: SupportedIndexType,
-        symbol_type: DataSymbolType,
+        symbol_type: SymbolType,
         obj: Any,
         containing_scope: "Scope",
         stmt_node: Optional[ast.stmt] = None,
@@ -113,8 +113,8 @@ class DataSymbol:
         self.stmt_node = self.update_stmt_node(stmt_node)
         self.symbol_node = symbol_node
         self._funcall_live_symbols = None
-        self.parents: Dict["DataSymbol", List[Timestamp]] = {}
-        self.children: Dict["DataSymbol", List[Timestamp]] = {}
+        self.parents: Dict["Symbol", List[Timestamp]] = {}
+        self.children: Dict["Symbol", List[Timestamp]] = {}
 
         # initialize at -1 for implicit since the corresponding piece of data could already be around,
         # and we don't want liveness checker to think this was newly created unless we
@@ -145,7 +145,7 @@ class DataSymbol:
         # All timestamps associated with this symbol
         self.updated_timestamps: Set[Timestamp] = set()
 
-        self.fresher_ancestors: Set["DataSymbol"] = set()
+        self.fresher_ancestors: Set["Symbol"] = set()
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
 
         # cells where this symbol was live
@@ -176,7 +176,7 @@ class DataSymbol:
                 ns.scope_name = self.name
 
     @property
-    def aliases(self) -> List["DataSymbol"]:
+    def aliases(self) -> List["Symbol"]:
         return list(flow().aliases.get(self.obj_id, []))
 
     @property
@@ -212,7 +212,7 @@ class DataSymbol:
             return max(self.timestamp_by_used_time.keys())
 
     @property
-    def namespace_waiting_symbols(self) -> Set["DataSymbol"]:
+    def namespace_waiting_symbols(self) -> Set["Symbol"]:
         ns = self.namespace
         return set() if ns is None else ns.namespace_waiting_symbols
 
@@ -232,7 +232,7 @@ class DataSymbol:
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
     def compute_namespace_timestamps(
-        self, seen: Optional[Set["DataSymbol"]] = None
+        self, seen: Optional[Set["Symbol"]] = None
     ) -> Set[Timestamp]:
         timestamps = {self.timestamp_excluding_ns_descendents, self.timestamp}
         ns = self.namespace
@@ -259,7 +259,7 @@ class DataSymbol:
 
     def cascading_reactive_cell_num(
         self,
-        seen: Optional[Set["DataSymbol"]] = None,
+        seen: Optional[Set["Symbol"]] = None,
         consider_containing_symbols: bool = True,
     ) -> int:
         if seen is None:
@@ -289,7 +289,7 @@ class DataSymbol:
             flow().cell_counter() if ctr is None else ctr,
         )
 
-    def iter_containing_symbols(self) -> Generator["DataSymbol", None, None]:
+    def iter_containing_symbols(self) -> Generator["Symbol", None, None]:
         yield self
         ns = self.containing_namespace
         if ns is None or not ns.is_namespace_scope:
@@ -311,23 +311,23 @@ class DataSymbol:
 
     @property
     def is_subscript(self) -> bool:
-        return self.symbol_type == DataSymbolType.SUBSCRIPT
+        return self.symbol_type == SymbolType.SUBSCRIPT
 
     @property
     def is_class(self) -> bool:
-        return self.symbol_type == DataSymbolType.CLASS
+        return self.symbol_type == SymbolType.CLASS
 
     @property
     def is_function(self) -> bool:
-        return self.symbol_type == DataSymbolType.FUNCTION
+        return self.symbol_type == SymbolType.FUNCTION
 
     @property
     def is_import(self) -> bool:
-        return self.symbol_type == DataSymbolType.IMPORT
+        return self.symbol_type == SymbolType.IMPORT
 
     @property
     def is_module(self) -> bool:
-        return self.symbol_type == DataSymbolType.MODULE
+        return self.symbol_type == SymbolType.MODULE
 
     @property
     def imported_module(self) -> str:
@@ -376,7 +376,7 @@ class DataSymbol:
             ctr, flow().min_cascading_reactive_cell_num
         )
 
-    def get_top_level(self) -> Optional["DataSymbol"]:
+    def get_top_level(self) -> Optional["Symbol"]:
         if not self.containing_scope.is_namespace_scope:
             return self
         else:
@@ -408,7 +408,7 @@ class DataSymbol:
 
     @property
     def is_anonymous(self) -> bool:
-        if self.symbol_type == DataSymbolType.ANONYMOUS:
+        if self.symbol_type == SymbolType.ANONYMOUS:
             return True
         ns = self.containing_namespace
         if ns is not None and ns.is_anonymous:
@@ -420,8 +420,8 @@ class DataSymbol:
         return self._implicit
 
     def shallow_clone(
-        self, new_obj: Any, new_containing_scope: "Scope", symbol_type: DataSymbolType
-    ) -> "DataSymbol":
+        self, new_obj: Any, new_containing_scope: "Scope", symbol_type: SymbolType
+    ) -> "Symbol":
         return self.__class__(self.name, symbol_type, new_obj, new_containing_scope)
 
     @property
@@ -577,12 +577,12 @@ class DataSymbol:
         self.cached_obj_type = None
 
     def get_ref_count(self) -> int:
-        if self.obj is None or self.obj is DataSymbol.NULL:
+        if self.obj is None or self.obj is Symbol.NULL:
             return -1
         total = sys.getrefcount(self.obj) - 1
         total -= len(flow().aliases.get(self.obj_id, []))
         ns = flow().namespaces.get(self.obj_id, None)
-        if ns is not None and ns.obj is not None and ns.obj is not DataSymbol.NULL:
+        if ns is not None and ns.obj is not None and ns.obj is not Symbol.NULL:
             total -= 1
         return total
 
@@ -605,8 +605,8 @@ class DataSymbol:
             return False
         if not self._cached_out_of_sync or self.obj_id == self.cached_obj_id:
             return True
-        if self.obj is None or prev_obj is DataSymbol.NULL:
-            return self.obj is None and prev_obj is DataSymbol.NULL
+        if self.obj is None or prev_obj is Symbol.NULL:
+            return self.obj is None and prev_obj is Symbol.NULL
         obj_type = type(self.obj)
         prev_type = type(prev_obj)
         if obj_type != prev_type:
@@ -658,7 +658,7 @@ class DataSymbol:
 
     def _match_call_args_with_definition_args(
         self,
-    ) -> Generator[Tuple[ast.arg, List["DataSymbol"]], None, None]:
+    ) -> Generator[Tuple[ast.arg, List["Symbol"]], None, None]:
         # TODO: handle posonlyargs, kwonlyargs
         assert self.func_def_stmt is not None and isinstance(
             self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
@@ -831,7 +831,7 @@ class DataSymbol:
             return False
         return True
 
-    def _is_underscore_or_simple_assign(self, new_deps: Set["DataSymbol"]) -> bool:
+    def _is_underscore_or_simple_assign(self, new_deps: Set["Symbol"]) -> bool:
         if self.name == "_":
             # FIXME: distinguish between explicit assignment to _ from user and implicit assignment from kernel
             return True
@@ -839,13 +839,13 @@ class DataSymbol:
             return False
         if len(new_deps) != 1:
             return False
-        only_dep: DataSymbol = next(iter(new_deps))
+        only_dep: Symbol = next(iter(new_deps))
         # obj ids can get reused for anon symbols like literals
         return not only_dep.is_anonymous and self.cached_obj_id == only_dep.obj_id
 
     def update_deps(
         self,
-        new_deps: Set["DataSymbol"],
+        new_deps: Set["Symbol"],
         prev_obj: Any = None,
         overwrite: bool = True,
         mutated: bool = False,
@@ -912,7 +912,7 @@ class DataSymbol:
         else:
             bump_version = refresh and (
                 not should_preserve_timestamp
-                or type(self.obj) not in DataSymbol.IMMUTABLE_TYPES
+                or type(self.obj) not in Symbol.IMMUTABLE_TYPES
             )
         if refresh:
             self.refresh(
@@ -1002,11 +1002,11 @@ class DataSymbol:
         used_time: Optional[Timestamp] = None,
         used_node: Optional[ast.AST] = None,
         exclude_ns: bool = False,
-        seen: Optional[Set["DataSymbol"]] = None,
+        seen: Optional[Set["Symbol"]] = None,
         is_static: bool = False,
         is_blocking: bool = False,
         add_data_dep_only_if_parent_new: bool = False,
-    ) -> "DataSymbol":
+    ) -> "Symbol":
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
@@ -1076,7 +1076,7 @@ class DataSymbol:
         refresh_descendent_namespaces: bool = False,
         refresh_namespace_waiting: bool = True,
         timestamp: Optional[Timestamp] = None,
-        seen: Optional[Set["DataSymbol"]] = None,
+        seen: Optional[Set["Symbol"]] = None,
     ) -> None:
         self._last_refreshed_timestamp = Timestamp.current()
         self._temp_disable_warnings = False
@@ -1128,6 +1128,6 @@ class DataSymbol:
 
 
 if len(_SymbolContainer) == 0:
-    _SymbolContainer.append(DataSymbol)
+    _SymbolContainer.append(Symbol)
 else:
-    _SymbolContainer[0] = DataSymbol
+    _SymbolContainer[0] = Symbol

@@ -9,20 +9,20 @@ from ipyflow.singletons import flow, tracer
 
 if TYPE_CHECKING:
     # avoid circular imports
-    from ipyflow.data_model.data_symbol import DataSymbol
+    from ipyflow.data_model.symbol import Symbol
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
 class UpdateProtocol:
-    def __init__(self, updated_sym: "DataSymbol") -> None:
+    def __init__(self, updated_sym: "Symbol") -> None:
         self.updated_sym = updated_sym
-        self.seen: Set["DataSymbol"] = set()
+        self.seen: Set["Symbol"] = set()
 
     def __call__(
         self,
-        new_deps: Set["DataSymbol"],
+        new_deps: Set["Symbol"],
         mutated: bool,
         propagate_to_namespace_descendents: bool,
         refresh: bool,
@@ -65,7 +65,7 @@ class UpdateProtocol:
         for dsym in updated_symbols_with_ancestors:
             self._propagate_waiting_to_deps(dsym, skip_seen_check=True)
 
-    def _maybe_get_duped_attrsub_updated_syms(self) -> Set["DataSymbol"]:
+    def _maybe_get_duped_attrsub_updated_syms(self) -> Set["Symbol"]:
         for modname, classname in DUPED_ATTRSUB_CLASSES:
             module = sys.modules.get(modname, None)
             if modname is None:
@@ -80,7 +80,7 @@ class UpdateProtocol:
 
             name = self.updated_sym.name
             return cast(
-                Set["DataSymbol"],
+                Set["Symbol"],
                 {
                     ns.lookup_data_symbol_by_name_this_indentation(
                         name, is_subscript=is_sub
@@ -93,7 +93,7 @@ class UpdateProtocol:
 
     def _collect_updated_symbols_and_refresh_namespaces(
         self,
-        updated_symbols: Iterable["DataSymbol"],
+        updated_symbols: Iterable["Symbol"],
         refresh_descendent_namespaces: bool,
     ) -> None:
         logger.warning(
@@ -130,7 +130,7 @@ class UpdateProtocol:
                     )
 
     def _propagate_waiting_to_namespace_parents(
-        self, dsym: "DataSymbol", skip_seen_check: bool = False
+        self, dsym: "Symbol", skip_seen_check: bool = False
     ) -> None:
         if not skip_seen_check and dsym in self.seen:
             return
@@ -153,8 +153,8 @@ class UpdateProtocol:
                 self._propagate_waiting_to_deps(child)
 
     def _non_class_to_instance_children(
-        self, dsym: "DataSymbol"
-    ) -> Generator["DataSymbol", None, None]:
+        self, dsym: "Symbol"
+    ) -> Generator["Symbol", None, None]:
         if self.updated_sym is dsym:
             yield from dsym.children
             return
@@ -168,7 +168,7 @@ class UpdateProtocol:
             yield child
 
     def _propagate_waiting_to_namespace_children(
-        self, dsym: "DataSymbol", skip_seen_check: bool = False
+        self, dsym: "Symbol", skip_seen_check: bool = False
     ) -> None:
         if not skip_seen_check and dsym in self.seen:
             return
@@ -181,7 +181,7 @@ class UpdateProtocol:
             self._propagate_waiting_to_deps(ns_child)
 
     def _propagate_waiting_to_deps(
-        self, dsym: "DataSymbol", skip_seen_check: bool = False
+        self, dsym: "Symbol", skip_seen_check: bool = False
     ) -> None:
         if not skip_seen_check and dsym in self.seen:
             return

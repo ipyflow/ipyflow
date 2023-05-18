@@ -3,10 +3,10 @@ from typing import TYPE_CHECKING, List, Type
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
-    from ipyflow.data_model.data_symbol import DataSymbol
     from ipyflow.data_model.namespace import Namespace
     from ipyflow.data_model.scope import Scope
     from ipyflow.data_model.statement import Statement
+    from ipyflow.data_model.symbol import Symbol
     from ipyflow.data_model.timestamp import Timestamp
 
 
@@ -14,7 +14,7 @@ _CodeCellContainer: List[Type["CodeCell"]] = []
 _NamespaceContainer: List[Type["Namespace"]] = []
 _ScopeContainer: List[Type["Scope"]] = []
 _StatementContainer: List[Type["Statement"]] = []
-_SymbolContainer: List[Type["DataSymbol"]] = []
+_SymbolContainer: List[Type["Symbol"]] = []
 _TimestampContainer: List[Type["Timestamp"]] = []
 
 
@@ -30,7 +30,7 @@ def scopes() -> Type["Scope"]:
     return _ScopeContainer[0]
 
 
-def symbols() -> Type["DataSymbol"]:
+def symbols() -> Type["Symbol"]:
     return _SymbolContainer[0]
 
 

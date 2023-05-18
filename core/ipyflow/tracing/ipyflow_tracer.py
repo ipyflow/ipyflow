@@ -37,10 +37,10 @@ from ipyflow.api.lift import unset_tag as api_unset_tag
 from ipyflow.api.lift import users as api_users
 from ipyflow.api.lift import watchpoints as api_watchpoints
 from ipyflow.data_model.code_cell import cells
-from ipyflow.data_model.data_symbol import DataSymbol
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import Statement
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_calls import resolve_external_call
@@ -163,17 +163,17 @@ class DataflowTracer(StackFrameManager):
         self.prev_event: Optional[pyc.TraceEvent] = None
         self.prev_trace_stmt: Optional[Statement] = None
         self.traced_statements: Dict[NodeId, Statement] = {}
-        self.node_id_to_loaded_symbols: Dict[NodeId, List[DataSymbol]] = {}
+        self.node_id_to_loaded_symbols: Dict[NodeId, List[Symbol]] = {}
         self.node_id_to_saved_store_data: Dict[NodeId, SavedStoreData] = {}
-        self.node_id_to_saved_live_subscript_refs: Dict[NodeId, Set[DataSymbol]] = {}
+        self.node_id_to_saved_live_subscript_refs: Dict[NodeId, Set[Symbol]] = {}
         self.node_id_to_saved_del_data: Dict[NodeId, SavedDelData] = {}
         self.node_id_to_loaded_literal_scope: Dict[NodeId, Namespace] = {}
         self.node_id_to_saved_dict_key: Dict[NodeId, Any] = {}
-        self.this_stmt_updated_symbols: Set[DataSymbol] = set()
-        self.pending_usage_updates_by_sym: Dict[DataSymbol, bool] = {}
+        self.this_stmt_updated_symbols: Set[Symbol] = set()
+        self.pending_usage_updates_by_sym: Dict[Symbol, bool] = {}
         self.cur_cell_symtab: Optional[symtable.SymbolTable] = None
 
-        self.calling_symbol: Optional[DataSymbol] = None
+        self.calling_symbol: Optional[Symbol] = None
         self.call_stack: pyc.TraceStack = self.make_stack()
         with self.call_stack.register_stack_state():
             # everything here should be copyable
@@ -499,7 +499,7 @@ class DataflowTracer(StackFrameManager):
 
     def resolve_store_data_for_target(
         self, target: Union[str, int, ast.AST], frame: FrameType
-    ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[DataSymbol]]:
+    ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[Symbol]]:
         target = self._partial_resolve_ref(target)
         if isinstance(target, str):
             return self._resolve_store_data_for_simple_target(target, frame)
@@ -542,9 +542,9 @@ class DataflowTracer(StackFrameManager):
         return scope, obj, attr_or_sub, is_subscript
 
     def resolve_loaded_symbols(
-        self, symbol_ref: Union[str, int, ast.AST, DataSymbol]
-    ) -> List[DataSymbol]:
-        if isinstance(symbol_ref, DataSymbol):
+        self, symbol_ref: Union[str, int, ast.AST, Symbol]
+    ) -> List[Symbol]:
+        if isinstance(symbol_ref, Symbol):
             return [symbol_ref]
         symbol_ref = self._partial_resolve_ref(symbol_ref)
         if isinstance(symbol_ref, int):
@@ -558,9 +558,7 @@ class DataflowTracer(StackFrameManager):
         else:
             return []
 
-    def resolve_symbols(
-        self, symbol_refs: Set[Union[str, int, DataSymbol]]
-    ) -> Set[DataSymbol]:
+    def resolve_symbols(self, symbol_refs: Set[Union[str, int, Symbol]]) -> Set[Symbol]:
         data_symbols = set()
         for ref in symbol_refs:
             data_symbols.update(self.resolve_loaded_symbols(ref))
@@ -611,7 +609,7 @@ class DataflowTracer(StackFrameManager):
         node: ast.AST,
         is_load: bool = True,
         is_named: bool = False,
-    ) -> Optional[DataSymbol]:
+    ) -> Optional[Symbol]:
         # TODO: upsert modules / namespaces hierarchically
         if isinstance(module_or_function, ModuleType):
             module = module_or_function
@@ -675,7 +673,7 @@ class DataflowTracer(StackFrameManager):
 
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(
         self, obj_attr_or_sub: Any, node: ast.AST
-    ) -> Optional[DataSymbol]:
+    ) -> Optional[Symbol]:
         if self.saved_complex_symbol_load_data is None:
             return None
         (

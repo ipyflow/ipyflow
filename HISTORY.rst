@@ -1,10 +1,11 @@
 History
 =======
 
-0.0.171 (2022-05-21)
+0.0.172 (2022-05-21)
 --------------------
 * Workaround for jupyter_core asyncio bug;
-* Stop pinning requirements thanks to software workarounds;
+* Jupyter server extension to enable aforementioned workaround;
+* Stop pinning requirements thanks to aforementioned software workarounds;
 
 0.0.170 (2022-05-13)
 --------------------

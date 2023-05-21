@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.171 (2022-05-21)
+--------------------
+* Workaround for jupyter_core asyncio bug;
+* Stop pinning requirements thanks to software workarounds;
+
 0.0.170 (2022-05-13)
 --------------------
 * Fix alt mode execute when reactivity is default;

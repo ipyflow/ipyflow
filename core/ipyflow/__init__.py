@@ -35,7 +35,9 @@ def _jupyter_server_extension_points():
 
 
 def load_jupyter_server_extension(nbapp):
-    pass
+    from ipyflow.kernel.kernel import patch_jupyter_taskrunner_run
+
+    patch_jupyter_taskrunner_run()
 
 
 def load_ipython_extension(ipy: "InteractiveShell") -> None:

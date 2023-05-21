@@ -430,6 +430,10 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 from ipyflow.kernel import patched_nest_asyncio
 
                 patched_nest_asyncio.apply()
+
+                # As of 2023/05/21, it seems like this is only necessary in
+                # the server extension, but seems like it can't hurt to do
+                # it here as well.
                 patch_jupyter_taskrunner_run()
 
             @classmethod

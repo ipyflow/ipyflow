@@ -49,6 +49,38 @@ class PyccoloKernelSettings(NamedTuple):
     store_history: bool
 
 
+def patched_taskrunner_run(_self, coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        # Workaround for bugs.python.org/issue39529.
+        try:
+            loop = asyncio.get_event_loop_policy().get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+    from ipyflow.kernel import patched_nest_asyncio
+
+    patched_nest_asyncio.apply(loop)
+    future = asyncio.ensure_future(coro, loop=loop)
+    try:
+        return loop.run_until_complete(future)
+    except BaseException as e:
+        future.cancel()
+        raise e
+
+
+def patch_jupyter_taskrunner_run():
+    # workaround for the issue described in
+    # https://github.com/jupyter/notebook/issues/6721
+    try:
+        import jupyter_core.utils
+
+        jupyter_core.utils._TaskRunner.run = patched_taskrunner_run
+    except:  # noqa: E722
+        pass
+
+
 class PyccoloKernelHooks:
     def after_init_class(self) -> None:
         ...
@@ -398,6 +430,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                 from ipyflow.kernel import patched_nest_asyncio
 
                 patched_nest_asyncio.apply()
+                patch_jupyter_taskrunner_run()
 
             @classmethod
             def inject(

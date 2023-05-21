@@ -4,7 +4,7 @@ import logging
 import sys
 from contextlib import contextmanager
 from io import StringIO
-from typing import Any, Callable, Generator, List, Optional
+from typing import Any, Callable, Generator, List, Optional, TextIO
 
 from IPython import get_ipython
 from IPython.core.displayhook import DisplayHook
@@ -160,6 +160,8 @@ class capture_output_tee:
         self.stderr = stderr
         self.display = display
         self.shell = None
+        self.sys_stdout: Optional[TextIO] = None
+        self.sys_stderr: Optional[TextIO] = None
 
     def __enter__(self) -> CapturedIO:
         self.sys_stdout = sys.stdout

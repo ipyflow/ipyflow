@@ -2,14 +2,14 @@ import asyncio
 import sys
 
 
-def apply():
+def apply(loop=None):
     import nest_asyncio
 
     # ref: https://github.com/erdewit/nest_asyncio/issues/14
     nest_asyncio._patch_task = _patched_patch_task
 
     # ref: https://github.com/erdewit/nest_asyncio
-    nest_asyncio.apply()
+    nest_asyncio.apply(loop=loop)
 
 
 def _patched_patch_task():

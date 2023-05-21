@@ -22,8 +22,7 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     author='Stephen Macke',
     author_email='stephen.macke@gmail.com',
-    description='Next-generation IPython kernel with reactivity, '
-                'execution suggestions, syntax extensions, and more.',
+    description='A reactive Python kernel for Jupyter notebooks.',
     long_description=read_file('README.md'),
     long_description_content_type='text/markdown',
     url='https://github.com/ipyflow/ipyflow',

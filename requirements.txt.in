@@ -2,6 +2,4 @@ ipyflow-core=={version}
 jupyter
 jupyterlab>=3.0
 nbclassic
-# ref: https://discourse.jupyter.org/t/jupyter-notebook-zmq-message-arrived-on-closed-channel-error/17869/17
-# seems to have been fixed in later versions
-tornado>=6.3.1
+notebook

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.173 (2022-05-25)
+--------------------
+* Fix potential bug in nest_asyncio patching;
+
 0.0.172 (2022-05-21)
 --------------------
 * Workaround for jupyter_core asyncio bug;

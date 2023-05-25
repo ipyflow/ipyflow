@@ -26,6 +26,8 @@ def _patched_patch_task():
                 curr_tasks[task._loop] = curr_task
 
     Task = asyncio.Task
+    if hasattr(Task, '_nest_patched'):
+        return
     if sys.version_info >= (3, 7, 0):
 
         def enter_task(loop, task):
@@ -36,16 +38,17 @@ def _patched_patch_task():
 
         asyncio.tasks._enter_task = enter_task
         asyncio.tasks._leave_task = leave_task
-        curr_tasks = asyncio.tasks._current_tasks
+        curr_tasks = asyncio.tasks._current_tasks  # type: ignore
     else:
-        curr_tasks = Task._current_tasks
+        curr_tasks = Task._current_tasks  # type: ignore
     try:
-        step_orig = Task._Task__step
-        Task._Task__step = step
+        step_orig = Task._Task__step  # type: ignore
+        Task._Task__step = step  # type: ignore
     except AttributeError:
         try:
-            step_orig = Task.__step
-            Task.__step = step
+            step_orig = Task.__step  # type: ignore
+            Task.__step = step  # type: ignore
         except AttributeError:
-            step_orig = Task._step
-            Task._step = step
+            step_orig = Task._step  # type: ignore
+            Task._step = step  # type: ignore
+    Task._nest_patched = True  # type: ignore

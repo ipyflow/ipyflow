@@ -328,6 +328,37 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
     interface: 'jupyter'
   });
 
+  const keybinding = {
+    help: 'alt mode execute',
+    help_index: 'zz',
+    handler: () => {
+      if (activeCell?.cell_type !== 'code') {
+        return;
+      }
+      notifyActiveCell();
+      if (isAltModeExecuting) {
+        // ensure that we keep exec_mode the same
+        // when next toggle runs
+        Jupyter.notebook.kernel.execute(
+          '%flow toggle-reactivity-until-next-reset',
+          {
+            silent: true,
+            store_history: false
+          }
+        );
+      }
+      isAltModeExecuting = true;
+      Jupyter.notebook.kernel.execute(
+        '%flow toggle-reactivity-until-next-reset',
+        {
+          silent: true,
+          store_history: false
+        }
+      );
+      Jupyter.notebook.execute_cells([activeCellIdx]);
+    }
+  };
+
   const onExecution = (evt: any, data: { cell: any }) => {
     if (disconnected) {
       Jupyter.notebook.events.unbind('execute.CodeCell', onExecution);
@@ -407,36 +438,6 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         setTimeout(notifyContents, 2000);
       };
       notifyContents();
-      const keybinding = {
-        help: 'alt mode execute',
-        help_index: 'zz',
-        handler: () => {
-          if (activeCell?.cell_type !== 'code') {
-            return;
-          }
-          notifyActiveCell();
-          if (isAltModeExecuting) {
-            // ensure that we keep exec_mode the same
-            // when next toggle runs
-            Jupyter.notebook.kernel.execute(
-              '%flow toggle-reactivity-until-next-reset',
-              {
-                silent: true,
-                store_history: false
-              }
-            );
-          }
-          isAltModeExecuting = true;
-          Jupyter.notebook.kernel.execute(
-            '%flow toggle-reactivity-until-next-reset',
-            {
-              silent: true,
-              store_history: false
-            }
-          );
-          Jupyter.notebook.execute_cells([activeCellIdx]);
-        }
-      };
       Jupyter.keyboard_manager.command_shortcuts.add_shortcuts({
         'cmd-shift-enter': keybinding,
         'ctrl-shift-enter': keybinding
@@ -572,6 +573,14 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
   return () => {
     disconnected = true;
     clearCellState(Jupyter);
+    Jupyter.keyboard_manager.command_shortcuts.remove_shortcut(
+      'cmd-shift-enter'
+    );
+    Jupyter.keyboard_manager.command_shortcuts.remove_shortcut(
+      'ctrl-shift-enter'
+    );
+    Jupyter.keyboard_manager.edit_shortcuts.remove_shortcut('cmd-shift-enter');
+    Jupyter.keyboard_manager.edit_shortcuts.remove_shortcut('ctrl-shift-enter');
   };
 }
 
@@ -591,6 +600,28 @@ __non_webpack_require__(
       commDisconnectHandler();
     });
     Jupyter.notebook.events.on('kernel_ready.Kernel', () => {
+      Jupyter.notebook.kernel.comm_manager.register_target(
+        'ipyflow-client',
+        (comm: any, open_msg: any) => {
+          const payload = open_msg.content.data;
+          if (payload.type !== 'establish' || !(payload.success ?? false)) {
+            return;
+          }
+          comm.on_msg((msg: any) => {
+            const payload = msg.content.data;
+            if (!(payload.success ?? false)) {
+              return;
+            }
+            if (payload.type === 'unestablish') {
+              commDisconnectHandler();
+            } else if (payload.type === 'establish') {
+              commDisconnectHandler = connectToComm(Jupyter, code_cell);
+            }
+          });
+          commDisconnectHandler();
+          commDisconnectHandler = connectToComm(Jupyter, code_cell);
+        }
+      );
       if (Jupyter.notebook.kernel.name === 'ipyflow') {
         commDisconnectHandler = connectToComm(Jupyter, code_cell);
       } else {

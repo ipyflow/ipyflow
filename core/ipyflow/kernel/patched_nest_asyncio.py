@@ -26,7 +26,7 @@ def _patched_patch_task():
                 curr_tasks[task._loop] = curr_task
 
     Task = asyncio.Task
-    if hasattr(Task, '_nest_patched'):
+    if hasattr(Task, "_nest_patched"):
         return
     if sys.version_info >= (3, 7, 0):
 

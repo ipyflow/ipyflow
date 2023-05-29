@@ -27,7 +27,7 @@ const linkedReadyMakerClass = 'linked-ready-maker';
 const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
-let ipyflowExtensionEnabled: boolean = false;
+let ipyflowExtensionEnabled = false;
 let dirtyCells: Set<string> = new Set();
 let waitingCells: Set<string> = new Set();
 let readyCells: Set<string> = new Set();
@@ -91,7 +91,10 @@ const extension: JupyterFrontEndPlugin<void> = {
         if (!session.isReady) {
           return;
         }
-        if (session.session.kernel.name !== IPYFLOW_KERNEL_NAME && !ipyflowExtensionEnabled) {
+        if (
+          session.session.kernel.name !== IPYFLOW_KERNEL_NAME &&
+          !ipyflowExtensionEnabled
+        ) {
           app.commands.execute('notebook:enter-command-mode');
           CodeCell.execute(notebooks.activeCell as CodeCell, session);
         } else if (notebooks.activeCell.model.type === 'code') {
@@ -168,28 +171,31 @@ const extension: JupyterFrontEndPlugin<void> = {
       session.ready.then(() => {
         clearCellState(nbPanel.content);
         let commDisconnectHandler = resetState;
-        session.session.kernel.registerCommTarget('ipyflow-client', (comm, open_msg) => {
-          const payload = open_msg.content.data;
-          if (payload.type !== 'establish' || !(payload.success ?? false)) {
-            return;
-          }
-          ipyflowExtensionEnabled = true;
-          comm.onMsg = (msg) => {
-            const payload = msg.content.data;
-            if (!(payload.success ?? false)) {
+        session.session.kernel.registerCommTarget(
+          'ipyflow-client',
+          (comm, open_msg) => {
+            const payload = open_msg.content.data;
+            if (payload.type !== 'establish' || !(payload.success ?? false)) {
               return;
             }
-            if (payload.type === 'unestablish') {
-              ipyflowExtensionEnabled = false;
-              commDisconnectHandler();
-            } else if (payload.type === 'establish') {
-              ipyflowExtensionEnabled = true;
-              commDisconnectHandler = connectToComm(session, nbPanel.content);
-            }
+            ipyflowExtensionEnabled = true;
+            comm.onMsg = (msg) => {
+              const payload = msg.content.data;
+              if (!(payload.success ?? false)) {
+                return;
+              }
+              if (payload.type === 'unestablish') {
+                ipyflowExtensionEnabled = false;
+                commDisconnectHandler();
+              } else if (payload.type === 'establish') {
+                ipyflowExtensionEnabled = true;
+                commDisconnectHandler = connectToComm(session, nbPanel.content);
+              }
+            };
+            commDisconnectHandler();
+            commDisconnectHandler = connectToComm(session, nbPanel.content);
           }
-          commDisconnectHandler();
-          commDisconnectHandler = connectToComm(session, nbPanel.content);
-        });
+        );
         if (session.session.kernel.name === IPYFLOW_KERNEL_NAME) {
           session.ready.then(() => {
             commDisconnectHandler = connectToComm(session, nbPanel.content);

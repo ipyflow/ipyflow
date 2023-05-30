@@ -14,6 +14,7 @@ const linkedReadyMakingClass = 'linked-ready-making';
 const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
+let isIpyflowCommConnected = false;
 let waitingCells: Set<string> = new Set();
 let readyCells: Set<string> = new Set();
 let waiterLinks: { [id: string]: string[] } = {};
@@ -226,9 +227,9 @@ function refreshNodeMapping(Jupyter: any): void {
   orderIdxById = {};
 
   Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
-    cellsById[cell.cell_id] = cell.element[0];
-    cellModelsById[cell.cell_id] = cell;
-    orderIdxById[cell.cell_id] = idx;
+    cellsById[cell.id] = cell.element[0];
+    cellModelsById[cell.id] = cell;
+    orderIdxById[cell.id] = idx;
   });
 }
 
@@ -261,7 +262,7 @@ function clearCellState(Jupyter: any): void {
 
 function updateOneCellUI(cell: any): void {
   clearOneCellState(cell);
-  const id = cell.cell_id;
+  const id = cell.id;
   const elem = cell.element[0];
   if (waitingCells.has(id)) {
     elem.classList.add(waitingClass);
@@ -313,7 +314,7 @@ function gatherCellMetadataById(Jupyter: any): CellMetadataMap {
     if (cell.cell_type !== 'code') {
       return;
     }
-    cell_metadata_by_id[cell.cell_id] = {
+    cell_metadata_by_id[cell.id] = {
       index: idx,
       content: cell.get_text(),
       type: cell.cell_type
@@ -371,7 +372,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
     data.cell.element[0].classList.remove(readyMakingInputClass);
     comm.send({
       type: 'compute_exec_schedule',
-      executed_cell_id: data.cell.cell_id,
+      executed_cell_id: data.cell.id,
       cell_metadata_by_id: gatherCellMetadataById(Jupyter)
     });
   };
@@ -385,14 +386,14 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       return;
     }
     Jupyter.notebook.get_cells().forEach((cell: any, idx: number) => {
-      if (data.cell.cell_id === cell.cell_id) {
+      if (data.cell.id === cell.id) {
         activeCell = data.cell;
         activeCellIdx = idx;
       }
     });
     comm.send({
       type: 'change_active_cell',
-      active_cell_id: data.cell.cell_id,
+      active_cell_id: data.cell.id,
       active_cell_order_idx: activeCellIdx
     });
   };
@@ -414,10 +415,11 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
     // console.log('comm got msg: ');
     // console.log(msg.content.data)
     const payload = msg.content.data;
-    if (disconnected || !(payload.success ?? false)) {
+    if (disconnected || !(payload.success ?? true)) {
       return;
     }
     if (payload.type === 'establish') {
+      isIpyflowCommConnected = true;
       Jupyter.notebook.events.on('create.Cell', notifyActiveCell);
       Jupyter.notebook.events.on('delete.Cell', notifyActiveCell);
       Jupyter.notebook.events.on('cut.Cell', notifyActiveCell);
@@ -496,24 +498,21 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
             return;
           }
           if (!lastExecutedCellIdSeen) {
-            lastExecutedCellIdSeen = cell.cell_id === lastExecutedCellId;
+            lastExecutedCellIdSeen = cell.id === lastExecutedCellId;
             if (flow_order === 'in_order' || exec_schedule === 'strict') {
               return;
             }
           }
           if (
             cell.cell_type !== 'code' ||
-            executedReactiveReadyCells.has(cell.cell_id)
+            executedReactiveReadyCells.has(cell.id)
           ) {
             return;
           }
-          if (!newReadyCells.has(cell.cell_id)) {
+          if (!newReadyCells.has(cell.id)) {
             return;
           }
-          if (
-            !forcedReactiveCells.has(cell.cell_id) &&
-            exec_mode !== 'reactive'
-          ) {
+          if (!forcedReactiveCells.has(cell.id) && exec_mode !== 'reactive') {
             return;
           }
           if (cellPendingExecution == null) {
@@ -564,23 +563,31 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         updateUI(Jupyter);
         comm.send({
           type: 'change_active_cell',
-          active_cell_id: cellPendingExecution.cell_id,
+          active_cell_id: cellPendingExecution.id,
           active_cell_order_idx: cellPendingExecutionIdx
         });
       }
     }
   });
   return () => {
+    comm.close();
     disconnected = true;
     clearCellState(Jupyter);
-    Jupyter.keyboard_manager.command_shortcuts.remove_shortcut(
-      'cmd-shift-enter'
-    );
-    Jupyter.keyboard_manager.command_shortcuts.remove_shortcut(
-      'ctrl-shift-enter'
-    );
-    Jupyter.keyboard_manager.edit_shortcuts.remove_shortcut('cmd-shift-enter');
-    Jupyter.keyboard_manager.edit_shortcuts.remove_shortcut('ctrl-shift-enter');
+    if (isIpyflowCommConnected) {
+      Jupyter.keyboard_manager.command_shortcuts.remove_shortcut(
+        'cmd-shift-enter'
+      );
+      Jupyter.keyboard_manager.command_shortcuts.remove_shortcut(
+        'ctrl-shift-enter'
+      );
+      Jupyter.keyboard_manager.edit_shortcuts.remove_shortcut(
+        'cmd-shift-enter'
+      );
+      Jupyter.keyboard_manager.edit_shortcuts.remove_shortcut(
+        'ctrl-shift-enter'
+      );
+    }
+    isIpyflowCommConnected = false;
   };
 }
 
@@ -591,30 +598,20 @@ __non_webpack_require__(
     let commDisconnectHandler = function() {
       // nothing to do by default
     };
-    Jupyter.notebook.events.on('spec_changed.Kernel', () => {
-      // console.log('kernel changed');
-      commDisconnectHandler();
-    });
-    Jupyter.notebook.events.on('kernel_restarting.Kernel', () => {
-      // console.log('kernel changed');
-      commDisconnectHandler();
-    });
-    Jupyter.notebook.events.on('kernel_ready.Kernel', () => {
+
+    const registerCommTarget = () => {
       Jupyter.notebook.kernel.comm_manager.register_target(
         'ipyflow-client',
-        (comm: any, open_msg: any) => {
-          const payload = open_msg.content.data;
-          if (payload.type !== 'establish' || !(payload.success ?? false)) {
-            return;
-          }
+        (comm: any, _open_msg: any) => {
           comm.on_msg((msg: any) => {
             const payload = msg.content.data;
-            if (!(payload.success ?? false)) {
+            if (!(payload.success ?? true)) {
               return;
             }
             if (payload.type === 'unestablish') {
               commDisconnectHandler();
             } else if (payload.type === 'establish') {
+              commDisconnectHandler();
               commDisconnectHandler = connectToComm(Jupyter, code_cell);
             }
           });
@@ -622,13 +619,20 @@ __non_webpack_require__(
           commDisconnectHandler = connectToComm(Jupyter, code_cell);
         }
       );
-      if (Jupyter.notebook.kernel.name === 'ipyflow') {
-        commDisconnectHandler = connectToComm(Jupyter, code_cell);
-      } else {
-        commDisconnectHandler = function() {
-          // reset to no-op
-        };
-      }
+    };
+
+    Jupyter.notebook.events.on('spec_changed.Kernel', () => {
+      // console.log('kernel changed');
+      registerCommTarget();
+      commDisconnectHandler();
+    });
+    Jupyter.notebook.events.on('kernel_restarting.Kernel', () => {
+      // console.log('kernel changed');
+      commDisconnectHandler();
+    });
+    Jupyter.notebook.events.on('kernel_ready.Kernel', () => {
+      registerCommTarget();
+      commDisconnectHandler = connectToComm(Jupyter, code_cell);
     });
   }
 );

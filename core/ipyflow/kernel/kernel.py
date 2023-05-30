@@ -5,6 +5,7 @@ import logging
 import sys
 from contextlib import contextmanager, suppress
 from typing import (
+    TYPE_CHECKING,
     Callable,
     ContextManager,
     Generator,
@@ -40,6 +41,9 @@ from ipyflow.utils.ipython_utils import (
     save_number_of_currently_executing_cell,
 )
 from ipyflow.version import __version__
+
+if TYPE_CHECKING:
+    from ipykernel.comm import Comm
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
@@ -417,6 +421,7 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             implementation_version = __version__
             prev_kernel_class: Optional[Type[IPythonKernel]] = None
             replacement_class: Optional[Type[IPythonKernel]] = None
+            client_comm: Optional["Comm"] = None
 
             def __init__(self, **kwargs) -> None:
                 super().__init__(**kwargs)

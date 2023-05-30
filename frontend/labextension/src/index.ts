@@ -13,8 +13,6 @@ import { INotebookTracker, Notebook } from '@jupyterlab/notebook';
 
 import _ from 'lodash';
 
-const IPYFLOW_KERNEL_NAME = 'ipyflow';
-
 type Highlights = 'all' | 'none' | 'executed' | 'reactive';
 
 const waitingClass = 'waiting-cell';
@@ -27,46 +25,60 @@ const linkedReadyMakerClass = 'linked-ready-maker';
 const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
-let ipyflowExtensionEnabled = false;
-let dirtyCells: Set<string> = new Set();
-let waitingCells: Set<string> = new Set();
-let readyCells: Set<string> = new Set();
-let waiterLinks: { [id: string]: string[] } = {};
-let readyMakerLinks: { [id: string]: string[] } = {};
-let activeCell: Cell<ICellModel> = null;
-let activeCellId: string = null;
-let cellsById: { [id: string]: HTMLElement } = {};
-let cellModelsById: { [id: string]: ICellModel } = {};
-let orderIdxById: { [id: string]: number } = {};
-let cellPendingExecution: CodeCell = null;
+type IpyflowSessionState = {
+  isIpyflowCommConnected: boolean;
+  dirtyCells: Set<string>;
+  waitingCells: Set<string>;
+  readyCells: Set<string>;
+  waiterLinks: { [id: string]: string[] };
+  readyMakerLinks: { [id: string]: string[] };
+  activeCell: Cell<ICellModel>;
+  activeCellId: string;
+  cellsById: { [id: string]: HTMLElement };
+  cellModelsById: { [id: string]: ICellModel };
+  orderIdxById: { [id: string]: number };
+  cellPendingExecution: CodeCell;
+  lastExecutionMode: string;
+  isReactivelyExecuting: boolean;
+  isAltModeExecuting: boolean;
+  lastExecutionHighlights: Highlights;
+  executedReactiveReadyCells: Set<string>;
+  newReadyCells: Set<string>;
+  forcedReactiveCells: Set<string>;
+};
 
-let lastExecutionMode: string = null;
-let isReactivelyExecuting = false;
-let isAltModeExecuting = false;
-let lastExecutionHighlights: Highlights = null;
-let executedReactiveReadyCells: Set<string> = new Set();
-let newReadyCells: Set<string> = new Set();
-let forcedReactiveCells: Set<string> = new Set();
+type IpyflowState = {
+  [session_id: string]: IpyflowSessionState;
+};
 
-function resetState(): void {
-  dirtyCells = new Set();
-  waitingCells = new Set();
-  readyCells = new Set();
-  waiterLinks = {};
-  readyMakerLinks = {};
-  activeCell = null;
-  activeCellId = null;
-  cellsById = {};
-  cellModelsById = {};
-  orderIdxById = {};
-  cellPendingExecution = null;
-  lastExecutionMode = null;
-  isReactivelyExecuting = false;
-  isAltModeExecuting = false;
-  lastExecutionHighlights = null;
-  executedReactiveReadyCells = new Set();
-  newReadyCells = new Set();
-  forcedReactiveCells = new Set();
+const ipyflowState: IpyflowState = {};
+
+function initSessionState(session_id: string): void {
+  ipyflowState[session_id] = {
+    isIpyflowCommConnected: false,
+    dirtyCells: new Set(),
+    waitingCells: new Set(),
+    readyCells: new Set(),
+    waiterLinks: {},
+    readyMakerLinks: {},
+    activeCell: null,
+    activeCellId: null,
+    cellsById: {},
+    cellModelsById: {},
+    orderIdxById: {},
+    cellPendingExecution: null,
+    lastExecutionMode: null,
+    isReactivelyExecuting: false,
+    isAltModeExecuting: false,
+    lastExecutionHighlights: null,
+    executedReactiveReadyCells: new Set(),
+    newReadyCells: new Set(),
+    forcedReactiveCells: new Set(),
+  };
+}
+
+function resetSessionState(session_id: string): void {
+  delete ipyflowState[session_id];
 }
 
 /**
@@ -91,15 +103,14 @@ const extension: JupyterFrontEndPlugin<void> = {
         if (!session.isReady) {
           return;
         }
-        if (
-          session.session.kernel.name !== IPYFLOW_KERNEL_NAME &&
-          !ipyflowExtensionEnabled
-        ) {
+        const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+          {}) as IpyflowSessionState;
+        if (!(state.isIpyflowCommConnected ?? false)) {
           app.commands.execute('notebook:enter-command-mode');
           CodeCell.execute(notebooks.activeCell as CodeCell, session);
         } else if (notebooks.activeCell.model.type === 'code') {
           app.commands.execute('notebook:enter-command-mode');
-          if (isAltModeExecuting) {
+          if (state.isAltModeExecuting) {
             // run the toggle twice to get to the same exec mode, but with updated timestamp
             session.session.kernel
               .requestExecute({
@@ -119,7 +130,7 @@ const extension: JupyterFrontEndPlugin<void> = {
                   });
               });
           } else {
-            isAltModeExecuting = true;
+            state.isAltModeExecuting = true;
             session.session.kernel
               .requestExecute({
                 code: '%flow toggle-reactivity-until-next-reset',
@@ -168,27 +179,21 @@ const extension: JupyterFrontEndPlugin<void> = {
     });
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
-      session.ready.then(() => {
-        clearCellState(nbPanel.content);
-        let commDisconnectHandler = resetState;
+      let commDisconnectHandler = () => resetSessionState(session.session.id);
+
+      const registerCommTarget = () => {
         session.session.kernel.registerCommTarget(
           'ipyflow-client',
-          (comm, open_msg) => {
-            const payload = open_msg.content.data;
-            if (payload.type !== 'establish' || !(payload.success ?? false)) {
-              return;
-            }
-            ipyflowExtensionEnabled = true;
+          (comm, _open_msg) => {
             comm.onMsg = (msg) => {
               const payload = msg.content.data;
-              if (!(payload.success ?? false)) {
+              if (!(payload.success ?? true)) {
                 return;
               }
               if (payload.type === 'unestablish') {
-                ipyflowExtensionEnabled = false;
                 commDisconnectHandler();
               } else if (payload.type === 'establish') {
-                ipyflowExtensionEnabled = true;
+                commDisconnectHandler();
                 commDisconnectHandler = connectToComm(session, nbPanel.content);
               }
             };
@@ -196,24 +201,25 @@ const extension: JupyterFrontEndPlugin<void> = {
             commDisconnectHandler = connectToComm(session, nbPanel.content);
           }
         );
-        if (session.session.kernel.name === IPYFLOW_KERNEL_NAME) {
-          session.ready.then(() => {
-            commDisconnectHandler = connectToComm(session, nbPanel.content);
-          });
-        }
+      };
+
+      session.ready.then(() => {
+        clearCellState(nbPanel.content);
+        registerCommTarget();
+        commDisconnectHandler();
+        commDisconnectHandler = connectToComm(session, nbPanel.content);
         session.kernelChanged.connect((_, args) => {
           if (args.newValue == null) {
             return;
           }
-          resetState();
           clearCellState(nbPanel.content);
           commDisconnectHandler();
-          commDisconnectHandler = resetState;
-          if (args.newValue.name === IPYFLOW_KERNEL_NAME) {
-            session.ready.then(() => {
-              commDisconnectHandler = connectToComm(session, nbPanel.content);
-            });
-          }
+          resetSessionState(session.session.id);
+          commDisconnectHandler = () => resetSessionState(session.session.id);
+          session.ready.then(() => {
+            registerCommTarget();
+            commDisconnectHandler = connectToComm(session, nbPanel.content);
+          });
         });
       });
     });
@@ -306,18 +312,6 @@ const addWaitingOutputInteractions = (
   );
 };
 
-const refreshNodeMapping = (notebook: Notebook) => {
-  cellsById = {};
-  cellModelsById = {};
-  orderIdxById = {};
-
-  notebook.widgets.forEach((cell, idx) => {
-    cellsById[cell.model.id] = cell.node;
-    cellModelsById[cell.model.id] = cell.model;
-    orderIdxById[cell.model.id] = idx;
-  });
-};
-
 const clearCellState = (notebook: Notebook) => {
   notebook.widgets.forEach((cell) => {
     cell.node.classList.remove(waitingClass);
@@ -372,9 +366,10 @@ const addUnsafeCellInteraction = (
 };
 
 const connectToComm = (session: ISessionContext, notebook: Notebook) => {
-  resetState();
-  activeCell = notebook.activeCell;
-  activeCellId = activeCell.model.id;
+  initSessionState(session.session.id);
+  const state = ipyflowState[session.session.id];
+  state.activeCell = notebook.activeCell;
+  state.activeCellId = state.activeCell.model.id;
   const comm = session.session.kernel.createComm('ipyflow');
   let disconnected = false;
 
@@ -414,7 +409,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       type: 'compute_exec_schedule',
       executed_cell_id: cell?.id,
       cell_metadata_by_id,
-      is_reactively_executing: isReactivelyExecuting,
+      is_reactively_executing: state.isReactivelyExecuting,
     });
   };
 
@@ -450,6 +445,18 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     comm.send(payload);
   };
 
+  const refreshNodeMapping = (notebook: Notebook) => {
+    state.cellsById = {};
+    state.cellModelsById = {};
+    state.orderIdxById = {};
+
+    notebook.widgets.forEach((cell, idx) => {
+      state.cellsById[cell.model.id] = cell.node;
+      state.cellModelsById[cell.model.id] = cell.model;
+      state.orderIdxById[cell.model.id] = idx;
+    });
+  };
+
   const onActiveCellChange = (nb: Notebook, cell: Cell<ICellModel>) => {
     if (notebook !== nb) {
       return;
@@ -459,41 +466,40 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       return;
     }
     notifyActiveCell(cell.model);
-    if (activeCell !== null && activeCell.model !== null) {
-      if ((<ICodeCellModel>activeCell.model).isDirty) {
-        dirtyCells.add(activeCellId);
+    if (state.activeCell !== null && state.activeCell.model !== null) {
+      if ((<ICodeCellModel>state.activeCell.model).isDirty) {
+        state.dirtyCells.add(state.activeCellId);
       } else {
-        dirtyCells.delete(activeCellId);
+        state.dirtyCells.delete(state.activeCellId);
       }
-      activeCell.model.stateChanged.disconnect(
+      state.activeCell.model.stateChanged.disconnect(
         onExecution,
-        activeCell.model.stateChanged
+        state.activeCell.model.stateChanged
       );
     }
-    activeCell = cell;
-    activeCellId = cell.model.id;
+    state.activeCell = cell;
+    state.activeCellId = cell.model.id;
 
     if (
-      activeCell === null ||
-      activeCell.model === null ||
-      activeCell.model.type !== 'code'
+      state.activeCell === null ||
+      state.activeCell.model === null ||
+      state.activeCell.model.type !== 'code'
     ) {
       return;
     }
 
-    activeCell.model.stateChanged.connect(onExecution);
-    notifyActiveCell(activeCell.model);
+    state.activeCell.model.stateChanged.connect(onExecution);
+    notifyActiveCell(state.activeCell.model);
 
-    if (dirtyCells.has(activeCellId)) {
-      const activeCellModel: any = activeCell.model as any;
+    if (state.dirtyCells.has(state.activeCellId)) {
+      const activeCellModel: any = state.activeCell.model as any;
       if (activeCellModel._setDirty !== undefined) {
         activeCellModel._setDirty(true);
       }
     }
     refreshNodeMapping(notebook);
-    updateOneCellUI(activeCellId);
+    updateOneCellUI(state.activeCellId);
   };
-  notebook.activeCellChanged.connect(onActiveCellChange);
 
   const actionUpdatePairs: {
     action: 'mouseover' | 'mouseout';
@@ -510,7 +516,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
   ];
 
   const updateOneCellUI = (id: string) => {
-    const model = cellModelsById[id];
+    const model = state.cellModelsById[id];
     if (model.type !== 'code') {
       return;
     }
@@ -518,70 +524,70 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     if (codeModel.executionCount == null) {
       return;
     }
-    const elem = cellsById[id];
-    if (waitingCells.has(id)) {
+    const elem = state.cellsById[id];
+    if (state.waitingCells.has(id)) {
       elem.classList.add(waitingClass);
       elem.classList.add(readyClass);
       elem.classList.remove(readyMakingInputClass);
       addWaitingOutputInteractions(elem, linkedWaitingClass);
-    } else if (readyCells.has(id)) {
+    } else if (state.readyCells.has(id)) {
       elem.classList.add(readyMakingInputClass);
       elem.classList.add(readyClass);
       addWaitingOutputInteractions(elem, linkedReadyMakerClass);
     }
 
-    if (lastExecutionMode === 'reactive') {
+    if (state.lastExecutionMode === 'reactive') {
       return;
     }
 
-    if (Object.prototype.hasOwnProperty.call(waiterLinks, id)) {
+    if (Object.prototype.hasOwnProperty.call(state.waiterLinks, id)) {
       actionUpdatePairs.forEach(({ action, update }) => {
         addUnsafeCellInteraction(
           getJpInputCollapser(elem),
-          waiterLinks[id],
-          cellsById,
+          state.waiterLinks[id],
+          state.cellsById,
           getJpInputCollapser,
           action,
           update,
-          waitingCells
+          state.waitingCells
         );
 
         addUnsafeCellInteraction(
           getJpOutputCollapser(elem),
-          waiterLinks[id],
-          cellsById,
+          state.waiterLinks[id],
+          state.cellsById,
           getJpInputCollapser,
           action,
           update,
-          waitingCells
+          state.waitingCells
         );
       });
     }
 
-    if (Object.prototype.hasOwnProperty.call(readyMakerLinks, id)) {
-      if (!waitingCells.has(id)) {
+    if (Object.prototype.hasOwnProperty.call(state.readyMakerLinks, id)) {
+      if (!state.waitingCells.has(id)) {
         elem.classList.add(readyMakingClass);
         elem.classList.add(readyClass);
       }
       actionUpdatePairs.forEach(({ action, update }) => {
         addUnsafeCellInteraction(
           getJpInputCollapser(elem),
-          readyMakerLinks[id],
-          cellsById,
+          state.readyMakerLinks[id],
+          state.cellsById,
           getJpInputCollapser,
           action,
           update,
-          waitingCells
+          state.waitingCells
         );
 
         addUnsafeCellInteraction(
           getJpInputCollapser(elem),
-          readyMakerLinks[id],
-          cellsById,
+          state.readyMakerLinks[id],
+          state.cellsById,
           getJpOutputCollapser,
           action,
           update,
-          waitingCells
+          state.waitingCells
         );
       });
     }
@@ -589,52 +595,56 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
 
   const updateUI = (notebook: Notebook) => {
     clearCellState(notebook);
-    if (lastExecutionHighlights === 'none') {
+    if (state.lastExecutionHighlights === 'none') {
       return;
     }
     refreshNodeMapping(notebook);
-    for (const [id] of Object.entries(cellsById)) {
+    for (const [id] of Object.entries(state.cellsById)) {
       updateOneCellUI(id);
     }
   };
 
   comm.onMsg = (msg) => {
     const payload = msg.content.data;
-    if (disconnected || !(payload.success ?? false)) {
+    if (disconnected || !(payload.success ?? true)) {
       return;
     }
     if (payload.type === 'establish') {
+      state.isIpyflowCommConnected = true;
+      notebook.activeCellChanged.connect(onActiveCellChange);
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
       notebook.model.contentChanged.connect(onContentChanged);
       requestComputeExecSchedule();
     } else if (payload.type === 'set_exec_mode') {
-      isAltModeExecuting = false;
-      lastExecutionMode = payload.exec_mode as string;
+      state.isAltModeExecuting = false;
+      state.lastExecutionMode = payload.exec_mode as string;
     } else if (payload.type === 'compute_exec_schedule') {
-      waitingCells = new Set(payload.waiting_cells as string[]);
-      readyCells = new Set(payload.ready_cells as string[]);
-      newReadyCells = new Set([
-        ...newReadyCells,
+      state.waitingCells = new Set(payload.waiting_cells as string[]);
+      state.readyCells = new Set(payload.ready_cells as string[]);
+      state.newReadyCells = new Set([
+        ...state.newReadyCells,
         ...(payload.new_ready_cells as string[]),
       ]);
-      forcedReactiveCells = new Set([
-        ...forcedReactiveCells,
+      state.forcedReactiveCells = new Set([
+        ...state.forcedReactiveCells,
         ...(payload.forced_reactive_cells as string[]),
       ]);
-      waiterLinks = payload.waiter_links as { [id: string]: string[] };
-      readyMakerLinks = payload.ready_maker_links as { [id: string]: string[] };
-      cellPendingExecution = null;
+      state.waiterLinks = payload.waiter_links as { [id: string]: string[] };
+      state.readyMakerLinks = payload.ready_maker_links as {
+        [id: string]: string[];
+      };
+      state.cellPendingExecution = null;
       const exec_mode = payload.exec_mode as string;
-      isReactivelyExecuting =
-        isReactivelyExecuting ||
+      state.isReactivelyExecuting =
+        state.isReactivelyExecuting ||
         ((payload?.is_reactively_executing as boolean) ?? false);
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
-      lastExecutionMode = exec_mode;
-      lastExecutionHighlights = payload.highlights as Highlights;
+      state.lastExecutionMode = exec_mode;
+      state.lastExecutionHighlights = payload.highlights as Highlights;
       const lastExecutedCellId = payload.last_executed_cell_id as string;
-      executedReactiveReadyCells.add(lastExecutedCellId);
+      state.executedReactiveReadyCells.add(lastExecutedCellId);
       const last_execution_was_error =
         payload.last_execution_was_error as boolean;
       if (!last_execution_was_error) {
@@ -648,22 +658,22 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
           }
           if (
             cell.model.type !== 'code' ||
-            executedReactiveReadyCells.has(cell.model.id)
+            state.executedReactiveReadyCells.has(cell.model.id)
           ) {
             continue;
           }
-          if (!newReadyCells.has(cell.model.id)) {
+          if (!state.newReadyCells.has(cell.model.id)) {
             continue;
           }
           if (
-            !forcedReactiveCells.has(cell.model.id) &&
+            !state.forcedReactiveCells.has(cell.model.id) &&
             exec_mode !== 'reactive'
           ) {
             continue;
           }
           const codeCell = cell as CodeCell;
-          if (cellPendingExecution === null) {
-            cellPendingExecution = codeCell;
+          if (state.cellPendingExecution === null) {
+            state.cellPendingExecution = codeCell;
             // break early if using one of the order-based semantics
             if (flow_order === 'in_order' || exec_schedule === 'strict') {
               break;
@@ -672,34 +682,34 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
             // pass
           } else if (
             codeCell.model.executionCount <
-            cellPendingExecution.model.executionCount
+            state.cellPendingExecution.model.executionCount
           ) {
             // otherwise, execute in order of earliest execution counter
-            cellPendingExecution = codeCell;
+            state.cellPendingExecution = codeCell;
           }
         }
       }
-      if (cellPendingExecution === null) {
-        if (isReactivelyExecuting) {
-          if (lastExecutionHighlights === 'reactive') {
-            readyCells = executedReactiveReadyCells;
+      if (state.cellPendingExecution === null) {
+        if (state.isReactivelyExecuting) {
+          if (state.lastExecutionHighlights === 'reactive') {
+            state.readyCells = state.executedReactiveReadyCells;
           }
           comm.send({
             type: 'reactivity_cleanup',
           });
         }
-        forcedReactiveCells = new Set();
-        newReadyCells = new Set();
-        executedReactiveReadyCells = new Set();
+        state.forcedReactiveCells = new Set();
+        state.newReadyCells = new Set();
+        state.executedReactiveReadyCells = new Set();
         updateUI(notebook);
-        isReactivelyExecuting = false;
-        if (lastExecutionMode === 'reactive') {
-          isAltModeExecuting = false;
+        state.isReactivelyExecuting = false;
+        if (state.lastExecutionMode === 'reactive') {
+          state.isAltModeExecuting = false;
         }
       } else {
-        isReactivelyExecuting = true;
-        onActiveCellChange(notebook, cellPendingExecution);
-        CodeCell.execute(cellPendingExecution, session);
+        state.isReactivelyExecuting = true;
+        onActiveCellChange(notebook, state.cellPendingExecution);
+        CodeCell.execute(state.cellPendingExecution, session);
       }
     }
   };
@@ -708,8 +718,10 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
   });
   // return a disconnection handle
   return () => {
+    comm.dispose();
     disconnected = true;
-    resetState();
+    state.isIpyflowCommConnected = false;
+    resetSessionState(session.session.id);
   };
 };
 

@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.174 (2022-05-29)
+--------------------
+* Allow activation of frontend features via `%load_ext ipyflow` (even on ipykernel);
+* Scope frontend state to session;
+* Fixes for various corner cases around page refresh;
+
 0.0.173 (2022-05-25)
 --------------------
 * Fix potential bug in nest_asyncio patching;

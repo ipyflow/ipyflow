@@ -96,6 +96,7 @@ class UpdateProtocol:
         updated_symbols: Iterable["Symbol"],
         refresh_descendent_namespaces: bool,
     ) -> None:
+        # TODO: can this method be unified with symbol.refresh() with bump_version=False?
         logger.warning(
             "collecting updated symbols and namespaces for %s", updated_symbols
         )
@@ -104,7 +105,6 @@ class UpdateProtocol:
                 continue
             dsym.updated_timestamps.add(Timestamp.current())
             dsym.required_timestamp = Timestamp.uninitialized()
-            # dsym.refresh(bump_version=False)
             self.seen.add(dsym)
             for cell in dsym.cells_where_deep_live:
                 cell.add_used_cell_counter(dsym, flow().cell_counter())

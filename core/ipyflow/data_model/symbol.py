@@ -17,8 +17,7 @@ from typing import (
     cast,
 )
 
-import ipyflow.data_model.utils.sizing_utils as sizing
-from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection
+from ipyflow.config import FlowDirection
 from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.annotation_utils import (
@@ -120,10 +119,6 @@ class Symbol:
         # and we don't want liveness checker to think this was newly created unless we
         # explicitly trace an update somewhere
         self._timestamp: Timestamp = (
-            Timestamp.uninitialized() if implicit else Timestamp.current()
-        )
-        # we need this to ensure we always use the latest version even for things like tuple unpack
-        self._last_refreshed_timestamp = (
             Timestamp.uninitialized() if implicit else Timestamp.current()
         )
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
@@ -604,16 +599,7 @@ class Symbol:
             total -= 1
         return total
 
-    def should_preserve_timestamp(self, prev_obj: Optional[Any]) -> bool:
-        if flow().mut_settings.exec_mode == ExecutionMode.REACTIVE:
-            # always bump timestamps for reactive mode
-            return False
-        if flow().mut_settings.exec_schedule in (
-            ExecutionSchedule.DAG_BASED,
-            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
-        ):
-            # always bump timestamps for dag schedule
-            return False
+    def _should_cancel_propagation(self, prev_obj: Optional[Any]) -> bool:
         if prev_obj is None:
             return False
         if (
@@ -625,17 +611,7 @@ class Symbol:
             return True
         if self.obj is None or prev_obj is Symbol.NULL:
             return self.obj is None and prev_obj is Symbol.NULL
-        obj_type = type(self.obj)
-        prev_type = type(prev_obj)
-        if obj_type != prev_type:
-            return False
-        obj_size_ubound = sizing.sizeof(self.obj)
-        if obj_size_ubound > sizing.MAX_SIZE:
-            return False
-        cached_obj_size_ubound = sizing.sizeof(prev_obj)
-        if cached_obj_size_ubound > sizing.MAX_SIZE:
-            return False
-        return (obj_size_ubound == cached_obj_size_ubound) and self.obj == prev_obj
+        return False
 
     def _handle_aliases(self):
         cleanup_discard(flow().aliases, self.cached_obj_id, self)
@@ -908,8 +884,8 @@ class Symbol:
         self.fresher_ancestor_timestamps.clear()
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.update_usage_info()
-        should_preserve_timestamp = not mutated and self.should_preserve_timestamp(
-            prev_obj
+        propagate = propagate and (
+            mutated or deleted or not self._should_cancel_propagation(prev_obj)
         )
         prev_cell = cells().current_cell().prev_cell
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
@@ -923,18 +899,9 @@ class Symbol:
                 for dsym in new_deps
             )
         if is_cascading_reactive:
-            bump_version = refresh
             self.bump_cascading_reactive_cell_num()
-        elif self.cascading_reactive_cell_num() == flow().cell_counter():
-            bump_version = refresh
-        else:
-            bump_version = refresh and (
-                not should_preserve_timestamp
-                or type(self.obj) not in Symbol.IMMUTABLE_TYPES
-            )
         if refresh:
             self.refresh(
-                bump_version=bump_version,
                 # rationale: if this is a mutation for which we have more precise information,
                 # then we don't need to update the ns descendents as this will already have happened.
                 # also don't update ns descendents for things like `a = b`
@@ -944,7 +911,7 @@ class Symbol:
                 and not self._is_underscore_or_simple_assign(new_deps),
                 refresh_namespace_waiting=not mutated,
             )
-        if propagate and (deleted or not should_preserve_timestamp):
+        if propagate:
             UpdateProtocol(self)(
                 new_deps, mutated, propagate_to_namespace_descendents, refresh
             )
@@ -1035,14 +1002,12 @@ class Symbol:
                 used_time.cell_num,
                 self.timestamp,
             )
-        ts_to_use = self._timestamp  # if exclude_ns else self.timestamp
-        if ts_to_use.is_initialized:
-            ts_to_use = max(ts_to_use, self._last_refreshed_timestamp)
         timestamp_by_used_time = (
             self.timestamp_by_liveness_time
             if is_static
             else self.timestamp_by_used_time
         )
+        ts_to_use = self._timestamp
         if ts_to_use.is_initialized and not is_blocking:
             is_usage = False
             if is_static:
@@ -1090,31 +1055,26 @@ class Symbol:
 
     def refresh(
         self,
-        bump_version: bool = True,
         refresh_descendent_namespaces: bool = False,
         refresh_namespace_waiting: bool = True,
         timestamp: Optional[Timestamp] = None,
         seen: Optional[Set["Symbol"]] = None,
     ) -> None:
-        self._last_refreshed_timestamp = Timestamp.current()
-        self._temp_disable_warnings = False
+        self._timestamp = Timestamp.current() if timestamp is None else timestamp
         self.updated_timestamps.add(Timestamp.current())
-        if bump_version:
-            self._timestamp = Timestamp.current() if timestamp is None else timestamp
-            self._override_timestamp = None
-            for cell in self.cells_where_live:
-                cell.add_used_cell_counter(self, self._timestamp.cell_num)
-            ns = self.containing_namespace
-            if ns is not None:
-                # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
-                ns.max_descendent_timestamp = self.timestamp_excluding_ns_descendents
-                for alias in flow().aliases.get(ns.obj_id, []):
-                    for cell in alias.cells_where_deep_live:
-                        cell.add_used_cell_counter(alias, self._timestamp.cell_num)
-            self._version += 1
-            self._timestamp_by_version.append(self._timestamp)
-        else:
-            self.required_timestamp = Timestamp.uninitialized()
+        self._override_timestamp = None
+        self._temp_disable_warnings = False
+        for cell in self.cells_where_live:
+            cell.add_used_cell_counter(self, self._timestamp.cell_num)
+        ns = self.containing_namespace
+        if ns is not None:
+            # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
+            ns.max_descendent_timestamp = self.timestamp_excluding_ns_descendents
+            for alias in flow().aliases.get(ns.obj_id, []):
+                for cell in alias.cells_where_deep_live:
+                    cell.add_used_cell_counter(alias, self._timestamp.cell_num)
+        self._version += 1
+        self._timestamp_by_version.append(self._timestamp)
         if refresh_descendent_namespaces:
             if seen is None:
                 seen = set()

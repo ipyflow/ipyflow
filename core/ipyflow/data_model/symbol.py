@@ -128,6 +128,7 @@ class Symbol:
         )
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
+        self._timestamp_by_version = [self._timestamp]
         self._defined_cell_num = cells().exec_counter()
         self._cascading_reactive_cell_num = -1
         self._override_ready_liveness_cell_num = -1
@@ -142,8 +143,10 @@ class Symbol:
         self.used_node_by_used_time: Dict[Timestamp, ast.AST] = {}
         # History of definitions at time of liveness
         self.timestamp_by_liveness_time: Dict[Timestamp, Timestamp] = {}
-        # All timestamps associated with this symbol
-        self.updated_timestamps: Set[Timestamp] = set()
+        # All timestamps associated with updates to this symbol
+        self.updated_timestamps: Set[Timestamp] = {
+            ts for ts in [self._timestamp] if ts.is_initialized
+        }
 
         self.fresher_ancestors: Set["Symbol"] = set()
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
@@ -232,9 +235,22 @@ class Symbol:
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
     def compute_namespace_timestamps(
-        self, seen: Optional[Set["Symbol"]] = None
+        self,
+        seen: Optional[Set["Symbol"]] = None,
+        version_ubound: Optional[Timestamp] = None,
     ) -> Set[Timestamp]:
-        timestamps = {self.timestamp_excluding_ns_descendents, self.timestamp}
+        if version_ubound is None:
+            timestamps = {self.timestamp_excluding_ns_descendents, self.timestamp}
+        else:
+            max_leq_ubound = Timestamp.uninitialized()
+            for ts in reversed(self._timestamp_by_version):
+                if ts <= version_ubound:
+                    max_leq_ubound = ts
+                    break
+            if max_leq_ubound.is_initialized:
+                timestamps = {max_leq_ubound}
+            else:
+                timestamps = set()
         ns = self.namespace
         if ns is None:
             return timestamps
@@ -244,7 +260,9 @@ class Symbol:
             return timestamps
         seen.add(self)
         for dsym in ns.all_data_symbols_this_indentation():
-            timestamps |= dsym.compute_namespace_timestamps(seen=seen)
+            timestamps |= dsym.compute_namespace_timestamps(
+                seen=seen, version_ubound=version_ubound
+            )
         return timestamps
 
     def code(self, format_type: Optional[Type[FormatType]] = None) -> FormatType:
@@ -1080,6 +1098,7 @@ class Symbol:
     ) -> None:
         self._last_refreshed_timestamp = Timestamp.current()
         self._temp_disable_warnings = False
+        self.updated_timestamps.add(Timestamp.current())
         if bump_version:
             self._timestamp = Timestamp.current() if timestamp is None else timestamp
             self._override_timestamp = None
@@ -1092,8 +1111,10 @@ class Symbol:
                 for alias in flow().aliases.get(ns.obj_id, []):
                     for cell in alias.cells_where_deep_live:
                         cell.add_used_cell_counter(alias, self._timestamp.cell_num)
-            self.updated_timestamps.add(self._timestamp)
             self._version += 1
+            self._timestamp_by_version.append(self._timestamp)
+        else:
+            self.required_timestamp = Timestamp.uninitialized()
         if refresh_descendent_namespaces:
             if seen is None:
                 seen = set()
@@ -1123,8 +1144,8 @@ class Symbol:
                             timestamp=self.timestamp_excluding_ns_descendents,
                             seen=seen,
                         )
-            if refresh_namespace_waiting:
-                self.namespace_waiting_symbols.clear()
+        if refresh_namespace_waiting:
+            self.namespace_waiting_symbols.clear()
 
 
 if len(_SymbolContainer) == 0:

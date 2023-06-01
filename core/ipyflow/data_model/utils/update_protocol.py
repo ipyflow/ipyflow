@@ -103,6 +103,8 @@ class UpdateProtocol:
             if dsym.is_import or dsym in self.seen:
                 continue
             dsym.updated_timestamps.add(Timestamp.current())
+            dsym.required_timestamp = Timestamp.uninitialized()
+            # dsym.refresh(bump_version=False)
             self.seen.add(dsym)
             for cell in dsym.cells_where_deep_live:
                 cell.add_used_cell_counter(dsym, flow().cell_counter())

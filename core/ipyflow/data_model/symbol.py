@@ -123,7 +123,7 @@ class Symbol:
         )
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
-        self._timestamp_by_version = [self._timestamp]
+        self._timestamp_by_version: List[Timestamp] = []
         self._defined_cell_num = cells().exec_counter()
         self._cascading_reactive_cell_num = -1
         self._override_ready_liveness_cell_num = -1
@@ -139,9 +139,7 @@ class Symbol:
         # History of definitions at time of liveness
         self.timestamp_by_liveness_time: Dict[Timestamp, Timestamp] = {}
         # All timestamps associated with updates to this symbol
-        self.updated_timestamps: Set[Timestamp] = {
-            ts for ts in [self._timestamp] if ts.is_initialized
-        }
+        self.updated_timestamps: Set[Timestamp] = set()
 
         self.fresher_ancestors: Set["Symbol"] = set()
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
@@ -229,7 +227,7 @@ class Symbol:
         ns = self.namespace
         return ts if ns is None else max(ts, ns.max_descendent_timestamp)
 
-    def compute_namespace_timestamps(
+    def _compute_namespace_timestamps(
         self,
         seen: Optional[Set["Symbol"]] = None,
         version_ubound: Optional[Timestamp] = None,
@@ -255,19 +253,27 @@ class Symbol:
             return timestamps
         seen.add(self)
         for dsym in ns.all_data_symbols_this_indentation():
-            timestamps |= dsym.compute_namespace_timestamps(
+            timestamps |= dsym._compute_namespace_timestamps(
                 seen=seen, version_ubound=version_ubound
             )
         return timestamps
 
-    def code(self, format_type: Optional[Type[FormatType]] = None) -> FormatType:
-        ts = self.timestamp_excluding_ns_descendents
+    def _get_timestamps_for_version(self, version: int) -> Set[Timestamp]:
+        ts = self._timestamp_by_version[version]
         if ts.cell_num == -1:
-            timestamps = {Timestamp(self.defined_cell_num, ts.stmt_num)}
+            return {Timestamp(self.defined_cell_num, ts.stmt_num)}
         else:
-            timestamps = self.compute_namespace_timestamps()
+            return self._compute_namespace_timestamps(
+                version_ubound=None if version == -1 else ts
+            )
+
+    def code(
+        self, format_type: Optional[Type[FormatType]] = None, version: int = -1
+    ) -> FormatType:
         return statements().format_multi_slice(
-            timestamps, blacken=True, format_type=format_type
+            self._get_timestamps_for_version(version=version),
+            blacken=True,
+            format_type=format_type,
         )
 
     def cascading_reactive_cell_num(

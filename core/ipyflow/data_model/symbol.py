@@ -1001,6 +1001,8 @@ class Symbol:
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
+        if not used_time.is_initialized:
+            return self
         if flow().is_dev_mode:
             logger.info(
                 "sym `%s` used in cell %d last updated in cell %d",

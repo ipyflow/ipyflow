@@ -356,6 +356,8 @@ def get_live_symbols_and_cells_for_references(
     update_liveness_time_versions: bool = False,
     add_data_dep_only_if_parent_new: bool = False,
 ) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
+    if cell_ctr < 0:
+        update_liveness_time_versions = False
     live_symbols: Set[ResolvedSymbol] = set()
     unresolved_live_refs: Set[LiveSymbolRef] = set()
     called_syms: Set[Tuple[ResolvedSymbol, int]] = set()

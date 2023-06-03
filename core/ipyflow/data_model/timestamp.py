@@ -44,11 +44,12 @@ class Timestamp(NamedTuple):
 
     @classmethod
     def uninitialized(cls) -> "Timestamp":
-        return cls(-1, -1)
+        return _TS_UNINITIALIZED
 
     @property
     def is_initialized(self) -> bool:
-        return self > Timestamp.uninitialized()
+        uninited = Timestamp.uninitialized()
+        return self.cell_num > uninited.cell_num and self.stmt_num > uninited.stmt_num
 
     def plus(self, cell_num_delta: int, stmt_num_delta: int) -> "Timestamp":
         return self.__class__(
@@ -102,6 +103,9 @@ class Timestamp(NamedTuple):
                 sym.update_usage_info(
                     used_time=used_time, used_node=used_node, exclude_ns=exclude_ns
                 )
+
+
+_TS_UNINITIALIZED = Timestamp(-1, -1)
 
 
 if len(_TimestampContainer) == 0:

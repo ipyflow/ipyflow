@@ -591,7 +591,7 @@ class NotebookFlow(singletons.NotebookFlow):
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )
         if last_cell_id is None or cell_metadata_by_id is None:
-            # bail if we don't have either of these
+            # bail if we don't have both of these
             null_vals = []
             if last_cell_id is None:
                 null_vals.append("last_cell_id")

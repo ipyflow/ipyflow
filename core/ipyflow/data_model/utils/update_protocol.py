@@ -60,7 +60,7 @@ class UpdateProtocol:
         if refresh:
             for updated_sym in directly_updated_symbols:
                 if not updated_sym.is_waiting and updated_sym is not self.updated_sym:
-                    updated_sym.refresh(take_timestamp_snapshots=True)
+                    updated_sym.refresh()
         self.seen |= new_deps  # don't propagate to stuff on RHS
         for dsym in updated_symbols_with_ancestors:
             self._propagate_waiting_to_deps(dsym, skip_seen_check=True)

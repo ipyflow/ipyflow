@@ -17,7 +17,7 @@ from typing import (
     cast,
 )
 
-from ipyflow.config import FlowDirection
+from ipyflow.config import ExecutionMode, FlowDirection
 from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.annotation_utils import (
@@ -121,8 +121,6 @@ class Symbol:
         self._timestamp: Timestamp = (
             Timestamp.uninitialized() if implicit else Timestamp.current()
         )
-        # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
-        self._version: int = 0
         self._snapshot_timestamps: List[Timestamp] = []
         self._snapshot_timestamp_ubounds: List[Timestamp] = []
         self._defined_cell_num = cells().exec_counter()
@@ -858,9 +856,13 @@ class Symbol:
     ) -> None:
         if self.is_import and self.obj_id == self.cached_obj_id:
             # skip updates for imported symbols
-            # just bump the version if it's newly created
-            if mutated or not self._timestamp.is_initialized:
-                self._timestamp = Timestamp.current()
+            # just bump the version if it's newly created or if we're reactively executing
+            if (
+                mutated
+                or not self._timestamp.is_initialized
+                or flow().mut_settings.exec_mode == ExecutionMode.REACTIVE
+            ):
+                self.refresh()
             return
         if overwrite and not self.is_globally_accessible:
             self.watchpoints.clear()
@@ -917,7 +919,6 @@ class Symbol:
                 )
                 and not self._is_underscore_or_simple_assign(new_deps),
                 refresh_namespace_waiting=not mutated,
-                take_timestamp_snapshots=True,
             )
         if propagate:
             UpdateProtocol(self)(
@@ -1079,16 +1080,18 @@ class Symbol:
 
     def refresh(
         self,
+        take_timestamp_snapshots: bool = True,
         refresh_descendent_namespaces: bool = False,
         refresh_namespace_waiting: bool = True,
         timestamp: Optional[Timestamp] = None,
-        take_timestamp_snapshots: bool = False,
         seen: Optional[Set["Symbol"]] = None,
     ) -> None:
-        self._version += 1
+        orig_timestamp = self._timestamp
         self._timestamp = Timestamp.current() if timestamp is None else timestamp
         self._override_timestamp = None
-        if take_timestamp_snapshots:
+        if take_timestamp_snapshots and (
+            orig_timestamp < self._timestamp or len(self._snapshot_timestamps) == 0
+        ):
             self._take_timestamp_snapshots(self._timestamp)
         self.updated_timestamps.add(self._timestamp)
         self._temp_disable_warnings = False

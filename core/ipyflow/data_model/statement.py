@@ -271,6 +271,8 @@ class Statement(SlicingMixin):
                     reactive_seen = True
                     if not resolved.is_live and resolved.atom.is_cascading_reactive:
                         resolved.dsym.bump_cascading_reactive_cell_num()
+                    if resolved.is_last:
+                        resolved.dsym.refresh()
                 if reactive_seen and not blocking_seen:
                     if resolved.is_cascading_reactive:
                         flow().updated_reactive_symbols.add(resolved.dsym)

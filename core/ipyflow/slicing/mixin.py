@@ -4,6 +4,7 @@ import sys
 import textwrap
 from typing import (
     TYPE_CHECKING,
+    Callable,
     Dict,
     Iterable,
     List,
@@ -271,6 +272,75 @@ class SlicingMixin(Protocol):
         )
 
 
+def _get_slice_text_from_slice(slice: Dict[int, str]) -> str:
+    return "\n\n".join(
+        f"# Cell {cell_num}\n" + content for cell_num, content in sorted(slice.items())
+    )
+
+
+def _make_slice_markup_closure(
+    iface: Interface, blacken: bool
+) -> Callable[[Dict[int, str]], str]:
+    def _slice_markup_closure(slice: Dict[int, str]) -> str:
+        slice_text = _get_slice_text_from_slice(slice)
+        slice_text_linked_cells = []
+        if iface == Interface.JUPYTER:
+            container_selector = (
+                "javascript:document.getElementById('notebook-container')"
+            )
+        elif iface == Interface.JUPYTERLAB:
+            container_selector = (
+                "javascript:document.getElementById("
+                "document.querySelector('.jp-mod-current').dataset.id).children[2]"
+                # the below is necessary for jupyterlab >= 4.0
+                # TODO: should we also support jupyterlab < 4.0?
+                ".children[0].children[0]"
+            )
+        else:
+            container_selector = None
+        for cell_num, content in sorted(slice.items()):
+            cell = cells().at_counter(cell_num)
+            if (
+                container_selector is not None
+                and cell.is_current_for_id
+                and cell.position >= 0
+            ):
+                rendered_cell = (
+                    f'# <a href="{container_selector}.children[{cell.position}].scrollIntoView()">'
+                    f"Cell {cell_num}</a>"
+                )
+            else:
+                rendered_cell = f"# Cell {cell_num}"
+            slice_text_linked_cells.append(rendered_cell + f"\n{content}")
+        slice_text_no_cells = "\n".join(
+            content for _cell_num, content in sorted(slice.items())
+        )
+        if blacken:
+            slice_text_no_cells = black.format_str(
+                slice_text_no_cells, mode=black.FileMode()
+            ).strip()
+        if iface == Interface.JUPYTER:
+            classes = "output_subarea output_text output_stream output_stdout"
+        elif iface == Interface.JUPYTERLAB:
+            classes = "lm-Widget p-Widget jp-RenderedText jp-OutputArea-output"
+        else:
+            classes = ""
+        return textwrap.dedent(
+            f"""
+            <div class="{classes}">
+            <pre>
+            <a href="javascript:navigator.clipboard.writeText('{slice_text_no_cells.encode("unicode_escape").decode("utf-8")}')">Copy code</a>\
+ | <a href="javascript:navigator.clipboard.writeText('{slice_text.encode("unicode_escape").decode("utf-8")}')">Copy cells</a>
+     
+            {{code}}
+            </pre>
+            </div>
+            """
+        ).format(code="\n\n".join(slice_text_linked_cells))
+
+    return _slice_markup_closure
+
+
 def format_slice(
     slice: Dict[int, str],
     blacken: bool = True,
@@ -291,60 +361,7 @@ def format_slice(
                 ).strip()
             except Exception as e:
                 logger.info("call to black failed with exception: %s", e)
-    slice_text_cells = "\n\n".join(
-        f"# Cell {cell_num}\n" + content for cell_num, content in sorted(slice.items())
-    )
     if format_type is str:
-        return slice_text_cells
-    slice_text_linked_cells = []
-    if iface == Interface.JUPYTER:
-        container_selector = "javascript:document.getElementById('notebook-container')"
-    elif iface == Interface.JUPYTERLAB:
-        container_selector = (
-            "javascript:document.getElementById("
-            "document.querySelector('.jp-mod-current').dataset.id).children[2]"
-        )
-    else:
-        container_selector = None
-    for cell_num, content in sorted(slice.items()):
-        cell = cells().at_counter(cell_num)
-        if (
-            container_selector is not None
-            and cell.is_current_for_id
-            and cell.position >= 0
-        ):
-            rendered_cell = (
-                f'# <a href="{container_selector}.children[{cell.position}].scrollIntoView()">'
-                f"Cell {cell_num}</a>"
-            )
-        else:
-            rendered_cell = f"# Cell {cell_num}"
-        slice_text_linked_cells.append(rendered_cell + f"\n{content}")
-    assert format_type is HTML
-    slice_text_no_cells = "\n".join(
-        content for _cell_num, content in sorted(slice.items())
-    )
-    if blacken:
-        slice_text_no_cells = black.format_str(
-            slice_text_no_cells, mode=black.FileMode()
-        ).strip()
-    if iface == Interface.JUPYTER:
-        classes = "output_subarea output_text output_stream output_stdout"
-    elif iface == Interface.JUPYTERLAB:
-        classes = "lm-Widget p-Widget jp-RenderedText jp-OutputArea-output"
-    else:
-        classes = ""
-    return HTML(
-        textwrap.dedent(
-            f"""
-        <div class="{classes}">
-        <pre>
-        <a href="javascript:navigator.clipboard.writeText('{slice_text_no_cells.encode("unicode_escape").decode("utf-8")}')">Copy code</a>\
- | <a href="javascript:navigator.clipboard.writeText('{slice_text_cells.encode("unicode_escape").decode("utf-8")}')">Copy cells</a>
- 
-        {{code}}
-        </pre>
-        </div>
-        """
-        ).format(code="\n\n".join(slice_text_linked_cells))
-    )
+        return _get_slice_text_from_slice(slice)
+    slice_markup_closure = _make_slice_markup_closure(iface, blacken=blacken)
+    return format_type(slice_markup_closure(slice))

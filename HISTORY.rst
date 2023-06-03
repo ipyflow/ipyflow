@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.175 (2022-06-03)
+--------------------
+* Fix scrolling functionality in slicing widget for jupyterlab>=4;
+* Fix bug that allowed attempted usage updates to symbols with uninitialized timestamps;
+
 0.0.174 (2022-05-29)
 --------------------
 * Allow activation of frontend features via `%load_ext ipyflow` (even on ipykernel);

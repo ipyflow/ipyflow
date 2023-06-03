@@ -25,7 +25,7 @@ from ipyflow.data_model.utils.annotation_utils import (
     make_annotation_string,
 )
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
-from ipyflow.models import _SymbolContainer, statements, symbols
+from ipyflow.models import _SymbolContainer, namespaces, statements, symbols
 from ipyflow.singletons import flow, tracer
 from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
 from ipyflow.slicing.mixin import FormatType
@@ -123,7 +123,8 @@ class Symbol:
         )
         # The version is a simple counter not associated with cells that is bumped whenever the timestamp is updated
         self._version: int = 0
-        self._timestamp_by_version: List[Timestamp] = []
+        self._snapshot_timestamps: List[Timestamp] = []
+        self._snapshot_timestamp_ubounds: List[Timestamp] = []
         self._defined_cell_num = cells().exec_counter()
         self._cascading_reactive_cell_num = -1
         self._override_ready_liveness_cell_num = -1
@@ -236,7 +237,7 @@ class Symbol:
             timestamps = {self.timestamp_excluding_ns_descendents, self.timestamp}
         else:
             max_leq_ubound = Timestamp.uninitialized()
-            for ts in reversed(self._timestamp_by_version):
+            for ts in reversed(self._snapshot_timestamps):
                 if ts <= version_ubound:
                     max_leq_ubound = ts
                     break
@@ -259,7 +260,7 @@ class Symbol:
         return timestamps
 
     def _get_timestamps_for_version(self, version: int) -> Set[Timestamp]:
-        ts = self._timestamp_by_version[version]
+        ts = self._snapshot_timestamps[version]
         if ts.cell_num == -1:
             return {Timestamp(self.defined_cell_num, ts.stmt_num)}
         else:
@@ -916,6 +917,7 @@ class Symbol:
                 )
                 and not self._is_underscore_or_simple_assign(new_deps),
                 refresh_namespace_waiting=not mutated,
+                take_timestamp_snapshots=True,
             )
         if propagate:
             UpdateProtocol(self)(
@@ -984,9 +986,7 @@ class Symbol:
         ns = self.namespace
         if ns is not None:
             return ns
-        # FIXME: workaround for circular dep
-        Namespace = getattr(sys.modules["ipyflow.data_model.namespace"], "Namespace")
-        return Namespace(self.obj, self.name, parent_scope=self.containing_scope)
+        return namespaces()(self.obj, self.name, parent_scope=self.containing_scope)
 
     def update_usage_info(
         self,
@@ -1059,16 +1059,36 @@ class Symbol:
             )
         return self
 
+    def _take_timestamp_snapshots(
+        self, ts_ubound: Timestamp, seen: Optional[Set["Symbol"]] = None
+    ) -> None:
+        if seen is None:
+            seen = set()
+        if self in seen:
+            return
+        seen.add(self)
+        self._snapshot_timestamps.append(self._timestamp)
+        self._snapshot_timestamp_ubounds.append(ts_ubound)
+        containing_ns = self.containing_namespace
+        if containing_ns is None:
+            return
+        for alias in flow().aliases.get(containing_ns.obj_id, []):
+            alias._take_timestamp_snapshots(ts_ubound, seen=seen)
+
     def refresh(
         self,
         refresh_descendent_namespaces: bool = False,
         refresh_namespace_waiting: bool = True,
         timestamp: Optional[Timestamp] = None,
+        take_timestamp_snapshots: bool = False,
         seen: Optional[Set["Symbol"]] = None,
     ) -> None:
+        self._version += 1
         self._timestamp = Timestamp.current() if timestamp is None else timestamp
-        self.updated_timestamps.add(Timestamp.current())
         self._override_timestamp = None
+        if take_timestamp_snapshots:
+            self._take_timestamp_snapshots(self._timestamp)
+        self.updated_timestamps.add(self._timestamp)
         self._temp_disable_warnings = False
         for cell in self.cells_where_live:
             cell.add_used_cell_counter(self, self._timestamp.cell_num)
@@ -1079,8 +1099,6 @@ class Symbol:
             for alias in flow().aliases.get(ns.obj_id, []):
                 for cell in alias.cells_where_deep_live:
                     cell.add_used_cell_counter(alias, self._timestamp.cell_num)
-        self._version += 1
-        self._timestamp_by_version.append(self._timestamp)
         if refresh_descendent_namespaces:
             if seen is None:
                 seen = set()
@@ -1108,6 +1126,7 @@ class Symbol:
                         dsym.refresh(
                             refresh_descendent_namespaces=True,
                             timestamp=self.timestamp_excluding_ns_descendents,
+                            take_timestamp_snapshots=False,
                             seen=seen,
                         )
         if refresh_namespace_waiting:

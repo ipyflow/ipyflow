@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.176 (2022-06-11)
+--------------------
+* Small improvements to reactivity semantics;
+* Hopefully fix deps for conda-forge;
+
 0.0.175 (2022-06-03)
 --------------------
 * Fix scrolling functionality in slicing widget for jupyterlab>=4;

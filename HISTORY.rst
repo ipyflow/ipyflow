@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.177 (2022-06-26)
+--------------------
+* Set consistent comm ids when APIs permit;
+
 0.0.176 (2022-06-11)
 --------------------
 * Small improvements to reactivity semantics;

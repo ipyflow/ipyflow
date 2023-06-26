@@ -370,7 +370,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
   const state = ipyflowState[session.session.id];
   state.activeCell = notebook.activeCell;
   state.activeCellId = state.activeCell.model.id;
-  const comm = session.session.kernel.createComm('ipyflow');
+  const comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
   let disconnected = false;
 
   const gatherCellMetadataAndContent = () => {

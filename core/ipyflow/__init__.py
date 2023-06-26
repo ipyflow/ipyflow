@@ -50,7 +50,9 @@ def load_ipython_extension(ipy: "InteractiveShell") -> None:
     if IPyflowKernel.client_comm is None:  # type: ignore
         from ipykernel.comm import Comm
 
-        IPyflowKernel.client_comm = Comm(target_name="ipyflow-client")  # type: ignore
+        comm = Comm(target_name="ipyflow-client")  # type: ignore
+        comm.comm_id = "ipyflow-client"
+        IPyflowKernel.client_comm = comm
     else:
         IPyflowKernel.client_comm.send({"type": "establish", "success": True})  # type: ignore
 

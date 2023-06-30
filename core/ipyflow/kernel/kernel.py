@@ -595,7 +595,8 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         cell_id, flow_._active_cell_id = flow_._active_cell_id, None
         placeholder_id = cell_id is None
         if placeholder_id:
-            cell_id = flow_.cell_counter()
+            # next counter because it gets bumped on creation
+            cell_id = CodeCell.next_exec_counter()
         cell = CodeCell.create_and_track(
             cell_id,
             cell_content,

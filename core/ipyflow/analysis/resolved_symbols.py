@@ -38,6 +38,9 @@ class ResolvedSymbol(CommonEqualityMixin):
             kwargs["exclude_ns"] = True
         self.dsym.update_usage_info(*args, **kwargs)
 
+    def __repr__(self) -> str:
+        return f"|->{self.dsym}|"
+
     def __hash__(self) -> int:
         return hash(
             (

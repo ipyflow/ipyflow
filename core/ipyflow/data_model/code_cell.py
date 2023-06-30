@@ -31,7 +31,7 @@ from ipyflow.analysis.live_refs import (
     get_symbols_for_references,
 )
 from ipyflow.analysis.resolved_symbols import ResolvedSymbol
-from ipyflow.config import ExecutionSchedule, FlowDirection
+from ipyflow.config import ExecutionSchedule, FlowDirection, Interface
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, kernel
@@ -93,10 +93,10 @@ class CodeCell(SlicingMixin):
         self.override_live_refs: Optional[List[str]] = None
         self.override_dead_refs: Optional[List[str]] = None
         self.reactive_tags: Set[str] = set()
-        self._dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
-        self._dynamic_children: Dict[IdType, Set["Symbol"]] = {}
-        self._static_parents: Dict[IdType, Set["Symbol"]] = {}
-        self._static_children: Dict[IdType, Set["Symbol"]] = {}
+        self.dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
+        self.dynamic_children: Dict[IdType, Set["Symbol"]] = {}
+        self.static_parents: Dict[IdType, Set["Symbol"]] = {}
+        self.static_children: Dict[IdType, Set["Symbol"]] = {}
         self._used_cell_counters_by_live_symbol: Dict["Symbol", Set[int]] = defaultdict(
             set
         )
@@ -126,7 +126,16 @@ class CodeCell(SlicingMixin):
 
     @property
     def position(self) -> int:
-        return self._position_by_cell_id.get(self.cell_id, -1)
+        pos = self._position_by_cell_id.get(self.cell_id, -1)
+        if pos == -1:
+            settings = flow().mut_settings
+            if (
+                settings.flow_order == FlowDirection.IN_ORDER
+                and settings.interface == Interface.IPYTHON
+            ):
+                assert type(self.cell_id) is int
+                pos = self.cell_id
+        return pos
 
     @property
     def directional_parents(self) -> Mapping[IdType, FrozenSet["Symbol"]]:
@@ -277,8 +286,8 @@ class CodeCell(SlicingMixin):
         )
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
-            cell._dynamic_children = prev_cell._dynamic_children
-            cell._static_children = prev_cell._static_children
+            cell.dynamic_children = prev_cell.dynamic_children
+            cell.static_children = prev_cell.static_children
             for tag in prev_cell.tags:
                 cls._cells_by_tag[tag].discard(prev_cell)
             for tag in prev_cell.reactive_tags:

@@ -63,10 +63,10 @@ class Statement(SlicingMixin):
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
         self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
-        self._dynamic_parents: Dict[IdType, Set[Symbol]] = {}
-        self._dynamic_children: Dict[IdType, Set[Symbol]] = {}
-        self._static_parents: Dict[IdType, Set[Symbol]] = {}
-        self._static_children: Dict[IdType, Set[Symbol]] = {}
+        self.dynamic_parents: Dict[IdType, Set[Symbol]] = {}
+        self.dynamic_children: Dict[IdType, Set[Symbol]] = {}
+        self.static_parents: Dict[IdType, Set[Symbol]] = {}
+        self.static_children: Dict[IdType, Set[Symbol]] = {}
 
     @property
     def id(self) -> IdType:

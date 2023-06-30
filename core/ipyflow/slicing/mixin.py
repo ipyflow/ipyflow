@@ -51,10 +51,10 @@ class SlicingMixin(Protocol):
     #############
     # subclasses must implement the following:
 
-    _dynamic_parents: Dict[IdType, Set["Symbol"]]
-    _dynamic_children: Dict[IdType, Set["Symbol"]]
-    _static_parents: Dict[IdType, Set["Symbol"]]
-    _static_children: Dict[IdType, Set["Symbol"]]
+    dynamic_parents: Dict[IdType, Set["Symbol"]]
+    dynamic_children: Dict[IdType, Set["Symbol"]]
+    static_parents: Dict[IdType, Set["Symbol"]]
+    static_children: Dict[IdType, Set["Symbol"]]
 
     @classmethod
     def at_timestamp(
@@ -162,9 +162,9 @@ class SlicingMixin(Protocol):
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            return self._dynamic_parents
+            return self.dynamic_parents
         elif ctx == SlicingContext.STATIC:
-            return self._static_parents
+            return self.static_parents
         else:
             assert False
 
@@ -173,9 +173,9 @@ class SlicingMixin(Protocol):
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            self._dynamic_parents = new_parents
+            self.dynamic_parents = new_parents
         elif ctx == SlicingContext.STATIC:
-            self._static_parents = new_parents
+            self.static_parents = new_parents
         else:
             assert False
 
@@ -184,9 +184,9 @@ class SlicingMixin(Protocol):
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            return self._dynamic_children
+            return self.dynamic_children
         elif ctx == SlicingContext.STATIC:
-            return self._static_children
+            return self.static_children
         else:
             assert False
 
@@ -195,9 +195,9 @@ class SlicingMixin(Protocol):
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            self._dynamic_children = new_children
+            self.dynamic_children = new_children
         elif ctx == SlicingContext.STATIC:
-            self._static_children = new_children
+            self.static_children = new_children
         else:
             assert False
 

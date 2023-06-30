@@ -442,7 +442,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 # to ensure that static data deps get refreshed
                 prev_static_parents = {
                     pid: set(sym_edges)
-                    for pid, sym_edges in cell._static_parents.items()
+                    for pid, sym_edges in cell.static_parents.items()
                 }
                 if not is_same_content:
                     with static_slicing_context():
@@ -456,7 +456,7 @@ class NotebookFlow(singletons.NotebookFlow):
                     with dynamic_slicing_context():
                         for pid, sym_edges in prev_static_parents.items():
                             cell.remove_parent_edges(
-                                pid, sym_edges - cell._static_parents.get(pid, set())
+                                pid, sym_edges - cell.static_parents.get(pid, set())
                             )
                 should_recompute_exec_schedule = True
             except SyntaxError:
@@ -781,7 +781,7 @@ class NotebookFlow(singletons.NotebookFlow):
             return
         used_symbols = set()
         for syms in itertools.chain(
-            cell._dynamic_parents.values(), cell._static_parents.values()
+            cell.dynamic_parents.values(), cell.static_parents.values()
         ):
             used_symbols |= syms
         for _ in SlicingContext.iter_slicing_contexts():

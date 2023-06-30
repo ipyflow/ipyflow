@@ -999,12 +999,13 @@ class Symbol:
         is_blocking: bool = False,
         add_data_dep_only_if_parent_new: bool = False,
     ) -> "Symbol":
+        flow_ = flow()
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
         if not used_time.is_initialized:
             return self
-        if flow().is_dev_mode:
+        if flow_.is_dev_mode:
             logger.info(
                 "sym `%s` used in cell %d last updated in cell %d",
                 self,
@@ -1020,13 +1021,13 @@ class Symbol:
         if ts_to_use.is_initialized and not is_blocking:
             is_usage = False
             if is_static:
-                if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
+                if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
                     is_usage = ts_to_use.positional < used_time.positional
                 else:
                     is_usage = ts_to_use < used_time
                 if is_usage:
                     with static_slicing_context():
-                        flow().add_data_dep(
+                        flow_.add_data_dep(
                             used_time,
                             ts_to_use,
                             self,
@@ -1035,7 +1036,7 @@ class Symbol:
             elif not is_static and ts_to_use < used_time:
                 is_usage = True
                 with dynamic_slicing_context():
-                    flow().add_data_dep(
+                    flow_.add_data_dep(
                         used_time,
                         ts_to_use,
                         self,

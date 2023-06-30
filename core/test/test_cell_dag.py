@@ -18,7 +18,7 @@ def test_simple():
         run_cell("y = x + 1")
         assert cells().from_id(2).parents.keys() == {1}
         assert cells().from_id(1).children.keys() == {2}, (
-            "got %s" % cells().from_id(1)._dynamic_children
+            "got %s" % cells().from_id(1).dynamic_children
         )
         run_cell("z = x + y + 2")
         assert cells().from_id(3).parents.keys() == {1, 2}

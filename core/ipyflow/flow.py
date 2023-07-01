@@ -618,6 +618,7 @@ class NotebookFlow(singletons.NotebookFlow):
             self._exception_raised_during_execution is not None
         )
         response["is_reactively_executing"] = is_reactively_executing
+        response["settings"] = self.mut_settings.to_json() | self.settings.to_json()
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> None:

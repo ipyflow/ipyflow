@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import Generator, List, NamedTuple
+from typing import Any, Dict, Generator, List
 
 from ipyflow.slicing.context import SlicingContext, iter_slicing_contexts
 
@@ -47,7 +47,20 @@ class Interface(Enum):
     UNKNOWN = "unknown"
 
 
-class DataflowSettings(NamedTuple):
+class JsonSerializableMixin:
+    def to_json(self: Any) -> Dict[str, Any]:
+        json = {}
+        for key, value in asdict(self).items():
+            if isinstance(value, Enum):
+                value = value.value
+            if not isinstance(value, (bool, float, str)):
+                value = str(value)
+            json[key] = value
+        return json
+
+
+@dataclass(frozen=True)
+class DataflowSettings(JsonSerializableMixin):
     test_context: bool
     use_comm: bool
     mark_waiting_symbol_usages_unsafe: bool
@@ -56,7 +69,7 @@ class DataflowSettings(NamedTuple):
 
 
 @dataclass
-class MutableDataflowSettings:
+class MutableDataflowSettings(JsonSerializableMixin):
     dataflow_enabled: bool
     trace_messages_enabled: bool
     highlights: Highlights

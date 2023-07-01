@@ -21,7 +21,7 @@ _flow_fixture, run_cell_ = make_flow_fixture()
 def override_settings(**kwargs):
     old_settings = flow().settings
     old_mut_settings = flow().mut_settings
-    new_settings = old_settings._asdict()
+    new_settings = asdict(old_settings)
     new_mut_settings = asdict(old_mut_settings)
     for k, v in kwargs.items():
         if k in new_settings:

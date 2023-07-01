@@ -95,7 +95,9 @@ class PyccoloKernelHooks:
     def before_enter_tracing_context(self) -> None:
         ...
 
-    def before_execute(self, cell_content: str) -> Optional[str]:
+    def before_execute(
+        self, cell_content: str, cell_id: Optional[str] = None
+    ) -> Optional[str]:
         ...
 
     def should_trace(self) -> bool:
@@ -365,14 +367,28 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             logger.exception("encountered an exception")
             raise
 
-    async def pyc_execute(self, cell_content: str, is_async: bool, run_cell_func):
+    async def pyc_execute(
+        self,
+        cell_content: str,
+        is_async: bool,
+        run_cell_func,
+        cell_id: Optional[str] = None,
+    ):
         with save_number_of_currently_executing_cell():
-            return await self._pyc_execute_impl(cell_content, is_async, run_cell_func)
+            return await self._pyc_execute_impl(
+                cell_content, is_async, run_cell_func, cell_id=cell_id
+            )
 
-    async def _pyc_execute_impl(self, cell_content: str, is_async: bool, run_cell_func):
+    async def _pyc_execute_impl(
+        self,
+        cell_content: str,
+        is_async: bool,
+        run_cell_func,
+        cell_id: Optional[str] = None,
+    ):
         ret = None
         # Stage 1: Run pre-execute hook
-        maybe_new_content = self.before_execute(cell_content)
+        maybe_new_content = self.before_execute(cell_content, cell_id=cell_id)
         if maybe_new_content is not None:
             cell_content = maybe_new_content
 
@@ -486,19 +502,27 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                     store_history=False,
                     user_expressions=None,
                     allow_stdin=False,
+                    cell_id=None,
                 ):
                     super_ = super()
 
                     async def _run_cell_func(cell):
                         return await super_.do_execute(
-                            cell, silent, store_history, user_expressions, allow_stdin
+                            cell,
+                            silent,
+                            store_history,
+                            user_expressions,
+                            allow_stdin,
+                            cell_id=cell_id,
                         )
 
                     if silent or not store_history or self._is_code_empty(code):
                         # then it's probably a control message; don't run through ipyflow
                         ret = await _run_cell_func(code)
                     else:
-                        ret = await self.pyc_execute(code, True, _run_cell_func)
+                        ret = await self.pyc_execute(
+                            code, True, _run_cell_func, cell_id=cell_id
+                        )
                     if ret["status"] == "error":
                         self.on_exception(ret["ename"])
                     self._maybe_eject()
@@ -513,12 +537,18 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                     store_history=False,
                     user_expressions=None,
                     allow_stdin=False,
+                    cell_id=None,
                 ):
                     super_ = super()
 
                     async def _run_cell_func(cell):
                         ret = super_.do_execute(
-                            cell, silent, store_history, user_expressions, allow_stdin
+                            cell,
+                            silent,
+                            store_history,
+                            user_expressions,
+                            allow_stdin,
+                            cell_id=cell_id,
                         )
                         if inspect.isawaitable(ret):
                             return await ret
@@ -528,7 +558,9 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
                     ret = asyncio.get_event_loop().run_until_complete(
                         _run_cell_func(code)
                         if silent or not store_history or self._is_code_empty(code)
-                        else self.pyc_execute(code, True, _run_cell_func)
+                        else self.pyc_execute(
+                            code, True, _run_cell_func, cell_id=cell_id
+                        )
                     )
                     if ret["status"] == "error":
                         self.on_exception(ret["ename"])
@@ -576,7 +608,9 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
     def should_trace(self) -> bool:
         return singletons.flow().mut_settings.dataflow_enabled
 
-    def before_execute(self, cell_content: str) -> Optional[str]:
+    def before_execute(
+        self, cell_content: str, cell_id: Optional[str] = None
+    ) -> Optional[str]:
         flow_ = singletons.flow()
         if (
             -1 < flow_._reactivity_toggled_timestamp < flow_.cell_counter()
@@ -592,13 +626,15 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
             logger.error(flow_._saved_debug_message)
             flow_._saved_debug_message = None
 
-        cell_id, flow_._active_cell_id = flow_._active_cell_id, None
-        placeholder_id = cell_id is None
+        if cell_id is not None:
+            flow_._active_cell_id = cell_id
+        to_create_cell_id, flow_._active_cell_id = flow_._active_cell_id, None
+        placeholder_id = to_create_cell_id is None
         if placeholder_id:
             # next counter because it gets bumped on creation
-            cell_id = CodeCell.next_exec_counter()
+            to_create_cell_id = CodeCell.next_exec_counter()
         cell = CodeCell.create_and_track(
-            cell_id,
+            to_create_cell_id,
             cell_content,
             flow_._tags,
             validate_ipython_counter=self.settings.store_history,
@@ -609,7 +645,10 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
             flow_.last_executed_content,
             cell_content,
         )
-        last_cell_id, flow_.last_executed_cell_id = flow_.last_executed_cell_id, cell_id
+        last_cell_id, flow_.last_executed_cell_id = (
+            flow_.last_executed_cell_id,
+            to_create_cell_id,
+        )
 
         if not flow_.mut_settings.dataflow_enabled:
             return None
@@ -625,7 +664,7 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
             if (
                 flow_.mut_settings.warn_out_of_order_usages
                 and used_out_of_order_counter is not None
-                and (cell_id, cell_content)
+                and (to_create_cell_id, cell_content)
                 != (
                     last_cell_id,
                     last_content,

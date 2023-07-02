@@ -18,7 +18,13 @@ from ipyflow.annotations.compiler import (
     register_annotations_directory,
     register_annotations_file,
 )
-from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
+from ipyflow.config import (
+    ExecutionMode,
+    ExecutionSchedule,
+    FlowDirection,
+    Highlights,
+    ReactivityMode,
+)
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.experimental.dag import create_dag_metadata
@@ -109,6 +115,8 @@ def make_line_magic(flow_: "NotebookFlow"):
             "flow_semantics",
         ):
             return set_flow_direction(line)
+        elif cmd == "reactivity":
+            return set_reactivity(line)
         elif cmd in ("register", "register_tracer"):
             return register_tracer(line)
         elif cmd in ("deregister", "deregister_tracer"):
@@ -442,6 +450,19 @@ def set_flow_direction(line_: str) -> None:
         warn(usage)
         return
     flow().mut_settings.flow_order = flow_order
+
+
+def set_reactivity(line_: str) -> None:
+    line_ = line_.lower().strip()
+    usage = (
+        f"Usage: %flow reactivity [{ReactivityMode.BATCH}|{ReactivityMode.INCREMENTAL}]"
+    )
+    if line_ in ("batch", "incremental"):
+        reactivity = ReactivityMode(line_)
+    else:
+        warn(usage)
+        return
+    flow().mut_settings.reactivity_mode = reactivity
 
 
 def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:

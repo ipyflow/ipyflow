@@ -34,6 +34,7 @@ from ipyflow.config import (
     Highlights,
     Interface,
     MutableDataflowSettings,
+    ReactivityMode,
 )
 from ipyflow.data_model.code_cell import CodeCell, cells
 from ipyflow.data_model.namespace import Namespace
@@ -121,6 +122,14 @@ class NotebookFlow(singletons.NotebookFlow):
                     "flow_direction",
                     FlowDirection(
                         getattr(config, "flow_direction", FlowDirection.IN_ORDER)
+                    ),
+                )
+            ),
+            reactivity_mode=ReactivityMode(
+                kwargs.pop(
+                    "reactivity_mode",
+                    ReactivityMode(
+                        getattr(config, "reactivity_mode", ReactivityMode.INCREMENTAL)
                     ),
                 )
             ),

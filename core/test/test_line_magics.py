@@ -8,7 +8,13 @@ from ipyflow.annotations.compiler import (
     REGISTERED_CLASS_SPECS,
     REGISTERED_FUNCTION_SPECS,
 )
-from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
+from ipyflow.config import (
+    ExecutionMode,
+    ExecutionSchedule,
+    FlowDirection,
+    Highlights,
+    ReactivityMode,
+)
 from ipyflow.data_model.code_cell import cells
 from ipyflow.line_magics import _USAGE
 from ipyflow.singletons import flow, kernel
@@ -153,6 +159,14 @@ def test_set_exec_schedule_and_flow_order():
     run_cell(f"%flow schedule {ExecutionSchedule.STRICT.value}")
     # strict schedule only works for in_order semantics
     assert flow().mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
+
+
+def test_set_reactivity():
+    assert flow().mut_settings.reactivity_mode == ReactivityMode.INCREMENTAL
+    run_cell(f"%flow reactivity {ReactivityMode.BATCH.value}")
+    assert flow().mut_settings.reactivity_mode == ReactivityMode.BATCH
+    run_cell(f"%flow reactivity {ReactivityMode.INCREMENTAL.value}")
+    assert flow().mut_settings.reactivity_mode == ReactivityMode.INCREMENTAL
 
 
 def test_register_deregister_tracer():

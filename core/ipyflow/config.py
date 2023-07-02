@@ -30,6 +30,11 @@ class Highlights(Enum):
     REACTIVE = "reactive"
 
 
+class ReactivityMode(Enum):
+    BATCH = "batch"
+    INCREMENTAL = "incremental"
+
+
 # TODO: figure out how to represent different versions of
 #  same interface (e.g. jupyterlab 4.0, notebook v7, etc)
 class Interface(Enum):
@@ -79,6 +84,7 @@ class MutableDataflowSettings(JsonSerializableMixin):
     exec_mode: ExecutionMode
     exec_schedule: ExecutionSchedule
     flow_order: FlowDirection
+    reactivity_mode: ReactivityMode
     warn_out_of_order_usages: bool
     lint_out_of_order_usages: bool
     syntax_transforms_enabled: bool

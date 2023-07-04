@@ -62,3 +62,18 @@
 .ready-making-input-cell .jp-InputCollapser:hover > .jp-Collapser-child {
   background-color: var(--ready-making-color);
 }
+
+.jp-Notebook .jp-Cell.ipyflow-slice-self .jp-InputPrompt::before {
+  color: var(--jp-brand-color1);
+  content: '•';
+}
+
+.jp-Notebook .jp-Cell.ipyflow-slice-direct .jp-InputPrompt::before {
+  color: var(--ready-making-color);
+  content: '•';
+}
+
+.jp-Notebook .jp-Cell.ipyflow-slice .jp-InputPrompt::before {
+  color: var(--waiting-color);
+  content: '•';
+}

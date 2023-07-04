@@ -162,11 +162,11 @@ def test_set_exec_schedule_and_flow_order():
 
 
 def test_set_reactivity():
-    assert flow().mut_settings.reactivity_mode == ReactivityMode.INCREMENTAL
-    run_cell(f"%flow reactivity {ReactivityMode.BATCH.value}")
     assert flow().mut_settings.reactivity_mode == ReactivityMode.BATCH
     run_cell(f"%flow reactivity {ReactivityMode.INCREMENTAL.value}")
     assert flow().mut_settings.reactivity_mode == ReactivityMode.INCREMENTAL
+    run_cell(f"%flow reactivity {ReactivityMode.BATCH.value}")
+    assert flow().mut_settings.reactivity_mode == ReactivityMode.BATCH
 
 
 def test_register_deregister_tracer():

@@ -30,7 +30,7 @@ let cellPendingExecutionIdx: number | null = null;
 
 let lastExecutionMode: string | null = null;
 let isReactivelyExecuting = false;
-let isAltModeExecuting = false;
+let numAltModeExecutes = 0;
 let lastExecutionHighlights: Highlights | null = null;
 let executedReactiveReadyCells: Set<string> = new Set();
 let newReadyCells: Set<string> = new Set();
@@ -337,25 +337,12 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         return;
       }
       notifyActiveCell();
-      if (isAltModeExecuting) {
-        // ensure that we keep exec_mode the same
-        // when next toggle runs
-        Jupyter.notebook.kernel.execute(
-          '%flow toggle-reactivity-until-next-reset',
-          {
-            silent: true,
-            store_history: false
-          }
-        );
-      }
-      isAltModeExecuting = true;
-      Jupyter.notebook.kernel.execute(
-        '%flow toggle-reactivity-until-next-reset',
-        {
+      if (++numAltModeExecutes === 1) {
+        Jupyter.notebook.kernel.execute('%flow toggle-reactivity', {
           silent: true,
           store_history: false
-        }
-      );
+        });
+      }
       Jupyter.notebook.execute_cells([activeCellIdx]);
     }
   };
@@ -454,7 +441,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         is_reactively_executing: isReactivelyExecuting
       });
     } else if (payload.type === 'set_exec_mode') {
-      isAltModeExecuting = false;
+      numAltModeExecutes = 0;
       lastExecutionMode = payload.exec_mode as string;
     } else if (payload.type === 'change_active_cell') {
       if (cellPendingExecutionIdx != null) {
@@ -553,9 +540,11 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         newReadyCells = new Set();
         executedReactiveReadyCells = new Set();
         updateUI(Jupyter);
-        isReactivelyExecuting = false;
-        if (lastExecutionMode === 'reactive') {
-          isAltModeExecuting = false;
+        if (numAltModeExecutes > 0 && --numAltModeExecutes === 0) {
+          Jupyter.notebook.kernel.execute('%flow toggle-reactivity', {
+            silent: true,
+            store_history: false
+          });
         }
         notifyActiveCell();
       } else {

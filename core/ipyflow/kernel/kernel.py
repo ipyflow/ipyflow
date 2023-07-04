@@ -612,12 +612,6 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         self, cell_content: str, cell_id: Optional[str] = None
     ) -> Optional[str]:
         flow_ = singletons.flow()
-        if (
-            -1 < flow_._reactivity_toggled_timestamp < flow_.cell_counter()
-            and flow_.mut_settings.exec_mode == ExecutionMode.NORMAL
-        ):
-            flow_.toggle_reactivity()
-            flow_._reactivity_toggled_timestamp = -1
         self.syntax_transforms_enabled = flow_.mut_settings.syntax_transforms_enabled
         self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
         flow_.test_and_clear_waiter_usage_detected()

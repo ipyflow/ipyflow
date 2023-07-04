@@ -21,6 +21,9 @@ const readyMakingClass = 'ready-making-cell';
 const readyMakingInputClass = 'ready-making-input-cell';
 const linkedWaitingClass = 'linked-waiting';
 const linkedReadyMakerClass = 'linked-ready-maker';
+const selfSliceClass = 'ipyflow-slice-self';
+const directSliceClass = 'ipyflow-slice-direct';
+const sliceClass = 'ipyflow-slice';
 
 const cleanup = new Event('cleanup');
 
@@ -32,19 +35,21 @@ type IpyflowSessionState = {
   readyCells: Set<string>;
   waiterLinks: { [id: string]: string[] };
   readyMakerLinks: { [id: string]: string[] };
+  prevActiveCell: Cell<ICellModel> | null;
   activeCell: Cell<ICellModel>;
-  activeCellId: string;
-  cellsById: { [id: string]: HTMLElement };
-  cellModelsById: { [id: string]: ICellModel };
+  cellsById: { [id: string]: Cell<ICellModel> };
   orderIdxById: { [id: string]: number };
   cellPendingExecution: CodeCell;
   lastExecutionMode: string;
   isReactivelyExecuting: boolean;
-  isAltModeExecuting: boolean;
+  numAltModeExecutes: number;
   lastExecutionHighlights: Highlights;
   executedReactiveReadyCells: Set<string>;
   newReadyCells: Set<string>;
   forcedReactiveCells: Set<string>;
+  cellParents: { [id: string]: string[] };
+  cellChildren: { [id: string]: string[] };
+  settings: { [key: string]: string };
 };
 
 type IpyflowState = {
@@ -61,24 +66,79 @@ function initSessionState(session_id: string): void {
     readyCells: new Set(),
     waiterLinks: {},
     readyMakerLinks: {},
+    prevActiveCell: null,
     activeCell: null,
-    activeCellId: null,
     cellsById: {},
-    cellModelsById: {},
     orderIdxById: {},
     cellPendingExecution: null,
     lastExecutionMode: null,
     isReactivelyExecuting: false,
-    isAltModeExecuting: false,
+    numAltModeExecutes: 0,
     lastExecutionHighlights: null,
     executedReactiveReadyCells: new Set(),
     newReadyCells: new Set(),
     forcedReactiveCells: new Set(),
+    cellParents: {},
+    cellChildren: {},
+    settings: {},
   };
 }
 
 function resetSessionState(session_id: string): void {
   delete ipyflowState[session_id];
+}
+
+function computeTransitiveClosureHelper(
+  closure: Set<string>,
+  cellId: string,
+  edges: { [id: string]: string[] }
+): void {
+  if (closure.has(cellId)) {
+    return;
+  }
+  closure.add(cellId);
+  const children = edges[cellId];
+  if (children === undefined) {
+    return;
+  }
+  children.forEach((child) =>
+    computeTransitiveClosureHelper(closure, child, edges)
+  );
+}
+
+function computeTransitiveClosure(
+  cellIds: string[],
+  state: IpyflowSessionState,
+  inclusive = true
+): Cell<ICellModel>[] {
+  const closure = new Set<string>();
+  for (const cellId of cellIds) {
+    computeTransitiveClosureHelper(closure, cellId, state.cellChildren);
+    if (!inclusive) {
+      closure.delete(cellId);
+    }
+  }
+  return Array.from(closure)
+    .sort((a, b) => state.orderIdxById[a] - state.orderIdxById[b])
+    .map((id) => state.cellsById[id]);
+}
+
+function executeCells(
+  cells: Array<Cell<ICellModel>>,
+  session: ISessionContext
+) {
+  for (const cell of cells) {
+    // if any of them fail, change the [*] to [ ] on subsequent cells
+    CodeCell.execute(cell as CodeCell, session).then((msg) => {
+      if ((msg as any)?.content?.status === 'error') {
+        for (const cell of cells) {
+          if (cell.promptNode.textContent?.includes('[*]')) {
+            cell.setPrompt('');
+          }
+        }
+      }
+    });
+  }
 }
 
 /**
@@ -103,44 +163,44 @@ const extension: JupyterFrontEndPlugin<void> = {
         if (!session.isReady) {
           return;
         }
+        app.commands.execute('notebook:enter-command-mode');
         const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
           {}) as IpyflowSessionState;
         if (!(state.isIpyflowCommConnected ?? false)) {
-          app.commands.execute('notebook:enter-command-mode');
           CodeCell.execute(notebooks.activeCell as CodeCell, session);
-        } else if (notebooks.activeCell.model.type === 'code') {
-          app.commands.execute('notebook:enter-command-mode');
-          if (state.isAltModeExecuting) {
-            // run the toggle twice to get to the same exec mode, but with updated timestamp
+          return;
+        }
+        if (notebooks.activeCell.model.type !== 'code') {
+          return;
+        }
+        state.numAltModeExecutes++;
+        if (
+          state.settings.reactivity_mode === 'incremental' ||
+          state.settings.exec_mode === 'reactive'
+        ) {
+          if (state.numAltModeExecutes === 1) {
             session.session.kernel
               .requestExecute({
-                code: '%flow toggle-reactivity-until-next-reset',
-                silent: true,
-                store_history: false,
-              })
-              .done.then(() => {
-                session.session.kernel
-                  .requestExecute({
-                    code: '%flow toggle-reactivity-until-next-reset',
-                    silent: true,
-                    store_history: false,
-                  })
-                  .done.then(() => {
-                    CodeCell.execute(notebooks.activeCell as CodeCell, session);
-                  });
-              });
-          } else {
-            state.isAltModeExecuting = true;
-            session.session.kernel
-              .requestExecute({
-                code: '%flow toggle-reactivity-until-next-reset',
+                code: '%flow toggle-reactivity',
                 silent: true,
                 store_history: false,
               })
               .done.then(() => {
                 CodeCell.execute(notebooks.activeCell as CodeCell, session);
               });
+          } else {
+            CodeCell.execute(notebooks.activeCell as CodeCell, session);
           }
+        } else if (state.settings.reactivity_mode === 'batch') {
+          const closure = computeTransitiveClosure(
+            [notebooks.activeCell.model.id],
+            state
+          );
+          executeCells(closure, session);
+        } else {
+          console.error(
+            `Unknown reactivity mode: ${state.settings.reactivity_mode}`
+          );
         }
       },
     });
@@ -159,23 +219,56 @@ const extension: JupyterFrontEndPlugin<void> = {
       category: 'execution',
       args: {},
     });
-    app.commands.addCommand('alt-execute', {
-      label: 'Alt Execute',
+
+    app.commands.addCommand('execute-remaining', {
+      label: 'Execute Remaining Cells',
       isEnabled: () => true,
       isVisible: () => true,
       isToggled: () => false,
       execute: () => {
         const session = notebooks.currentWidget.sessionContext;
-        if (session.isReady) {
-          app.commands.execute('notebook:enter-command-mode');
-          CodeCell.execute(notebooks.activeCell as CodeCell, session);
+        if (!session.isReady) {
+          return;
+        }
+        const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+          {}) as IpyflowSessionState;
+        if (state.isIpyflowCommConnected ?? false) {
+          const closure = computeTransitiveClosure(
+            [state.activeCell.model.id],
+            state,
+            false
+          );
+          executeCells(closure, session);
         }
       },
     });
-    app.commands.addKeyBinding({
-      command: 'alt-execute',
-      keys: ['Accel Enter'],
-      selector: '.jp-Notebook',
+    app.commands.commandExecuted.connect((_, args) => {
+      const session = notebooks.currentWidget.sessionContext;
+      if (!session.isReady) {
+        return;
+      }
+      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+        {}) as IpyflowSessionState;
+      if (!(state.isIpyflowCommConnected ?? false)) {
+        return;
+      }
+      if (
+        state.settings?.exec_mode !== 'reactive' ||
+        state.settings?.reactivity_mode !== 'batch'
+      ) {
+        return;
+      }
+      if (args.id === 'notebook:run-cell') {
+        app.commands.execute('execute-remaining');
+      } else if (args.id === 'notebook:run-cell-and-select-next') {
+        const origActiveCell = state.activeCell;
+        try {
+          state.activeCell = state.prevActiveCell;
+          app.commands.execute('execute-remaining');
+        } finally {
+          state.activeCell = origActiveCell;
+        }
+      }
     });
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
@@ -339,7 +432,7 @@ const clearCellState = (notebook: Notebook) => {
 const addUnsafeCellInteraction = (
   elem: Element,
   linkedElems: string[],
-  cellsById: { [id: string]: HTMLElement },
+  cellsById: { [id: string]: Cell },
   collapserFun: (elem: HTMLElement) => Element,
   evt: 'mouseover' | 'mouseout',
   add_or_remove: 'add' | 'remove',
@@ -354,7 +447,7 @@ const addUnsafeCellInteraction = (
       if (waitingCells.has(linkedId)) {
         css = linkedWaitingClass;
       }
-      const collapser = collapserFun(cellsById[linkedId]);
+      const collapser = collapserFun(cellsById[linkedId].node);
       if (collapser === null || collapser.firstElementChild === null) {
         return;
       }
@@ -369,7 +462,6 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
   initSessionState(session.session.id);
   const state = ipyflowState[session.session.id];
   state.activeCell = notebook.activeCell;
-  state.activeCellId = state.activeCell.model.id;
   const comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
   let disconnected = false;
 
@@ -392,11 +484,22 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     return cell_metadata_by_id;
   };
 
+  const syncDirtiness = (cell: Cell<ICellModel>) => {
+    if (cell !== null && cell.model !== null) {
+      if ((<ICodeCellModel>cell.model).isDirty) {
+        state.dirtyCells.add(cell.model.id);
+      } else {
+        state.dirtyCells.delete(cell.model.id);
+      }
+    }
+  };
+
   const onContentChanged = _.debounce(() => {
     if (disconnected) {
       notebook.model.contentChanged.disconnect(onContentChanged);
       return;
     }
+    notebook.widgets.forEach(syncDirtiness);
     comm.send({
       type: 'notify_content_changed',
       cell_metadata_by_id: gatherCellMetadataAndContent(),
@@ -421,6 +524,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
+    state.dirtyCells.delete(cell.id);
     notebook.widgets.forEach((itercell) => {
       if (itercell.model.id === cell.id) {
         itercell.node.classList.remove(readyClass);
@@ -447,12 +551,10 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
 
   const refreshNodeMapping = (notebook: Notebook) => {
     state.cellsById = {};
-    state.cellModelsById = {};
     state.orderIdxById = {};
 
     notebook.widgets.forEach((cell, idx) => {
-      state.cellsById[cell.model.id] = cell.node;
-      state.cellModelsById[cell.model.id] = cell.model;
+      state.cellsById[cell.model.id] = cell;
       state.orderIdxById[cell.model.id] = idx;
     });
   };
@@ -466,19 +568,12 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       return;
     }
     notifyActiveCell(cell.model);
-    if (state.activeCell !== null && state.activeCell.model !== null) {
-      if ((<ICodeCellModel>state.activeCell.model).isDirty) {
-        state.dirtyCells.add(state.activeCellId);
-      } else {
-        state.dirtyCells.delete(state.activeCellId);
-      }
-      state.activeCell.model.stateChanged.disconnect(
-        onExecution,
-        state.activeCell.model.stateChanged
-      );
-    }
+    state.activeCell.model.stateChanged.disconnect(
+      onExecution,
+      state.activeCell.model.stateChanged
+    );
+    state.prevActiveCell = state.activeCell;
     state.activeCell = cell;
-    state.activeCellId = cell.model.id;
 
     if (
       state.activeCell === null ||
@@ -491,14 +586,21 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     state.activeCell.model.stateChanged.connect(onExecution);
     notifyActiveCell(state.activeCell.model);
 
-    if (state.dirtyCells.has(state.activeCellId)) {
-      const activeCellModel: any = state.activeCell.model as any;
-      if (activeCellModel._setDirty !== undefined) {
-        activeCellModel._setDirty(true);
-      }
+    if (state.dirtyCells.has(state.activeCell.model.id)) {
+      (state.activeCell.model as any)._setDirty?.(true);
     }
     refreshNodeMapping(notebook);
-    updateOneCellUI(state.activeCellId);
+    if (state.settings.reactivity_mode === 'batch') {
+      updateUI(notebook);
+    } else {
+      updateOneCellUI(
+        state.activeCell.model.id,
+        false,
+        false,
+        false,
+        state.lastExecutionHighlights !== 'none'
+      );
+    }
   };
 
   const actionUpdatePairs: {
@@ -515,8 +617,14 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     },
   ];
 
-  const updateOneCellUI = (id: string) => {
-    const model = state.cellModelsById[id];
+  const updateOneCellUI = (
+    id: string,
+    isSelf: boolean,
+    inDirectSlice: boolean,
+    inSlice: boolean,
+    showCollapserHighlights: boolean
+  ) => {
+    const model = state.cellsById[id].model;
     if (model.type !== 'code') {
       return;
     }
@@ -524,7 +632,25 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     if (codeModel.executionCount == null) {
       return;
     }
-    const elem = state.cellsById[id];
+    const elem = state.cellsById[id].node;
+    if (isSelf) {
+      elem.classList.add(selfSliceClass);
+    } else {
+      elem.classList.remove(selfSliceClass);
+    }
+    if (inDirectSlice && !isSelf) {
+      elem.classList.add(directSliceClass);
+    } else {
+      elem.classList.remove(directSliceClass);
+    }
+    if (inSlice && !inDirectSlice && !isSelf) {
+      elem.classList.add(sliceClass);
+    } else {
+      elem.classList.remove(sliceClass);
+    }
+    if (!showCollapserHighlights) {
+      return;
+    }
     if (state.waitingCells.has(id)) {
       elem.classList.add(waitingClass);
       elem.classList.add(readyClass);
@@ -595,12 +721,32 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
 
   const updateUI = (notebook: Notebook) => {
     clearCellState(notebook);
-    if (state.lastExecutionHighlights === 'none') {
-      return;
-    }
     refreshNodeMapping(notebook);
+    const slice = new Set<string>();
+    let directSlice = new Set<string>();
+    const activeCellId = state.activeCell.model.id;
+    if (
+      state.settings.reactivity_mode === 'batch' &&
+      (Object.prototype.hasOwnProperty.call(state.cellChildren, activeCellId) ||
+        Object.prototype.hasOwnProperty.call(state.cellParents, activeCellId))
+    ) {
+      directSlice = new Set([
+        activeCellId,
+        ...state.cellChildren[activeCellId],
+        ...state.cellParents[activeCellId],
+      ]);
+      computeTransitiveClosureHelper(slice, activeCellId, state.cellChildren);
+      slice.delete(activeCellId);
+      computeTransitiveClosureHelper(slice, activeCellId, state.cellParents);
+    }
     for (const [id] of Object.entries(state.cellsById)) {
-      updateOneCellUI(id);
+      updateOneCellUI(
+        id,
+        id === activeCellId && directSlice.has(id),
+        directSlice.has(id),
+        slice.has(id),
+        state.lastExecutionHighlights !== 'none'
+      );
     }
   };
 
@@ -617,9 +763,12 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       notebook.model.contentChanged.connect(onContentChanged);
       requestComputeExecSchedule();
     } else if (payload.type === 'set_exec_mode') {
-      state.isAltModeExecuting = false;
+      state.numAltModeExecutes = 0;
       state.lastExecutionMode = payload.exec_mode as string;
     } else if (payload.type === 'compute_exec_schedule') {
+      state.settings = payload.settings as { [key: string]: string };
+      state.cellParents = payload.cell_parents as { [id: string]: string[] };
+      state.cellChildren = payload.cell_children as { [id: string]: string[] };
       state.waitingCells = new Set(payload.waiting_cells as string[]);
       state.readyCells = new Set(payload.ready_cells as string[]);
       state.newReadyCells = new Set([
@@ -648,44 +797,59 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       const last_execution_was_error =
         payload.last_execution_was_error as boolean;
       if (!last_execution_was_error) {
-        let lastExecutedCellIdSeen = false;
-        for (const cell of notebook.widgets) {
-          if (!lastExecutedCellIdSeen) {
-            lastExecutedCellIdSeen = cell.model.id === lastExecutedCellId;
-            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+        if (state.settings.reactivity_mode === 'batch') {
+          let batchedReactiveCells = Array.from(state.forcedReactiveCells);
+          if (state.isReactivelyExecuting || exec_mode === 'reactive') {
+            batchedReactiveCells = [
+              ...batchedReactiveCells,
+              ...Array.from(state.newReadyCells),
+            ];
+          }
+          batchedReactiveCells = batchedReactiveCells.filter(
+            (id) => !state.executedReactiveReadyCells.has(id)
+          );
+          const closure = computeTransitiveClosure(batchedReactiveCells, state);
+          executeCells(closure, session);
+        } else {
+          let lastExecutedCellIdSeen = false;
+          for (const cell of notebook.widgets) {
+            if (!lastExecutedCellIdSeen) {
+              lastExecutedCellIdSeen = cell.model.id === lastExecutedCellId;
+              if (flow_order === 'in_order' || exec_schedule === 'strict') {
+                continue;
+              }
+            }
+            if (
+              cell.model.type !== 'code' ||
+              state.executedReactiveReadyCells.has(cell.model.id)
+            ) {
               continue;
             }
-          }
-          if (
-            cell.model.type !== 'code' ||
-            state.executedReactiveReadyCells.has(cell.model.id)
-          ) {
-            continue;
-          }
-          if (!state.newReadyCells.has(cell.model.id)) {
-            continue;
-          }
-          if (
-            !state.forcedReactiveCells.has(cell.model.id) &&
-            exec_mode !== 'reactive'
-          ) {
-            continue;
-          }
-          const codeCell = cell as CodeCell;
-          if (state.cellPendingExecution === null) {
-            state.cellPendingExecution = codeCell;
-            // break early if using one of the order-based semantics
-            if (flow_order === 'in_order' || exec_schedule === 'strict') {
-              break;
+            if (!state.newReadyCells.has(cell.model.id)) {
+              continue;
             }
-          } else if (codeCell.model.executionCount == null) {
-            // pass
-          } else if (
-            codeCell.model.executionCount <
-            state.cellPendingExecution.model.executionCount
-          ) {
-            // otherwise, execute in order of earliest execution counter
-            state.cellPendingExecution = codeCell;
+            if (
+              !state.forcedReactiveCells.has(cell.model.id) &&
+              !(state.isReactivelyExecuting || exec_mode === 'reactive')
+            ) {
+              continue;
+            }
+            const codeCell = cell as CodeCell;
+            if (state.cellPendingExecution === null) {
+              state.cellPendingExecution = codeCell;
+              // break early if using one of the order-based semantics
+              if (flow_order === 'in_order' || exec_schedule === 'strict') {
+                break;
+              }
+            } else if (codeCell.model.executionCount == null) {
+              // pass
+            } else if (
+              codeCell.model.executionCount <
+              state.cellPendingExecution.model.executionCount
+            ) {
+              // otherwise, execute in order of earliest execution counter
+              state.cellPendingExecution = codeCell;
+            }
           }
         }
       }
@@ -703,8 +867,17 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
         state.executedReactiveReadyCells = new Set();
         updateUI(notebook);
         state.isReactivelyExecuting = false;
-        if (state.lastExecutionMode === 'reactive') {
-          state.isAltModeExecuting = false;
+        if (
+          state.numAltModeExecutes > 0 &&
+          --state.numAltModeExecutes === 0 &&
+          (state.settings.reactivty_mode === 'incremental' ||
+            state.settings.exec_mode === 'reactive')
+        ) {
+          session.session.kernel.requestExecute({
+            code: '%flow toggle-reactivity',
+            silent: true,
+            store_history: false,
+          });
         }
       } else {
         state.isReactivelyExecuting = true;

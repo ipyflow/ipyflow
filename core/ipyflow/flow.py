@@ -129,7 +129,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 kwargs.pop(
                     "reactivity_mode",
                     ReactivityMode(
-                        getattr(config, "reactivity_mode", ReactivityMode.INCREMENTAL)
+                        getattr(config, "reactivity_mode", ReactivityMode.BATCH)
                     ),
                 )
             ),
@@ -197,7 +197,6 @@ class NotebookFlow(singletons.NotebookFlow):
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Union[None, Exception, str] = None
         self._last_exception_raised: Union[None, str, Exception] = None
-        self._reactivity_toggled_timestamp = -1
         self.exception_counter: int = 0
         self._saved_debug_message: Optional[str] = None
         self.min_timestamp = -1
@@ -245,6 +244,8 @@ class NotebookFlow(singletons.NotebookFlow):
             iface = Interface(interface)
         except ValueError:
             iface = Interface.UNKNOWN
+        if self.mut_settings.interface == iface:
+            return
         self.mut_settings.interface = iface
         self.mut_settings.dataflow_enabled = getattr(
             config, "dataflow_enabled", kwargs.get("dataflow_enabled", True)
@@ -607,7 +608,7 @@ class NotebookFlow(singletons.NotebookFlow):
             if cell_metadata_by_id is None:
                 null_vals.append("cell_metadata_by_id")
             return {"success": False, "error": f"null value for {', '.join(null_vals)}"}
-        cells_to_check = (
+        cells_to_check = list(
             cell
             for cell in (
                 cells().from_id_nullable(cell_id) for cell_id in cell_metadata_by_id
@@ -630,18 +631,26 @@ class NotebookFlow(singletons.NotebookFlow):
         response["settings"] = dict(
             self.mut_settings.to_json().items() | self.settings.to_json().items()
         )
+        cell_parents = {}
+        cell_children = {}
+        for cell in cells_to_check:
+            if cell.cell_ctr <= 0:
+                continue
+            this_cell_parents: Set[IdType] = set()
+            this_cell_children: Set[IdType] = set()
+            for _ in self.mut_settings.iter_slicing_contexts():
+                this_cell_parents |= cell.directional_parents.keys()
+                this_cell_children |= cell.directional_children.keys()
+            cell_parents[cell.id] = list(this_cell_parents)
+            cell_children[cell.id] = list(this_cell_children)
+        response["cell_parents"] = cell_parents
+        response["cell_children"] = cell_children
         return response
 
     def handle_reactivity_cleanup(self, _request=None) -> None:
         self.min_cascading_reactive_cell_num = self.cell_counter()
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
-        if (
-            self._reactivity_toggled_timestamp > 0
-            and self.mut_settings.exec_mode == ExecutionMode.REACTIVE
-        ):
-            self.toggle_reactivity()
-            self._reactivity_toggled_timestamp = -1
 
     def toggle_reactivity(self):
         if self.mut_settings.exec_mode == ExecutionMode.NORMAL:
@@ -650,7 +659,6 @@ class NotebookFlow(singletons.NotebookFlow):
             self.mut_settings.exec_mode = ExecutionMode.NORMAL
         else:
             raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
-        self._reactivity_toggled_timestamp = self.cell_counter()
 
     def handle_refresh_symbols(self, request) -> None:
         for symbol_str in request.get("symbols", []):

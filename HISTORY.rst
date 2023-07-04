@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.178 (2022-07-xx)
+--------------------
+* Add batch reactivity_mode and make it the default (previously was incremental);
+* Add slice indicators to the left of cell counters;
+* Fix bug related to syncing dirty cell indicator to dirty state after paste;
+
 0.0.177 (2022-06-26)
 --------------------
 * Set consistent comm ids when APIs permit;

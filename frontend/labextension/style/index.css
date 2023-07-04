@@ -63,6 +63,12 @@
   background-color: var(--ready-making-color);
 }
 
+/* get rid of the '.' in the dirty indicator since we have appropriated it */
+.jp-Notebook .jp-Cell.jp-mod-dirty .jp-InputPrompt::before {
+  color: var(--jp-warn-color1);
+  content: '';
+}
+
 .jp-Notebook .jp-Cell.ipyflow-slice-self .jp-InputPrompt::before {
   color: var(--jp-brand-color1);
   content: '•';

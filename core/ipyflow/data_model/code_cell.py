@@ -303,6 +303,14 @@ class CodeCell(SlicingMixin):
 
     @classmethod
     def set_cell_positions(cls, order_index_by_cell_id: Dict[IdType, int]):
+        settings = flow().mut_settings
+        if (
+            settings.flow_order == FlowDirection.IN_ORDER
+            and settings.interface != Interface.IPYTHON
+        ):
+            for cell_id in cls._position_by_cell_id:
+                if cell_id not in order_index_by_cell_id:
+                    order_index_by_cell_id[cell_id] = cast(int, float("inf"))
         cls._position_by_cell_id = order_index_by_cell_id
 
     @classmethod

@@ -24,7 +24,6 @@ from IPython.core.magic import register_cell_magic
 from pyccolo.import_hooks import TraceFinder
 
 from ipyflow import singletons
-from ipyflow.config import ExecutionMode
 from ipyflow.data_model.code_cell import CodeCell
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
@@ -129,13 +128,13 @@ class OutputRecorder(pyc.BaseTracer):
         return False
 
 
-class PyccoloKernelMixin(PyccoloKernelHooks):
+class IPyflowKernelBase(singletons.IPyflowKernel):
     def __init__(self, **kwargs) -> None:
         store_history = kwargs.pop("store_history", True)
         super().__init__(**kwargs)
         self._initialize(store_history=store_history)
 
-    def _initialize(self, store_history: bool = True) -> None:
+    def _initialize(self, *, store_history: bool) -> None:
         self.settings: PyccoloKernelSettings = PyccoloKernelSettings(
             store_history=store_history
         )
@@ -430,148 +429,6 @@ class PyccoloKernelMixin(PyccoloKernelHooks):
             self.on_exception(None)
         return ret
 
-    @classmethod
-    def make_zmq_kernel_class(cls, name: str) -> Type[IPythonKernel]:
-        class ZMQKernel(cls, IPythonKernel):  # type: ignore
-            implementation = "kernel"
-            implementation_version = __version__
-            prev_kernel_class: Optional[Type[IPythonKernel]] = None
-            replacement_class: Optional[Type[IPythonKernel]] = None
-            client_comm: Optional["Comm"] = None
-
-            def __init__(self, **kwargs) -> None:
-                super().__init__(**kwargs)
-                # this needs to happen after IPythonKernel.__init__ completes,
-                # which means that we cannot put it in _initialize(), since at
-                # that point only PyccoloKernelHooks.__init__ will be finished
-                self.after_init_class()
-
-            def _initialize(self, **kwargs) -> None:
-                super()._initialize(**kwargs)
-                from ipyflow.kernel import patched_nest_asyncio
-
-                patched_nest_asyncio.apply()
-
-                # As of 2023/05/21, it seems like this is only necessary in
-                # the server extension, but seems like it can't hurt to do
-                # it here as well.
-                patch_jupyter_taskrunner_run()
-
-            @classmethod
-            def inject(
-                zmq_kernel_class, prev_kernel_class: Type[IPythonKernel]
-            ) -> None:
-                ipy = get_ipython()
-                kernel = ipy.kernel
-                kernel.__class__ = zmq_kernel_class
-                if zmq_kernel_class.prev_kernel_class is None:
-                    kernel._initialize()
-                    kernel.after_init_class()
-                    for subclass in singletons.IPyflowKernel._walk_mro():
-                        subclass._instance = kernel
-                zmq_kernel_class.prev_kernel_class = prev_kernel_class
-                CodeCell._cell_counter = ipy.execution_count
-
-            @classmethod
-            def _maybe_eject(zmq_kernel_class) -> None:
-                if zmq_kernel_class.replacement_class is None:
-                    return
-                get_ipython().kernel.__class__ = zmq_kernel_class.replacement_class
-                zmq_kernel_class.replacement_class = None
-
-            def init_metadata(self, parent):
-                """
-                Don't actually change the metadata; we just want to get the cell id
-                out of the execution request.
-                """
-                self.before_init_metadata(parent)
-                return super().init_metadata(parent)
-
-            def _is_code_empty(self, code: str) -> bool:
-                return (
-                    self.shell.input_transformer_manager.transform_cell(code).strip()
-                    == ""
-                )
-
-            if inspect.iscoroutinefunction(IPythonKernel.do_execute):
-
-                async def do_execute(
-                    self,
-                    code,
-                    silent,
-                    store_history=False,
-                    user_expressions=None,
-                    allow_stdin=False,
-                    cell_id=None,
-                ):
-                    super_ = super()
-
-                    async def _run_cell_func(cell):
-                        return await super_.do_execute(
-                            cell,
-                            silent,
-                            store_history,
-                            user_expressions,
-                            allow_stdin,
-                            cell_id=cell_id,
-                        )
-
-                    if silent or not store_history or self._is_code_empty(code):
-                        # then it's probably a control message; don't run through ipyflow
-                        ret = await _run_cell_func(code)
-                    else:
-                        ret = await self.pyc_execute(
-                            code, True, _run_cell_func, cell_id=cell_id
-                        )
-                    if ret["status"] == "error":
-                        self.on_exception(ret["ename"])
-                    self._maybe_eject()
-                    return ret
-
-            else:
-
-                def do_execute(
-                    self,
-                    code,
-                    silent,
-                    store_history=False,
-                    user_expressions=None,
-                    allow_stdin=False,
-                    cell_id=None,
-                ):
-                    super_ = super()
-
-                    async def _run_cell_func(cell):
-                        ret = super_.do_execute(
-                            cell,
-                            silent,
-                            store_history,
-                            user_expressions,
-                            allow_stdin,
-                            cell_id=cell_id,
-                        )
-                        if inspect.isawaitable(ret):
-                            return await ret
-                        else:
-                            return ret
-
-                    ret = asyncio.get_event_loop().run_until_complete(
-                        _run_cell_func(code)
-                        if silent or not store_history or self._is_code_empty(code)
-                        else self.pyc_execute(
-                            code, True, _run_cell_func, cell_id=cell_id
-                        )
-                    )
-                    if ret["status"] == "error":
-                        self.on_exception(ret["ename"])
-                    self._maybe_eject()
-                    return ret
-
-        ZMQKernel.__name__ = name
-        return ZMQKernel
-
-
-class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
     def after_init_class(self) -> None:
         NotebookFlow.instance(use_comm=True)
 
@@ -721,4 +578,130 @@ class IPyflowKernelBase(singletons.IPyflowKernel, PyccoloKernelMixin):
         singletons.flow().get_and_set_exception_raised_during_execution(e)
 
 
-IPyflowKernel = IPyflowKernelBase.make_zmq_kernel_class("IPyflowKernel")
+class IPyflowKernel(IPyflowKernelBase, IPythonKernel):  # type: ignore
+    implementation = "kernel"
+    implementation_version = __version__
+    prev_kernel_class: Optional[Type[IPythonKernel]] = None
+    replacement_class: Optional[Type[IPythonKernel]] = None
+    client_comm: Optional["Comm"] = None
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        # this needs to happen after IPythonKernel.__init__ completes,
+        # which means that we cannot put it in _initialize(), since at
+        # that point only PyccoloKernelHooks.__init__ will be finished
+        self.after_init_class()
+
+    def _initialize(self, *, store_history: bool = True) -> None:
+        super()._initialize(store_history=store_history)
+        from ipyflow.kernel import patched_nest_asyncio
+
+        patched_nest_asyncio.apply()
+
+        # As of 2023/05/21, it seems like this is only necessary in
+        # the server extension, but seems like it can't hurt to do
+        # it here as well.
+        patch_jupyter_taskrunner_run()
+
+    @classmethod
+    def inject(zmq_kernel_class, prev_kernel_class: Type[IPythonKernel]) -> None:
+        ipy = get_ipython()
+        kernel = ipy.kernel
+        kernel.__class__ = zmq_kernel_class
+        if zmq_kernel_class.prev_kernel_class is None:
+            kernel._initialize()
+            kernel.after_init_class()
+            for subclass in singletons.IPyflowKernel._walk_mro():
+                subclass._instance = kernel
+        zmq_kernel_class.prev_kernel_class = prev_kernel_class
+        CodeCell._cell_counter = ipy.execution_count
+
+    @classmethod
+    def _maybe_eject(zmq_kernel_class) -> None:
+        if zmq_kernel_class.replacement_class is None:
+            return
+        get_ipython().kernel.__class__ = zmq_kernel_class.replacement_class
+        zmq_kernel_class.replacement_class = None
+
+    def init_metadata(self, parent):
+        """
+        Don't actually change the metadata; we just want to get the cell id
+        out of the execution request.
+        """
+        self.before_init_metadata(parent)
+        return super().init_metadata(parent)
+
+    def _is_code_empty(self, code: str) -> bool:
+        return self.shell.input_transformer_manager.transform_cell(code).strip() == ""
+
+    if inspect.iscoroutinefunction(IPythonKernel.do_execute):
+
+        async def do_execute(
+            self,
+            code,
+            silent,
+            store_history=False,
+            user_expressions=None,
+            allow_stdin=False,
+            cell_id=None,
+        ):
+            super_ = super()
+
+            async def _run_cell_func(cell):
+                return await super_.do_execute(
+                    cell,
+                    silent,
+                    store_history,
+                    user_expressions,
+                    allow_stdin,
+                    cell_id=cell_id,
+                )
+
+            if silent or not store_history or self._is_code_empty(code):
+                # then it's probably a control message; don't run through ipyflow
+                ret = await _run_cell_func(code)
+            else:
+                ret = await self.pyc_execute(
+                    code, True, _run_cell_func, cell_id=cell_id
+                )
+            if ret["status"] == "error":
+                self.on_exception(ret["ename"])
+            self._maybe_eject()
+            return ret
+
+    else:
+
+        def do_execute(
+            self,
+            code,
+            silent,
+            store_history=False,
+            user_expressions=None,
+            allow_stdin=False,
+            cell_id=None,
+        ):
+            super_ = super()
+
+            async def _run_cell_func(cell):
+                ret = super_.do_execute(
+                    cell,
+                    silent,
+                    store_history,
+                    user_expressions,
+                    allow_stdin,
+                    cell_id=cell_id,
+                )
+                if inspect.isawaitable(ret):
+                    return await ret
+                else:
+                    return ret
+
+            ret = asyncio.get_event_loop().run_until_complete(
+                _run_cell_func(code)
+                if silent or not store_history or self._is_code_empty(code)
+                else self.pyc_execute(code, True, _run_cell_func, cell_id=cell_id)
+            )
+            if ret["status"] == "error":
+                self.on_exception(ret["ename"])
+            self._maybe_eject()
+            return ret

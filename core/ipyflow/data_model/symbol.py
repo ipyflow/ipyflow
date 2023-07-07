@@ -979,8 +979,18 @@ class Symbol:
             override=True,
         )
         with dynamic_slicing_context():
-            flow().add_data_dep(sym._timestamp, sym._override_timestamp, sym)
-            flow().add_data_dep(sym._override_timestamp, sym._timestamp, sym)
+            flow().add_data_dep(
+                sym._timestamp,
+                sym._override_timestamp,
+                sym,
+                add_only_if_parent_new=False,
+            )
+            flow().add_data_dep(
+                sym._override_timestamp,
+                sym._timestamp,
+                sym,
+                add_only_if_parent_new=False,
+            )
         _debounced_exec_schedule(cells().at_timestamp(self.timestamp).cell_id)
 
     def namespaced(self) -> "Namespace":

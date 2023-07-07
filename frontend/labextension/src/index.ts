@@ -309,7 +309,11 @@ const extension: JupyterFrontEndPlugin<void> = {
             state,
             false
           );
-          state.executeCells(closure);
+          if (closure.length > 0) {
+            state.executeCells(closure);
+          } else {
+            state.requestComputeExecSchedule();
+          }
         }
       },
     });

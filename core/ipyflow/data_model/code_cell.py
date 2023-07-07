@@ -438,7 +438,10 @@ class CodeCell(SlicingMixin):
         return cls._override_current_cell or cls._cell_by_cell_ctr[cls._cell_counter]
 
     def get_max_used_live_symbol_cell_counter(
-        self, live_symbols: Set[ResolvedSymbol], filter_to_reactive: bool = False, filter_to_cascading_reactive: bool = False
+        self,
+        live_symbols: Set[ResolvedSymbol],
+        filter_to_reactive: bool = False,
+        filter_to_cascading_reactive: bool = False,
     ) -> int:
         min_allowed_cell_position_by_symbol: Optional[Dict["Symbol", int]] = None
         flow_ = flow()

@@ -64,7 +64,9 @@ class FrontendCheckerResult(NamedTuple):
             "ready_cells": list(self.ready_cells),
             "new_ready_cells": list(self.new_ready_cells),
             "forced_reactive_cells": list(self.forced_reactive_cells),
-            "forced_cascading_reactive_cells": list(self.forced_cascading_reactive_cells),
+            "forced_cascading_reactive_cells": list(
+                self.forced_cascading_reactive_cells
+            ),
             "unsafe_order_cells": {
                 cell_id: [unsafe.cell_id for unsafe in unsafe_order_cells]
                 for cell_id, unsafe_order_cells in self.unsafe_order_cells.items()

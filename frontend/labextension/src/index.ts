@@ -58,6 +58,7 @@ class IpyflowSessionState {
   executedReactiveReadyCells: Set<string>;
   newReadyCells: Set<string>;
   forcedReactiveCells: Set<string>;
+  forcedCascadingReactiveCells: Set<string>;
   cellParents: { [id: string]: string[] };
   cellChildren: { [id: string]: string[] };
   settings: { [key: string]: string };
@@ -83,6 +84,7 @@ class IpyflowSessionState {
     this.executedReactiveReadyCells = new Set();
     this.newReadyCells = new Set();
     this.forcedReactiveCells = new Set();
+    this.forcedCascadingReactiveCells = new Set();
     this.cellParents = {};
     this.cellChildren = {};
     this.settings = {};
@@ -838,6 +840,10 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
         ...state.forcedReactiveCells,
         ...(payload.forced_reactive_cells as string[]),
       ]);
+      state.forcedCascadingReactiveCells = new Set([
+        ...state.forcedCascadingReactiveCells,
+        ...(payload.forced_cascading_reactive_cells as string[]),
+      ]);
       state.waiterLinks = payload.waiter_links as { [id: string]: string[] };
       state.readyMakerLinks = payload.ready_maker_links as {
         [id: string]: string[];
@@ -866,14 +872,29 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       if (last_execution_was_error) {
         doneReactivelyExecuting = true;
       } else if (state.settings.reactivity_mode === 'batch') {
+        const cascadingReactiveCellIds = computeTransitiveClosure(
+          Array.from(state.forcedCascadingReactiveCells).filter(
+            (id) => !state.executedReactiveReadyCells.has(id)
+          ),
+          state
+        ).map((cell) => cell.model.id);
         let reactiveCells: Array<Cell<ICellModel>>;
         if (exec_mode === 'reactive') {
           reactiveCells = computeTransitiveClosure(
-            [...state.newReadyCells, ...state.forcedReactiveCells],
+            [
+              ...state.newReadyCells,
+              ...state.forcedReactiveCells,
+              ...cascadingReactiveCellIds,
+            ].filter((id) => !state.executedReactiveReadyCells.has(id)),
             state
+          ).filter(
+            (cell) => !state.executedReactiveReadyCells.has(cell.model.id)
           );
         } else {
-          reactiveCells = Array.from(state.forcedReactiveCells)
+          reactiveCells = [
+            ...state.forcedReactiveCells,
+            ...cascadingReactiveCellIds,
+          ]
             .filter(
               (id) =>
                 !state.executedReactiveReadyCells.has(id) &&
@@ -887,6 +908,10 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
           doneReactivelyExecuting = true;
         } else {
           state.isReactivelyExecuting = true;
+          state.executedReactiveReadyCells = new Set([
+            ...state.executedReactiveReadyCells,
+            ...reactiveCells.map((cell) => cell.model.id),
+          ]);
           state.executeCells(reactiveCells);
         }
       } else if (state.settings.reactivity_mode === 'incremental') {
@@ -949,6 +974,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
           state.toggleReactivity();
         }
         state.forcedReactiveCells = new Set();
+        state.forcedCascadingReactiveCells = new Set();
         state.newReadyCells = new Set();
         state.executedReactiveReadyCells = new Set();
         state.isReactivelyExecuting = false;

@@ -32,6 +32,7 @@ class FrontendCheckerResult(NamedTuple):
     ready_cells: Set[IdType]
     new_ready_cells: Set[IdType]
     forced_reactive_cells: Set[IdType]
+    forced_cascading_reactive_cells: Set[IdType]
     typecheck_error_cells: Set[IdType]
     unsafe_order_cells: Dict[IdType, Set[CodeCell]]
     unsafe_order_symbol_usage: Dict[IdType, List[Dict[str, Any]]]
@@ -46,6 +47,7 @@ class FrontendCheckerResult(NamedTuple):
             ready_cells=set(),
             new_ready_cells=set(),
             forced_reactive_cells=set(),
+            forced_cascading_reactive_cells=set(),
             typecheck_error_cells=set(),
             unsafe_order_cells=defaultdict(set),
             unsafe_order_symbol_usage=defaultdict(list),
@@ -62,6 +64,7 @@ class FrontendCheckerResult(NamedTuple):
             "ready_cells": list(self.ready_cells),
             "new_ready_cells": list(self.new_ready_cells),
             "forced_reactive_cells": list(self.forced_reactive_cells),
+            "forced_cascading_reactive_cells": list(self.forced_cascading_reactive_cells),
             "unsafe_order_cells": {
                 cell_id: [unsafe.cell_id for unsafe in unsafe_order_cells]
                 for cell_id, unsafe_order_cells in self.unsafe_order_cells.items()
@@ -158,6 +161,11 @@ class FrontendCheckerResult(NamedTuple):
             )
             if max_used_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 self.forced_reactive_cells.add(cell_id)
+            max_used_ctr = cell.get_max_used_live_symbol_cell_counter(
+                checker_results_by_cid[cell_id].live, filter_to_cascading_reactive=True
+            )
+            if max_used_ctr > max(cell.cell_ctr, flow_.min_timestamp):
+                self.forced_cascading_reactive_cells.add(cell_id)
 
     def _compute_dag_based_waiters(self, cells_to_check: List[CodeCell]) -> None:
         flow_ = flow()

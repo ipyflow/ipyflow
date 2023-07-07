@@ -143,10 +143,6 @@ class FrontendCheckerResult(NamedTuple):
         last_executed_cell_pos: int,
     ) -> None:
         flow_ = flow()
-        if flow_.mut_settings.exec_mode == ExecutionMode.REACTIVE:
-            # no need to do this computation if already in reactive mode, since
-            # everything that is new ready is automatically considered reactive
-            return
         for cell_id in self.ready_cells:
             if cell_id not in checker_results_by_cid:
                 continue
@@ -219,7 +215,7 @@ class FrontendCheckerResult(NamedTuple):
                         sym.timestamp.cell_num for sym in syms
                     }:
                         is_ready = True
-                        if par.cell_ctr == flow_.cell_counter():
+                        if par.cell_ctr >= flow_.min_new_ready_cell_counter():
                             is_new_ready = True
                             break
         if not is_new_ready and (
@@ -235,7 +231,7 @@ class FrontendCheckerResult(NamedTuple):
             )
             if max_used_live_sym_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 is_ready = True
-                if max_used_live_sym_ctr >= flow_.cell_counter():
+                if max_used_live_sym_ctr >= flow_.min_new_ready_cell_counter():
                     is_new_ready = True
         elif (
             not is_new_ready
@@ -246,7 +242,10 @@ class FrontendCheckerResult(NamedTuple):
                     cell.cell_ctr, flow_.min_timestamp
                 ):
                     is_ready = True
-                    if dead_sym.timestamp.cell_num == flow_.cell_counter():
+                    if (
+                        dead_sym.timestamp.cell_num
+                        >= flow_.min_new_ready_cell_counter()
+                    ):
                         is_new_ready = True
         return is_ready, is_new_ready
 

@@ -224,6 +224,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.display_sym: Symbol = None
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
+        self._min_new_ready_cell_counter = -1
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -325,6 +326,9 @@ class NotebookFlow(singletons.NotebookFlow):
     @staticmethod
     def cell_counter() -> int:
         return cells().exec_counter()
+
+    def min_new_ready_cell_counter(self) -> int:
+        return max(self._min_new_ready_cell_counter, self.cell_counter())
 
     def add_data_dep(
         self,
@@ -659,6 +663,7 @@ class NotebookFlow(singletons.NotebookFlow):
             self.mut_settings.exec_mode = ExecutionMode.NORMAL
         else:
             raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
+        self._min_new_ready_cell_counter = self.cell_counter() + 1
 
     def handle_refresh_symbols(self, request) -> None:
         for symbol_str in request.get("symbols", []):

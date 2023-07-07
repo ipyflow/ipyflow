@@ -1,4 +1,13 @@
-import { IChangedArgs } from '@jupyterlab/coreutils/lib/interfaces';
+import type { IChangedArgs } from '@jupyterlab/coreutils/lib/interfaces';
+import type {
+  IComm,
+  IShellFuture,
+} from '@jupyterlab/services/lib/kernel/kernel';
+import type {
+  IObservableList,
+  IObservableUndoableList,
+} from '@jupyterlab/observables';
+import type { KernelMessage } from '@jupyterlab/services';
 
 import {
   JupyterFrontEnd,
@@ -28,7 +37,10 @@ const sliceClass = 'ipyflow-slice';
 const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
-type IpyflowSessionState = {
+class IpyflowSessionState {
+  comm: IComm | null;
+  notebook: Notebook | null;
+  session: ISessionContext | null;
   isIpyflowCommConnected: boolean;
   dirtyCells: Set<string>;
   waitingCells: Set<string>;
@@ -40,7 +52,6 @@ type IpyflowSessionState = {
   cellsById: { [id: string]: Cell<ICellModel> };
   orderIdxById: { [id: string]: number };
   cellPendingExecution: CodeCell;
-  lastExecutionMode: string;
   isReactivelyExecuting: boolean;
   numAltModeExecutes: number;
   lastExecutionHighlights: Highlights;
@@ -50,7 +61,101 @@ type IpyflowSessionState = {
   cellParents: { [id: string]: string[] };
   cellChildren: { [id: string]: string[] };
   settings: { [key: string]: string };
-};
+
+  constructor() {
+    this.comm = null;
+    this.notebook = null;
+    this.session = null;
+    this.isIpyflowCommConnected = false;
+    this.dirtyCells = new Set();
+    this.waitingCells = new Set();
+    this.readyCells = new Set();
+    this.waiterLinks = {};
+    this.readyMakerLinks = {};
+    this.prevActiveCell = null;
+    this.activeCell = null;
+    this.cellsById = {};
+    this.orderIdxById = {};
+    this.cellPendingExecution = null;
+    this.isReactivelyExecuting = false;
+    this.numAltModeExecutes = 0;
+    this.lastExecutionHighlights = null;
+    this.executedReactiveReadyCells = new Set();
+    this.newReadyCells = new Set();
+    this.forcedReactiveCells = new Set();
+    this.cellParents = {};
+    this.cellChildren = {};
+    this.settings = {};
+  }
+
+  gatherCellMetadataAndContent() {
+    const cell_metadata_by_id: {
+      [id: string]: {
+        index: number;
+        content: string;
+        type: string;
+      };
+    } = {};
+    this.notebook.widgets.forEach((itercell, idx) => {
+      const model = itercell.model;
+      cell_metadata_by_id[model.id] = {
+        index: idx,
+        content: model.sharedModel.getSource(),
+        type: model.type,
+      };
+    });
+    return cell_metadata_by_id;
+  }
+
+  requestComputeExecSchedule() {
+    this.comm.send({
+      type: 'compute_exec_schedule',
+      cell_metadata_by_id: this.gatherCellMetadataAndContent(),
+      is_reactively_executing: this.isReactivelyExecuting,
+    });
+  }
+
+  executeCells(cells: Cell<ICellModel>[]) {
+    if (cells.length === 0) {
+      return;
+    }
+    let numFinished = 0;
+    for (const cell of cells) {
+      // if any of them fail, change the [*] to [ ] on subsequent cells
+      CodeCell.execute(cell as CodeCell, this.session).then((msg) => {
+        if ((msg as any)?.content?.status === 'error') {
+          numFinished = cells.length;
+          for (const cell of cells) {
+            if (cell.promptNode.textContent?.includes('[*]')) {
+              cell.setPrompt('');
+            }
+          }
+        } else {
+          numFinished++;
+        }
+        if (numFinished === cells.length) {
+          this.requestComputeExecSchedule();
+        }
+      });
+    }
+  }
+
+  toggleReactivity(): IShellFuture<
+    KernelMessage.IExecuteRequestMsg,
+    KernelMessage.IExecuteReplyMsg
+  > {
+    if (this.settings.exec_mode === 'reactive') {
+      this.settings.exec_mode = 'normal';
+    } else if (this.settings.exec_mode === 'normal') {
+      this.settings.exec_mode = 'reactive';
+    }
+    return this.session.session.kernel.requestExecute({
+      code: '%flow toggle-reactivity',
+      silent: true,
+      store_history: false,
+    });
+  }
+}
 
 type IpyflowState = {
   [session_id: string]: IpyflowSessionState;
@@ -59,29 +164,7 @@ type IpyflowState = {
 const ipyflowState: IpyflowState = {};
 
 function initSessionState(session_id: string): void {
-  ipyflowState[session_id] = {
-    isIpyflowCommConnected: false,
-    dirtyCells: new Set(),
-    waitingCells: new Set(),
-    readyCells: new Set(),
-    waiterLinks: {},
-    readyMakerLinks: {},
-    prevActiveCell: null,
-    activeCell: null,
-    cellsById: {},
-    orderIdxById: {},
-    cellPendingExecution: null,
-    lastExecutionMode: null,
-    isReactivelyExecuting: false,
-    numAltModeExecutes: 0,
-    lastExecutionHighlights: null,
-    executedReactiveReadyCells: new Set(),
-    newReadyCells: new Set(),
-    forcedReactiveCells: new Set(),
-    cellParents: {},
-    cellChildren: {},
-    settings: {},
-  };
+  ipyflowState[session_id] = new IpyflowSessionState();
 }
 
 function resetSessionState(session_id: string): void {
@@ -119,26 +202,10 @@ function computeTransitiveClosure(
     }
   }
   return Array.from(closure)
+    .filter((id) => state.cellsById[id] !== undefined)
+    .filter((id) => state.orderIdxById[id] !== undefined)
     .sort((a, b) => state.orderIdxById[a] - state.orderIdxById[b])
     .map((id) => state.cellsById[id]);
-}
-
-function executeCells(
-  cells: Array<Cell<ICellModel>>,
-  session: ISessionContext
-) {
-  for (const cell of cells) {
-    // if any of them fail, change the [*] to [ ] on subsequent cells
-    CodeCell.execute(cell as CodeCell, session).then((msg) => {
-      if ((msg as any)?.content?.status === 'error') {
-        for (const cell of cells) {
-          if (cell.promptNode.textContent?.includes('[*]')) {
-            cell.setPrompt('');
-          }
-        }
-      }
-    });
-  }
 }
 
 /**
@@ -174,29 +241,31 @@ const extension: JupyterFrontEndPlugin<void> = {
           return;
         }
         state.numAltModeExecutes++;
-        if (
-          state.settings.reactivity_mode === 'incremental' ||
-          state.settings.exec_mode === 'reactive'
-        ) {
+        if (state.settings.reactivity_mode === 'incremental') {
           if (state.numAltModeExecutes === 1) {
-            session.session.kernel
-              .requestExecute({
-                code: '%flow toggle-reactivity',
-                silent: true,
-                store_history: false,
-              })
-              .done.then(() => {
-                CodeCell.execute(notebooks.activeCell as CodeCell, session);
-              });
+            state
+              .toggleReactivity()
+              .done.then(() =>
+                CodeCell.execute(notebooks.activeCell as CodeCell, session)
+              );
           } else {
             CodeCell.execute(notebooks.activeCell as CodeCell, session);
           }
         } else if (state.settings.reactivity_mode === 'batch') {
-          const closure = computeTransitiveClosure(
-            [notebooks.activeCell.model.id],
+          let closure = [notebooks.activeCell];
+          if (state.settings.exec_mode === 'normal') {
+            closure = computeTransitiveClosure(
+              [notebooks.activeCell.model.id],
+              state
+            );
+          }
+          if (state.numAltModeExecutes === 1) {
             state
-          );
-          executeCells(closure, session);
+              .toggleReactivity()
+              .done.then(() => state.executeCells(closure));
+          } else {
+            state.executeCells(closure);
+          }
         } else {
           console.error(
             `Unknown reactivity mode: ${state.settings.reactivity_mode}`
@@ -238,7 +307,7 @@ const extension: JupyterFrontEndPlugin<void> = {
             state,
             false
           );
-          executeCells(closure, session);
+          state.executeCells(closure);
         }
       },
     });
@@ -252,19 +321,27 @@ const extension: JupyterFrontEndPlugin<void> = {
       if (!(state.isIpyflowCommConnected ?? false)) {
         return;
       }
-      if (
-        state.settings?.exec_mode !== 'reactive' ||
-        state.settings?.reactivity_mode !== 'batch'
-      ) {
+      const settings = state.settings;
+      const isBatch = settings?.reactivity_mode === 'batch';
+      const isReactive = settings?.exec_mode === 'reactive';
+      if (!isBatch) {
         return;
       }
       if (args.id === 'notebook:run-cell') {
-        app.commands.execute('execute-remaining');
+        if (isReactive) {
+          app.commands.execute('execute-remaining');
+        } else {
+          state.requestComputeExecSchedule();
+        }
       } else if (args.id === 'notebook:run-cell-and-select-next') {
         const origActiveCell = state.activeCell;
         try {
           state.activeCell = state.prevActiveCell;
-          app.commands.execute('execute-remaining');
+          if (isReactive) {
+            app.commands.execute('execute-remaining');
+          } else {
+            state.requestComputeExecSchedule();
+          }
         } finally {
           state.activeCell = origActiveCell;
         }
@@ -411,6 +488,9 @@ const clearCellState = (notebook: Notebook) => {
     cell.node.classList.remove(readyMakingClass);
     cell.node.classList.remove(readyClass);
     cell.node.classList.remove(readyMakingInputClass);
+    cell.node.classList.remove(selfSliceClass);
+    cell.node.classList.remove(directSliceClass);
+    cell.node.classList.remove(sliceClass);
 
     // clear any old event listeners
     const inputCollapser = getJpInputCollapser(cell.node);
@@ -463,26 +543,10 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
   const state = ipyflowState[session.session.id];
   state.activeCell = notebook.activeCell;
   const comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
+  state.comm = comm;
+  state.notebook = notebook;
+  state.session = session;
   let disconnected = false;
-
-  const gatherCellMetadataAndContent = () => {
-    const cell_metadata_by_id: {
-      [id: string]: {
-        index: number;
-        content: string;
-        type: string;
-      };
-    } = {};
-    notebook.widgets.forEach((itercell, idx) => {
-      const model = itercell.model;
-      cell_metadata_by_id[model.id] = {
-        index: idx,
-        content: model.sharedModel.getSource(),
-        type: model.type,
-      };
-    });
-    return cell_metadata_by_id;
-  };
 
   const syncDirtiness = (cell: Cell<ICellModel>) => {
     if (cell !== null && cell.model !== null) {
@@ -502,19 +566,9 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     notebook.widgets.forEach(syncDirtiness);
     comm.send({
       type: 'notify_content_changed',
-      cell_metadata_by_id: gatherCellMetadataAndContent(),
+      cell_metadata_by_id: state.gatherCellMetadataAndContent(),
     });
   }, 500);
-
-  const requestComputeExecSchedule = (cell?: ICellModel) => {
-    const cell_metadata_by_id = gatherCellMetadataAndContent();
-    comm.send({
-      type: 'compute_exec_schedule',
-      executed_cell_id: cell?.id,
-      cell_metadata_by_id,
-      is_reactively_executing: state.isReactivelyExecuting,
-    });
-  };
 
   const onExecution = (cell: ICellModel, args: IChangedArgs<any>) => {
     if (disconnected) {
@@ -531,8 +585,34 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
         itercell.node.classList.remove(readyMakingInputClass);
       }
     });
-    requestComputeExecSchedule(cell);
+    if (state.settings.reactivity_mode === 'incremental') {
+      state.requestComputeExecSchedule();
+    }
   };
+
+  for (const cell of notebook.widgets) {
+    cell.model.stateChanged.connect(onExecution);
+  }
+
+  const onCellsAdded = (
+    _: IObservableUndoableList<ICellModel>,
+    change: IObservableList.IChangedArgs<ICellModel>
+  ) => {
+    if (disconnected) {
+      notebook.model.cells.changed.disconnect(onCellsAdded);
+      return;
+    }
+    if (change.type === 'add') {
+      for (const cell of change.newValues) {
+        cell?.stateChanged.connect(onExecution);
+      }
+    } else if (change.type === 'remove') {
+      for (const cell of change.oldValues) {
+        cell?.stateChanged.disconnect(onExecution);
+      }
+    }
+  };
+  notebook.model.cells.changed.connect(onCellsAdded);
 
   const notifyActiveCell = (newActiveCell: ICellModel) => {
     let newActiveCellOrderIdx = -1;
@@ -568,10 +648,6 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       return;
     }
     notifyActiveCell(cell.model);
-    state.activeCell.model.stateChanged.disconnect(
-      onExecution,
-      state.activeCell.model.stateChanged
-    );
     state.prevActiveCell = state.activeCell;
     state.activeCell = cell;
 
@@ -583,24 +659,12 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       return;
     }
 
-    state.activeCell.model.stateChanged.connect(onExecution);
     notifyActiveCell(state.activeCell.model);
 
     if (state.dirtyCells.has(state.activeCell.model.id)) {
       (state.activeCell.model as any)._setDirty?.(true);
     }
-    refreshNodeMapping(notebook);
-    if (state.settings.reactivity_mode === 'batch') {
-      updateUI(notebook);
-    } else {
-      updateOneCellUI(
-        state.activeCell.model.id,
-        false,
-        false,
-        false,
-        state.lastExecutionHighlights !== 'none'
-      );
-    }
+    updateUI(notebook);
   };
 
   const actionUpdatePairs: {
@@ -662,7 +726,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       addWaitingOutputInteractions(elem, linkedReadyMakerClass);
     }
 
-    if (state.lastExecutionMode === 'reactive') {
+    if (state.settings.exec_mode === 'reactive') {
       return;
     }
 
@@ -726,9 +790,8 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     let directSlice = new Set<string>();
     const activeCellId = state.activeCell.model.id;
     if (
-      state.settings.reactivity_mode === 'batch' &&
-      (Object.prototype.hasOwnProperty.call(state.cellChildren, activeCellId) ||
-        Object.prototype.hasOwnProperty.call(state.cellParents, activeCellId))
+      Object.prototype.hasOwnProperty.call(state.cellChildren, activeCellId) ||
+      Object.prototype.hasOwnProperty.call(state.cellParents, activeCellId)
     ) {
       directSlice = new Set([
         activeCellId,
@@ -761,20 +824,16 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
       notebook.model.contentChanged.connect(onContentChanged);
-      requestComputeExecSchedule();
+      state.requestComputeExecSchedule();
     } else if (payload.type === 'set_exec_mode') {
       state.numAltModeExecutes = 0;
-      state.lastExecutionMode = payload.exec_mode as string;
+      state.settings.exec_mode = payload.exec_mode as string;
     } else if (payload.type === 'compute_exec_schedule') {
       state.settings = payload.settings as { [key: string]: string };
       state.cellParents = payload.cell_parents as { [id: string]: string[] };
       state.cellChildren = payload.cell_children as { [id: string]: string[] };
       state.waitingCells = new Set(payload.waiting_cells as string[]);
       state.readyCells = new Set(payload.ready_cells as string[]);
-      state.newReadyCells = new Set([
-        ...state.newReadyCells,
-        ...(payload.new_ready_cells as string[]),
-      ]);
       state.forcedReactiveCells = new Set([
         ...state.forcedReactiveCells,
         ...(payload.forced_reactive_cells as string[]),
@@ -788,72 +847,96 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       state.isReactivelyExecuting =
         state.isReactivelyExecuting ||
         ((payload?.is_reactively_executing as boolean) ?? false);
+      if (exec_mode === 'reactive') {
+        state.newReadyCells = new Set([
+          ...state.newReadyCells,
+          ...(payload.new_ready_cells as string[]),
+        ]);
+      } else {
+        state.newReadyCells.clear();
+      }
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
-      state.lastExecutionMode = exec_mode;
       state.lastExecutionHighlights = payload.highlights as Highlights;
       const lastExecutedCellId = payload.last_executed_cell_id as string;
       state.executedReactiveReadyCells.add(lastExecutedCellId);
       const last_execution_was_error =
         payload.last_execution_was_error as boolean;
-      if (!last_execution_was_error) {
-        if (state.settings.reactivity_mode === 'batch') {
-          let batchedReactiveCells = Array.from(state.forcedReactiveCells);
-          if (state.isReactivelyExecuting || exec_mode === 'reactive') {
-            batchedReactiveCells = [
-              ...batchedReactiveCells,
-              ...Array.from(state.newReadyCells),
-            ];
-          }
-          batchedReactiveCells = batchedReactiveCells.filter(
-            (id) => !state.executedReactiveReadyCells.has(id)
+      let doneReactivelyExecuting = false;
+      if (last_execution_was_error) {
+        doneReactivelyExecuting = true;
+      } else if (state.settings.reactivity_mode === 'batch') {
+        let reactiveCells: Array<Cell<ICellModel>>;
+        if (exec_mode === 'reactive') {
+          reactiveCells = computeTransitiveClosure(
+            [...state.newReadyCells, ...state.forcedReactiveCells],
+            state
           );
-          const closure = computeTransitiveClosure(batchedReactiveCells, state);
-          executeCells(closure, session);
         } else {
-          let lastExecutedCellIdSeen = false;
-          for (const cell of notebook.widgets) {
-            if (!lastExecutedCellIdSeen) {
-              lastExecutedCellIdSeen = cell.model.id === lastExecutedCellId;
-              if (flow_order === 'in_order' || exec_schedule === 'strict') {
-                continue;
-              }
+          reactiveCells = Array.from(state.forcedReactiveCells)
+            .filter(
+              (id) =>
+                !state.executedReactiveReadyCells.has(id) &&
+                state.cellsById[id] !== undefined &&
+                state.orderIdxById[id] !== undefined
+            )
+            .sort((a, b) => state.orderIdxById[a] - state.orderIdxById[b])
+            .map((id) => state.cellsById[id]);
+        }
+        if (reactiveCells.length === 0) {
+          doneReactivelyExecuting = true;
+        } else {
+          state.isReactivelyExecuting = true;
+          state.executeCells(reactiveCells);
+        }
+      } else if (state.settings.reactivity_mode === 'incremental') {
+        let lastExecutedCellIdSeen = false;
+        for (const cell of notebook.widgets) {
+          if (!lastExecutedCellIdSeen) {
+            lastExecutedCellIdSeen = cell.model.id === lastExecutedCellId;
+            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+              continue;
             }
+          }
+          if (
+            cell.model.type !== 'code' ||
+            state.executedReactiveReadyCells.has(cell.model.id)
+          ) {
+            continue;
+          }
+          if (!state.forcedReactiveCells.has(cell.model.id)) {
             if (
-              cell.model.type !== 'code' ||
-              state.executedReactiveReadyCells.has(cell.model.id)
+              !state.newReadyCells.has(cell.model.id) ||
+              exec_mode !== 'reactive'
             ) {
               continue;
             }
-            if (!state.newReadyCells.has(cell.model.id)) {
-              continue;
+          }
+          const codeCell = cell as CodeCell;
+          if (state.cellPendingExecution === null) {
+            state.cellPendingExecution = codeCell;
+            // break early if using one of the order-based semantics
+            if (flow_order === 'in_order' || exec_schedule === 'strict') {
+              break;
             }
-            if (
-              !state.forcedReactiveCells.has(cell.model.id) &&
-              !(state.isReactivelyExecuting || exec_mode === 'reactive')
-            ) {
-              continue;
-            }
-            const codeCell = cell as CodeCell;
-            if (state.cellPendingExecution === null) {
-              state.cellPendingExecution = codeCell;
-              // break early if using one of the order-based semantics
-              if (flow_order === 'in_order' || exec_schedule === 'strict') {
-                break;
-              }
-            } else if (codeCell.model.executionCount == null) {
-              // pass
-            } else if (
-              codeCell.model.executionCount <
-              state.cellPendingExecution.model.executionCount
-            ) {
-              // otherwise, execute in order of earliest execution counter
-              state.cellPendingExecution = codeCell;
-            }
+          } else if (codeCell.model.executionCount == null) {
+            // pass
+          } else if (
+            codeCell.model.executionCount <
+            state.cellPendingExecution.model.executionCount
+          ) {
+            // otherwise, execute in order of earliest execution counter
+            state.cellPendingExecution = codeCell;
           }
         }
+        if (state.cellPendingExecution === null) {
+          doneReactivelyExecuting = true;
+        } else {
+          state.isReactivelyExecuting = true;
+          CodeCell.execute(state.cellPendingExecution, session);
+        }
       }
-      if (state.cellPendingExecution === null) {
+      if (doneReactivelyExecuting) {
         if (state.isReactivelyExecuting) {
           if (state.lastExecutionHighlights === 'reactive') {
             state.readyCells = state.executedReactiveReadyCells;
@@ -862,27 +945,14 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
             type: 'reactivity_cleanup',
           });
         }
+        if (state.numAltModeExecutes > 0 && --state.numAltModeExecutes === 0) {
+          state.toggleReactivity();
+        }
         state.forcedReactiveCells = new Set();
         state.newReadyCells = new Set();
         state.executedReactiveReadyCells = new Set();
-        updateUI(notebook);
         state.isReactivelyExecuting = false;
-        if (
-          state.numAltModeExecutes > 0 &&
-          --state.numAltModeExecutes === 0 &&
-          (state.settings.reactivty_mode === 'incremental' ||
-            state.settings.exec_mode === 'reactive')
-        ) {
-          session.session.kernel.requestExecute({
-            code: '%flow toggle-reactivity',
-            silent: true,
-            store_history: false,
-          });
-        }
-      } else {
-        state.isReactivelyExecuting = true;
-        onActiveCellChange(notebook, state.cellPendingExecution);
-        CodeCell.execute(state.cellPendingExecution, session);
+        updateUI(notebook);
       }
     }
   };

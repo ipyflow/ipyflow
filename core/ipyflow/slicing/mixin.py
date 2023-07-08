@@ -64,7 +64,7 @@ class SlicingMixin(Protocol):
 
     @classmethod
     def from_timestamp(
-            cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
+        cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
     ) -> "SlicingMixin":
         return cls.at_timestamp(ts, stmt_num=stmt_num)
 
@@ -171,9 +171,11 @@ class SlicingMixin(Protocol):
         elif ctx == SlicingContext.STATIC:
             return self.static_parents
         flow_ = flow()
+        # TODO: rather than asserting test context,
+        #  assert that we're being called from the notebook
         assert not flow_.is_test
         settings = flow_.mut_settings
-        parents = {}
+        parents: Dict[IdType, Set["Symbol"]] = {}
         for _ in settings.iter_slicing_contexts():
             for pid, syms in self.parents.items():
                 parents.setdefault(pid, set()).update(syms)

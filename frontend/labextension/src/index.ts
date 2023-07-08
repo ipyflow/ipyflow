@@ -38,57 +38,31 @@ const cleanup = new Event('cleanup');
 
 // ipyflow frontend state
 class IpyflowSessionState {
-  comm: IComm | null;
-  notebook: Notebook | null;
-  session: ISessionContext | null;
-  isIpyflowCommConnected: boolean;
-  dirtyCells: Set<string>;
-  waitingCells: Set<string>;
-  readyCells: Set<string>;
-  waiterLinks: { [id: string]: string[] };
-  readyMakerLinks: { [id: string]: string[] };
-  prevActiveCell: Cell<ICellModel> | null;
-  activeCell: Cell<ICellModel>;
-  cellsById: { [id: string]: Cell<ICellModel> };
-  orderIdxById: { [id: string]: number };
-  cellPendingExecution: CodeCell;
-  isReactivelyExecuting: boolean;
-  numAltModeExecutes: number;
-  lastExecutionHighlights: Highlights;
-  executedReactiveReadyCells: Set<string>;
-  newReadyCells: Set<string>;
-  forcedReactiveCells: Set<string>;
-  forcedCascadingReactiveCells: Set<string>;
-  cellParents: { [id: string]: string[] };
-  cellChildren: { [id: string]: string[] };
-  settings: { [key: string]: string };
-
-  constructor() {
-    this.comm = null;
-    this.notebook = null;
-    this.session = null;
-    this.isIpyflowCommConnected = false;
-    this.dirtyCells = new Set();
-    this.waitingCells = new Set();
-    this.readyCells = new Set();
-    this.waiterLinks = {};
-    this.readyMakerLinks = {};
-    this.prevActiveCell = null;
-    this.activeCell = null;
-    this.cellsById = {};
-    this.orderIdxById = {};
-    this.cellPendingExecution = null;
-    this.isReactivelyExecuting = false;
-    this.numAltModeExecutes = 0;
-    this.lastExecutionHighlights = null;
-    this.executedReactiveReadyCells = new Set();
-    this.newReadyCells = new Set();
-    this.forcedReactiveCells = new Set();
-    this.forcedCascadingReactiveCells = new Set();
-    this.cellParents = {};
-    this.cellChildren = {};
-    this.settings = {};
-  }
+  comm: IComm | null = null;
+  notebook: Notebook | null = null;
+  session: ISessionContext | null = null;
+  isIpyflowCommConnected: boolean = false;
+  dirtyCells: Set<string> = new Set();
+  waitingCells: Set<string> = new Set();
+  readyCells: Set<string> = new Set();
+  waiterLinks: { [id: string]: string[] } = {};
+  readyMakerLinks: { [id: string]: string[] } = {};
+  prevActiveCell: Cell<ICellModel> | null = null;
+  activeCell: Cell<ICellModel> | null = null;
+  cellsById: { [id: string]: Cell<ICellModel> } = {};
+  orderIdxById: { [id: string]: number } = {};
+  cellPendingExecution: CodeCell | null = null;
+  isReactivelyExecuting: boolean = false;
+  numAltModeExecutes: number = 0;
+  altModeExecuteCells: Cell<ICellModel>[] | null = null;
+  lastExecutionHighlights: Highlights | null = null;
+  executedReactiveReadyCells: Set<string> = new Set();
+  newReadyCells: Set<string> = new Set();
+  forcedReactiveCells: Set<string> = new Set();
+  forcedCascadingReactiveCells: Set<string> = new Set();
+  cellParents: { [id: string]: string[] } = {};
+  cellChildren: { [id: string]: string[] } = {};
+  settings: { [key: string]: string } = {};
 
   gatherCellMetadataAndContent() {
     const cell_metadata_by_id: {
@@ -157,6 +131,31 @@ class IpyflowSessionState {
       store_history: false,
     });
   }
+
+  computeTransitiveClosure(
+    cellIds: string[],
+    inclusive = true,
+    parents = false
+  ): Cell<ICellModel>[] {
+    const closure = new Set<string>();
+    for (const cellId of cellIds) {
+      if (parents) {
+        computeTransitiveClosureHelper(closure, cellId, this.cellParents);
+      } else {
+        computeTransitiveClosureHelper(closure, cellId, this.cellChildren);
+      }
+    }
+    if (!inclusive) {
+      for (const cellId of cellIds) {
+        closure.delete(cellId);
+      }
+    }
+    return Array.from(closure)
+      .filter((id) => this.cellsById[id] !== undefined)
+      .filter((id) => this.orderIdxById[id] !== undefined)
+      .sort((a, b) => this.orderIdxById[a] - this.orderIdxById[b])
+      .map((id) => this.cellsById[id]);
+  }
 }
 
 type IpyflowState = {
@@ -191,25 +190,6 @@ function computeTransitiveClosureHelper(
   );
 }
 
-function computeTransitiveClosure(
-  cellIds: string[],
-  state: IpyflowSessionState,
-  inclusive = true
-): Cell<ICellModel>[] {
-  const closure = new Set<string>();
-  for (const cellId of cellIds) {
-    computeTransitiveClosureHelper(closure, cellId, state.cellChildren);
-    if (!inclusive) {
-      closure.delete(cellId);
-    }
-  }
-  return Array.from(closure)
-    .filter((id) => state.cellsById[id] !== undefined)
-    .filter((id) => state.orderIdxById[id] !== undefined)
-    .sort((a, b) => state.orderIdxById[a] - state.orderIdxById[b])
-    .map((id) => state.cellsById[id]);
-}
-
 /**
  * Initialization data for the jupyterlab-ipyflow extension.
  */
@@ -235,8 +215,16 @@ const extension: JupyterFrontEndPlugin<void> = {
         app.commands.execute('notebook:enter-command-mode');
         const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
           {}) as IpyflowSessionState;
+        const altModeExecuteCells = state.altModeExecuteCells;
+        state.altModeExecuteCells = null;
         if (!(state.isIpyflowCommConnected ?? false)) {
           CodeCell.execute(notebooks.activeCell as CodeCell, session);
+          return;
+        }
+        if (
+          state.settings.reactivity_mode !== 'batch' &&
+          altModeExecuteCells !== null
+        ) {
           return;
         }
         if (notebooks.activeCell.model.type !== 'code') {
@@ -254,12 +242,14 @@ const extension: JupyterFrontEndPlugin<void> = {
             CodeCell.execute(notebooks.activeCell as CodeCell, session);
           }
         } else if (state.settings.reactivity_mode === 'batch') {
-          let closure = [notebooks.activeCell];
-          if (state.settings.exec_mode === 'normal') {
-            closure = computeTransitiveClosure(
-              [notebooks.activeCell.model.id],
-              state
-            );
+          let closure = altModeExecuteCells ?? [notebooks.activeCell];
+          if (
+            state.settings.exec_mode === 'normal' &&
+            altModeExecuteCells === null
+          ) {
+            closure = state.computeTransitiveClosure([
+              notebooks.activeCell.model.id,
+            ]);
           }
           if (state.numAltModeExecutes === 1) {
             state
@@ -291,8 +281,8 @@ const extension: JupyterFrontEndPlugin<void> = {
       args: {},
     });
 
-    app.commands.addCommand('execute-remaining', {
-      label: 'Execute Remaining Cells',
+    app.commands.addCommand('execute-forward-slice', {
+      label: 'Execute Forward Slice',
       isEnabled: () => true,
       isVisible: () => true,
       isToggled: () => false,
@@ -303,20 +293,86 @@ const extension: JupyterFrontEndPlugin<void> = {
         }
         const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
           {}) as IpyflowSessionState;
-        if (state.isIpyflowCommConnected ?? false) {
-          const closure = computeTransitiveClosure(
-            [state.activeCell.model.id],
-            state,
-            false
-          );
-          if (closure.length > 0) {
-            state.executeCells(closure);
-          } else {
-            state.requestComputeExecSchedule();
-          }
+        if (!(state.isIpyflowCommConnected ?? false)) {
+          return;
+        }
+        app.commands.execute('notebook:enter-command-mode');
+        state.executeCells(
+          state.computeTransitiveClosure([state.activeCell.model.id])
+        );
+      },
+    });
+    app.commands.addKeyBinding({
+      command: 'execute-forward-slice',
+      keys: ['Accel J'],
+      selector: '.jp-Notebook',
+    });
+    app.commands.addKeyBinding({
+      command: 'execute-forward-slice',
+      keys: ['Accel ArrowDown'],
+      selector: '.jp-Notebook',
+    });
+
+    app.commands.addCommand('execute-backward-slice', {
+      label: 'Execute Backward Slice',
+      isEnabled: () => true,
+      isVisible: () => true,
+      isToggled: () => false,
+      execute: () => {
+        const session = notebooks.currentWidget.sessionContext;
+        if (!session.isReady) {
+          return;
+        }
+        const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+          {}) as IpyflowSessionState;
+        if (!(state.isIpyflowCommConnected ?? false)) {
+          return;
+        }
+        app.commands.execute('notebook:enter-command-mode');
+        const closure = state.computeTransitiveClosure(
+          [state.activeCell.model.id],
+          true,
+          true
+        );
+        if (state.settings.exec_mode === 'normal') {
+          state.executeCells(closure);
+        } else {
+          state.altModeExecuteCells = closure;
+          app.commands.execute('alt-mode-execute');
         }
       },
     });
+    app.commands.addKeyBinding({
+      command: 'execute-backward-slice',
+      keys: ['Accel K'],
+      selector: '.jp-Notebook',
+    });
+    app.commands.addKeyBinding({
+      command: 'execute-backward-slice',
+      keys: ['Accel ArrowUp'],
+      selector: '.jp-Notebook',
+    });
+
+    const executeRemaining = () => {
+      const session = notebooks.currentWidget.sessionContext;
+      if (!session.isReady) {
+        return;
+      }
+      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+        {}) as IpyflowSessionState;
+      if (state.isIpyflowCommConnected ?? false) {
+        const closure = state.computeTransitiveClosure(
+          [state.activeCell.model.id],
+          false
+        );
+        if (closure.length > 0) {
+          state.executeCells(closure);
+        } else {
+          state.requestComputeExecSchedule();
+        }
+      }
+    };
+
     app.commands.commandExecuted.connect((_, args) => {
       const session = notebooks.currentWidget.sessionContext;
       if (!session.isReady) {
@@ -335,7 +391,7 @@ const extension: JupyterFrontEndPlugin<void> = {
       }
       if (args.id === 'notebook:run-cell') {
         if (isReactive) {
-          app.commands.execute('execute-remaining');
+          executeRemaining();
         } else {
           state.requestComputeExecSchedule();
         }
@@ -344,7 +400,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         try {
           state.activeCell = state.prevActiveCell;
           if (isReactive) {
-            app.commands.execute('execute-remaining');
+            executeRemaining();
           } else {
             state.requestComputeExecSchedule();
           }
@@ -736,7 +792,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       return;
     }
 
-    if (Object.prototype.hasOwnProperty.call(state.waiterLinks, id)) {
+    if (state.waiterLinks[id] !== undefined) {
       actionUpdatePairs.forEach(({ action, update }) => {
         addUnsafeCellInteraction(
           getJpInputCollapser(elem),
@@ -760,7 +816,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       });
     }
 
-    if (Object.prototype.hasOwnProperty.call(state.readyMakerLinks, id)) {
+    if (state.readyMakerLinks[id] !== undefined) {
       if (!state.waitingCells.has(id)) {
         elem.classList.add(readyMakingClass);
         elem.classList.add(readyClass);
@@ -796,8 +852,8 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     let directSlice = new Set<string>();
     const activeCellId = state.activeCell.model.id;
     if (
-      Object.prototype.hasOwnProperty.call(state.cellChildren, activeCellId) ||
-      Object.prototype.hasOwnProperty.call(state.cellParents, activeCellId)
+      state.cellChildren[activeCellId] !== undefined ||
+      state.cellParents[activeCellId] !== undefined
     ) {
       directSlice = new Set([
         activeCellId,
@@ -877,24 +933,26 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       if (last_execution_was_error) {
         doneReactivelyExecuting = true;
       } else if (state.settings.reactivity_mode === 'batch') {
-        const cascadingReactiveCellIds = computeTransitiveClosure(
-          Array.from(state.forcedCascadingReactiveCells).filter(
-            (id) => !state.executedReactiveReadyCells.has(id)
-          ),
-          state
-        ).map((cell) => cell.model.id);
+        const cascadingReactiveCellIds = state
+          .computeTransitiveClosure(
+            Array.from(state.forcedCascadingReactiveCells).filter(
+              (id) => !state.executedReactiveReadyCells.has(id)
+            )
+          )
+          .map((cell) => cell.model.id);
         let reactiveCells: Array<Cell<ICellModel>>;
         if (exec_mode === 'reactive') {
-          reactiveCells = computeTransitiveClosure(
-            [
-              ...state.newReadyCells,
-              ...state.forcedReactiveCells,
-              ...cascadingReactiveCellIds,
-            ].filter((id) => !state.executedReactiveReadyCells.has(id)),
-            state
-          ).filter(
-            (cell) => !state.executedReactiveReadyCells.has(cell.model.id)
-          );
+          reactiveCells = state
+            .computeTransitiveClosure(
+              [
+                ...state.newReadyCells,
+                ...state.forcedReactiveCells,
+                ...cascadingReactiveCellIds,
+              ].filter((id) => !state.executedReactiveReadyCells.has(id))
+            )
+            .filter(
+              (cell) => !state.executedReactiveReadyCells.has(cell.model.id)
+            );
         } else {
           reactiveCells = [
             ...state.forcedReactiveCells,

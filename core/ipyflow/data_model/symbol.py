@@ -157,6 +157,8 @@ class Symbol:
         self.disable_warnings = False
         self._temp_disable_warnings = False
 
+        self._num_widget_observers = 0
+
         flow().aliases.setdefault(id(obj), set()).add(self)
         if (
             isinstance(self.name, str)
@@ -554,6 +556,12 @@ class Symbol:
     #         self.call_scope = None
 
     def update_obj_ref(self, obj: Any, refresh_cached: bool = True) -> None:
+        if self._num_widget_observers > 0:
+            try:
+                self.obj.unobserve_all()
+            except:  # noqa
+                pass
+            self._num_widget_observers = 0
         self._tombstone = False
         self._cached_out_of_sync = True
         if (
@@ -956,6 +964,7 @@ class Symbol:
             "value", None, set(), self.stmt_node
         )
         self.obj.observe(self._observe_widget)
+        self._num_widget_observers += 1
 
     def _observe_widget(self, msg: Dict[str, Any]) -> None:
         if msg.get("name") != "value" or "new" not in msg:

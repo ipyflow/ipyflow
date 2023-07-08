@@ -10,6 +10,7 @@ History
 * [kernel] Fix bug wherein tracing wasn't totally disabled in line magics;
 * [kernel] Fix bug wherein statement dependencies would not be updated for cells that react to later versions of an updated slider;
 * [kernel] Make sure ipython also captures static dependencies;
+* [kernel] Various minor bugfixes;
 
 0.0.177 (2022-06-26)
 --------------------

@@ -413,6 +413,7 @@ def set_exec_mode(line_: str) -> None:
     if exec_mode == ExecutionMode.REACTIVE:
         for cell in cells().all_cells_most_recently_run_for_each_id():
             cell.set_ready(False)
+    flow_._min_new_ready_cell_counter = flow_.cell_counter() + 1
     comm = flow_._comm
     if comm is not None:
         comm.send(

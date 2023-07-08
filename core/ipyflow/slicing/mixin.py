@@ -63,6 +63,12 @@ class SlicingMixin(Protocol):
         ...
 
     @classmethod
+    def from_timestamp(
+            cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
+    ) -> "SlicingMixin":
+        return cls.at_timestamp(ts, stmt_num=stmt_num)
+
+    @classmethod
     def from_id(cls, sid: IdType) -> "SlicingMixin":
         ...
 
@@ -160,13 +166,18 @@ class SlicingMixin(Protocol):
     @property
     def parents(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
-        assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
             return self.dynamic_parents
         elif ctx == SlicingContext.STATIC:
             return self.static_parents
-        else:
-            assert False
+        flow_ = flow()
+        assert not flow_.is_test
+        settings = flow_.mut_settings
+        parents = {}
+        for _ in settings.iter_slicing_contexts():
+            for pid, syms in self.parents.items():
+                parents.setdefault(pid, set()).update(syms)
+        return parents
 
     @parents.setter
     def parents(self, new_parents: Dict[IdType, Set["Symbol"]]) -> None:

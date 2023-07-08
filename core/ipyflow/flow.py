@@ -653,6 +653,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_reactivity_cleanup(self, _request=None) -> None:
         self.min_cascading_reactive_cell_num = self.cell_counter()
+        self._min_new_ready_cell_counter = self.cell_counter() + 1
         self.updated_reactive_symbols.clear()
         self.updated_deep_reactive_symbols.clear()
 

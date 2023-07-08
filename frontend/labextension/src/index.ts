@@ -856,7 +856,8 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       const exec_mode = payload.exec_mode as string;
       state.isReactivelyExecuting =
         state.isReactivelyExecuting ||
-        ((payload?.is_reactively_executing as boolean) ?? false);
+        ((payload?.is_reactively_executing as boolean) ?? false) ||
+        exec_mode === 'reactive';
       if (exec_mode === 'reactive') {
         state.newReadyCells = new Set([
           ...state.newReadyCells,

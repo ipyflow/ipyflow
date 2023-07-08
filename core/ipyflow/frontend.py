@@ -325,7 +325,11 @@ class FrontendCheckerResult(NamedTuple):
                 # prevent this cell from being considered as newly ready so that
                 # it is not reactively executed
                 return checker_result
-        if is_new_ready or (not was_ready and is_ready):
+        if is_new_ready or (
+            not was_ready
+            and is_ready
+            and flow_.cell_counter() >= flow_.min_new_ready_cell_counter()
+        ):
             self.new_ready_cells.add(cell_id)
         return checker_result
 

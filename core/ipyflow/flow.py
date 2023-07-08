@@ -225,6 +225,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
         self._min_new_ready_cell_counter = -1
+        self._min_forced_reactive_cell_counter = -1
         if use_comm:
             get_ipython().kernel.comm_manager.register_target(
                 __package__, self._comm_target
@@ -328,7 +329,18 @@ class NotebookFlow(singletons.NotebookFlow):
         return cells().exec_counter()
 
     def min_new_ready_cell_counter(self) -> int:
-        return max(self._min_new_ready_cell_counter, self.cell_counter())
+        return max(
+            self._min_new_ready_cell_counter, self.cell_counter(), self.min_timestamp
+        )
+
+    def min_forced_reactive_cell_counter(self) -> int:
+        return max(
+            self._min_forced_reactive_cell_counter,
+            self.min_timestamp,
+        )
+
+    def bump_min_forced_reactive_counter(self) -> None:
+        self._min_forced_reactive_cell_counter = self.cell_counter()
 
     def add_data_dep(
         self,

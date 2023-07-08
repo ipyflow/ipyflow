@@ -60,6 +60,7 @@ class IpyflowSessionState {
   newReadyCells: Set<string> = new Set();
   forcedReactiveCells: Set<string> = new Set();
   forcedCascadingReactiveCells: Set<string> = new Set();
+  numPendingForcedReactiveCounterBumps = 0;
   cellParents: { [id: string]: string[] } = {};
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
@@ -127,6 +128,18 @@ class IpyflowSessionState {
     }
     return this.session.session.kernel.requestExecute({
       code: '%flow toggle-reactivity',
+      silent: true,
+      store_history: false,
+    });
+  }
+
+  bumpForcedReactiveCounter(): IShellFuture<
+    KernelMessage.IExecuteRequestMsg,
+    KernelMessage.IExecuteReplyMsg
+  > {
+    this.numPendingForcedReactiveCounterBumps--;
+    return this.session.session.kernel.requestExecute({
+      code: '%flow bump-min-forced-reactive-counter',
       silent: true,
       store_history: false,
     });
@@ -297,7 +310,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         true,
         isBackward
       );
-      // TODO: prevent forced (cascading) reactive cells from running if not part of slice?
+      state.numPendingForcedReactiveCounterBumps++;
       if (state.settings.exec_mode === 'normal') {
         state.executeCells(closure);
       } else {
@@ -885,14 +898,19 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
       state.cellChildren = payload.cell_children as { [id: string]: string[] };
       state.waitingCells = new Set(payload.waiting_cells as string[]);
       state.readyCells = new Set(payload.ready_cells as string[]);
-      state.forcedReactiveCells = new Set([
-        ...state.forcedReactiveCells,
-        ...(payload.forced_reactive_cells as string[]),
-      ]);
-      state.forcedCascadingReactiveCells = new Set([
-        ...state.forcedCascadingReactiveCells,
-        ...(payload.forced_cascading_reactive_cells as string[]),
-      ]);
+      if (state.numPendingForcedReactiveCounterBumps === 0) {
+        state.forcedReactiveCells = new Set([
+          ...state.forcedReactiveCells,
+          ...(payload.forced_reactive_cells as string[]),
+        ]);
+        state.forcedCascadingReactiveCells = new Set([
+          ...state.forcedCascadingReactiveCells,
+          ...(payload.forced_cascading_reactive_cells as string[]),
+        ]);
+      } else {
+        state.forcedReactiveCells = new Set();
+        state.forcedCascadingReactiveCells = new Set();
+      }
       state.waiterLinks = payload.waiter_links as { [id: string]: string[] };
       state.readyMakerLinks = payload.ready_maker_links as {
         [id: string]: string[];
@@ -909,7 +927,7 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
           ...(payload.new_ready_cells as string[]),
         ]);
       } else {
-        state.newReadyCells.clear();
+        state.newReadyCells = new Set();
       }
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
@@ -1024,6 +1042,9 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
         }
         if (state.numAltModeExecutes > 0 && --state.numAltModeExecutes === 0) {
           state.toggleReactivity();
+        }
+        if (state.numPendingForcedReactiveCounterBumps > 0) {
+          state.bumpForcedReactiveCounter();
         }
         state.forcedReactiveCells = new Set();
         state.forcedCascadingReactiveCells = new Set();

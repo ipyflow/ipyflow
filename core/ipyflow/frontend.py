@@ -161,12 +161,16 @@ class FrontendCheckerResult(NamedTuple):
             max_used_ctr = cell.get_max_used_live_symbol_cell_counter(
                 checker_results_by_cid[cell_id].live, filter_to_reactive=True
             )
-            if max_used_ctr > max(cell.cell_ctr, flow_.min_timestamp):
+            if max_used_ctr > max(
+                cell.cell_ctr, flow_.min_forced_reactive_cell_counter()
+            ):
                 self.forced_reactive_cells.add(cell_id)
             max_used_ctr = cell.get_max_used_live_symbol_cell_counter(
                 checker_results_by_cid[cell_id].live, filter_to_cascading_reactive=True
             )
-            if max_used_ctr > max(cell.cell_ctr, flow_.min_timestamp):
+            if max_used_ctr > max(
+                cell.cell_ctr, flow_.min_forced_reactive_cell_counter()
+            ):
                 self.forced_cascading_reactive_cells.add(cell_id)
 
     def _compute_dag_based_waiters(self, cells_to_check: List[CodeCell]) -> None:

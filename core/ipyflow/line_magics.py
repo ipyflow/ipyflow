@@ -144,6 +144,9 @@ def make_line_magic(flow_: "NotebookFlow"):
         elif cmd == "toggle_reactivity":
             flow_.toggle_reactivity()
             return None
+        elif cmd == "bump_min_forced_reactive_counter":
+            flow_.bump_min_forced_reactive_counter()
+            return None
         elif cmd in line_magic_names:
             warn(
                 f"We have a magic for {cmd}, but have not yet registered it",

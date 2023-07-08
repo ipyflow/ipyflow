@@ -41,7 +41,7 @@ class IpyflowSessionState {
   comm: IComm | null = null;
   notebook: Notebook | null = null;
   session: ISessionContext | null = null;
-  isIpyflowCommConnected: boolean = false;
+  isIpyflowCommConnected = false;
   dirtyCells: Set<string> = new Set();
   waitingCells: Set<string> = new Set();
   readyCells: Set<string> = new Set();
@@ -52,8 +52,8 @@ class IpyflowSessionState {
   cellsById: { [id: string]: Cell<ICellModel> } = {};
   orderIdxById: { [id: string]: number } = {};
   cellPendingExecution: CodeCell | null = null;
-  isReactivelyExecuting: boolean = false;
-  numAltModeExecutes: number = 0;
+  isReactivelyExecuting = false;
+  numAltModeExecutes = 0;
   altModeExecuteCells: Cell<ICellModel>[] | null = null;
   lastExecutionHighlights: Highlights | null = null;
   executedReactiveReadyCells: Set<string> = new Set();

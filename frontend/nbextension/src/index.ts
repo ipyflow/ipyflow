@@ -323,6 +323,18 @@ function gatherCellMetadataById(Jupyter: any): CellMetadataMap {
   return cell_metadata_by_id;
 }
 
+function toggleReactivity(Jupyter: any): void {
+  if (lastExecutionMode === 'reactive') {
+    lastExecutionMode = 'normal';
+  } else if (lastExecutionMode === 'normal') {
+    lastExecutionMode = 'reactive';
+  }
+  Jupyter.notebook.kernel.execute('%flow toggle-reactivity', {
+    silent: true,
+    store_history: false
+  });
+}
+
 function connectToComm(Jupyter: any, code_cell: any): () => void {
   let disconnected = false;
   const comm = Jupyter.notebook.kernel.comm_manager.new_comm('ipyflow', {
@@ -338,10 +350,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       }
       notifyActiveCell();
       if (++numAltModeExecutes === 1) {
-        Jupyter.notebook.kernel.execute('%flow toggle-reactivity', {
-          silent: true,
-          store_history: false
-        });
+        toggleReactivity(Jupyter);
       }
       Jupyter.notebook.execute_cells([activeCellIdx]);
     }
@@ -454,10 +463,6 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       refreshNodeMapping(Jupyter);
       waitingCells = new Set((payload.waiting_cells ?? []) as string[]);
       readyCells = new Set((payload.ready_cells ?? []) as string[]);
-      newReadyCells = new Set([
-        ...newReadyCells,
-        ...(payload.new_ready_cells as string[])
-      ]);
       forcedReactiveCells = new Set([
         ...forcedReactiveCells,
         ...(payload.forced_reactive_cells as string[])
@@ -467,9 +472,18 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
       cellPendingExecution = null;
       cellPendingExecutionIdx = null;
       const exec_mode = payload.exec_mode as string;
+      if (exec_mode === 'reactive') {
+        newReadyCells = new Set([
+          ...newReadyCells,
+          ...(payload.new_ready_cells as string[])
+        ]);
+      } else {
+        newReadyCells = new Set();
+      }
       isReactivelyExecuting =
         isReactivelyExecuting ||
-        ((payload?.is_reactively_executing as boolean) ?? false);
+        ((payload?.is_reactively_executing as boolean) ?? false) ||
+        exec_mode === 'reactive';
       const flow_order = payload.flow_order;
       const exec_schedule = payload.exec_schedule;
       lastExecutionMode = exec_mode;
@@ -496,11 +510,10 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
           ) {
             return;
           }
-          if (!newReadyCells.has(cell.id)) {
-            return;
-          }
-          if (!forcedReactiveCells.has(cell.id) && exec_mode !== 'reactive') {
-            return;
+          if (!forcedReactiveCells.has(cell.id)) {
+            if (exec_mode !== 'reactive' || !newReadyCells.has(cell.id)) {
+              return;
+            }
           }
           if (cellPendingExecution == null) {
             if (activeCellToReturnToAfterReactiveExecution == null) {
@@ -541,10 +554,7 @@ function connectToComm(Jupyter: any, code_cell: any): () => void {
         executedReactiveReadyCells = new Set();
         updateUI(Jupyter);
         if (numAltModeExecutes > 0 && --numAltModeExecutes === 0) {
-          Jupyter.notebook.kernel.execute('%flow toggle-reactivity', {
-            silent: true,
-            store_history: false
-          });
+          toggleReactivity(Jupyter);
         }
         notifyActiveCell();
       } else {

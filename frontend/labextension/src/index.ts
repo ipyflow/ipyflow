@@ -281,26 +281,37 @@ const extension: JupyterFrontEndPlugin<void> = {
       args: {},
     });
 
+    const executeSlice = (isBackward: boolean) => {
+      const session = notebooks.currentWidget.sessionContext;
+      if (!session.isReady) {
+        return;
+      }
+      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+        {}) as IpyflowSessionState;
+      if (!(state.isIpyflowCommConnected ?? false)) {
+        return;
+      }
+      app.commands.execute('notebook:enter-command-mode');
+      const closure = state.computeTransitiveClosure(
+        [state.activeCell.model.id],
+        true,
+        isBackward
+      );
+      // TODO: prevent forced (cascading) reactive cells from running if not part of slice?
+      if (state.settings.exec_mode === 'normal') {
+        state.executeCells(closure);
+      } else {
+        state.altModeExecuteCells = closure;
+        app.commands.execute('alt-mode-execute');
+      }
+    };
+
     app.commands.addCommand('execute-forward-slice', {
       label: 'Execute Forward Slice',
       isEnabled: () => true,
       isVisible: () => true,
       isToggled: () => false,
-      execute: () => {
-        const session = notebooks.currentWidget.sessionContext;
-        if (!session.isReady) {
-          return;
-        }
-        const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
-          {}) as IpyflowSessionState;
-        if (!(state.isIpyflowCommConnected ?? false)) {
-          return;
-        }
-        app.commands.execute('notebook:enter-command-mode');
-        state.executeCells(
-          state.computeTransitiveClosure([state.activeCell.model.id])
-        );
-      },
+      execute: () => executeSlice(false),
     });
     app.commands.addKeyBinding({
       command: 'execute-forward-slice',
@@ -318,29 +329,7 @@ const extension: JupyterFrontEndPlugin<void> = {
       isEnabled: () => true,
       isVisible: () => true,
       isToggled: () => false,
-      execute: () => {
-        const session = notebooks.currentWidget.sessionContext;
-        if (!session.isReady) {
-          return;
-        }
-        const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
-          {}) as IpyflowSessionState;
-        if (!(state.isIpyflowCommConnected ?? false)) {
-          return;
-        }
-        app.commands.execute('notebook:enter-command-mode');
-        const closure = state.computeTransitiveClosure(
-          [state.activeCell.model.id],
-          true,
-          true
-        );
-        if (state.settings.exec_mode === 'normal') {
-          state.executeCells(closure);
-        } else {
-          state.altModeExecuteCells = closure;
-          app.commands.execute('alt-mode-execute');
-        }
-      },
+      execute: () => executeSlice(true),
     });
     app.commands.addKeyBinding({
       command: 'execute-backward-slice',

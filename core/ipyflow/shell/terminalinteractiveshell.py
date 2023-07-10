@@ -6,6 +6,6 @@ from ipyflow.shell.interactiveshell import UsesIPyflowShell
 
 
 class IPyflowTerminalInteractiveShell(
-    singletons.IPyflowShell, TerminalInteractiveShell, metaclass=UsesIPyflowShell
+    singletons.IPyflowShell, TerminalInteractiveShell, metaclass=UsesIPyflowShell  # type: ignore
 ):
     pass

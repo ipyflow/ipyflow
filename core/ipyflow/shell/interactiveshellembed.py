@@ -10,7 +10,7 @@ from ipyflow.shell.interactiveshell import UsesIPyflowShell
 
 
 class IPyflowInteractiveShellEmbed(
-    singletons.IPyflowShell, InteractiveShellEmbed, metaclass=UsesIPyflowShell
+    singletons.IPyflowShell, InteractiveShellEmbed, metaclass=UsesIPyflowShell  # type: ignore
 ):
     pass
 

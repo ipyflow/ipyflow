@@ -2,7 +2,7 @@
 import logging
 import sys
 from contextlib import contextmanager, suppress
-from typing import Any, Callable, Generator, List, Optional, Tuple, Type, Union
+from typing import Callable, Generator, List, Optional, Tuple, Type, Union
 
 import pyccolo as pyc
 from IPython import get_ipython

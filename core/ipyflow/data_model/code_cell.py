@@ -34,7 +34,7 @@ from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.config import ExecutionSchedule, FlowDirection, Interface
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _CodeCellContainer, cells, statements
-from ipyflow.singletons import flow, kernel
+from ipyflow.singletons import flow, shell
 from ipyflow.slicing.context import SlicingContext
 from ipyflow.slicing.mixin import SlicingMixin
 from ipyflow.types import IdType, TimestampOrCounter
@@ -387,7 +387,7 @@ class CodeCell(SlicingMixin):
         # we transform magics, but for %time, we would ideally like to trace the statement being timed
         # TODO: how to do this?
         content = get_ipython().transform_cell(self.current_content)
-        ast_rewriter, syntax_augmenters = kernel().make_rewriter_and_syntax_augmenters()
+        ast_rewriter, syntax_augmenters = shell().make_rewriter_and_syntax_augmenters()
         for aug in syntax_augmenters:
             content = aug(content)
         return ast_rewriter, content

@@ -5,7 +5,7 @@ import ipyflow.api
 from ipyflow.api import *
 from ipyflow.kernel import IPyflowKernel
 from ipyflow.models import cells, namespaces, scopes, statements, symbols, timestamps
-from ipyflow.singletons import flow, tracer
+from ipyflow.singletons import flow, kernel, shell, tracer
 
 if TYPE_CHECKING:
     from IPython import InteractiveShell
@@ -74,3 +74,19 @@ __version__ = _version.get_versions()['version']
 __all__ = ipyflow.api.__all__ + [
     "cells", "namespaces", "scopes", "statements", "symbols", "timestamps"
 ] + ["__version__"]
+
+
+def main():
+    import sys
+    # Remove the CWD from sys.path while we load stuff.
+    # This is added back by InteractiveShellApp.init_path()
+    # TODO: probably need to make this separate from ipyflow package so that we can
+    #  completely avoid imports until after removing cwd from sys.path
+    if sys.path[0] == "":
+        del sys.path[0]
+
+    from IPython.terminal import ipapp as app
+
+    from ipyflow.shell import IPyflowTerminalInteractiveShell
+
+    app.launch_new_instance(interactive_shell_class=IPyflowTerminalInteractiveShell)

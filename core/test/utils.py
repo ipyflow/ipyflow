@@ -17,8 +17,8 @@ from ipyflow.config import FlowDirection
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.flow import NotebookFlow
-from ipyflow.kernel.kernel import IPyflowKernelBase
-from ipyflow.singletons import flow
+from ipyflow.shell import IPyflowInteractiveShell
+from ipyflow.singletons import flow, shell
 from ipyflow.tracing.external_calls.base_handlers import REGISTERED_HANDLER_BY_FUNCTION
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
@@ -80,9 +80,10 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
             else:
                 cell_pos = next_exec_counter
         cells()._position_by_cell_id[cell_id] = cell_pos
-        get_ipython().run_cell_magic(
-            flow().cell_magic_name, None, textwrap.dedent(code)
-        )
+        shell().run_cell(textwrap.dedent(code), cell_id=cell_id)
+        # get_ipython().run_cell_magic(
+        #     flow().cell_magic_name, None, textwrap.dedent(code)
+        # )
         try:
             if not ignore_exceptions and getattr(sys, "last_value", None) is not None:
                 last_tb = getattr(sys, "last_traceback", None)
@@ -106,13 +107,10 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
 
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
-        IPyflowKernelBase.clear_instance()
-        IPyflowKernelBase.instance(
-            store_history=False,
-        )
+        # IPyflowInteractiveShell.clear_instance()
+        print(IPyflowInteractiveShell.instance())
         NotebookFlow.clear_instance()
         NotebookFlow.instance(
-            cell_magic_name="_FLOW_CELL_MAGIC",
             test_context=test_context,
             flow_direction=flow_direction,
             **kwargs,
@@ -129,13 +127,13 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
         else:
             yield
         # ensure each test didn't give failures during ast transformation
-        IPyflowKernelBase.instance().cleanup_tracers()
+        IPyflowInteractiveShell.instance().cleanup_tracers()
         _, exc = flow().reset_exception_counter()
         if exc is not None:
             if isinstance(exc, str):
                 raise Exception(exc)
             elif isinstance(exc, Exception):
                 raise exc
-        get_ipython().reset()  # reset ipython state
+        IPyflowInteractiveShell.instance().reset()  # reset ipython state
 
     return init_or_reset_dependency_graph, run_cell

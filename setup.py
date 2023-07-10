@@ -65,6 +65,11 @@ setup(
         "test": ["ipyflow-core[test]"],
         "dev": ["ipyflow-core[dev]"],
     },
+    entry_points={
+        "console_scripts": [
+            "ipyflow = ipyflow:main"
+        ],
+    },
     license="BSD-3-Clause",
     zip_safe=False,
     classifiers=[

@@ -6,18 +6,15 @@ from contextlib import contextmanager
 from io import StringIO
 from typing import Any, Callable, Generator, List, Optional, TextIO
 
-from IPython import get_ipython
 from IPython.core.displayhook import DisplayHook
 from IPython.core.displaypub import CapturingDisplayPublisher, DisplayPublisher
 from IPython.core.interactiveshell import ExecutionResult, InteractiveShell
 from IPython.utils.capture import CapturedIO
 
+from ipyflow.singletons import shell
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
-
-
-def _ipython() -> InteractiveShell:
-    return get_ipython()
 
 
 class _IpythonState:
@@ -26,7 +23,7 @@ class _IpythonState:
 
     @contextmanager
     def save_number_of_currently_executing_cell(self) -> Generator[None, None, None]:
-        self.cell_counter = _ipython().execution_count
+        self.cell_counter = shell().execution_count
         try:
             yield
         finally:
@@ -36,23 +33,23 @@ class _IpythonState:
     def ast_transformer_context(
         self, transformers: List[ast.NodeTransformer]
     ) -> Generator[None, None, None]:
-        old = _ipython().ast_transformers
-        _ipython().ast_transformers = old + transformers
+        old = shell().ast_transformers
+        shell().ast_transformers = old + transformers
         try:
             yield
         finally:
-            _ipython().ast_transformers = old
+            shell().ast_transformers = old
 
     @contextmanager
     def input_transformer_context(
         self, transformers: List[Callable[[List[str]], List[str]]]
     ) -> Generator[None, None, None]:
-        old = _ipython().input_transformers_post
-        _ipython().input_transformers_post = old + transformers
+        old = shell().input_transformers_post
+        shell().input_transformers_post = old + transformers
         try:
             yield
         finally:
-            _ipython().input_transformers_post = old
+            shell().input_transformers_post = old
 
 
 _IPY = _IpythonState()
@@ -83,7 +80,7 @@ def cell_counter() -> int:
 
 
 def run_cell(cell, **kwargs) -> ExecutionResult:
-    return _ipython().run_cell(
+    return shell().run_cell(
         cell,
         store_history=kwargs.pop("store_history", True),
         silent=kwargs.pop("silent", False),
@@ -159,7 +156,7 @@ class capture_output_tee:
         self.stdout = stdout
         self.stderr = stderr
         self.display = display
-        self.shell = None
+        self.shell: Optional[InteractiveShell] = None
         self.sys_stdout: Optional[TextIO] = None
         self.sys_stderr: Optional[TextIO] = None
 
@@ -168,7 +165,7 @@ class capture_output_tee:
         self.sys_stderr = sys.stderr
 
         if self.display:
-            self.shell = get_ipython()
+            self.shell = shell()
             if self.shell is None:
                 self.save_display_pub = None
                 self.display = False

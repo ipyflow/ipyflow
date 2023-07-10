@@ -28,7 +28,7 @@ from ipyflow.config import (
 from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.experimental.dag import create_dag_metadata
-from ipyflow.singletons import flow, kernel
+from ipyflow.singletons import flow, shell
 from ipyflow.slicing.mixin import SlicingMixin, format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
@@ -488,11 +488,11 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
 
 
 def _deregister_tracers(tracers):
-    kernel().tracer_cleanup_pending = True
+    shell().tracer_cleanup_pending = True
     for tracer in tracers:
         tracer.clear_instance()
         try:
-            kernel().registered_tracers.remove(tracer)
+            shell().registered_tracers.remove(tracer)
         except ValueError:
             pass
 
@@ -502,7 +502,7 @@ def _deregister_tracers_for(tracer_cls):
         [tracer_cls]
         + [
             tracer
-            for tracer in kernel().registered_tracers
+            for tracer in shell().registered_tracers
             if tracer.__name__ == tracer_cls.__name__
         ]
     )
@@ -517,14 +517,14 @@ def register_tracer(line_: str) -> None:
         return
     _deregister_tracers_for(tracer_cls)
     tracer_cls.instance()
-    kernel().registered_tracers.insert(0, tracer_cls)
+    shell().registered_tracers.insert(0, tracer_cls)
 
 
 def deregister_tracer(line_: str) -> None:
     line_ = line_.strip()
     usage = f"Usage: %flow deregister_tracer [<module.path.to.tracer_class>|all]"
     if line_.lower() == "all":
-        _deregister_tracers(list(kernel().registered_tracers))
+        _deregister_tracers(list(shell().registered_tracers))
     else:
         tracer_cls = _resolve_tracer_class(line_)
         if tracer_cls is None:

@@ -6,7 +6,10 @@ from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
     from ipyflow.flow import NotebookFlow as NotebookFlowInstance
-    from ipyflow.kernel.kernel import IPyflowKernelBase as IPyflowKernelInstance
+    from ipyflow.kernel.kernel import IPyflowKernel as IPyflowKernelInstance
+    from ipyflow.shell.interactiveshell import (
+        IPyflowInteractiveShell as IPyflowShellInstance,
+    )
     from ipyflow.tracing.ipyflow_tracer import DataflowTracer as TracerInstance
 
 
@@ -20,12 +23,21 @@ class NotebookFlow(SingletonConfigurable):
         self.__class__._Xyud34_INSTANCE = self
 
 
+class IPyflowShell(SingletonConfigurable):
+    pass
+
+
 class IPyflowKernel(SingletonConfigurable):
     pass
 
 
 class SingletonBaseTracer(pyc.BaseTracer):
     pass
+
+
+def shell() -> "IPyflowShellInstance":
+    assert IPyflowShell.initialized()
+    return IPyflowShell.instance()
 
 
 def kernel() -> "IPyflowKernelInstance":

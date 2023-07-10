@@ -17,7 +17,7 @@ from ipyflow.config import (
 )
 from ipyflow.data_model.code_cell import cells
 from ipyflow.line_magics import _USAGE
-from ipyflow.singletons import flow, kernel
+from ipyflow.singletons import flow, shell
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
 # Reset dependency graph before each test
@@ -170,11 +170,11 @@ def test_set_reactivity():
 
 
 def test_register_deregister_tracer():
-    assert DataflowTracer in kernel().registered_tracers
+    assert DataflowTracer in shell().registered_tracers
     run_cell(f"%flow deregister {DataflowTracer.__module__}.{DataflowTracer.__name__}")
-    assert DataflowTracer not in kernel().registered_tracers
+    assert DataflowTracer not in shell().registered_tracers
     run_cell(f"%flow register {DataflowTracer.__module__}.{DataflowTracer.__name__}")
-    assert DataflowTracer in kernel().registered_tracers
+    assert DataflowTracer in shell().registered_tracers
 
 
 def test_clear():

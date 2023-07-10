@@ -67,7 +67,6 @@ class JsonSerializableMixin:
 @dataclass(frozen=True)
 class DataflowSettings(JsonSerializableMixin):
     test_context: bool
-    use_comm: bool
     mark_waiting_symbol_usages_unsafe: bool
     mark_typecheck_failures_unsafe: bool
     mark_phantom_cell_usages_unsafe: bool

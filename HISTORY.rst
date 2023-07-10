@@ -7,6 +7,7 @@ History
 * [lab] Add slice indicators to the left of cell counters;
 * [lab] Fix bug related to syncing dirty cell indicator to dirty state after paste;
 * [lab] Add ctrl / cmd + j, k for execute forward, backward slices, respectively;
+* [kernel] Provide a ipyflow-based TerminalInteractiveShell launchable via 'ipyflow' on the command line;
 * [kernel] Fix bug wherein tracing wasn't totally disabled in line magics;
 * [kernel] Fix bug wherein statement dependencies would not be updated for cells that react to later versions of an updated slider;
 * [kernel] Make sure ipython also captures static dependencies;

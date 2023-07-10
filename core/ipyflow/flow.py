@@ -21,6 +21,7 @@ from typing import (
 
 import pyccolo as pyc
 from ipykernel.comm import Comm
+from ipykernel.ipkernel import IPythonKernel
 from IPython import get_ipython
 from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 
@@ -62,19 +63,14 @@ logger.setLevel(logging.WARNING)
 class NotebookFlow(singletons.NotebookFlow):
     """Holds all the state necessary to capture dataflow in Jupyter notebooks."""
 
-    def __init__(
-        self,
-        cell_magic_name=None,
-        use_comm=False,
-        **kwargs,
-    ) -> None:
+    def __init__(self, **kwargs) -> None:
         super().__init__()
         cells().clear()
         statements().clear()
         config = get_ipython().config.ipyflow
+        self._line_magic = make_line_magic(self)
         self.settings: DataflowSettings = DataflowSettings(
             test_context=kwargs.pop("test_context", False),
-            use_comm=use_comm,
             mark_waiting_symbol_usages_unsafe=kwargs.pop(
                 "mark_waiting_symbol_usages_unsafe",
                 getattr(config, "mark_waiting_symbol_usages_unsafe", True),
@@ -188,11 +184,6 @@ class NotebookFlow(singletons.NotebookFlow):
         self._active_cell_id: Optional[IdType] = None
         self.waiter_usage_detected = False
         self.out_of_order_usage_detected_counter: Optional[int] = None
-        if cell_magic_name is None:
-            self._cell_magic = None
-        else:
-            self._cell_magic = singletons.kernel().make_cell_magic(cell_magic_name)
-        self._line_magic = make_line_magic(self)
         self._prev_cell_waiting_symbols: Set[Symbol] = set()
         self._cell_name_to_cell_num_mapping: Dict[str, int] = {}
         self._exception_raised_during_execution: Union[None, Exception, str] = None
@@ -226,10 +217,9 @@ class NotebookFlow(singletons.NotebookFlow):
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
         self._min_new_ready_cell_counter = -1
         self._min_forced_reactive_cell_counter = -1
-        if use_comm:
-            get_ipython().kernel.comm_manager.register_target(
-                __package__, self._comm_target
-            )
+
+    def register_comm_target(self, kernel: IPythonKernel) -> None:
+        kernel.comm_manager.register_target(__package__, self._comm_target)
 
     def init_virtual_symbols(self) -> None:
         if self._virtual_symbols_inited:
@@ -381,7 +371,6 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def reset_cell_counter(self):
         # only called in test context
-        assert not singletons.kernel().settings.store_history
         for sym in self.all_data_symbols():
             sym._timestamp = (
                 sym._max_inner_timestamp
@@ -735,7 +724,7 @@ class NotebookFlow(singletons.NotebookFlow):
         result = FrontendCheckerResult.empty()
         try:
             if (
-                DataflowTracer not in singletons.kernel().registered_tracers
+                DataflowTracer not in singletons.shell().registered_tracers
                 or not DataflowTracer.initialized()
             ):
                 return result
@@ -750,7 +739,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 self.updated_deep_reactive_symbols_last_cell.clear()
 
     def _safety_precheck_cell(self, cell: CodeCell) -> None:
-        for tracer in singletons.kernel().registered_tracers:
+        for tracer in singletons.shell().registered_tracers:
             # just make sure all tracers are initialized
             tracer.instance()
         checker_result = self.check_and_link_multiple_cells(
@@ -827,10 +816,6 @@ class NotebookFlow(singletons.NotebookFlow):
                 if not cells().from_id(cell_id).is_current_for_id:
                     continue
                 cell.add_parent_edges(cell_id, sym_edges & used_symbols)
-
-    @property
-    def cell_magic_name(self):
-        return self._cell_magic.__name__
 
     @property
     def line_magic_name(self):

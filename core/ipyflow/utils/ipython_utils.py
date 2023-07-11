@@ -10,6 +10,7 @@ from IPython.core.displayhook import DisplayHook
 from IPython.core.displaypub import CapturingDisplayPublisher, DisplayPublisher
 from IPython.core.interactiveshell import ExecutionResult, InteractiveShell
 from IPython.utils.capture import CapturedIO
+from traitlets import MetaHasTraits
 
 from ipyflow.singletons import shell
 
@@ -206,3 +207,16 @@ class capture_output_tee:
         if self.display and self.shell:
             self.shell.display_pub = self.save_display_pub
             # sys.displayhook = self.save_display_hook
+
+
+def make_mro_inserter_metaclass(old_class, new_class):
+    class MetaMroInserter(MetaHasTraits):
+        def mro(cls):
+            ret = []
+            for clazz in super().mro():
+                if clazz is old_class:
+                    ret.append(new_class)
+                ret.append(clazz)
+            return ret
+
+    return MetaMroInserter

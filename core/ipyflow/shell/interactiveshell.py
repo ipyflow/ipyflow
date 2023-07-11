@@ -12,7 +12,6 @@ from pyccolo.import_hooks import TraceFinder
 from ipyflow import singletons
 from ipyflow.data_model.code_cell import CodeCell
 from ipyflow.flow import NotebookFlow
-from ipyflow.shell.utils import make_mro_inserter_metaclass
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
     DataflowTracer,
@@ -23,6 +22,7 @@ from ipyflow.utils.ipython_utils import (
     ast_transformer_context,
     capture_output_tee,
     input_transformer_context,
+    make_mro_inserter_metaclass,
     save_number_of_currently_executing_cell,
 )
 
@@ -47,8 +47,14 @@ class OutputRecorder(pyc.BaseTracer):
 
 
 class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
+    prev_shell_class: Optional[Type[InteractiveShell]] = None
+    replacement_class: Optional[Type[InteractiveShell]] = None
+
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
+        self._initialize()
+
+    def _initialize(self) -> None:
         self.tee_output_tracer = OutputRecorder.instance()
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [
             OutputRecorder,
@@ -61,10 +67,29 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self._saved_meta_path_entries: List[TraceFinder] = []
 
     @classmethod
-    def instance(cls, *args, **kwargs):
+    def instance(cls, *args, **kwargs) -> "IPyflowInteractiveShell":
         ret = super().instance(*args, **kwargs)
         NotebookFlow.instance()
         return ret
+
+    @classmethod
+    def inject(shell_class, prev_shell_class: Type[InteractiveShell]) -> None:
+        ipy = get_ipython()
+        ipy.__class__ = shell_class
+        if shell_class.prev_shell_class is None:
+            ipy._initialize()
+            for subclass in singletons.IPyflowShell._walk_mro():
+                subclass._instance = ipy
+        NotebookFlow.instance()
+        CodeCell._cell_counter = ipy.execution_count
+        shell_class.prev_shell_class = prev_shell_class
+
+    @classmethod
+    def _maybe_eject(shell_class) -> None:
+        if shell_class.replacement_class is None:
+            return
+        get_ipython().__class__ = shell_class.replacement_class
+        shell_class.replacement_class = None
 
     def cleanup_tracers(self):
         self._restore_meta_path()
@@ -279,21 +304,24 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     ) -> ExecutionResult:
         if silent or self._is_code_empty(raw_cell):
             # then it's probably a control message; don't run through ipyflow
-            return super()._run_cell(
+            ret = super()._run_cell(
                 raw_cell,
                 store_history=store_history,
                 silent=silent,
                 shell_futures=shell_futures,
                 cell_id=cell_id,
             )
-        with save_number_of_currently_executing_cell():
-            return self._ipyflow_run_cell(
-                raw_cell,
-                store_history=store_history,
-                silent=silent,
-                shell_futures=shell_futures,
-                cell_id=cell_id,
-            )
+        else:
+            with save_number_of_currently_executing_cell():
+                ret = self._ipyflow_run_cell(
+                    raw_cell,
+                    store_history=store_history,
+                    silent=silent,
+                    shell_futures=shell_futures,
+                    cell_id=cell_id,
+                )
+        self._maybe_eject()
+        return ret
 
     def _ipyflow_run_cell(
         self,

@@ -2,8 +2,10 @@
 from typing import TYPE_CHECKING
 
 import ipyflow.api
+from ipyflow import singletons
 from ipyflow.api import *
-from ipyflow.kernel import IPyflowKernel
+from ipyflow.kernel.kernel import IPyflowKernel, UsesIPyflowKernel
+from ipyflow.shell import load_ipython_extension as load_ipyflow_extension, unload_ipython_extension as unload_ipyflow_extension
 from ipyflow.models import cells, namespaces, scopes, statements, symbols, timestamps
 from ipyflow.singletons import flow, kernel, shell, tracer
 
@@ -41,11 +43,17 @@ def load_jupyter_server_extension(nbapp):
 
 
 def load_ipython_extension(ipy: "InteractiveShell") -> None:
-    cur_kernel_cls = ipy.kernel.__class__  # type: ignore
-    if cur_kernel_cls is IPyflowKernel:
-        IPyflowKernel.replacement_class = None  # type: ignore
+    load_ipyflow_extension(ipy)
+    kernel = getattr(ipy, "kernel", None)
+    if kernel is None:
+        return
+    cur_kernel_cls = kernel.__class__  # type: ignore
+    if issubclass(cur_kernel_cls, IPyflowKernel):
+        cur_kernel_cls.replacement_class = None  # type: ignore
     else:
-        IPyflowKernel.inject(prev_kernel_class=cur_kernel_cls)  # type: ignore
+        class GeneratedIPyflowKernel(singletons.IPyflowKernel, cur_kernel_cls, metaclass=UsesIPyflowKernel):  # type: ignore
+            pass
+        GeneratedIPyflowKernel.inject(prev_kernel_class=cur_kernel_cls)  # type: ignore
 
     if IPyflowKernel.client_comm is None:  # type: ignore
         from ipykernel.comm import Comm
@@ -58,9 +66,14 @@ def load_ipython_extension(ipy: "InteractiveShell") -> None:
 
 
 def unload_ipython_extension(ipy: "InteractiveShell") -> None:
-    assert isinstance(ipy.kernel, IPyflowKernel)  # type: ignore
-    assert IPyflowKernel.prev_kernel_class is not None  # type: ignore
-    IPyflowKernel.replacement_class = IPyflowKernel.prev_kernel_class  # type: ignore
+    unload_ipyflow_extension(ipy)
+    kernel = getattr(ipy, "kernel", None)
+    if kernel is None:
+        return
+    cur_kernel_cls = kernel.__class__
+    assert issubclass(cur_kernel_cls, IPyflowKernel)  # type: ignore
+    assert cur_kernel_cls.prev_kernel_class is not None  # type: ignore
+    cur_kernel_cls.replacement_class = cur_kernel_cls.prev_kernel_class  # type: ignore
 
     # TODO: reset state here so that %reload_ext behaves like unload then load?
 

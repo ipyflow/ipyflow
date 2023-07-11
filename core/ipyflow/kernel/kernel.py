@@ -10,9 +10,9 @@ from IPython import get_ipython
 from traitlets import Type
 
 from ipyflow import singletons
-from ipyflow.data_model.code_cell import CodeCell
 from ipyflow.flow import NotebookFlow
 from ipyflow.shell.zmqshell import IPyflowZMQInteractiveShell
+from ipyflow.utils.ipython_utils import make_mro_inserter_metaclass
 from ipyflow.version import __version__
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ def patch_jupyter_taskrunner_run():
         pass
 
 
-class IPyflowKernel(IPythonKernel):  # type: ignore
+class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
     implementation = "kernel"
     shell_class = Type(IPyflowZMQInteractiveShell)
     implementation_version = __version__
@@ -88,24 +88,23 @@ class IPyflowKernel(IPythonKernel):  # type: ignore
         patch_jupyter_taskrunner_run()
 
     @classmethod
-    def inject(zmq_kernel_class, prev_kernel_class: TypeType[IPythonKernel]) -> None:
+    def inject(kernel_class, prev_kernel_class: TypeType[IPythonKernel]) -> None:
         ipy = get_ipython()
         kernel = ipy.kernel
-        kernel.__class__ = zmq_kernel_class
-        if zmq_kernel_class.prev_kernel_class is None:
+        kernel.__class__ = kernel_class
+        if kernel_class.prev_kernel_class is None:
             kernel._initialize()
-            kernel.after_init_class()
             for subclass in singletons.IPyflowKernel._walk_mro():
                 subclass._instance = kernel
-        zmq_kernel_class.prev_kernel_class = prev_kernel_class
-        CodeCell._cell_counter = ipy.execution_count
+        NotebookFlow.instance().register_comm_target(kernel)
+        kernel_class.prev_kernel_class = prev_kernel_class
 
     @classmethod
-    def _maybe_eject(zmq_kernel_class) -> None:
-        if zmq_kernel_class.replacement_class is None:
+    def _maybe_eject(kernel_class) -> None:
+        if kernel_class.replacement_class is None:
             return
-        get_ipython().kernel.__class__ = zmq_kernel_class.replacement_class
-        zmq_kernel_class.replacement_class = None
+        get_ipython().kernel.__class__ = kernel_class.replacement_class
+        kernel_class.replacement_class = None
 
     def before_init_metadata(self, parent) -> None:
         """
@@ -178,3 +177,6 @@ class IPyflowKernel(IPythonKernel):  # type: ignore
             result = asyncio.get_event_loop().run_until_complete(_run_cell_func(code))
             self._maybe_eject()
             return result
+
+
+UsesIPyflowKernel = make_mro_inserter_metaclass(IPythonKernel, IPyflowKernel)

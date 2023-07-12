@@ -376,8 +376,8 @@ const extension: JupyterFrontEndPlugin<void> = {
     };
 
     app.commands.commandExecuted.connect((_, args) => {
-      const session = notebooks.currentWidget.sessionContext;
-      if (!session.isReady) {
+      const session = notebooks?.currentWidget?.sessionContext;
+      if (!(session?.isReady ?? false)) {
         return;
       }
       const state: IpyflowSessionState = (ipyflowState[session.session.id] ??

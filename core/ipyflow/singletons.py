@@ -15,13 +15,7 @@ if TYPE_CHECKING:
 
 
 class NotebookFlow(SingletonConfigurable):
-    _Xyud34_INSTANCE = None
-
-    def __init__(self):
-        super().__init__()
-        # we need to keep another ref around for some reason to prevent a segfault
-        # TODO: figure out why
-        self.__class__._Xyud34_INSTANCE = self
+    pass
 
 
 class IPyflowShell(SingletonConfigurable):

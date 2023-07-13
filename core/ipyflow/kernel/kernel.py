@@ -86,6 +86,9 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         # the server extension, but seems like it can't hurt to do
         # it here as well.
         patch_jupyter_taskrunner_run()
+        self._has_cell_id: bool = (
+            "cell_id" in inspect.signature(super().do_execute).parameters
+        )
 
     @classmethod
     def inject(kernel_class, prev_kernel_class: TypeType[IPythonKernel]) -> None:
@@ -138,13 +141,16 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             allow_stdin=False,
             cell_id=None,
         ):
+            kwargs = {}
+            if self._has_cell_id:
+                kwargs["cell_id"] = cell_id
             ret = await super().do_execute(
                 code,
                 silent,
                 store_history,
                 user_expressions,
                 allow_stdin,
-                cell_id=cell_id,
+                **kwargs,
             )
             self._maybe_eject()
             return ret
@@ -160,6 +166,10 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             allow_stdin=False,
             cell_id=None,
         ):
+            kwargs = {}
+            if self._has_cell_id:
+                kwargs["cell_id"] = cell_id
+
             async def _run_cell_func(cell):
                 ret = super().do_execute(
                     cell,
@@ -167,7 +177,7 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
                     store_history,
                     user_expressions,
                     allow_stdin,
-                    cell_id=cell_id,
+                    **kwargs,
                 )
                 if inspect.isawaitable(ret):
                     return await ret

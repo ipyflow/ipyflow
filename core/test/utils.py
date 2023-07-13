@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import inspect
 import os
 import sys
 import textwrap
@@ -6,7 +7,6 @@ from contextlib import contextmanager
 from typing import Any, Tuple
 
 import pytest
-from IPython import get_ipython
 from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 
 from ipyflow.annotations.compiler import (
@@ -66,8 +66,10 @@ def lookup_symbol_by_name(name: str) -> Symbol:
 # Reset dependency graph before each test to prevent unexpected stale dependency
 def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
     os.environ[PYCCOLO_DEV_MODE_ENV_VAR] = "1"
+    has_keyword_arg = "cell_id" in inspect.signature(shell().run_cell).parameters
 
     def run_cell(code, cell_id=None, cell_pos=None, ignore_exceptions=False) -> int:
+        nonlocal has_keyword_arg
         next_exec_counter = cells().next_exec_counter()
         if cell_id is None:
             cell_id = next_exec_counter
@@ -80,7 +82,10 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
             else:
                 cell_pos = next_exec_counter
         cells()._position_by_cell_id[cell_id] = cell_pos
-        shell().run_cell(textwrap.dedent(code), cell_id=cell_id)
+        kwargs = {}
+        if has_keyword_arg:
+            kwargs["cell_id"] = cell_id
+        shell().run_cell(textwrap.dedent(code), **kwargs)
         # get_ipython().run_cell_magic(
         #     flow().cell_magic_name, None, textwrap.dedent(code)
         # )

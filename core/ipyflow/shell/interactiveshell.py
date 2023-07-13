@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import inspect
 import logging
 import sys
 from contextlib import contextmanager, suppress
@@ -65,6 +66,9 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self.syntax_transforms_enabled: bool = True
         self.syntax_transforms_only: bool = False
         self._saved_meta_path_entries: List[TraceFinder] = []
+        self._has_cell_id: bool = (
+            "cell_id" in inspect.signature(self.run_cell).parameters
+        )
 
     @classmethod
     def instance(cls, *args, **kwargs) -> "IPyflowInteractiveShell":
@@ -302,6 +306,9 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         shell_futures=True,
         cell_id=None,
     ) -> ExecutionResult:
+        kwargs = {}
+        if self._has_cell_id:
+            kwargs["cell_id"] = cell_id
         if silent or self._is_code_empty(raw_cell):
             # then it's probably a control message; don't run through ipyflow
             ret = super()._run_cell(
@@ -309,7 +316,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 store_history=store_history,
                 silent=silent,
                 shell_futures=shell_futures,
-                cell_id=cell_id,
+                **kwargs,
             )
         else:
             with save_number_of_currently_executing_cell():
@@ -318,7 +325,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     store_history=store_history,
                     silent=silent,
                     shell_futures=shell_futures,
-                    cell_id=cell_id,
+                    **kwargs,
                 )
         self._maybe_eject()
         return ret
@@ -329,12 +336,12 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         store_history=False,
         silent=False,
         shell_futures=True,
-        cell_id=None,
+        **kwargs,
     ) -> ExecutionResult:
         ret = None
         # Stage 1: Run pre-execute hook
         maybe_new_content = self.before_run_cell(
-            raw_cell, store_history=store_history, cell_id=cell_id
+            raw_cell, store_history=store_history, **kwargs
         )
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
@@ -356,7 +363,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     store_history=store_history,
                     silent=silent,
                     shell_futures=shell_futures,
-                    cell_id=cell_id,
+                    **kwargs,
                 )  # pragma: no cover
                 if is_already_recording_output:
                     outvar = (

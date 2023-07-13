@@ -46,3 +46,24 @@ def static_slicing_context() -> Generator[None, None, None]:
 def iter_slicing_contexts(*dep_contexts: SlicingContext) -> Generator[None, None, None]:
     for _ in yield_in_loop(*[set_slicing_context(dep_ctx) for dep_ctx in dep_contexts]):
         yield
+
+
+dangling_ctx_var: ContextVar[bool] = ContextVar("dangling_ctx_var", default=False)
+
+
+@contextmanager
+def dangling_context(is_dangling: bool = True) -> Generator[None, None, None]:
+    token = dangling_ctx_var.set(is_dangling or dangling_ctx_var.get())
+    try:
+        yield
+    finally:
+        dangling_ctx_var.reset(token)
+
+
+def iter_dangling_contexts() -> Generator[None, None, None]:
+    token = dangling_ctx_var.set(False)
+    try:
+        for _ in yield_in_loop(dangling_context(False), dangling_context(True)):
+            yield
+    finally:
+        dangling_ctx_var.reset(token)

@@ -97,6 +97,11 @@ class CodeCell(SlicingMixin):
         self.dynamic_children: Dict[IdType, Set["Symbol"]] = {}
         self.static_parents: Dict[IdType, Set["Symbol"]] = {}
         self.static_children: Dict[IdType, Set["Symbol"]] = {}
+        self.dangling_dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
+        self.dangling_dynamic_children: Dict[IdType, Set["Symbol"]] = {}
+        self.dangling_static_parents: Dict[IdType, Set["Symbol"]] = {}
+        self.dangling_static_children: Dict[IdType, Set["Symbol"]] = {}
+        self.used_symbols: Set["Symbol"] = set()
         self._used_cell_counters_by_live_symbol: Dict["Symbol", Set[int]] = defaultdict(
             set
         )
@@ -432,6 +437,10 @@ class CodeCell(SlicingMixin):
     @property
     def is_current_for_id(self) -> bool:
         return self._current_cell_by_cell_id.get(self.cell_id, None) is self
+
+    @property
+    def is_current(self) -> bool:
+        return self.is_current_for_id
 
     @classmethod
     def current_cell(cls) -> "CodeCell":

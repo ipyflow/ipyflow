@@ -47,6 +47,7 @@ from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
 from ipyflow.slicing.context import (
     SlicingContext,
+    dangling_context,
     dynamic_slicing_context,
     slicing_ctx_var,
     static_slicing_context,
@@ -339,6 +340,8 @@ class NotebookFlow(singletons.NotebookFlow):
         sym: Symbol,
         add_only_if_parent_new: bool = True,
     ) -> None:
+        child_cell = cells().at_timestamp(child)
+        child_cell.used_symbols.add(sym)
         parent_cell = cells().at_timestamp(parent)
         # if it has already run, don't add the edge
         if (
@@ -347,7 +350,7 @@ class NotebookFlow(singletons.NotebookFlow):
             and parent_cell.prev_cell.cell_ctr > 0
         ):
             return
-        cells().at_timestamp(child).add_parent_edge(parent_cell, sym)
+        child_cell.add_parent_edge(parent_cell, sym)
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
             statements().at_timestamp(child).add_parent_edge(
                 statements().at_timestamp(parent), sym
@@ -806,16 +809,17 @@ class NotebookFlow(singletons.NotebookFlow):
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
-        used_symbols = set()
+        parent_symbols = set()
         for syms in itertools.chain(
             cell.dynamic_parents.values(), cell.static_parents.values()
         ):
-            used_symbols |= syms
+            parent_symbols |= syms
         for _ in SlicingContext.iter_slicing_contexts():
             for cell_id, sym_edges in prev_cell.parents.items():
-                if not cells().from_id(cell_id).is_current_for_id:
-                    continue
-                cell.add_parent_edges(cell_id, sym_edges & used_symbols)
+                cell.add_parent_edges(cell_id, sym_edges & parent_symbols)
+                cell.remove_parent_edges(cell_id, sym_edges - parent_symbols)
+                with dangling_context():
+                    cell.add_parent_edges(cell_id, sym_edges & cell.used_symbols)
 
     @property
     def line_magic_name(self):

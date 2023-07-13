@@ -4,10 +4,11 @@ import logging
 from collections import defaultdict
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
-from ipyflow.config import ExecutionMode, ExecutionSchedule, FlowDirection, Highlights
+from ipyflow.config import ExecutionSchedule, FlowDirection, Highlights
 from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
+from ipyflow.slicing.context import iter_dangling_contexts
 from ipyflow.types import IdType
 
 logger = logging.getLogger(__name__)
@@ -216,22 +217,25 @@ class FrontendCheckerResult(NamedTuple):
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 if is_new_ready:
                     break
-                for pid, syms in cell.directional_parents.items():
-                    par = cells().from_id(pid)
-                    if (
-                        flow_order == flow_order.IN_ORDER
-                        and par.position >= cell.position
-                    ):
-                        continue
-                    if max(
-                        cell.cell_ctr, flow_.min_timestamp
-                    ) < par.cell_ctr and par.cell_ctr in {
-                        sym.timestamp.cell_num for sym in syms
-                    }:
-                        is_ready = True
-                        if par.cell_ctr >= flow_.min_new_ready_cell_counter():
-                            is_new_ready = True
-                            break
+                for _ in iter_dangling_contexts():
+                    if is_new_ready:
+                        break
+                    for pid, syms in cell.directional_parents.items():
+                        par = cells().from_id(pid)
+                        if (
+                            flow_order == flow_order.IN_ORDER
+                            and par.position >= cell.position
+                        ):
+                            continue
+                        if max(
+                            cell.cell_ctr, flow_.min_timestamp
+                        ) < par.cell_ctr and par.cell_ctr in {
+                            sym.timestamp.cell_num for sym in syms
+                        }:
+                            is_ready = True
+                            if par.cell_ctr >= flow_.min_new_ready_cell_counter():
+                                is_new_ready = True
+                                break
         if not is_new_ready and (
             flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
             or (

@@ -11,6 +11,7 @@ from IPython.core.interactiveshell import ExecutionResult, InteractiveShell
 from pyccolo.import_hooks import TraceFinder
 
 from ipyflow import singletons
+from ipyflow.config import Interface
 from ipyflow.data_model.code_cell import CodeCell
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
@@ -67,7 +68,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self.syntax_transforms_only: bool = False
         self._saved_meta_path_entries: List[TraceFinder] = []
         self._has_cell_id: bool = (
-            "cell_id" in inspect.signature(self.run_cell).parameters
+            "cell_id" in inspect.signature(super()._run_cell).parameters
         )
 
     @classmethod
@@ -427,8 +428,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self, cell_content: str, store_history: bool, cell_id: Optional[str] = None
     ) -> Optional[str]:
         flow_ = singletons.flow()
-        self.syntax_transforms_enabled = flow_.mut_settings.syntax_transforms_enabled
-        self.syntax_transforms_only = flow_.mut_settings.syntax_transforms_only
+        settings = flow_.mut_settings
+        if settings.interface == Interface.UNKNOWN:
+            try:
+                singletons.kernel()
+            except AssertionError:
+                settings.interface = Interface.IPYTHON
+        self.syntax_transforms_enabled = settings.syntax_transforms_enabled
+        self.syntax_transforms_only = settings.syntax_transforms_only
         flow_.test_and_clear_waiter_usage_detected()
         flow_.test_and_clear_out_of_order_usage_detected_counter()
         if flow_._saved_debug_message is not None:  # pragma: no cover

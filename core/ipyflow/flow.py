@@ -89,7 +89,7 @@ class NotebookFlow(singletons.NotebookFlow):
             dataflow_enabled=kwargs.pop("dataflow_enabled", True),
             trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
             highlights=kwargs.pop("highlights", Highlights.EXECUTED),
-            interface=kwargs.pop("interface", Interface.IPYTHON),
+            interface=kwargs.pop("interface", Interface.UNKNOWN),
             static_slicing_enabled=kwargs.pop(
                 "static_slicing_enabled",
                 getattr(config, "static_slicing_enabled", True),

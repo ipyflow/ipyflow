@@ -530,8 +530,6 @@ class NotebookFlow(singletons.NotebookFlow):
     def handle_notify_content_changed(
         self, request: Dict[str, Any], is_reactively_executing: bool = False
     ) -> Optional[Dict[str, Any]]:
-        if not self.mut_settings.dataflow_enabled:
-            return {"success": False, "error": "dataflow not enabled"}
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )

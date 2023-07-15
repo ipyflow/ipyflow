@@ -12,6 +12,7 @@ from traitlets import Type
 from ipyflow import singletons
 from ipyflow.flow import NotebookFlow
 from ipyflow.shell.zmqshell import IPyflowZMQInteractiveShell
+from ipyflow.singletons import flow
 from ipyflow.utils.ipython_utils import make_mro_inserter_metaclass
 from ipyflow.version import __version__
 
@@ -24,6 +25,24 @@ logger.setLevel(logging.WARNING)
 
 class PyccoloKernelSettings(NamedTuple):
     store_history: bool
+
+
+def patch_pydevd_file_filters() -> None:
+    try:
+        from _pydevd_bundle.pydevd_filtering import FilesFiltering
+
+        orig_in_project_roots = FilesFiltering.in_project_roots
+
+        def in_project_roots(self, received_filename):
+            if "ipyflow" in received_filename:
+                return False
+            if "pyccolo" in received_filename:
+                return False
+            return orig_in_project_roots(self, received_filename)
+
+        FilesFiltering.in_project_roots = in_project_roots
+    except:  # noqa: E722
+        pass
 
 
 def patched_taskrunner_run(_self, coro):
@@ -86,9 +105,18 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         # the server extension, but seems like it can't hurt to do
         # it here as well.
         patch_jupyter_taskrunner_run()
+        patch_pydevd_file_filters()
         self._has_cell_id: bool = (
             "cell_id" in inspect.signature(super().do_execute).parameters
         )
+
+    async def do_debug_request(self, msg):
+        flow_ = flow()
+        if msg.get("command") == "attach":
+            flow_.mut_settings.dataflow_enabled = False
+        elif msg.get("command") == "disconnect":
+            flow_.mut_settings.dataflow_enabled = True
+        return await super().do_debug_request(msg)
 
     @classmethod
     def inject(kernel_class, prev_kernel_class: TypeType[IPythonKernel]) -> None:

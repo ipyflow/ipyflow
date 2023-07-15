@@ -530,6 +530,8 @@ class NotebookFlow(singletons.NotebookFlow):
     def handle_notify_content_changed(
         self, request: Dict[str, Any], is_reactively_executing: bool = False
     ) -> Optional[Dict[str, Any]]:
+        if not self.mut_settings.dataflow_enabled:
+            return {"success": False, "error": "dataflow not enabled"}
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )
@@ -596,10 +598,12 @@ class NotebookFlow(singletons.NotebookFlow):
     def handle_compute_exec_schedule(
         self, request: Dict[str, Any], notify_content_changed: bool = True
     ) -> Optional[Dict[str, Any]]:
+        if not self.mut_settings.dataflow_enabled:
+            return {"success": False, "error": "dataflow not enabled"}
         is_reactively_executing = request.get("is_reactively_executing", False)
         if self._active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
-        if notify_content_changed:
+        if notify_content_changed and request.get("notify_content_changed", True):
             self.handle_notify_content_changed(
                 request, is_reactively_executing=is_reactively_executing
             )

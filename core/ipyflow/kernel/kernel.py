@@ -10,6 +10,7 @@ from IPython import get_ipython
 from traitlets import Type
 
 from ipyflow import singletons
+from ipyflow.config import ExecutionMode
 from ipyflow.flow import NotebookFlow
 from ipyflow.shell.zmqshell import IPyflowZMQInteractiveShell
 from ipyflow.singletons import flow
@@ -109,13 +110,26 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         self._has_cell_id: bool = (
             "cell_id" in inspect.signature(super().do_execute).parameters
         )
+        self._last_exec_mode: Optional[ExecutionMode] = None
 
     async def do_debug_request(self, msg):
         flow_ = flow()
+        settings = flow_.mut_settings
         if msg.get("command") == "attach":
-            flow_.mut_settings.dataflow_enabled = False
+            flow_.handle(
+                {
+                    "type": "compute_exec_schedule",
+                    "cell_metadata_by_id": {},
+                    "notify_content_changed": False,
+                }
+            )
+            settings.dataflow_enabled = False
+            self._last_exec_mode = settings.exec_mode
+            settings.exec_mode = ExecutionMode.NORMAL
         elif msg.get("command") == "disconnect":
-            flow_.mut_settings.dataflow_enabled = True
+            settings.dataflow_enabled = True
+            settings.exec_mode = self._last_exec_mode
+            flow_.handle({"type": "compute_exec_schedule"})
         return await super().do_debug_request(msg)
 
     @classmethod

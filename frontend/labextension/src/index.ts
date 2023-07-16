@@ -18,7 +18,11 @@ import { ICommandPalette, ISessionContext } from '@jupyterlab/apputils';
 
 import { Cell, CodeCell, ICellModel, ICodeCellModel } from '@jupyterlab/cells';
 
-import { INotebookTracker, Notebook } from '@jupyterlab/notebook';
+import {
+  INotebookTracker,
+  Notebook,
+  NotebookActions,
+} from '@jupyterlab/notebook';
 
 import _ from 'lodash';
 
@@ -42,6 +46,8 @@ class IpyflowSessionState {
   notebook: Notebook | null = null;
   session: ISessionContext | null = null;
   isIpyflowCommConnected = false;
+  executionScheduledCells: string[] = [];
+  selectedCells: string[] = [];
   dirtyCells: Set<string> = new Set();
   waitingCells: Set<string> = new Set();
   readyCells: Set<string> = new Set();
@@ -363,10 +369,12 @@ const extension: JupyterFrontEndPlugin<void> = {
       const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
         {}) as IpyflowSessionState;
       if (state.isIpyflowCommConnected ?? false) {
-        const closure = state.computeTransitiveClosure(
-          [state.activeCell.model.id],
-          false
-        );
+        let closureCellIds = state.executionScheduledCells;
+        state.executionScheduledCells = [];
+        if (closureCellIds.length === 0) {
+          closureCellIds = [state.activeCell.model.id];
+        }
+        const closure = state.computeTransitiveClosure(closureCellIds, false);
         if (closure.length > 0) {
           state.executeCells(closure);
         } else {
@@ -375,8 +383,34 @@ const extension: JupyterFrontEndPlugin<void> = {
       }
     };
 
+    NotebookActions.executionScheduled.connect((_, args) => {
+      const notebook = notebooks?.currentWidget;
+      if (notebook?.content !== args.notebook) {
+        return;
+      }
+      const session = notebook?.sessionContext;
+      if (!(session?.isReady ?? false)) {
+        return;
+      }
+      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+        {}) as IpyflowSessionState;
+      if (!(state.isIpyflowCommConnected ?? false)) {
+        return;
+      }
+      const settings = state.settings;
+      const isBatch = settings?.reactivity_mode === 'batch';
+      const isReactive = settings?.exec_mode === 'reactive';
+      if (!isBatch || !isReactive) {
+        return;
+      }
+      if (args.cell.model.type === 'code') {
+        state.executionScheduledCells.push(args.cell.model.id);
+      }
+    });
+
     app.commands.commandExecuted.connect((_, args) => {
-      const session = notebooks?.currentWidget?.sessionContext;
+      const notebook = notebooks?.currentWidget;
+      const session = notebook?.sessionContext;
       if (!(session?.isReady ?? false)) {
         return;
       }
@@ -428,11 +462,19 @@ const extension: JupyterFrontEndPlugin<void> = {
                 commDisconnectHandler();
               } else if (payload.type === 'establish') {
                 commDisconnectHandler();
-                commDisconnectHandler = connectToComm(session, nbPanel.content);
+                commDisconnectHandler = connectToComm(
+                  session,
+                  notebooks,
+                  nbPanel.content
+                );
               }
             };
             commDisconnectHandler();
-            commDisconnectHandler = connectToComm(session, nbPanel.content);
+            commDisconnectHandler = connectToComm(
+              session,
+              notebooks,
+              nbPanel.content
+            );
           }
         );
       };
@@ -441,7 +483,11 @@ const extension: JupyterFrontEndPlugin<void> = {
         clearCellState(nbPanel.content);
         registerCommTarget();
         commDisconnectHandler();
-        commDisconnectHandler = connectToComm(session, nbPanel.content);
+        commDisconnectHandler = connectToComm(
+          session,
+          notebooks,
+          nbPanel.content
+        );
         session.kernelChanged.connect((_, args) => {
           if (args.newValue == null) {
             return;
@@ -452,7 +498,11 @@ const extension: JupyterFrontEndPlugin<void> = {
           commDisconnectHandler = () => resetSessionState(session.session.id);
           session.ready.then(() => {
             registerCommTarget();
-            commDisconnectHandler = connectToComm(session, nbPanel.content);
+            commDisconnectHandler = connectToComm(
+              session,
+              notebooks,
+              nbPanel.content
+            );
           });
         });
       });
@@ -602,7 +652,11 @@ const addUnsafeCellInteraction = (
   attachCleanupListener(elem, evt, listener);
 };
 
-const connectToComm = (session: ISessionContext, notebook: Notebook) => {
+const connectToComm = (
+  session: ISessionContext,
+  notebooks: INotebookTracker,
+  notebook: Notebook
+) => {
   initSessionState(session.session.id);
   const state = ipyflowState[session.session.id];
   state.activeCell = notebook.activeCell;
@@ -852,30 +906,58 @@ const connectToComm = (session: ISessionContext, notebook: Notebook) => {
     refreshNodeMapping(notebook);
     const slice = new Set<string>();
     let directSlice = new Set<string>();
-    const activeCellId = state.activeCell.model.id;
-    if (
-      state.cellChildren[activeCellId] !== undefined ||
-      state.cellParents[activeCellId] !== undefined
-    ) {
-      directSlice = new Set([
-        activeCellId,
-        ...state.cellChildren[activeCellId],
-        ...state.cellParents[activeCellId],
-      ]);
-      computeTransitiveClosureHelper(slice, activeCellId, state.cellChildren);
-      slice.delete(activeCellId);
-      computeTransitiveClosureHelper(slice, activeCellId, state.cellParents);
+    let closureCellIds = state.selectedCells;
+    if (closureCellIds.length === 0) {
+      closureCellIds = [state.activeCell.model.id];
+    }
+    for (const cellId of closureCellIds) {
+      if (
+        state.cellChildren[cellId] !== undefined ||
+        state.cellParents[cellId] !== undefined
+      ) {
+        directSlice = new Set([
+          cellId,
+          ...directSlice,
+          ...state.cellChildren[cellId],
+          ...state.cellParents[cellId],
+        ]);
+        computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
+        slice.delete(cellId);
+        computeTransitiveClosureHelper(slice, cellId, state.cellParents);
+      }
     }
     for (const [id] of Object.entries(state.cellsById)) {
       updateOneCellUI(
         id,
-        id === activeCellId && directSlice.has(id),
+        id === state.activeCell.model.id && directSlice.has(id),
         directSlice.has(id),
         slice.has(id),
         state.lastExecutionHighlights !== 'none'
       );
     }
   };
+
+  const onSelectionChanged = () => {
+    if (disconnected) {
+      notebooks.selectionChanged.disconnect(onSelectionChanged);
+    }
+    const nbPanel = notebooks?.currentWidget;
+    const session = nbPanel?.sessionContext;
+    if (!(session?.isReady ?? false)) {
+      return;
+    }
+    const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+      {}) as IpyflowSessionState;
+    if (!(state.isIpyflowCommConnected ?? false)) {
+      return;
+    }
+    const notebook = nbPanel.content;
+    state.selectedCells = notebook.widgets
+      .filter((cell) => cell.model.type === 'code' && notebook.isSelected(cell))
+      .map((cell) => cell.model.id);
+    updateUI(notebook);
+  };
+  notebooks.selectionChanged.connect(onSelectionChanged);
 
   comm.onMsg = (msg) => {
     const payload = msg.content.data;

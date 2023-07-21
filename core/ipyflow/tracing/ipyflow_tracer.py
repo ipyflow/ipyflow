@@ -42,6 +42,7 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
+from ipyflow.models import symbols as api_symbols
 from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
@@ -961,6 +962,7 @@ class DataflowTracer(StackFrameManager):
             api_rdeps,
             api_rusers,
             api_set_tag,
+            api_symbols,
             api_timestamp,
             api_unset_tag,
             api_users,

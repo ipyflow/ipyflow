@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import TYPE_CHECKING, List, Optional, Type, Union, overload
+from typing import TYPE_CHECKING, Any, List, Optional, Type, Union, overload
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
@@ -48,8 +48,22 @@ def scopes() -> Type["Scope"]:
     return _ScopeContainer[0]
 
 
-def symbols() -> Type["Symbol"]:
-    return _SymbolContainer[0]
+if TYPE_CHECKING:
+
+    @overload
+    def symbols(sym: None = None) -> Type["Symbol"]:
+        ...
+
+    @overload
+    def symbols(sym: "Symbol") -> "Symbol":
+        ...
+
+
+def symbols(sym: Optional["Symbol"] = None) -> Union[Type["Symbol"], "Symbol"]:
+    if sym is None:
+        return _SymbolContainer[0]
+    else:
+        return sym
 
 
 def statements() -> Type["Statement"]:

@@ -648,15 +648,28 @@ class CodeCell(SlicingMixin):
     def compute_slice_stmts(self) -> List["Statement"]:
         return self.compute_multi_slice_stmts([self])
 
-    def code(
-        self, stmts: bool = False, format_type: Optional[Type[FormatType]] = None
+    def slice(
+        self,
+        stmts: bool = False,
+        seed_only: bool = False,
+        format_type: Optional[Type[FormatType]] = None,
     ) -> FormatType:
         if stmts:
             return self.format_multi_slice(
-                self.compute_slice_stmts(), blacken=True, format_type=format_type
+                self.compute_slice_stmts(),
+                blacken=True,
+                seed_only=seed_only,
+                format_type=format_type,
             )
         else:
-            return self.format_slice(blacken=False, format_type=format_type)
+            return self.format_slice(
+                blacken=False, seed_only=seed_only, format_type=format_type
+            )
+
+    def code(
+        self, stmts: bool = False, format_type: Optional[Type[FormatType]] = None
+    ) -> FormatType:
+        return self.slice(stmts=stmts, seed_only=True, format_type=format_type)
 
 
 if len(_CodeCellContainer) == 0:

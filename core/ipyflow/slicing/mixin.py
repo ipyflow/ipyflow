@@ -273,14 +273,19 @@ class SlicingMixin(Protocol):
 
     @classmethod
     def make_multi_slice(
-        cls, seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]]
+        cls,
+        seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
+        seed_only: bool = False,
     ) -> List["SlicingMixin"]:
         closure: Set["SlicingMixin"] = set()
         for seed in seeds:
             slice_seed = (
                 cls.at_timestamp(seed) if isinstance(seed, (Timestamp, int)) else seed
             )
-            slice_seed._make_slice_helper(closure)
+            if seed_only:
+                closure.add(slice_seed)
+            else:
+                slice_seed._make_slice_helper(closure)
         return sorted(closure, key=lambda dep: dep.timestamp)
 
     @staticmethod
@@ -299,9 +304,13 @@ class SlicingMixin(Protocol):
 
     @classmethod
     def make_cell_dict_multi_slice(
-        cls, seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]]
+        cls,
+        seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
+        seed_only: bool = False,
     ) -> Dict[int, str]:
-        return cls.make_cell_dict_from_closure(cls.make_multi_slice(seeds))
+        return cls.make_cell_dict_from_closure(
+            cls.make_multi_slice(seeds, seed_only=seed_only)
+        )
 
     def make_cell_dict_slice(self) -> Dict[int, str]:
         return self.make_cell_dict_multi_slice([self])
@@ -311,10 +320,11 @@ class SlicingMixin(Protocol):
         cls,
         seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
         blacken: bool = True,
+        seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
     ) -> FormatType:
         return format_slice(
-            cls.make_cell_dict_multi_slice(seeds),
+            cls.make_cell_dict_multi_slice(seeds, seed_only=seed_only),
             blacken=blacken,
             format_type=format_type,
         )
@@ -322,11 +332,13 @@ class SlicingMixin(Protocol):
     def format_slice(
         self,
         blacken: bool = True,
+        seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
     ) -> FormatType:
         return self.format_multi_slice(
             [self],
             blacken=blacken,
+            seed_only=seed_only,
             format_type=format_type,
         )
 

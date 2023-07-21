@@ -193,10 +193,22 @@ class Statement(SlicingMixin):
     def __repr__(self):
         return f"<{self.__class__.__name__}[ts={self.timestamp},text={repr(self.text[:self._TEXT_REPR_MAX_LENGTH])}]>"
 
+    def slice(
+        self,
+        blacken: bool = True,
+        seed_only: bool = False,
+        format_type: Optional[Type[FormatType]] = None,
+    ) -> FormatType:
+        return self.format_slice(
+            blacken=blacken, seed_only=seed_only, format_type=format_type
+        )
+
     def code(
         self, blacken: bool = True, format_type: Optional[Type[FormatType]] = None
     ) -> FormatType:
-        return self.format_slice(blacken=blacken, format_type=format_type)
+        return self.format_slice(
+            blacken=blacken, seed_only=True, format_type=format_type
+        )
 
     @property
     def stmt_contains_cascading_reactive_rval(self) -> bool:

@@ -115,7 +115,7 @@ def compile_function_handler(
             f"unable to handle null return type when trying to compile {func.name}"
         )
     if isinstance(ret, ast.Name):
-        handler_type = external_call_handler_by_name.get(ret.id, None)
+        handler_type = external_call_handler_by_name.get(ret.id)
         if handler_type is None:
             raise ValueError(f"No known handler for return type {ret}")
         return handler_type

@@ -17,6 +17,7 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    Type,
     cast,
 )
 
@@ -36,7 +37,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.context import SlicingContext
-from ipyflow.slicing.mixin import SlicingMixin
+from ipyflow.slicing.mixin import FormatType, SlicingMixin
 from ipyflow.types import IdType, TimestampOrCounter
 from ipyflow.utils.ipython_utils import _IPY, CapturedIO
 from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
@@ -363,6 +364,10 @@ class CodeCell(SlicingMixin):
         return cls._cell_by_cell_ctr[ctr]
 
     @classmethod
+    def from_counter(cls, ctr: int) -> "CodeCell":
+        return cls.at_counter(ctr)
+
+    @classmethod
     def at_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
     ) -> "CodeCell":
@@ -642,6 +647,16 @@ class CodeCell(SlicingMixin):
 
     def compute_slice_stmts(self) -> List["Statement"]:
         return self.compute_multi_slice_stmts([self])
+
+    def code(
+        self, stmts: bool = False, format_type: Optional[Type[FormatType]] = None
+    ) -> FormatType:
+        if stmts:
+            return self.format_multi_slice(
+                self.compute_slice_stmts(), blacken=True, format_type=format_type
+            )
+        else:
+            return self.format_slice(blacken=False, format_type=format_type)
 
 
 if len(_CodeCellContainer) == 0:

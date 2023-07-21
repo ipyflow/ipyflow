@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import TYPE_CHECKING, List, Type
+from typing import TYPE_CHECKING, List, Optional, Type, Union, overload
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from ipyflow.data_model.statement import Statement
     from ipyflow.data_model.symbol import Symbol
     from ipyflow.data_model.timestamp import Timestamp
+    from ipyflow.types import IdType
 
 
 _CodeCellContainer: List[Type["CodeCell"]] = []
@@ -18,8 +19,25 @@ _SymbolContainer: List[Type["Symbol"]] = []
 _TimestampContainer: List[Type["Timestamp"]] = []
 
 
-def cells() -> Type["CodeCell"]:
-    return _CodeCellContainer[0]
+if TYPE_CHECKING:
+
+    @overload
+    def cells(cell_id: None = None) -> Type["CodeCell"]:
+        ...
+
+    @overload
+    def cells(cell_id: "IdType") -> "CodeCell":
+        ...
+
+
+def cells(cell_id: Optional["IdType"] = None) -> Union[Type["CodeCell"], "CodeCell"]:
+    clazz = _CodeCellContainer[0]
+    if cell_id is None:
+        return clazz
+    elif isinstance(cell_id, int) and cell_id <= clazz.exec_counter():
+        return clazz.at_counter(cell_id)
+    else:
+        return clazz.from_id(cell_id)
 
 
 def namespaces() -> Type["Namespace"]:

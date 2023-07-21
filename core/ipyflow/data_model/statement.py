@@ -4,7 +4,7 @@ import builtins
 import logging
 import sys
 from types import FrameType
-from typing import TYPE_CHECKING, Dict, List, Optional, Set, Union, cast
+from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, Union, cast
 
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
@@ -18,7 +18,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _StatementContainer, cells, statements
 from ipyflow.singletons import flow, tracer
 from ipyflow.slicing.context import SlicingContext, static_slicing_context
-from ipyflow.slicing.mixin import SlicingMixin
+from ipyflow.slicing.mixin import FormatType, SlicingMixin
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import IdType, TimestampOrCounter
@@ -192,6 +192,11 @@ class Statement(SlicingMixin):
 
     def __repr__(self):
         return f"<{self.__class__.__name__}[ts={self.timestamp},text={repr(self.text[:self._TEXT_REPR_MAX_LENGTH])}]>"
+
+    def code(
+        self, blacken: bool = True, format_type: Optional[Type[FormatType]] = None
+    ) -> FormatType:
+        return self.format_slice(blacken=blacken, format_type=format_type)
 
     @property
     def stmt_contains_cascading_reactive_rval(self) -> bool:

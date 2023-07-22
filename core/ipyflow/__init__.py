@@ -85,8 +85,18 @@ __version__ = _version.get_versions()['version']
 
 
 __all__ = ipyflow.api.__all__ + [
-    "cells", "namespaces", "scopes", "statements", "symbols", "timestamps"
-] + ["__version__"]
+    "__version__",
+    "cell_above",
+    "cell_below",
+    "cell_at_offset",
+    "cells",
+    "namespaces",
+    "prev_cell",
+    "scopes",
+    "statements",
+    "symbols",
+    "timestamps",
+]
 
 
 def main():

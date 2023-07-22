@@ -182,7 +182,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.active_watchpoints: List[Tuple[Tuple[Watchpoint, ...], Symbol]] = []
         self.blocked_reactive_timestamps_by_symbol: Dict[Symbol, int] = {}
         self.statement_to_func_sym: Dict[int, Symbol] = {}
-        self._active_cell_id: Optional[IdType] = None
+        self.active_cell_id: Optional[IdType] = None
         self.waiter_usage_detected = False
         self.out_of_order_usage_detected_counter: Optional[int] = None
         self._prev_cell_waiting_symbols: Set[Symbol] = set()
@@ -422,7 +422,7 @@ class NotebookFlow(singletons.NotebookFlow):
         return fname in self._cell_name_to_cell_num_mapping
 
     def set_active_cell(self, cell_id: IdType) -> None:
-        self._active_cell_id = cell_id
+        self.active_cell_id = cell_id
 
     def set_tags(self, tags: Tuple[str, ...]) -> None:
         self._tags = tags
@@ -599,7 +599,7 @@ class NotebookFlow(singletons.NotebookFlow):
         if not self.mut_settings.dataflow_enabled:
             return {"success": False, "error": "dataflow not enabled"}
         is_reactively_executing = request.get("is_reactively_executing", False)
-        if self._active_cell_id is None:
+        if self.active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
         if notify_content_changed and request.get("notify_content_changed", True):
             self.handle_notify_content_changed(

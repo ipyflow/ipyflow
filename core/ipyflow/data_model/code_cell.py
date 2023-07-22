@@ -368,6 +368,17 @@ class CodeCell(SlicingMixin):
         return cls.at_counter(ctr)
 
     @classmethod
+    def at_position(cls, pos: int) -> Optional["CodeCell"]:
+        for cell_id, cell_pos in cls._position_by_cell_id.items():
+            if cell_pos == pos:
+                return cls.from_id(cell_id)
+        return None
+
+    @classmethod
+    def from_position(cls, pos: int) -> Optional["CodeCell"]:
+        return cls.at_position(pos)
+
+    @classmethod
     def at_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
     ) -> "CodeCell":

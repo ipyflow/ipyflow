@@ -443,8 +443,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             flow_._saved_debug_message = None
 
         if cell_id is not None:
-            flow_._active_cell_id = cell_id
-        to_create_cell_id, flow_._active_cell_id = flow_._active_cell_id, None
+            flow_.active_cell_id = cell_id
+        to_create_cell_id = flow_.active_cell_id
         placeholder_id = to_create_cell_id is None
         if placeholder_id:
             # next counter because it gets bumped on creation

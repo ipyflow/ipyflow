@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-from typing import TYPE_CHECKING, Any, List, Optional, Type, Union, overload
+from typing import TYPE_CHECKING, List, Optional, Type, Union, overload
+
+from ipyflow.singletons import flow
 
 if TYPE_CHECKING:
     from ipyflow.data_model.code_cell import CodeCell
@@ -38,6 +40,28 @@ def cells(cell_id: Optional["IdType"] = None) -> Union[Type["CodeCell"], "CodeCe
         return clazz.at_counter(cell_id)
     else:
         return clazz.from_id(cell_id)
+
+
+def cell_above() -> "CodeCell":
+    active_cell_id = flow().active_cell_id
+    assert active_cell_id is not None
+    return cells().at_position(cells().from_id(active_cell_id).position - 1)
+
+
+def cell_below() -> "CodeCell":
+    active_cell_id = flow().active_cell_id
+    assert active_cell_id is not None
+    return cells().at_position(cells().from_id(active_cell_id).position + 1)
+
+
+def cell_at_offset(offset: int) -> "CodeCell":
+    active_cell_id = flow().active_cell_id
+    assert active_cell_id is not None
+    return cells().at_position(cells().from_id(active_cell_id).position + offset)
+
+
+def prev_cell() -> Optional["CodeCell"]:
+    return cells().at_counter(cells().exec_counter() - 1)
 
 
 def namespaces() -> Type["Namespace"]:

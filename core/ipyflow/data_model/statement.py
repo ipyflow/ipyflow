@@ -18,7 +18,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _StatementContainer, cells, statements
 from ipyflow.singletons import flow, tracer
 from ipyflow.slicing.context import SlicingContext, static_slicing_context
-from ipyflow.slicing.mixin import FormatType, SlicingMixin
+from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import IdType, TimestampOrCounter
@@ -42,7 +42,7 @@ logger.setLevel(logging.WARNING)
 _override_unused_warning_stmts = statements
 
 
-class Statement(SlicingMixin):
+class Statement(SliceableMixin):
     _TEXT_REPR_MAX_LENGTH: int = 70
     _stmts_by_ts: Dict[Timestamp, List["Statement"]] = {}
     _stmts_by_id: Dict[IdType, List["Statement"]] = {}
@@ -198,14 +198,14 @@ class Statement(SlicingMixin):
         blacken: bool = True,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
-    ) -> FormatType:
+    ) -> Slice:
         return self.format_slice(
             blacken=blacken, seed_only=seed_only, format_type=format_type
         )
 
     def code(
         self, blacken: bool = True, format_type: Optional[Type[FormatType]] = None
-    ) -> FormatType:
+    ) -> Slice:
         return self.format_slice(
             blacken=blacken, seed_only=True, format_type=format_type
         )

@@ -4,7 +4,7 @@ import sys
 import textwrap
 from typing import (
     TYPE_CHECKING,
-    Callable,
+    Any,
     Dict,
     Iterable,
     List,
@@ -42,14 +42,115 @@ if TYPE_CHECKING:
 
 
 FormatType = TypeVar("FormatType", HTML, str)
-SliceRefType = Union["SlicingMixin", IdType, Timestamp]
+SliceRefType = Union["SliceableMixin", IdType, Timestamp]
 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class SlicingMixin(Protocol):
+class Slice:
+    def __init__(
+        self,
+        raw_slice: Dict[int, str],
+        blacken: bool,
+        format_type: Optional[Type[FormatType]] = None,
+    ) -> None:
+        self.raw_slice = dict(raw_slice)
+        self.iface = flow().mut_settings.interface
+        if format_type is None:
+            if self.iface in (Interface.IPYTHON, Interface.UNKNOWN):
+                fmt: Type[FormatType] = str  # type: ignore
+            else:
+                fmt = HTML
+        else:
+            fmt = format_type  # type: ignore
+        self.format_type: Type[FormatType] = fmt  # type: ignore
+        self.blacken = blacken
+
+    def _get_slice_text_from_slice(self) -> str:
+        return "\n\n".join(
+            f"# Cell {cell_num}\n" + content
+            for cell_num, content in sorted(self.raw_slice.items())
+        ).strip()
+
+    def _make_slice_widget(self) -> HTML:
+        slice_text = self._get_slice_text_from_slice()
+        slice_text_linked_cells = []
+        if self.iface == Interface.JUPYTER:
+            container_selector = (
+                "javascript:document.getElementById('notebook-container')"
+            )
+        elif self.iface == Interface.JUPYTERLAB:
+            container_selector = (
+                "javascript:document.getElementById("
+                "document.querySelector('.jp-mod-current').dataset.id).children[2]"
+                # the below is necessary for jupyterlab >= 4.0
+                # TODO: should we also support jupyterlab < 4.0?
+                ".children[0].children[0]"
+            )
+        else:
+            container_selector = None
+        for cell_num, content in sorted(self.raw_slice.items()):
+            cell = cells().at_counter(cell_num)
+            if (
+                container_selector is not None
+                and cell.is_current_for_id
+                and cell.position >= 0
+            ):
+                rendered_cell = (
+                    f'# <a href="{container_selector}.children[{cell.position}].scrollIntoView()">'
+                    f"Cell {cell_num}</a>"
+                )
+            else:
+                rendered_cell = f"# Cell {cell_num}"
+            slice_text_linked_cells.append(rendered_cell + f"\n{content}")
+        slice_text_no_cells = "\n".join(
+            content for _cell_num, content in sorted(self.raw_slice.items())
+        )
+        if self.blacken:
+            slice_text_no_cells = black.format_str(
+                slice_text_no_cells, mode=black.FileMode()
+            ).strip()
+        if self.iface == Interface.JUPYTER:
+            classes = "output_subarea output_text output_stream output_stdout"
+        elif self.iface == Interface.JUPYTERLAB:
+            classes = "lm-Widget p-Widget jp-RenderedText jp-OutputArea-output"
+        else:
+            classes = ""
+        return HTML(
+            textwrap.dedent(
+                f"""
+            <div class="{classes}">
+            <pre>
+            <a href="javascript:navigator.clipboard.writeText('{slice_text_no_cells.encode("unicode_escape").decode("utf-8")}')">Copy code</a>\
+ | <a href="javascript:navigator.clipboard.writeText('{slice_text.encode("unicode_escape").decode("utf-8")}')">Copy cells</a>
+     
+            {{code}}
+            </pre>
+            </div>
+            """
+            ).format(code="\n\n".join(slice_text_linked_cells))
+        )
+
+    def __str__(self) -> str:
+        return self._get_slice_text_from_slice()
+
+    def __repr__(self):
+        return repr(self._get_slice_text_from_slice())
+
+    def _repr_mimebundle_(self, **kwargs) -> Dict[str, Any]:
+        if self.format_type is str:
+            return {
+                "text/plain": self._get_slice_text_from_slice()
+            }
+        elif self.format_type is HTML:
+            return self._make_slice_widget()._repr_mimebundle_(**kwargs)
+        else:
+            raise ValueError(f"Unknown format type {self.format_type}")
+
+
+class SliceableMixin(Protocol):
     """
     Common slicing functionality shared between CodeCell and Statement
     """
@@ -70,21 +171,21 @@ class SlicingMixin(Protocol):
     @classmethod
     def at_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
-    ) -> "SlicingMixin":
+    ) -> "SliceableMixin":
         ...
 
     @classmethod
     def from_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
-    ) -> "SlicingMixin":
+    ) -> "SliceableMixin":
         return cls.at_timestamp(ts, stmt_num=stmt_num)
 
     @classmethod
-    def from_id(cls, sid: IdType) -> "SlicingMixin":
+    def from_id(cls, sid: IdType) -> "SliceableMixin":
         ...
 
     @classmethod
-    def from_id_nullable(cls, sid: IdType) -> Optional["SlicingMixin"]:
+    def from_id_nullable(cls, sid: IdType) -> Optional["SliceableMixin"]:
         ...
 
     @property
@@ -96,7 +197,7 @@ class SlicingMixin(Protocol):
         ...
 
     @property
-    def prev(self) -> Optional["SlicingMixin"]:
+    def prev(self) -> Optional["SliceableMixin"]:
         ...
 
     @property
@@ -111,7 +212,7 @@ class SlicingMixin(Protocol):
     #############
 
     @classmethod
-    def _from_ref(cls, parent_ref: SliceRefType) -> "SlicingMixin":
+    def _from_ref(cls, parent_ref: SliceRefType) -> "SliceableMixin":
         if isinstance(parent_ref, Timestamp):
             return cls.at_timestamp(parent_ref)
         elif isinstance(parent_ref, (int, str)):
@@ -260,7 +361,7 @@ class SlicingMixin(Protocol):
         else:
             assert False
 
-    def _make_slice_helper(self, closure: Set["SlicingMixin"]) -> None:
+    def _make_slice_helper(self, closure: Set["SliceableMixin"]) -> None:
         if self in closure:
             return
         closure.add(self)
@@ -268,16 +369,16 @@ class SlicingMixin(Protocol):
             for pid in self.parents.keys():
                 self.from_id(pid)._make_slice_helper(closure)
 
-    def make_slice(self) -> List["SlicingMixin"]:
+    def make_slice(self) -> List["SliceableMixin"]:
         return self.make_multi_slice([self])
 
     @classmethod
     def make_multi_slice(
         cls,
-        seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
+        seeds: Iterable[Union[TimestampOrCounter, "SliceableMixin"]],
         seed_only: bool = False,
-    ) -> List["SlicingMixin"]:
-        closure: Set["SlicingMixin"] = set()
+    ) -> List["SliceableMixin"]:
+        closure: Set["SliceableMixin"] = set()
         for seed in seeds:
             slice_seed = (
                 cls.at_timestamp(seed) if isinstance(seed, (Timestamp, int)) else seed
@@ -290,7 +391,7 @@ class SlicingMixin(Protocol):
 
     @staticmethod
     def make_cell_dict_from_closure(
-        closure: Sequence["SlicingMixin"],
+        closure: Sequence["SliceableMixin"],
     ) -> Dict[int, str]:
         slice_text_by_cell_num: Dict[int, List[str]] = {}
         for sliceable in closure:
@@ -305,7 +406,7 @@ class SlicingMixin(Protocol):
     @classmethod
     def make_cell_dict_multi_slice(
         cls,
-        seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
+        seeds: Iterable[Union[TimestampOrCounter, "SliceableMixin"]],
         seed_only: bool = False,
     ) -> Dict[int, str]:
         return cls.make_cell_dict_from_closure(
@@ -318,11 +419,11 @@ class SlicingMixin(Protocol):
     @classmethod
     def format_multi_slice(
         cls,
-        seeds: Iterable[Union[TimestampOrCounter, "SlicingMixin"]],
+        seeds: Iterable[Union[TimestampOrCounter, "SliceableMixin"]],
         blacken: bool = True,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
-    ) -> FormatType:
+    ) -> Slice:
         return format_slice(
             cls.make_cell_dict_multi_slice(seeds, seed_only=seed_only),
             blacken=blacken,
@@ -334,7 +435,7 @@ class SlicingMixin(Protocol):
         blacken: bool = True,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
-    ) -> FormatType:
+    ) -> Slice:
         return self.format_multi_slice(
             [self],
             blacken=blacken,
@@ -343,96 +444,18 @@ class SlicingMixin(Protocol):
         )
 
 
-def _get_slice_text_from_slice(slice: Dict[int, str]) -> str:
-    return "\n\n".join(
-        f"# Cell {cell_num}\n" + content for cell_num, content in sorted(slice.items())
-    )
-
-
-def _make_slice_markup_closure(
-    iface: Interface, blacken: bool
-) -> Callable[[Dict[int, str]], str]:
-    def _slice_markup_closure(slice: Dict[int, str]) -> str:
-        slice_text = _get_slice_text_from_slice(slice)
-        slice_text_linked_cells = []
-        if iface == Interface.JUPYTER:
-            container_selector = (
-                "javascript:document.getElementById('notebook-container')"
-            )
-        elif iface == Interface.JUPYTERLAB:
-            container_selector = (
-                "javascript:document.getElementById("
-                "document.querySelector('.jp-mod-current').dataset.id).children[2]"
-                # the below is necessary for jupyterlab >= 4.0
-                # TODO: should we also support jupyterlab < 4.0?
-                ".children[0].children[0]"
-            )
-        else:
-            container_selector = None
-        for cell_num, content in sorted(slice.items()):
-            cell = cells().at_counter(cell_num)
-            if (
-                container_selector is not None
-                and cell.is_current_for_id
-                and cell.position >= 0
-            ):
-                rendered_cell = (
-                    f'# <a href="{container_selector}.children[{cell.position}].scrollIntoView()">'
-                    f"Cell {cell_num}</a>"
-                )
-            else:
-                rendered_cell = f"# Cell {cell_num}"
-            slice_text_linked_cells.append(rendered_cell + f"\n{content}")
-        slice_text_no_cells = "\n".join(
-            content for _cell_num, content in sorted(slice.items())
-        )
-        if blacken:
-            slice_text_no_cells = black.format_str(
-                slice_text_no_cells, mode=black.FileMode()
-            ).strip()
-        if iface == Interface.JUPYTER:
-            classes = "output_subarea output_text output_stream output_stdout"
-        elif iface == Interface.JUPYTERLAB:
-            classes = "lm-Widget p-Widget jp-RenderedText jp-OutputArea-output"
-        else:
-            classes = ""
-        return textwrap.dedent(
-            f"""
-            <div class="{classes}">
-            <pre>
-            <a href="javascript:navigator.clipboard.writeText('{slice_text_no_cells.encode("unicode_escape").decode("utf-8")}')">Copy code</a>\
- | <a href="javascript:navigator.clipboard.writeText('{slice_text.encode("unicode_escape").decode("utf-8")}')">Copy cells</a>
-     
-            {{code}}
-            </pre>
-            </div>
-            """
-        ).format(code="\n\n".join(slice_text_linked_cells))
-
-    return _slice_markup_closure
-
-
 def format_slice(
-    slice: Dict[int, str],
+    raw_slice: Dict[int, str],
     blacken: bool = True,
     format_type: Optional[Type[FormatType]] = None,
-) -> FormatType:
-    iface = flow().mut_settings.interface
-    if format_type is None:
-        if iface in (Interface.IPYTHON, Interface.UNKNOWN):
-            format_type = str
-        else:
-            format_type = HTML
-    assert format_type is not None
+) -> Slice:
+    raw_slice = dict(raw_slice)
     if blacken:
-        for cell_num, content in list(slice.items()):
+        for cell_num, content in list(raw_slice.items()):
             try:
-                slice[cell_num] = black.format_str(
+                raw_slice[cell_num] = black.format_str(
                     content, mode=black.FileMode()
                 ).strip()
             except Exception as e:
                 logger.info("call to black failed with exception: %s", e)
-    if format_type is str:
-        return _get_slice_text_from_slice(slice)
-    slice_markup_closure = _make_slice_markup_closure(iface, blacken=blacken)
-    return format_type(slice_markup_closure(slice))
+    return Slice(raw_slice, blacken=blacken, format_type=format_type)

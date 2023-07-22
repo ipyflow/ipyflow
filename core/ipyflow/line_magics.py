@@ -29,7 +29,7 @@ from ipyflow.data_model.code_cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, shell
-from ipyflow.slicing.mixin import SlicingMixin, format_slice
+from ipyflow.slicing.mixin import Slice, SliceableMixin, format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
 if TYPE_CHECKING:
@@ -255,7 +255,7 @@ def get_code(symbol_str: str) -> Optional[str]:
             f"Could not find unique symbol metadata for {symbol_str.strip()}",
         )
         return None
-    return dsym.code()
+    return str(dsym.code())
 
 
 def show_waiting(line_: str) -> Optional[str]:
@@ -343,15 +343,17 @@ def make_slice(line: str) -> Optional[str]:
         warn(f"No cell(s) for tag: {tag}")
     else:
         if args.stmt:
-            closure: Sequence[SlicingMixin] = cells().compute_multi_slice_stmts(
+            closure: Sequence[SliceableMixin] = cells().compute_multi_slice_stmts(
                 slice_cells
             )
         else:
             closure = cells().make_multi_slice(slice_cells)
-        return format_slice(
-            cells().make_cell_dict_from_closure(closure),
-            blacken=args.stmt or args.blacken,
-            format_type=str,
+        return str(
+            format_slice(
+                cells().make_cell_dict_from_closure(closure),
+                blacken=args.stmt or args.blacken,
+                format_type=str,
+            )
         )
     return None
 

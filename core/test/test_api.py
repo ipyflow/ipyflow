@@ -24,10 +24,10 @@ def test_lookup_symbol_simple():
 def test_code_simple():
     run_cell("x = 0")
     run_cell("y = x + 1")
-    run_cell("env = pyc.exec(lift(y).code())")
+    run_cell("env = pyc.exec(str(lift(y).code()))")
     run_cell("assert env['x'] == 0")
     run_cell("assert env['y'] == 1")
-    run_cell("env = pyc.exec(code(y))")
+    run_cell("env = pyc.exec(str(code(y)))")
     run_cell("assert env['x'] == 0")
     run_cell("assert env['y'] == 1")
 

@@ -28,7 +28,7 @@ from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, namespaces, statements, symbols
 from ipyflow.singletons import flow, tracer
 from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
-from ipyflow.slicing.mixin import FormatType
+from ipyflow.slicing.mixin import FormatType, Slice
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard, debounce
@@ -270,7 +270,7 @@ class Symbol:
 
     def code(
         self, format_type: Optional[Type[FormatType]] = None, version: int = -1
-    ) -> FormatType:
+    ) -> Slice:
         return statements().format_multi_slice(
             self._get_timestamps_for_version(version=version),
             blacken=True,

@@ -26,7 +26,7 @@ from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import cells
-from ipyflow.singletons import flow, shell
+from ipyflow.singletons import flow, shell, tracer
 from ipyflow.slicing.context import (
     SlicingContext,
     dangling_context,
@@ -175,15 +175,18 @@ class Slice:
         prepend_lines = ["import sys\n"]
         for arg in args:
             prepend_lines.append(
-                "if {arg} is None: {arg} = sys._getframe().f_back.f_globals['{arg}']\n".format(
+                "if {arg} is None: {arg} = sys._getframe().f_back.f_back.f_globals['{arg}']\n".format(
                     arg=arg
                 )
             )
         text = "".join(prepend_lines + text.splitlines(keepends=True))
-        return pyc.exec(
-            f"def {func_name}({', '.join(f'{arg}=None' for arg in args)}):\n{textwrap.indent(text, '    ')}",
-            global_env=shell().user_ns,
-        )[func_name]
+        # TODO: annotate the function with explicit deps?
+        return tracer().make_tracing_disabled_func(
+            pyc.exec(
+                f"def {func_name}({', '.join(f'{arg}=None' for arg in args)}):\n{textwrap.indent(text, '    ')}",
+                global_env=shell().user_ns,
+            )[func_name]
+        )
 
 
 class SliceableMixin(Protocol):

@@ -1,4 +1,6 @@
 # -*- coding: utf-8 -*-
+import ast
+import builtins
 import logging
 import sys
 import textwrap
@@ -17,12 +19,14 @@ from typing import (
 )
 
 import black
+import pyccolo as pyc
 from ipywidgets import HTML
 
+from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import cells
-from ipyflow.singletons import flow
+from ipyflow.singletons import flow, shell
 from ipyflow.slicing.context import (
     SlicingContext,
     dangling_context,
@@ -50,6 +54,9 @@ logger.setLevel(logging.WARNING)
 
 
 class Slice:
+    FUNC_PREFIX = "_Xix_ipyflow_slice_func_"
+    _func_counter = 0
+
     def __init__(
         self,
         raw_slice: Dict[int, str],
@@ -141,13 +148,39 @@ class Slice:
 
     def _repr_mimebundle_(self, **kwargs) -> Dict[str, Any]:
         if self.format_type is str:
-            return {
-                "text/plain": self._get_slice_text_from_slice()
-            }
+            return {"text/plain": self._get_slice_text_from_slice()}
         elif self.format_type is HTML:
             return self._make_slice_widget()._repr_mimebundle_(**kwargs)
         else:
             raise ValueError(f"Unknown format type {self.format_type}")
+
+    def to_function(self, arguments: bool = True):
+        func_name = f"{self.FUNC_PREFIX}{self._func_counter}"
+        code_lines = str(self).splitlines(keepends=True)
+        try:
+            last_stmt = ast.parse(code_lines[-1])
+            if isinstance(last_stmt.body[-1], ast.Expr):
+                code_lines[-1] = "return " + code_lines[-1]
+        except SyntaxError:
+            pass
+        text = "".join(code_lines)
+        self.__class__._func_counter += 1
+        if arguments:
+            live_refs, _ = compute_live_dead_symbol_refs(
+                text, scope=flow().global_scope
+            )
+            arg_set_raw = {ref.ref.chain[0].value for ref in live_refs}
+            arg_set = {arg for arg in arg_set_raw if isinstance(arg, str)}
+            for arg in list(arg_set):
+                if hasattr(builtins, arg) or arg in sys.modules:
+                    arg_set.discard(arg)
+            args = list(arg_set)
+        else:
+            args = []
+        return pyc.exec(
+            f"def {func_name}({', '.join(args)}):\n{textwrap.indent(text, '    ')}",
+            global_env=shell().user_ns,
+        )[func_name]
 
 
 class SliceableMixin(Protocol):

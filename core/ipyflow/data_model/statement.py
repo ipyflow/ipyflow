@@ -210,6 +210,9 @@ class Statement(SliceableMixin):
             blacken=blacken, seed_only=True, format_type=format_type
         )
 
+    def to_function(self, *args, **kwargs):
+        return self.code().to_function(*args, **kwargs)
+
     @property
     def stmt_contains_cascading_reactive_rval(self) -> bool:
         if self._stmt_contains_cascading_reactive_rval is None:
@@ -328,6 +331,10 @@ class Statement(SliceableMixin):
             # if flow().is_test:
             #     raise ke
             return
+        if isinstance(target, ast.Name) and getattr(obj, "__name__", "").startswith(
+            Slice.FUNC_PREFIX
+        ):
+            obj.__name__ = target.id
         subscript_vals_to_use = [is_subscript]
         if scope.is_namespace_scope:
             namespace = cast(Namespace, scope)

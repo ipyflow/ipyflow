@@ -682,6 +682,9 @@ class CodeCell(SliceableMixin):
     ) -> Slice:
         return self.slice(stmts=stmts, seed_only=True, format_type=format_type)
 
+    def to_function(self, *args, **kwargs):
+        return self.code().to_function(*args, **kwargs)
+
 
 if len(_CodeCellContainer) == 0:
     _CodeCellContainer.append(CodeCell)

@@ -54,7 +54,7 @@ logger.setLevel(logging.WARNING)
 
 
 class Slice:
-    FUNC_PREFIX = "_Xix_ipyflow_slice_func_"
+    FUNC_PREFIX = "_X5ix_ipyflow_slice_func_"
     _func_counter = 0
 
     def __init__(
@@ -154,7 +154,7 @@ class Slice:
         else:
             raise ValueError(f"Unknown format type {self.format_type}")
 
-    def to_function(self, arguments: bool = True):
+    def to_function(self):
         func_name = f"{self.FUNC_PREFIX}{self._func_counter}"
         code_lines = str(self).splitlines(keepends=True)
         try:
@@ -165,20 +165,23 @@ class Slice:
             pass
         text = "".join(code_lines)
         self.__class__._func_counter += 1
-        if arguments:
-            live_refs, _ = compute_live_dead_symbol_refs(
-                text, scope=flow().global_scope
+        live_refs, _ = compute_live_dead_symbol_refs(text, scope=flow().global_scope)
+        arg_set_raw = {ref.ref.chain[0].value for ref in live_refs}
+        arg_set = {arg for arg in arg_set_raw if isinstance(arg, str)}
+        for arg in list(arg_set):
+            if hasattr(builtins, arg) or arg in sys.modules:
+                arg_set.discard(arg)
+        args = list(arg_set)
+        prepend_lines = ["import sys\n"]
+        for arg in args:
+            prepend_lines.append(
+                "if {arg} is None: {arg} = sys._getframe().f_back.f_globals['{arg}']\n".format(
+                    arg=arg
+                )
             )
-            arg_set_raw = {ref.ref.chain[0].value for ref in live_refs}
-            arg_set = {arg for arg in arg_set_raw if isinstance(arg, str)}
-            for arg in list(arg_set):
-                if hasattr(builtins, arg) or arg in sys.modules:
-                    arg_set.discard(arg)
-            args = list(arg_set)
-        else:
-            args = []
+        text = "".join(prepend_lines + text.splitlines(keepends=True))
         return pyc.exec(
-            f"def {func_name}({', '.join(args)}):\n{textwrap.indent(text, '    ')}",
+            f"def {func_name}({', '.join(f'{arg}=None' for arg in args)}):\n{textwrap.indent(text, '    ')}",
             global_env=shell().user_ns,
         )[func_name]
 

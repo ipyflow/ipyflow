@@ -26,7 +26,7 @@ def test_function_from_cell_no_args():
     run_cell("b = 2")
     run_cell("from ipyflow import prev_cell")
     run_cell("a + b")
-    run_cell("func = prev_cell().to_function(arguments=False)")
+    run_cell("func = prev_cell().to_function()")
     run_cell("assert func.__name__ == 'func'")
     run_cell("assert func() == 3")
     run_cell("b = 42")

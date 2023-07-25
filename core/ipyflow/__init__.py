@@ -6,7 +6,7 @@ from ipyflow import singletons
 from ipyflow.api import *
 from ipyflow.kernel.kernel import IPyflowKernel, UsesIPyflowKernel
 from ipyflow.shell import load_ipython_extension as load_ipyflow_extension, unload_ipython_extension as unload_ipyflow_extension
-from ipyflow.models import cell_above, cell_below, cell_at_offset, cells, namespaces, prev_cell, scopes, statements, symbols, timestamps
+from ipyflow.models import cell_above, cell_below, cell_at_offset, cells, last_run_cell, namespaces, scopes, statements, symbols, timestamps
 from ipyflow.singletons import flow, kernel, shell, tracer
 
 if TYPE_CHECKING:
@@ -90,8 +90,8 @@ __all__ = ipyflow.api.__all__ + [
     "cell_below",
     "cell_at_offset",
     "cells",
+    "last_run_cell",
     "namespaces",
-    "prev_cell",
     "scopes",
     "statements",
     "symbols",

@@ -145,7 +145,7 @@ def test_update_list_elem():
     run_all_cells(cells)
 
     response = flow().check_and_link_multiple_cells()
-    assert response.waiting_cells == set()
+    assert response.waiting_cells == set(), "got %s" % response.waiting_cells
     assert response.ready_cells == set(), "got %s" % response.ready_cells
 
     cells[4] = "x.inc()"
@@ -165,15 +165,15 @@ def test_update_list_elem():
         cells[6] = "lst[-1]"
         run_cell(cells[6], 6)
         response = flow().check_and_link_multiple_cells()
-        assert response.waiting_cells == set()
+        assert response.waiting_cells == set(), "got %s" % response.waiting_cells
         assert response.ready_cells == {2, 3, 4}, "got %s" % response.ready_cells
 
     run_cell(cells[4], 4)
     response = flow().check_and_link_multiple_cells()
-    assert response.waiting_cells == set()
+    assert response.waiting_cells == set(), "got %s" % response.waiting_cells
     assert response.ready_cells == set(
         [2, 3, 5] + ([6] if force_subscript_symbol_creation else [])
-    )
+    ), ("got %s" % response.ready_cells)
 
 
 def test_no_freshness_for_alias_assignment_post_mutation():

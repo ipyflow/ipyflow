@@ -60,7 +60,7 @@ def cell_at_offset(offset: int) -> "CodeCell":
     return cells().at_position(cells().from_id(active_cell_id).position + offset)
 
 
-def prev_cell() -> Optional["CodeCell"]:
+def last_run_cell() -> Optional["CodeCell"]:
     return cells().at_counter(cells().exec_counter() - 1)
 
 

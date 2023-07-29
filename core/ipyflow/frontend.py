@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
 
 from ipyflow.config import ExecutionSchedule, FlowDirection, Highlights
-from ipyflow.data_model.code_cell import CheckerResult, CodeCell, cells
+from ipyflow.data_model.cell import Cell, CheckerResult, cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
 from ipyflow.slicing.context import iter_dangling_contexts
@@ -35,7 +35,7 @@ class FrontendCheckerResult(NamedTuple):
     forced_reactive_cells: Set[IdType]
     forced_cascading_reactive_cells: Set[IdType]
     typecheck_error_cells: Set[IdType]
-    unsafe_order_cells: Dict[IdType, Set[CodeCell]]
+    unsafe_order_cells: Dict[IdType, Set[Cell]]
     unsafe_order_symbol_usage: Dict[IdType, List[Dict[str, Any]]]
     waiter_links: Dict[IdType, Set[IdType]]
     ready_maker_links: Dict[IdType, Set[IdType]]
@@ -174,7 +174,7 @@ class FrontendCheckerResult(NamedTuple):
             ):
                 self.forced_cascading_reactive_cells.add(cell_id)
 
-    def _compute_dag_based_waiters(self, cells_to_check: List[CodeCell]) -> None:
+    def _compute_dag_based_waiters(self, cells_to_check: List[Cell]) -> None:
         flow_ = flow()
         if flow_.mut_settings.exec_schedule not in (
             ExecutionSchedule.DAG_BASED,
@@ -201,7 +201,7 @@ class FrontendCheckerResult(NamedTuple):
             cells().from_id(cell_id).set_ready(False)
 
     def _compute_readiness(
-        self, cell: CodeCell, checker_result: CheckerResult
+        self, cell: Cell, checker_result: CheckerResult
     ) -> Tuple[bool, bool]:
         flow_ = flow()
         cell_id = cell.cell_id
@@ -269,7 +269,7 @@ class FrontendCheckerResult(NamedTuple):
 
     def _check_one_cell(
         self,
-        cell: CodeCell,
+        cell: Cell,
         update_liveness_time_versions: bool,
         last_executed_cell_pos: int,
         waiting_symbols_by_cell_id: Dict[IdType, Set[Symbol]],
@@ -355,12 +355,10 @@ class FrontendCheckerResult(NamedTuple):
                 self.forced_reactive_cells.add(reactive_cell_id)
         return last_executed_cell.position
 
-    def _compute_unsafe_order_usages(self, cells_to_check: List[CodeCell]) -> None:
+    def _compute_unsafe_order_usages(self, cells_to_check: List[Cell]) -> None:
         # FIXME: this will be slow for large notebooks; speed it up
         #  or make it optional
-        cell_by_ctr: Dict[int, CodeCell] = {
-            cell.cell_ctr: cell for cell in cells_to_check
-        }
+        cell_by_ctr: Dict[int, Cell] = {cell.cell_ctr: cell for cell in cells_to_check}
         for sym in flow().all_data_symbols():
             if sym.is_anonymous:
                 continue
@@ -391,7 +389,7 @@ class FrontendCheckerResult(NamedTuple):
 
     def compute_frontend_checker_result(
         self,
-        cells_to_check: Optional[Iterable[CodeCell]] = None,
+        cells_to_check: Optional[Iterable[Cell]] = None,
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[IdType] = None,
     ) -> "FrontendCheckerResult":

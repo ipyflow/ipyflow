@@ -6,7 +6,7 @@ from test.utils import make_flow_fixture, skipif_known_failing
 from typing import Dict
 
 from ipyflow.config import ExecutionSchedule, FlowDirection
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.flow import DataflowSettings, MutableDataflowSettings
 from ipyflow.singletons import flow
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from typing import Optional, Union
 
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.data_model.timestamp import Timestamp
 
 

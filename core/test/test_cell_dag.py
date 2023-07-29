@@ -2,7 +2,7 @@
 import logging
 from test.utils import make_flow_fixture
 
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.slicing.context import dynamic_slicing_context
 
 logging.basicConfig(level=logging.ERROR)

@@ -11,7 +11,7 @@ from ipyflow.analysis.mixins import (
     VisitListsMixin,
 )
 from ipyflow.analysis.symbol_ref import resolve_slice_to_constant
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp

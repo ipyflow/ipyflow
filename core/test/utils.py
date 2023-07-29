@@ -14,7 +14,7 @@ from ipyflow.annotations.compiler import (
     REGISTERED_FUNCTION_SPECS,
 )
 from ipyflow.config import FlowDirection
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.flow import NotebookFlow
 from ipyflow.shell import IPyflowInteractiveShell

@@ -31,7 +31,7 @@ else:
     import astunparse
 
 if TYPE_CHECKING:
-    from ipyflow.data_model.code_cell import CodeCell
+    from ipyflow.data_model.cell import Cell
 
 
 logger = logging.getLogger(__name__)
@@ -172,7 +172,7 @@ class Statement(SliceableMixin):
         return cls._stmts_by_ts.get(ts, [])
 
     @property
-    def containing_cell(self) -> "CodeCell":
+    def containing_cell(self) -> "Cell":
         return cells().at_timestamp(self.timestamp)
 
     @property

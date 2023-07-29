@@ -25,7 +25,7 @@ from ipyflow.config import (
     Highlights,
     ReactivityMode,
 )
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, shell

@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.178 (2022-07-xx)
+0.0.178 (2022-07-29)
 --------------------
 * [lab] Add batch reactivity_mode and make it the default (previously was incremental);
 * [lab] Add slice indicators to the left of cell counters;

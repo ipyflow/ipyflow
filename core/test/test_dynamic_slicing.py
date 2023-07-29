@@ -7,7 +7,7 @@ from test.utils import make_flow_fixture
 from typing import Dict
 
 from ipyflow.config import FlowDirection
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.singletons import flow
 from ipyflow.slicing.mixin import format_slice
 

@@ -64,14 +64,14 @@ class CheckerResult(NamedTuple):
     typechecks: bool  # whether the cell typechecks successfully
 
 
-class CodeCell(SliceableMixin):
-    _current_cell_by_cell_id: Dict[IdType, "CodeCell"] = {}
-    _cell_by_cell_ctr: Dict[int, "CodeCell"] = {}
+class Cell(SliceableMixin):
+    _current_cell_by_cell_id: Dict[IdType, "Cell"] = {}
+    _cell_by_cell_ctr: Dict[int, "Cell"] = {}
     _cell_counter: int = 0
     _position_by_cell_id: Dict[IdType, int] = {}
-    _cells_by_tag: Dict[str, Set["CodeCell"]] = defaultdict(set)
+    _cells_by_tag: Dict[str, Set["Cell"]] = defaultdict(set)
     _reactive_cells_by_tag: Dict[str, Set[IdType]] = defaultdict(set)
-    _override_current_cell: Optional["CodeCell"] = None
+    _override_current_cell: Optional["Cell"] = None
 
     def __init__(
         self,
@@ -79,7 +79,7 @@ class CodeCell(SliceableMixin):
         cell_ctr: int,
         content: str,
         tags: Tuple[str, ...],
-        prev_cell: Optional["CodeCell"] = None,
+        prev_cell: Optional["Cell"] = None,
         placeholder_id: bool = False,
     ) -> None:
         self.cell_id: IdType = cell_id
@@ -123,7 +123,7 @@ class CodeCell(SliceableMixin):
         return Timestamp(self.cell_ctr, -1)
 
     @property
-    def prev(self) -> Optional["CodeCell"]:
+    def prev(self) -> Optional["Cell"]:
         return self.prev_cell
 
     @property
@@ -262,7 +262,7 @@ class CodeCell(SliceableMixin):
         bump_cell_counter: bool = True,
         validate_ipython_counter: bool = True,
         placeholder_id: bool = False,
-    ) -> "CodeCell":
+    ) -> "Cell":
         if bump_cell_counter:
             cls._cell_counter += 1
             cell_ctr = cls._cell_counter
@@ -356,32 +356,32 @@ class CodeCell(SliceableMixin):
     @classmethod
     def all_cells_most_recently_run_for_each_id(
         cls,
-    ) -> Generator["CodeCell", None, None]:
+    ) -> Generator["Cell", None, None]:
         yield from cls._current_cell_by_cell_id.values()
 
     @classmethod
-    def at_counter(cls, ctr: int) -> "CodeCell":
+    def at_counter(cls, ctr: int) -> "Cell":
         return cls._cell_by_cell_ctr[ctr]
 
     @classmethod
-    def from_counter(cls, ctr: int) -> "CodeCell":
+    def from_counter(cls, ctr: int) -> "Cell":
         return cls.at_counter(ctr)
 
     @classmethod
-    def at_position(cls, pos: int) -> Optional["CodeCell"]:
+    def at_position(cls, pos: int) -> Optional["Cell"]:
         for cell_id, cell_pos in cls._position_by_cell_id.items():
             if cell_pos == pos:
                 return cls.from_id(cell_id)
         return None
 
     @classmethod
-    def from_position(cls, pos: int) -> Optional["CodeCell"]:
+    def from_position(cls, pos: int) -> Optional["Cell"]:
         return cls.at_position(pos)
 
     @classmethod
     def at_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
-    ) -> "CodeCell":
+    ) -> "Cell":
         assert stmt_num is None
         if isinstance(ts, Timestamp):
             return cls.at_counter(ts.cell_num)
@@ -389,11 +389,11 @@ class CodeCell(SliceableMixin):
             return cls.at_counter(ts)
 
     @classmethod
-    def from_id(cls, cell_id: IdType) -> "CodeCell":
+    def from_id(cls, cell_id: IdType) -> "Cell":
         return cls._current_cell_by_cell_id[cell_id]
 
     @classmethod
-    def from_id_nullable(cls, cell_id: IdType) -> Optional["CodeCell"]:
+    def from_id_nullable(cls, cell_id: IdType) -> Optional["Cell"]:
         return cls._current_cell_by_cell_id.get(cell_id)
 
     @classmethod
@@ -401,7 +401,7 @@ class CodeCell(SliceableMixin):
         return cell_id in cls._current_cell_by_cell_id
 
     @classmethod
-    def from_tag(cls, tag: str) -> Set["CodeCell"]:
+    def from_tag(cls, tag: str) -> Set["Cell"]:
         return cls._cells_by_tag.get(tag, set())
 
     def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
@@ -459,7 +459,7 @@ class CodeCell(SliceableMixin):
         return self.is_current_for_id
 
     @classmethod
-    def current_cell(cls) -> "CodeCell":
+    def current_cell(cls) -> "Cell":
         return cls._override_current_cell or cls._cell_by_cell_ctr[cls._cell_counter]
 
     def get_max_used_live_symbol_cell_counter(
@@ -646,7 +646,7 @@ class CodeCell(SliceableMixin):
 
     @classmethod
     def compute_multi_slice_stmts(
-        cls, slice_cells: Iterable["CodeCell"]
+        cls, slice_cells: Iterable["Cell"]
     ) -> List["Statement"]:
         timestamps: Set[Timestamp] = set()
         for cell in slice_cells:
@@ -687,6 +687,6 @@ class CodeCell(SliceableMixin):
 
 
 if len(_CodeCellContainer) == 0:
-    _CodeCellContainer.append(CodeCell)
+    _CodeCellContainer.append(Cell)
 else:
-    _CodeCellContainer[0] = CodeCell
+    _CodeCellContainer[0] = Cell

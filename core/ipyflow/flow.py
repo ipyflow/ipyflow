@@ -37,7 +37,7 @@ from ipyflow.config import (
     MutableDataflowSettings,
     ReactivityMode,
 )
-from ipyflow.data_model.code_cell import CodeCell, cells
+from ipyflow.data_model.cell import Cell, cells
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import statements
@@ -721,7 +721,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def check_and_link_multiple_cells(
         self,
-        cells_to_check: Optional[Iterable[CodeCell]] = None,
+        cells_to_check: Optional[Iterable[Cell]] = None,
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[IdType] = None,
         clear_updated_reactive_symbols: bool = False,
@@ -743,7 +743,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 self.updated_reactive_symbols_last_cell.clear()
                 self.updated_deep_reactive_symbols_last_cell.clear()
 
-    def _safety_precheck_cell(self, cell: CodeCell) -> None:
+    def _safety_precheck_cell(self, cell: Cell) -> None:
         for tracer in singletons.shell().registered_tracers:
             # just make sure all tracers are initialized
             tracer.instance()

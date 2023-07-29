@@ -15,7 +15,7 @@ from ipyflow.config import (
     Highlights,
     ReactivityMode,
 )
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.line_magics import _USAGE
 from ipyflow.singletons import flow, shell
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer

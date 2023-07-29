@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, List, Optional, Type, Union, overload
 from ipyflow.singletons import flow
 
 if TYPE_CHECKING:
-    from ipyflow.data_model.code_cell import CodeCell
+    from ipyflow.data_model.cell import Cell
     from ipyflow.data_model.namespace import Namespace
     from ipyflow.data_model.scope import Scope
     from ipyflow.data_model.statement import Statement
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from ipyflow.types import IdType
 
 
-_CodeCellContainer: List[Type["CodeCell"]] = []
+_CodeCellContainer: List[Type["Cell"]] = []
 _NamespaceContainer: List[Type["Namespace"]] = []
 _ScopeContainer: List[Type["Scope"]] = []
 _StatementContainer: List[Type["Statement"]] = []
@@ -24,15 +24,15 @@ _TimestampContainer: List[Type["Timestamp"]] = []
 if TYPE_CHECKING:
 
     @overload
-    def cells(cell_id: None = None) -> Type["CodeCell"]:
+    def cells(cell_id: None = None) -> Type["Cell"]:
         ...
 
     @overload
-    def cells(cell_id: "IdType") -> "CodeCell":
+    def cells(cell_id: "IdType") -> "Cell":
         ...
 
 
-def cells(cell_id: Optional["IdType"] = None) -> Union[Type["CodeCell"], "CodeCell"]:
+def cells(cell_id: Optional["IdType"] = None) -> Union[Type["Cell"], "Cell"]:
     clazz = _CodeCellContainer[0]
     if cell_id is None:
         return clazz
@@ -42,25 +42,25 @@ def cells(cell_id: Optional["IdType"] = None) -> Union[Type["CodeCell"], "CodeCe
         return clazz.from_id(cell_id)
 
 
-def cell_above() -> "CodeCell":
+def cell_above() -> "Cell":
     active_cell_id = flow().active_cell_id
     assert active_cell_id is not None
     return cells().at_position(cells().from_id(active_cell_id).position - 1)
 
 
-def cell_below() -> "CodeCell":
+def cell_below() -> "Cell":
     active_cell_id = flow().active_cell_id
     assert active_cell_id is not None
     return cells().at_position(cells().from_id(active_cell_id).position + 1)
 
 
-def cell_at_offset(offset: int) -> "CodeCell":
+def cell_at_offset(offset: int) -> "Cell":
     active_cell_id = flow().active_cell_id
     assert active_cell_id is not None
     return cells().at_position(cells().from_id(active_cell_id).position + offset)
 
 
-def last_run_cell() -> Optional["CodeCell"]:
+def last_run_cell() -> Optional["Cell"]:
     return cells().at_counter(cells().exec_counter() - 1)
 
 

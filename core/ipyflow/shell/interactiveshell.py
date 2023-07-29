@@ -12,7 +12,7 @@ from pyccolo.import_hooks import TraceFinder
 
 from ipyflow import singletons
 from ipyflow.config import Interface
-from ipyflow.data_model.code_cell import CodeCell
+from ipyflow.data_model.cell import Cell
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
@@ -86,7 +86,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             for subclass in singletons.IPyflowShell._walk_mro():
                 subclass._instance = ipy
         NotebookFlow.instance()
-        CodeCell._cell_counter = ipy.execution_count
+        Cell._cell_counter = ipy.execution_count
         shell_class.prev_shell_class = prev_shell_class
 
     @classmethod
@@ -448,8 +448,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         placeholder_id = to_create_cell_id is None
         if placeholder_id:
             # next counter because it gets bumped on creation
-            to_create_cell_id = CodeCell.next_exec_counter()
-        cell = CodeCell.create_and_track(
+            to_create_cell_id = Cell.next_exec_counter()
+        cell = Cell.create_and_track(
             to_create_cell_id,
             cell_content,
             flow_._tags,
@@ -496,9 +496,9 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def _handle_output(self) -> None:
         flow_ = singletons.flow()
         prev_cell = None
-        cell = CodeCell.current_cell()
+        cell = Cell.current_cell()
         if len(cell.history) >= 2:
-            prev_cell = CodeCell.at_timestamp(cell.history[-2])
+            prev_cell = Cell.at_timestamp(cell.history[-2])
         if (
             flow_.mut_settings.warn_out_of_order_usages
             and flow_.out_of_order_usage_detected_counter is not None
@@ -533,7 +533,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 # TODO: avoid bad performance by only iterating over symbols updated in this cell
                 sym
                 for sym in flow_.all_data_symbols()
-                if sym.timestamp.cell_num == CodeCell.exec_counter()
+                if sym.timestamp.cell_num == Cell.exec_counter()
             ]
         )
         flow_._add_applicable_prev_cell_parents_to_current()

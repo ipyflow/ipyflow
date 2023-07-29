@@ -37,7 +37,7 @@ from ipyflow.api.lift import timestamp as api_timestamp
 from ipyflow.api.lift import unset_tag as api_unset_tag
 from ipyflow.api.lift import users as api_users
 from ipyflow.api.lift import watchpoints as api_watchpoints
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.data_model.namespace import Namespace
 from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.statement import Statement

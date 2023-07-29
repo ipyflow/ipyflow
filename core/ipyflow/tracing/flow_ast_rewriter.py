@@ -6,7 +6,7 @@ from typing import cast
 
 from pyccolo import AstRewriter
 
-from ipyflow.data_model.code_cell import cells
+from ipyflow.data_model.cell import cells
 from ipyflow.singletons import flow
 
 logger = logging.getLogger(__name__)

@@ -18,7 +18,7 @@ from typing import (
 )
 
 from ipyflow.config import ExecutionMode, FlowDirection
-from ipyflow.data_model.code_cell import CodeCell, cells
+from ipyflow.data_model.cell import Cell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.annotation_utils import (
     get_type_annotation,
@@ -144,8 +144,8 @@ class Symbol:
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()
 
         # cells where this symbol was live
-        self.cells_where_deep_live: Set[CodeCell] = set()
-        self.cells_where_shallow_live: Set[CodeCell] = set()
+        self.cells_where_deep_live: Set[Cell] = set()
+        self.cells_where_shallow_live: Set[Cell] = set()
 
         self._last_computed_ready_or_waiting_cache_ts: int = -1
         self._is_ready_or_waiting_at_position_cache: Dict[Tuple[int, bool], bool] = {}
@@ -177,7 +177,7 @@ class Symbol:
         return list(flow().aliases.get(self.obj_id, []))
 
     @property
-    def cells_where_live(self) -> Set[CodeCell]:
+    def cells_where_live(self) -> Set[Cell]:
         return self.cells_where_deep_live | self.cells_where_shallow_live
 
     def __repr__(self) -> str:

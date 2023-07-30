@@ -29,8 +29,8 @@ IPyflow is a next-generation Python kernel for Jupyter and other notebook
 interfaces that tracks dataflow relationships between symbols and cells during
 a given interactive session, thereby making it easier to reason about notebook
 state. Here is a
-[video](https://docs.google.com/presentation/d/1D9MSiIkwv7gjRr7jfNYZXki9TfkoUr4Yr-a06i0w_QU)
-of a talk given at JupyterCon 2023 that introduces it (and corresponding
+[video](https://www.youtube.com/watch?v=mZZnDlyKk7g&t=8s)
+the JupyterCon talk introducing it (and corresponding
 [slides](https://docs.google.com/presentation/d/1D9MSiIkwv7gjRr7jfNYZXki9TfkoUr4Yr-a06i0w_QU)).
 
 If you'd like to skip the elevator pitch and skip straight to installation /

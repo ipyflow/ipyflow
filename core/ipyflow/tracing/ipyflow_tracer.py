@@ -158,6 +158,7 @@ class DataflowTracer(StackFrameManager):
                 blocking_spec
             ]
         self.tracing_disabled_since_last_module_stmt = False
+        self.guards_pending_deactivation: Set[str] = set()
         self._module_stmt_counter = 0
         self._saved_stmt_ret_expr: Optional[Any] = None
         self._seen_loop_ids: Set[NodeId] = set()
@@ -606,11 +607,9 @@ class DataflowTracer(StackFrameManager):
                 scope_name = "<unknown namespace>"
             ns = Namespace(obj, scope_name, parent_scope=None)
         # FIXME: brittle strategy for determining parent scope of obj
-        if ns.parent_scope is None:
-            if (
-                obj_name is not None
-                and obj_name not in self.prev_trace_stmt_in_cur_frame.frame.f_locals
-            ):
+        frame = self.prev_trace_stmt_in_cur_frame.frame
+        if ns.parent_scope is None and frame is not None:
+            if obj_name is not None and obj_name not in frame.f_locals:
                 parent_scope = flow().global_scope
             else:
                 parent_scope = self.active_scope
@@ -765,6 +764,8 @@ class DataflowTracer(StackFrameManager):
     )
     def after_loop_iter(self, *_, guard: str, **__):
         self.activate_guard(guard)
+        self.guards_pending_deactivation.add(guard)
+        self._disable_tracing(check_enabled=False)
 
     # @pyc.register_raw_handler(pyc.after_function_execution)
     # def after_function_exec(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
@@ -1365,6 +1366,9 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
+        for guard in self.guards_pending_deactivation:
+            self.deactivate_guard(guard)
+        self.guards_pending_deactivation.clear()
         self.next_stmt_node_id = stmt_id
         trace_stmt = self._get_or_make_trace_stmt(
             cast(ast.stmt, self.ast_node_by_id[stmt_id]), frame=frame

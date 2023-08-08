@@ -105,18 +105,12 @@ class IpyflowSessionState {
     let numFinished = 0;
     for (const cell of cells) {
       // if any of them fail, change the [*] to [ ] on subsequent cells
-      CodeCell.execute(cell as CodeCell, this.session).then((msg) => {
-        if ((msg as any)?.content?.status === 'error') {
-          numFinished = cells.length;
-          for (const cell of cells) {
-            if (cell.promptNode.textContent?.includes('[*]')) {
-              cell.setPrompt('');
-            }
-          }
-        } else {
-          numFinished++;
+      CodeCell.execute(cell as CodeCell, this.session).then(() => {
+        if (cell.promptNode.textContent?.includes('[*]')) {
+          // can happen if a preceding cell errored
+          cell.setPrompt('');
         }
-        if (numFinished === cells.length) {
+        if (++numFinished === cells.length) {
           this.requestComputeExecSchedule();
         }
       });

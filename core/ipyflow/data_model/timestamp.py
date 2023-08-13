@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator, Iterable, NamedTuple, Optional, Union
 
 from ipyflow.models import _TimestampContainer, cells, timestamps
-from ipyflow.singletons import flow, tracer
+from ipyflow.singletons import flow, tracer, tracer_initialized
 
 if TYPE_CHECKING:
     # avoid circular imports
@@ -33,10 +33,13 @@ class Timestamp(NamedTuple):
     def current(cls) -> "Timestamp":
         # TODO: shouldn't have to go through flow() singleton to get the cell counter,
         #  but the dependency structure prevents us from importing from ipyflow.data_model.code_cell
-        return cls(
-            flow().cell_counter() + _cell_offset,
-            tracer().module_stmt_counter() + _stmt_offset,
-        )
+        if tracer_initialized():
+            return cls(
+                flow().cell_counter() + _cell_offset,
+                tracer().module_stmt_counter() + _stmt_offset,
+            )
+        else:
+            return Timestamp.uninitialized()
 
     @property
     def positional(self) -> "Timestamp":

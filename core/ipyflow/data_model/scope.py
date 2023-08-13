@@ -17,7 +17,7 @@ from typing import (
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.symbol import Symbol, SymbolType
 from ipyflow.models import _ScopeContainer, scopes
-from ipyflow.singletons import tracer
+from ipyflow.singletons import tracer, tracer_initialized
 from ipyflow.types import SupportedIndexType
 
 if TYPE_CHECKING:
@@ -224,7 +224,8 @@ class Scope:
             refresh=not implicit,
             is_cascading_reactive=is_cascading_reactive,
         )
-        tracer().this_stmt_updated_symbols.add(dsym)
+        if tracer_initialized():
+            tracer().this_stmt_updated_symbols.add(dsym)
         return dsym
 
     def _upsert_data_symbol_for_name_inner(

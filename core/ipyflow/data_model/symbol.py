@@ -904,7 +904,10 @@ class Symbol:
         propagate = propagate and (
             mutated or deleted or not self._should_cancel_propagation(prev_obj)
         )
-        prev_cell = cells().current_cell().prev_cell
+        try:
+            prev_cell = cells().current_cell().prev_cell
+        except KeyError:
+            prev_cell = None
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
         if overwrite:
             self._cascading_reactive_cell_num = -1

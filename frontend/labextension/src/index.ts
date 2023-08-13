@@ -972,6 +972,11 @@ const connectToComm = (
       state.settings = payload.settings as { [key: string]: string };
       state.cellParents = payload.cell_parents as { [id: string]: string[] };
       state.cellChildren = payload.cell_children as { [id: string]: string[] };
+      (notebook.model as any).setMetadata('ipyflow', {
+        cell_parents: state.cellParents,
+        cell_children: state.cellChildren,
+      });
+      void notebooks.currentWidget.context.save();
       state.waitingCells = new Set(payload.waiting_cells as string[]);
       state.readyCells = new Set(payload.ready_cells as string[]);
       if (state.numPendingForcedReactiveCounterBumps === 0) {
@@ -1131,8 +1136,14 @@ const connectToComm = (
       }
     }
   };
+  const ipyflow_metadata = (notebook.model as any).getMetadata(
+    'ipyflow'
+  ) as any;
   comm.open({
     interface: 'jupyterlab',
+    cell_metadata_by_id: state.gatherCellMetadataAndContent(),
+    cell_parents: ipyflow_metadata?.cell_parents ?? {},
+    cell_children: ipyflow_metadata?.cell_children ?? {},
   });
   // return a disconnection handle
   return () => {

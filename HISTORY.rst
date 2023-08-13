@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.179 (2022-08-xx)
+--------------------
+* [lab][kernel] Persist dependency DAG across restarts;
+* [lab] Bugfix for clearing [*] in case where intitial cell in reactive chain threw an error;
+* [kernel] Improve loop performance;
+
 0.0.178 (2022-07-29)
 --------------------
 * [lab] Add batch reactivity_mode and make it the default (previously was incremental);

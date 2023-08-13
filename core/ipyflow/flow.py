@@ -214,6 +214,7 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self.fs: Namespace = None
         self.display_sym: Symbol = None
+        self.fake_edge_sym: Symbol = None
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
         self._min_new_ready_cell_counter = -1
@@ -227,11 +228,21 @@ class NotebookFlow(singletons.NotebookFlow):
             return
         self.fs = Namespace(Namespace.FILE_SYSTEM, "fs")
         self.display_sym = self.virtual_symbols.upsert_data_symbol_for_name(
-            "display", Symbol.DISPLAY
+            "display", Symbol.DISPLAY, propagate=False, implicit=True
+        )
+        self.fake_edge_sym = self.virtual_symbols.upsert_data_symbol_for_name(
+            "fake_edge_sym", object(), propagate=False, implicit=True
         )
         self._virtual_symbols_inited = True
 
-    def initialize(self, *, interface: Optional[str] = None, **kwargs) -> None:
+    def initialize(
+        self,
+        *,
+        interface: Optional[str] = None,
+        cell_metadata_by_id: Optional[Dict[str, Any]] = None,
+        cell_parents: Optional[Dict[IdType, List[IdType]]] = None,
+        **kwargs,
+    ) -> None:
         config = get_ipython().config.ipyflow
         try:
             iface = Interface(interface)
@@ -292,6 +303,19 @@ class NotebookFlow(singletons.NotebookFlow):
             os.environ[PYCCOLO_DEV_MODE_ENV_VAR] = "1"
         else:
             os.environ.pop(PYCCOLO_DEV_MODE_ENV_VAR, None)
+        self.init_virtual_symbols()
+        if cell_metadata_by_id is not None:
+            self.handle_notify_content_changed(
+                {"cell_metadata_by_id": cell_metadata_by_id},
+                is_reactively_executing=True,
+            )
+        if cell_parents is not None:
+            for _ in self.mut_settings.iter_slicing_contexts():
+                for child, parents in cell_parents.items():
+                    for parent in parents:
+                        cells().from_id(child).add_parent_edge(
+                            cells().from_id(parent), self.fake_edge_sym
+                        )
 
     @property
     def is_dev_mode(self) -> bool:
@@ -506,6 +530,8 @@ class NotebookFlow(singletons.NotebookFlow):
                 "success": False,
                 "error": str(e),
             }
+            if self.is_dev_mode:
+                logger.exception("exception during comm handler execution")
         if comm is None:
             comm = self._comm
         if comm is None:
@@ -605,16 +631,17 @@ class NotebookFlow(singletons.NotebookFlow):
             self.handle_notify_content_changed(
                 request, is_reactively_executing=is_reactively_executing
             )
-        self._add_parents_for_override_live_refs()
+        try:
+            self._add_parents_for_override_live_refs()
+        except KeyError:
+            pass
         last_cell_id = request.get("executed_cell_id", self.last_executed_cell_id)
         cell_metadata_by_id = request.get(
             "cell_metadata_by_id", self._prev_cell_metadata_by_id
         )
-        if last_cell_id is None or cell_metadata_by_id is None:
-            # bail if we don't have both of these
+        if cell_metadata_by_id is None:
+            # bail if we don't have this
             null_vals = []
-            if last_cell_id is None:
-                null_vals.append("last_cell_id")
             if cell_metadata_by_id is None:
                 null_vals.append("cell_metadata_by_id")
             return {"success": False, "error": f"null value for {', '.join(null_vals)}"}
@@ -644,13 +671,15 @@ class NotebookFlow(singletons.NotebookFlow):
         cell_parents = {}
         cell_children = {}
         for cell in cells_to_check:
-            if cell.cell_ctr <= 0:
-                continue
             this_cell_parents: Set[IdType] = set()
             this_cell_children: Set[IdType] = set()
             for _ in self.mut_settings.iter_slicing_contexts():
-                this_cell_parents |= cell.directional_parents.keys()
-                this_cell_children |= cell.directional_children.keys()
+                for par_id, syms in cell.directional_parents.items():
+                    if cell.cell_ctr > 0 or self.fake_edge_sym in syms:
+                        this_cell_parents.add(par_id)
+                for child_id, syms in cell.directional_children.items():
+                    if cell.cell_ctr > 0 or self.fake_edge_sym in syms:
+                        this_cell_children.add(child_id)
             cell_parents[cell.id] = list(this_cell_parents)
             cell_children[cell.id] = list(this_cell_children)
         response["cell_parents"] = cell_parents

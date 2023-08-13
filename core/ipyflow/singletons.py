@@ -50,3 +50,7 @@ def flow() -> "NotebookFlowInstance":
 def tracer() -> "TracerInstance":
     assert SingletonBaseTracer.initialized()
     return SingletonBaseTracer.instance()
+
+
+def tracer_initialized() -> bool:
+    return SingletonBaseTracer.initialized()

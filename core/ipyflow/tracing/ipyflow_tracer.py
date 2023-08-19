@@ -1439,6 +1439,7 @@ class DataflowTracer(StackFrameManager):
             assert call_depth >= 1, "expected call depth >= 1, got %d" % call_depth
         if call_depth > self.tracing_disabled_user_call_depth:
             # only reenable if our managed call stack has state for the current frame
+            print("call depth", call_depth, "vs", self.tracing_disabled_user_call_depth)
             return -1
         if len(self.call_stack) == 0:
             stmt_in_top_level_frame = self.prev_trace_stmt_in_cur_frame
@@ -1447,9 +1448,12 @@ class DataflowTracer(StackFrameManager):
                 "prev_trace_stmt_in_cur_frame", depth=0
             )
         if stmt_in_top_level_frame.finished:
+            print("already finished")
             return -1
         if flow().trace_messages_enabled:
             self.EVENT_LOGGER.warning("reenable tracing >>>")
+        if call_depth not in self.user_call_depth_to_tracer_call_stack_length:
+            print("call depth", call_depth, "not in", self.user_call_depth_to_tracer_call_stack_length)
         return self.user_call_depth_to_tracer_call_stack_length.get(call_depth, -1)
 
     def _try_reenable_tracing(

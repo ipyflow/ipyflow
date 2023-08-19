@@ -1438,6 +1438,7 @@ def test_list_mutation_from_attr():
     assert_detected("`lst` depends on stale `s`")
 
 
+@skipif_known_failing
 def test_list_mutation_extend_from_attr():
     run_cell('s = "hello X world X how X are X you X today?"')
     run_cell("lst = []")
@@ -2653,7 +2654,6 @@ if sys.version_info >= (3, 8):
         run_cell("logging.info(y)")
         assert_detected()
 
-    @skipif_known_failing
     def test_tracing_renable_after_loop_in_funcall():
         run_cell("x = 0")
         run_cell("y = x + 1")

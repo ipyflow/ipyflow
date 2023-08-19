@@ -190,7 +190,6 @@ class DataflowTracer(StackFrameManager):
         self.pending_usage_updates_by_sym: Dict[Symbol, bool] = {}
         self.cur_cell_symtab: Optional[symtable.SymbolTable] = None
 
-        self.user_call_depth_to_tracer_call_stack_length: Dict[int, int] = {0: 0, 1: 0}
         self.tracing_disabled_user_call_depth = -1
         self.calling_symbol: Optional[Symbol] = None
         self.call_stack: pyc.TraceStack = self.make_stack()
@@ -209,7 +208,7 @@ class DataflowTracer(StackFrameManager):
             # the next entries are only used when tracing gets re-enabled
             self.saved_call_depth = 0
             self.saved_external_call_depth = 0
-            self.user_call_depth = 0
+            self.user_call_depth = 1
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = flow().global_scope
@@ -347,12 +346,9 @@ class DataflowTracer(StackFrameManager):
             )
             self.cur_frame_original_scope = new_scope
             self.active_scope = new_scope
-            self.user_call_depth = self.get_user_call_stack_depth(frame)
+            self.user_call_depth = max(self.get_user_call_stack_depth(frame), 1)
             self.saved_call_depth = self.call_depth
             self.saved_external_call_depth = self.external_call_depth
-        self.user_call_depth_to_tracer_call_stack_length[self.user_call_depth] = len(
-            self.call_stack
-        )
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _check_prev_stmt_done_executing_hook(
@@ -492,9 +488,6 @@ class DataflowTracer(StackFrameManager):
                             ).append(dsym_to_attach)
         finally:
             if self.is_tracing_enabled:
-                del self.user_call_depth_to_tracer_call_stack_length[
-                    self.user_call_depth
-                ]
                 self.call_stack.pop()
             if flow().is_dev_mode and len(self.call_stack) == 0:
                 assert self.call_depth == 1
@@ -1439,7 +1432,6 @@ class DataflowTracer(StackFrameManager):
             assert call_depth >= 1, "expected call depth >= 1, got %d" % call_depth
         if call_depth > self.tracing_disabled_user_call_depth:
             # only reenable if our managed call stack has state for the current frame
-            print("call depth", call_depth, "vs", self.tracing_disabled_user_call_depth)
             return -1
         if len(self.call_stack) == 0:
             stmt_in_top_level_frame = self.prev_trace_stmt_in_cur_frame
@@ -1448,13 +1440,18 @@ class DataflowTracer(StackFrameManager):
                 "prev_trace_stmt_in_cur_frame", depth=0
             )
         if stmt_in_top_level_frame.finished:
-            print("already finished")
             return -1
         if flow().trace_messages_enabled:
             self.EVENT_LOGGER.warning("reenable tracing >>>")
-        if call_depth not in self.user_call_depth_to_tracer_call_stack_length:
-            print("call depth", call_depth, "not in", self.user_call_depth_to_tracer_call_stack_length)
-        return self.user_call_depth_to_tracer_call_stack_length.get(call_depth, -1)
+        for tracer_call_stack_length in range(len(self.call_stack)):
+            user_call_depth = self.call_stack.get_field(
+                "user_call_depth", depth=tracer_call_stack_length
+            )
+            if user_call_depth >= call_depth:
+                return tracer_call_stack_length
+        if self.user_call_depth >= call_depth:
+            return len(self.call_stack)
+        return -1
 
     def _try_reenable_tracing(
         self,
@@ -1469,7 +1466,6 @@ class DataflowTracer(StackFrameManager):
             return False
         assert tracing_reenabled_call_stack_length <= len(self.call_stack)
         while len(self.call_stack) > tracing_reenabled_call_stack_length:
-            del self.user_call_depth_to_tracer_call_stack_length[self.user_call_depth]
             self.call_stack.pop()
         self.call_depth = self.saved_call_depth
         self.external_call_depth = self.saved_external_call_depth

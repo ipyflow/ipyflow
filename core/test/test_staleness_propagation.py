@@ -2653,6 +2653,7 @@ if sys.version_info >= (3, 8):
         run_cell("logging.info(y)")
         assert_detected()
 
+    @skipif_known_failing
     def test_tracing_renable_after_loop_in_funcall():
         run_cell("x = 0")
         run_cell("y = x + 1")

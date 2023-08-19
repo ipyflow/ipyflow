@@ -1449,6 +1449,7 @@ class DataflowTracer(StackFrameManager):
             )
             if user_call_depth >= call_depth:
                 return tracer_call_stack_length
+            return -1
         if self.user_call_depth >= call_depth:
             return len(self.call_stack)
         return -1

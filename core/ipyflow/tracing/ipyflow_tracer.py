@@ -51,6 +51,7 @@ from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import SupportedIndexType
+from ipyflow.utils.misc_utils import is_project_file
 
 if TYPE_CHECKING:
     import astunparse
@@ -112,21 +113,23 @@ class StackFrameManager(SingletonBaseTracer):
     ):
         if frame.f_code.co_name == "<traced_lambda>":
             return pyc.SkipAll
+        flow_ = flow()
         # IPython quirk -- every line in outer scope apparently wrapped in lambda
         # We want to skip the outer 'call' and 'return' for these
+        frame_filename = frame.f_code.co_filename
         if event == pyc.call:
             self.call_depth += 1
-            self.external_call_depth += not flow().is_cell_file(
-                frame.f_code.co_filename
-            )
+            self.external_call_depth += not flow_.is_cell_file(
+                frame_filename
+            ) and not is_project_file(frame_filename)
             if self.call_depth == 1:
                 return pyc.SkipAll
         elif event == pyc.return_:
             self.call_depth -= 1
-            self.external_call_depth -= not flow().is_cell_file(
-                frame.f_code.co_filename
-            )
-            if flow().is_dev_mode:
+            self.external_call_depth -= not flow_.is_cell_file(
+                frame_filename
+            ) and not is_project_file(frame_filename)
+            if flow_.is_dev_mode:
                 assert self.call_depth >= 0
             if self.call_depth == 0:
                 return pyc.SkipAll
@@ -134,6 +137,17 @@ class StackFrameManager(SingletonBaseTracer):
     @property
     def should_patch_meta_path(self) -> bool:
         return False
+
+    @staticmethod
+    def get_user_call_stack_depth(frame: FrameType) -> int:
+        flow_ = flow()
+        user_call_depth = 0
+        while frame is not None:
+            filename = frame.f_code.co_filename
+            if flow_.is_cell_file(filename) or not is_project_file(filename):
+                user_call_depth += 1
+            frame = frame.f_back
+        return user_call_depth
 
 
 class DataflowTracer(StackFrameManager):
@@ -176,6 +190,8 @@ class DataflowTracer(StackFrameManager):
         self.pending_usage_updates_by_sym: Dict[Symbol, bool] = {}
         self.cur_cell_symtab: Optional[symtable.SymbolTable] = None
 
+        self.user_call_depth_to_tracer_call_stack_length: Dict[int, int] = {0: 0, 1: 0}
+        self.tracing_disabled_user_call_depth = -1
         self.calling_symbol: Optional[Symbol] = None
         self.call_stack: pyc.TraceStack = self.make_stack()
         with self.call_stack.register_stack_state():
@@ -189,6 +205,11 @@ class DataflowTracer(StackFrameManager):
             self.next_stmt_node_id: Optional[NodeId] = None
 
             self.pending_class_namespaces: List[Namespace] = []
+
+            # the next entries are only used when tracing gets re-enabled
+            self.saved_call_depth = 0
+            self.saved_external_call_depth = 0
+            self.user_call_depth = 0
 
             with self.call_stack.needing_manual_initialization():
                 self.cur_frame_original_scope: Scope = flow().global_scope
@@ -307,12 +328,12 @@ class DataflowTracer(StackFrameManager):
         for stmt in self.traced_statements.values():
             stmt.mark_finished()
 
-    def _handle_call_transition(self, trace_stmt: Statement):
+    def _handle_call_transition(self, trace_stmt: Statement, frame: FrameType):
         if (
             self.external_call_depth
             >= flow().mut_settings.max_external_call_depth_for_tracing
         ):
-            self._disable_tracing()
+            self._tracked_disable_tracing(frame)
             return
         # ensures we only handle del's and not delitem's
         self.node_id_to_saved_del_data.clear()
@@ -326,6 +347,12 @@ class DataflowTracer(StackFrameManager):
             )
             self.cur_frame_original_scope = new_scope
             self.active_scope = new_scope
+            self.user_call_depth = self.get_user_call_stack_depth(frame)
+            self.saved_call_depth = self.call_depth
+            self.saved_external_call_depth = self.external_call_depth
+        self.user_call_depth_to_tracer_call_stack_length[self.user_call_depth] = len(
+            self.call_stack
+        )
         self.prev_trace_stmt_in_cur_frame = self.prev_trace_stmt = trace_stmt
 
     def _check_prev_stmt_done_executing_hook(
@@ -352,11 +379,23 @@ class DataflowTracer(StackFrameManager):
         if num_finished_stmts > 0:
             self.after_stmt_reset_hook()
 
-    def _disable_tracing(self, *args, **kwargs) -> None:
-        self.tracing_disabled_since_last_module_stmt = True
-        super()._disable_tracing(*args, **kwargs)
+    def _tracked_enable_tracing(self, check_disabled: bool = True) -> None:
+        self.tracing_disabled_user_call_depth = -1
+        self._enable_tracing(check_disabled=check_disabled)
 
-    def _handle_return_transition(self, trace_stmt: Statement, ret: Any):
+    def _tracked_disable_tracing(
+        self, frame: FrameType, check_enabled: bool = True
+    ) -> None:
+        self.tracing_disabled_since_last_module_stmt = True
+        if self.is_tracing_enabled:
+            self.tracing_disabled_user_call_depth = self.get_user_call_stack_depth(
+                frame
+            )
+        self._disable_tracing(check_enabled=check_enabled)
+
+    def _handle_return_transition(
+        self, trace_stmt: Statement, frame: FrameType, ret: Any
+    ):
         try:
             inside_anonymous_call = self.inside_anonymous_call
             try:
@@ -368,7 +407,7 @@ class DataflowTracer(StackFrameManager):
                 # skip the transition and disable tracing in case this call
                 # happens in a loop; we won't catch it in our normal tracing
                 # disabler since it's the first call
-                self._disable_tracing()
+                self._tracked_disable_tracing(frame)
                 return
             assert return_to_stmt is not None
             if self.prev_event != pyc.exception:
@@ -453,6 +492,9 @@ class DataflowTracer(StackFrameManager):
                             ).append(dsym_to_attach)
         finally:
             if self.is_tracing_enabled:
+                del self.user_call_depth_to_tracer_call_stack_length[
+                    self.user_call_depth
+                ]
                 self.call_stack.pop()
             if flow().is_dev_mode and len(self.call_stack) == 0:
                 assert self.call_depth == 1
@@ -461,14 +503,15 @@ class DataflowTracer(StackFrameManager):
         self,
         event: pyc.TraceEvent,
         trace_stmt: Statement,
+        frame: FrameType,
         ret: Any,
     ):
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
         if event == pyc.call:
-            self._handle_call_transition(trace_stmt)
+            self._handle_call_transition(trace_stmt, frame)
         if event == pyc.return_:
-            self._handle_return_transition(trace_stmt, ret)
+            self._handle_return_transition(trace_stmt, frame, ret)
         self.prev_trace_stmt = trace_stmt
         self.prev_event = event
 
@@ -762,10 +805,10 @@ class DataflowTracer(StackFrameManager):
             pyc.after_dict_comprehension_value,
         )
     )
-    def after_loop_iter(self, *_, guard: str, **__):
+    def after_loop_iter(self, _obj, _node, frame: FrameType, *_, guard: str, **__):
         self.activate_guard(guard)
         self.guards_pending_deactivation.add(guard)
-        self._disable_tracing(check_enabled=False)
+        self._tracked_disable_tracing(frame, check_enabled=False)
 
     # @pyc.register_raw_handler(pyc.after_function_execution)
     # def after_function_exec(self, _obj: Any, _loop_id: NodeId, *_, guard: str, **__):
@@ -1123,19 +1166,9 @@ class DataflowTracer(StackFrameManager):
         *_,
         **__,
     ):
-        tracing_will_be_enabled_by_end = self.is_tracing_enabled
-        if not self.is_tracing_enabled:
-            tracing_will_be_enabled_by_end = self._should_attempt_to_reenable_tracing(
-                frame
-            )
-            if tracing_will_be_enabled_by_end:
-                # if tracing gets reenabled here instead of at the 'before_stmt' handler, then we're still
-                # at the same module stmt as when tracing was disabled, and we still have a 'return' to trace
-                self.call_depth = 1
-                self.call_stack.clear()
-                self.lexical_call_stack.clear()
-
-        if not tracing_will_be_enabled_by_end:
+        if not self.is_tracing_enabled and not self._try_reenable_tracing(
+            frame, empty_stack_call_depth=1, dry_run=True
+        ):
             return
 
         # no need to reset active scope here;
@@ -1150,7 +1183,7 @@ class DataflowTracer(StackFrameManager):
             self.external_calls[-1].process_return(retval)
 
         if not self.is_tracing_enabled:
-            self._enable_tracing()
+            self._tracked_enable_tracing()
 
     # Note: we don't trace set literals
     @pyc.register_raw_handler(
@@ -1313,6 +1346,11 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
+        if not self.is_tracing_enabled and not self._try_reenable_tracing(
+            frame, empty_stack_call_depth=1
+        ):
+            return
+        assert self.is_tracing_enabled
         if (
             stmt_id in self.traced_statements
             and self.traced_statements[stmt_id].finished
@@ -1384,36 +1422,24 @@ class DataflowTracer(StackFrameManager):
             ):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         self.prev_trace_stmt_in_cur_frame = trace_stmt
-        if not self.is_tracing_enabled and self._should_attempt_to_reenable_tracing(
-            frame
+        if not self.is_tracing_enabled and self._try_reenable_tracing(
+            frame, dry_run=True
         ):
-            # At this point, we can be sure we're at the top level
-            # because tracing was enabled in a top-level handler.
-            # We also need to clear the stack, as we won't catch
-            # the return event (since tracing was already disabled
-            # when we got to a `before_stmt` event).
-            self.call_depth = 0
-            self.call_stack.clear()
-            self.lexical_call_stack.clear()
             self.after_stmt_reset_hook()
-            self._enable_tracing()
+            self._tracked_enable_tracing()
 
-    def _should_attempt_to_reenable_tracing(self, frame: FrameType) -> bool:
+    def _call_stack_length_for_reenabling_tracing(self, frame: FrameType) -> int:
         if flow().is_dev_mode:
             assert not self.is_tracing_enabled
             assert self.call_depth > 0, (
                 "expected managed call depth > 0, got %d" % self.call_depth
             )
-        call_depth = 0
-        while frame is not None:
-            if flow().is_cell_file(frame.f_code.co_filename):
-                call_depth += 1
-            frame = frame.f_back
+        call_depth = self.get_user_call_stack_depth(frame)
         if flow().is_dev_mode:
             assert call_depth >= 1, "expected call depth >= 1, got %d" % call_depth
-        # TODO: allow reenabling tracing beyond just at the top level
-        if call_depth != 1:
-            return False
+        if call_depth > self.tracing_disabled_user_call_depth:
+            # only reenable if our managed call stack has state for the current frame
+            return -1
         if len(self.call_stack) == 0:
             stmt_in_top_level_frame = self.prev_trace_stmt_in_cur_frame
         else:
@@ -1421,9 +1447,32 @@ class DataflowTracer(StackFrameManager):
                 "prev_trace_stmt_in_cur_frame", depth=0
             )
         if stmt_in_top_level_frame.finished:
-            return False
+            return -1
         if flow().trace_messages_enabled:
             self.EVENT_LOGGER.warning("reenable tracing >>>")
+        return self.user_call_depth_to_tracer_call_stack_length.get(call_depth, -1)
+
+    def _try_reenable_tracing(
+        self,
+        frame: FrameType,
+        empty_stack_call_depth: Optional[int] = None,
+        dry_run: bool = False,
+    ) -> bool:
+        tracing_reenabled_call_stack_length = (
+            self._call_stack_length_for_reenabling_tracing(frame)
+        )
+        if tracing_reenabled_call_stack_length == -1:
+            return False
+        assert tracing_reenabled_call_stack_length <= len(self.call_stack)
+        while len(self.call_stack) > tracing_reenabled_call_stack_length:
+            self.call_stack.pop()
+        self.call_depth = self.saved_call_depth
+        self.external_call_depth = self.saved_external_call_depth
+        if len(self.call_stack) == 0 and empty_stack_call_depth is not None:
+            self.call_depth = empty_stack_call_depth
+        self.lexical_call_stack.clear()
+        if not dry_run:
+            self._tracked_enable_tracing()
         return True
 
     def _get_or_make_trace_stmt(
@@ -1513,10 +1562,10 @@ class DataflowTracer(StackFrameManager):
         if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
             if flow().trace_messages_enabled:
                 self.EVENT_LOGGER.warning(" disable tracing >>>")
-            self._disable_tracing()
+            self._tracked_disable_tracing(frame)
             return pyc.Null
         trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
-        self.state_transition_hook(event, trace_stmt, ret_obj)
+        self.state_transition_hook(event, trace_stmt, frame, ret_obj)
 
     @pyc.register_raw_handler((pyc.return_, pyc.exception))
     def handle_other_sys_events(
@@ -1541,4 +1590,4 @@ class DataflowTracer(StackFrameManager):
 
         trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
         self._maybe_log_event(event, stmt_node, trace_stmt)
-        self.state_transition_hook(event, trace_stmt, ret_obj)
+        self.state_transition_hook(event, trace_stmt, frame, ret_obj)

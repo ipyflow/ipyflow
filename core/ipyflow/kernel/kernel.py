@@ -15,6 +15,7 @@ from ipyflow.flow import NotebookFlow
 from ipyflow.shell.zmqshell import IPyflowZMQInteractiveShell
 from ipyflow.singletons import flow
 from ipyflow.utils.ipython_utils import make_mro_inserter_metaclass
+from ipyflow.utils.misc_utils import is_project_file
 from ipyflow.version import __version__
 
 if TYPE_CHECKING:
@@ -35,9 +36,7 @@ def patch_pydevd_file_filters() -> None:
         orig_in_project_roots = FilesFiltering.in_project_roots
 
         def in_project_roots(self, received_filename):
-            if "ipyflow" in received_filename:
-                return False
-            if "pyccolo" in received_filename:
+            if is_project_file(received_filename):
                 return False
             return orig_in_project_roots(self, received_filename)
 

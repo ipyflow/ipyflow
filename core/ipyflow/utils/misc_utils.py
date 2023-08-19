@@ -48,3 +48,7 @@ def yield_in_loop(*gens):
     for gen in gens:
         with gen:
             yield
+
+
+def is_project_file(filename: str) -> bool:
+    return "ipyflow" in filename or "pyccolo" in filename

@@ -1438,9 +1438,7 @@ def test_list_mutation_from_attr():
     assert_detected("`lst` depends on stale `s`")
 
 
-@skipif_known_failing
 def test_list_mutation_extend_from_attr():
-    # for this one, we somehow have to avoid disabling tracing which is hard
     run_cell('s = "hello X world X how X are X you X today?"')
     run_cell("lst = []")
     run_cell('lst.extend(word.strip() for word in s.split("X"))')
@@ -2641,3 +2639,32 @@ if sys.version_info >= (3, 8):
         assert_detected("`x` depends on old value of `foo.x`")
         run_cell("logging.info(a)")
         assert_detected("`a` depends on old value of `foo.x`")
+
+    def test_tracing_renable_after_loop():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            for _ in range(3):
+                z = 42
+            x = 1
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()
+
+    def test_tracing_renable_after_loop_in_funcall():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            def foo():
+                global x
+                for _ in range(3):
+                    z = 42
+                x = 1
+            foo()
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()

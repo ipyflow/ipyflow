@@ -144,7 +144,13 @@ class StackFrameManager(SingletonBaseTracer):
         user_call_depth = 0
         while frame is not None:
             filename = frame.f_code.co_filename
-            if flow_.is_cell_file(filename) or not is_project_file(filename):
+            if flow_.is_cell_file(filename) or (
+                not is_project_file(filename)
+                and not any(
+                    # for some reason some of these show up in some platforms but not others.
+                    s in filename for s in ("IPython/", "ipykernel/", "pytest/", "pluggy/")
+                )
+            ):
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth
@@ -1339,11 +1345,11 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
-        # if not self.is_tracing_enabled and not self._try_reenable_tracing(
-        #     frame, empty_stack_call_depth=1
-        # ):
-        #     return
-        # assert self.is_tracing_enabled
+        if not self.is_tracing_enabled and not self._try_reenable_tracing(
+            frame, empty_stack_call_depth=1
+        ):
+            return
+        assert self.is_tracing_enabled
         if (
             stmt_id in self.traced_statements
             and self.traced_statements[stmt_id].finished

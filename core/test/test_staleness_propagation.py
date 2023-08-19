@@ -1438,7 +1438,6 @@ def test_list_mutation_from_attr():
     assert_detected("`lst` depends on stale `s`")
 
 
-@skipif_known_failing
 def test_list_mutation_extend_from_attr():
     run_cell('s = "hello X world X how X are X you X today?"')
     run_cell("lst = []")

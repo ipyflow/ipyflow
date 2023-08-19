@@ -1465,9 +1465,7 @@ class DataflowTracer(StackFrameManager):
             return False
         assert tracing_reenabled_call_stack_length <= len(self.call_stack)
         while len(self.call_stack) > tracing_reenabled_call_stack_length:
-            del self.user_call_depth_to_tracer_call_stack_length[
-                self.user_call_depth
-            ]
+            del self.user_call_depth_to_tracer_call_stack_length[self.user_call_depth]
             self.call_stack.pop()
         self.call_depth = self.saved_call_depth
         self.external_call_depth = self.saved_external_call_depth

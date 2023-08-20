@@ -2687,6 +2687,26 @@ if sys.version_info >= (3, 8):
         run_cell("logging.info(y)")
         assert_detected()
 
+    def test_tracing_reenable_after_call_loop_in_nested_funcall():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            def baz():
+                pass
+            def foo():
+                global x
+                for _ in range(3):
+                    baz()
+                x = 1
+            def bar():
+                foo()
+            bar()
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()
+
     def test_tracing_reenable_after_funcalls():
         run_cell("x = 0")
         run_cell("y = x + 1")

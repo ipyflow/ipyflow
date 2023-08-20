@@ -154,7 +154,7 @@ class StackFrameManager(SingletonBaseTracer):
                         "ipykernel/",
                         "pytest/",
                         "pluggy/",
-                        "scripts/test_runner.py",
+                        # "scripts/test_runner.py",
                     )
                 )
             ):

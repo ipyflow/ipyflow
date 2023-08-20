@@ -295,8 +295,7 @@ support of folks from a number of companies -- both in the form of direct
 financial contributions ([Databricks](https://www.databricks.com/),
 [Hex](https://hex.tech/)) as well as indirect moral support and encouragement
 ([Ponder](https://ponder.io/), [Meta](https://www.meta.com/)). And of course,
-none of this would be possible without the amazing contributions from the
-Jupyter community.
+IPyflow rests on the foundations built by the incredible Jupyter community.
 
 License
 -------

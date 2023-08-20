@@ -161,6 +161,7 @@ class StackFrameManager(SingletonBaseTracer):
                     )
                 )
             ):
+                print("good:", filename)
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth
@@ -1490,6 +1491,7 @@ class DataflowTracer(StackFrameManager):
         self.lexical_call_stack.clear()
         if not dry_run:
             self._tracked_enable_tracing()
+        print("reenable", self.call_depth, self.external_call_depth, tracing_reenabled_call_stack_length)
         return True
 
     def _get_or_make_trace_stmt(

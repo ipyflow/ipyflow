@@ -148,10 +148,16 @@ class StackFrameManager(SingletonBaseTracer):
                 not is_project_file(filename)
                 and not any(
                     # for some reason some of these show up in some platforms but not others.
-                    s in filename for s in ("IPython/", "ipykernel/", "pytest/", "pluggy/")
+                    s in filename
+                    for s in (
+                        "IPython/",
+                        "ipykernel/",
+                        "pytest/",
+                        "pluggy/",
+                        "scripts/test_runner.py",
+                    )
                 )
             ):
-                print("good:", filename)
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth

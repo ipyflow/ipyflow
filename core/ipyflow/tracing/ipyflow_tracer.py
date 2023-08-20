@@ -2,6 +2,7 @@
 import ast
 import functools
 import logging
+import os
 import symtable
 import sys
 from collections import defaultdict
@@ -141,6 +142,7 @@ class StackFrameManager(SingletonBaseTracer):
     @staticmethod
     def get_user_call_stack_depth(frame: FrameType) -> int:
         flow_ = flow()
+        sep = os.path.sep
         user_call_depth = 0
         while frame is not None:
             filename = frame.f_code.co_filename
@@ -150,12 +152,12 @@ class StackFrameManager(SingletonBaseTracer):
                     # for some reason some of these show up in some platforms but not others.
                     s in filename
                     for s in (
-                        "IPython/",
-                        "ipykernel/",
-                        "pytest/",
-                        "pluggy/",
-                        "scripts/test_runner.py",
-                        "./test/"
+                        f"IPython{sep}",
+                        f"ipykernel{sep}",
+                        f"pytest{sep}",
+                        f"pluggy{sep}",
+                        f"scripts{sep}test_runner.py",
+                        f"{sep}test{sep}"
                     )
                 )
             ):

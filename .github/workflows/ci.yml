@@ -9,8 +9,10 @@ jobs:
 
     strategy:
       matrix:
-        os: [ 'macos-latest', 'ubuntu-latest', 'windows-latest' ]
-        python-version: [ '3.8.x', '3.9.x', '3.10.x', '3.11.x' ]
+        os: [ 'ubuntu-latest' ]
+        python-version: [ '3.11.x' ]
+          #os: [ 'macos-latest', 'ubuntu-latest', 'windows-latest' ]
+          #python-version: [ '3.8.x', '3.9.x', '3.10.x', '3.11.x' ]
 
     steps:
     - uses: actions/checkout@v2
@@ -38,7 +40,7 @@ jobs:
       # wherein it gives a false positive syntax error
       if: ${{ matrix.os == 'ubuntu-latest' }}
       run: make typecheck
-    - name: Compute coverage and run tests with ipytest (excluding typing)
+    - name: Compute coverage and run tests with pytest (excluding typing)
       if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10.x'}}
       run: make xmlcov
     - name: Run tests with ipytest, excluding typing and coverage

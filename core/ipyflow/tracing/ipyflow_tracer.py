@@ -158,6 +158,7 @@ class StackFrameManager(SingletonBaseTracer):
                     )
                 )
             ):
+                print("good:", filename)
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth

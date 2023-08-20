@@ -151,6 +151,7 @@ class StackFrameManager(SingletonBaseTracer):
                     s in filename for s in ("IPython/", "ipykernel/", "pytest/", "pluggy/")
                 )
             ):
+                print("good:", filename)
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth

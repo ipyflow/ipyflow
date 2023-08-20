@@ -154,11 +154,11 @@ class StackFrameManager(SingletonBaseTracer):
                         "ipykernel/",
                         "pytest/",
                         "pluggy/",
-                        # "scripts/test_runner.py",
+                        "scripts/test_runner.py",
+                        "./test/"
                     )
                 )
             ):
-                print("good:", filename)
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth
@@ -314,6 +314,7 @@ class DataflowTracer(StackFrameManager):
 
     # TODO: use stack mechanism to automate this?
     def after_stmt_reset_hook(self) -> None:
+        self.is_external_call_pending_return = False
         self.external_calls.clear()
         self.external_call_candidate = None
         self.active_scope = self.cur_frame_original_scope
@@ -328,7 +329,6 @@ class DataflowTracer(StackFrameManager):
         flow().updated_symbols |= self.this_stmt_updated_symbols
         self.this_stmt_updated_symbols.clear()
         self._seen_functions_ids.clear()
-        self.is_external_call_pending_return = False
         self.calling_symbol = None
         for sym, exclude_ns in self.pending_usage_updates_by_sym.items():
             sym.update_usage_info(exclude_ns=exclude_ns)

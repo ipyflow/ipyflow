@@ -27,8 +27,7 @@ class ContainsPrintVisitor(ast.NodeVisitor):
             self.visit(ast.parse(f.read()))
         ret = self._found_print_call
         self._found_print_call = False
-        # return ret
-        return False
+        return ret
 
     def visit_Call(self, node: ast.Call):
         self.generic_visit(node)

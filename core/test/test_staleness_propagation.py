@@ -2640,7 +2640,7 @@ if sys.version_info >= (3, 8):
         run_cell("logging.info(a)")
         assert_detected("`a` depends on old value of `foo.x`")
 
-    def test_tracing_renable_after_loop():
+    def test_tracing_reenable_after_loop():
         run_cell("x = 0")
         run_cell("y = x + 1")
         run_cell(
@@ -2653,7 +2653,7 @@ if sys.version_info >= (3, 8):
         run_cell("logging.info(y)")
         assert_detected()
 
-    def test_tracing_renable_after_loop_in_funcall():
+    def test_tracing_reenable_after_loop_in_funcall():
         run_cell("x = 0")
         run_cell("y = x + 1")
         run_cell(
@@ -2664,6 +2664,80 @@ if sys.version_info >= (3, 8):
                     z = 42
                 x = 1
             foo()
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()
+
+    def test_tracing_reenable_after_loop_in_nested_funcall():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            def foo():
+                global x
+                for _ in range(3):
+                    z = 42
+                x = 1
+            def bar():
+                foo()
+            bar()
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()
+
+    def test_tracing_reenable_after_funcalls():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            def bar():
+                pass
+            bar()
+            bar()
+            bar()
+            x = 1
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()
+
+    def test_tracing_reenable_after_funcalls_in_funcall():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            def bar():
+                pass
+            def foo():
+                global x
+                bar()
+                bar()
+                bar()
+                x = 1
+            foo()
+            """
+        )
+        run_cell("logging.info(y)")
+        assert_detected()
+
+    def test_tracing_reenable_after_funcalls_in_nested_funcall():
+        run_cell("x = 0")
+        run_cell("y = x + 1")
+        run_cell(
+            """
+            def bar():
+                pass
+            def foo():
+                global x
+                bar()
+                bar()
+                bar()
+                x = 1
+            def baz():
+                foo()
+            baz()
             """
         )
         run_cell("logging.info(y)")

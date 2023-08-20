@@ -1,11 +1,13 @@
 History
 =======
 
-0.0.179 (2022-08-xx)
+0.0.179 (2022-08-20)
 --------------------
 * [lab][kernel] Persist dependency DAG across restarts;
 * [lab] Bugfix for clearing [*] in case where intitial cell in reactive chain threw an error;
 * [kernel] Improve loop performance;
+* [kernel] Improve accuracy by expanding cases for tracing reenablement;
+* [kernel] Misc bugfixes;
 
 0.0.178 (2022-07-29)
 --------------------

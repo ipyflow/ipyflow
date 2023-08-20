@@ -82,7 +82,7 @@ Disable by running `%flow mode normal`.
 If you'd like to make reactivity the default behavior (not recommended, unless
 you do not mind being surprised occasionally), you can add this to your IPython
 profile (default location typically at
-`~/.ipython/profile_default/ipython_conifg.py`):
+`~/.ipython/profile_default/ipython_config.py`):
 
 ```python
 c = get_config()

@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import re
 from threading import Timer
 from typing import Callable
 
@@ -50,5 +51,8 @@ def yield_in_loop(*gens):
             yield
 
 
+_PROJECT_FILE_REGEX = re.compile(r"[/\\](ipyflow|pyccolo)[/\\]")
+
+
 def is_project_file(filename: str) -> bool:
-    return "ipyflow/" in filename or "pyccolo/" in filename
+    return bool(_PROJECT_FILE_REGEX.search(filename))

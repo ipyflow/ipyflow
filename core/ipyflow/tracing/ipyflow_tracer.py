@@ -2,7 +2,7 @@
 import ast
 import functools
 import logging
-import os
+import re
 import symtable
 import sys
 from collections import defaultdict
@@ -139,29 +139,21 @@ class StackFrameManager(SingletonBaseTracer):
     def should_patch_meta_path(self) -> bool:
         return False
 
-    @staticmethod
-    def get_user_call_stack_depth(frame: FrameType) -> int:
+    _FILTERED_PATH_REGEX = re.compile(
+        rf"[/\\]({'|'.join(['IPython', 'ipykernel', '_?pytest', 'pluggy', 'test'])})[/\\]"
+    )
+
+    @classmethod
+    def get_user_call_stack_depth(cls, frame: FrameType) -> int:
         flow_ = flow()
-        sep = os.path.sep
         user_call_depth = 0
         while frame is not None:
             filename = frame.f_code.co_filename
             if flow_.is_cell_file(filename) or (
                 not is_project_file(filename)
-                and not any(
-                    # for some reason some of these show up in some platforms but not others.
-                    s in filename
-                    for s in (
-                        f"IPython{sep}",
-                        f"ipykernel{sep}",
-                        f"pytest{sep}",
-                        f"pluggy{sep}",
-                        f"scripts{sep}test_runner.py",
-                        f"{sep}test{sep}"
-                    )
-                )
+                and not cls._FILTERED_PATH_REGEX.search(filename)
+                and "scripts/test_runner.py" not in filename
             ):
-                print("good:", filename)
                 user_call_depth += 1
             frame = frame.f_back
         return user_call_depth
@@ -1491,7 +1483,6 @@ class DataflowTracer(StackFrameManager):
         self.lexical_call_stack.clear()
         if not dry_run:
             self._tracked_enable_tracing()
-        print("reenable", self.call_depth, self.external_call_depth, tracing_reenabled_call_stack_length)
         return True
 
     def _get_or_make_trace_stmt(

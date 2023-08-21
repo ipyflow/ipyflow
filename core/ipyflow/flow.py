@@ -312,10 +312,16 @@ class NotebookFlow(singletons.NotebookFlow):
         if cell_parents is not None:
             for _ in self.mut_settings.iter_slicing_contexts():
                 for child, parents in cell_parents.items():
+                    try:
+                        child_cell = cells().from_id(child)
+                    except KeyError:
+                        continue
                     for parent in parents:
-                        cells().from_id(child).add_parent_edge(
-                            cells().from_id(parent), self.fake_edge_sym
-                        )
+                        try:
+                            parent_cell = cells().from_id(parent)
+                        except KeyError:
+                            continue
+                        child_cell.add_parent_edge(parent_cell, self.fake_edge_sym)
 
     @property
     def is_dev_mode(self) -> bool:

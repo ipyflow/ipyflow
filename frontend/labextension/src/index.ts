@@ -34,7 +34,7 @@ type CellMetadata = {
 };
 type CellMetadataMap = {
   [id: string]: CellMetadata;
-}
+};
 
 const waitingClass = 'waiting-cell';
 const readyClass = 'ready-cell';

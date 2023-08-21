@@ -27,6 +27,14 @@ import {
 import _ from 'lodash';
 
 type Highlights = 'all' | 'none' | 'executed' | 'reactive';
+type CellMetadata = {
+  index: number;
+  content: string;
+  type: string;
+};
+type CellMetadataMap = {
+  [id: string]: CellMetadata;
+}
 
 const waitingClass = 'waiting-cell';
 const readyClass = 'ready-cell';
@@ -70,15 +78,10 @@ class IpyflowSessionState {
   cellParents: { [id: string]: string[] } = {};
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
+  lastCellMetadataMap: CellMetadataMap | null = null;
 
   gatherCellMetadataAndContent() {
-    const cell_metadata_by_id: {
-      [id: string]: {
-        index: number;
-        content: string;
-        type: string;
-      };
-    } = {};
+    const cell_metadata_by_id: CellMetadataMap = {};
     this.notebook.widgets.forEach((itercell, idx) => {
       const model = itercell.model;
       cell_metadata_by_id[model.id] = {
@@ -675,10 +678,16 @@ const connectToComm = (
       notebook.model.contentChanged.disconnect(onContentChanged);
       return;
     }
+    const cell_metadata_by_id = state.gatherCellMetadataAndContent();
+    if (_.isEqual(cell_metadata_by_id, state.lastCellMetadataMap)) {
+      // fixes https://github.com/ipyflow/ipyflow/issues/145
+      return;
+    }
+    state.lastCellMetadataMap = cell_metadata_by_id;
     notebook.widgets.forEach(syncDirtiness);
     comm.send({
       type: 'notify_content_changed',
-      cell_metadata_by_id: state.gatherCellMetadataAndContent(),
+      cell_metadata_by_id,
     });
   }, 500);
 

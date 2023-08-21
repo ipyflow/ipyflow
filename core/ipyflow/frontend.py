@@ -412,17 +412,7 @@ class FrontendCheckerResult(NamedTuple):
         if cells_to_check is None:
             cells_to_check = cells().all_cells_most_recently_run_for_each_id()
         if flow_.mut_settings.highlights == Highlights.EXECUTED:
-            cells_to_check = (
-                cell
-                for cell in cells_to_check
-                if cell.cell_ctr > 0
-                or any(
-                    flow_.fake_edge_sym in static_syms | dynamic_syms
-                    for static_syms, dynamic_syms in zip(
-                        cell.static_parents.values(), cell.dynamic_parents.values()
-                    )
-                )
-            )
+            cells_to_check = (cell for cell in cells_to_check if cell.is_tracked)
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
         for cell in cells_to_check:
             checker_result = self._check_one_cell(

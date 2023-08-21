@@ -235,6 +235,26 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         self._virtual_symbols_inited = True
 
+    def _initialize_cell_parents(
+        self, cell_parents: Optional[Dict[IdType, List[IdType]]]
+    ) -> None:
+        if cell_parents is None:
+            return
+        for _ in self.mut_settings.iter_slicing_contexts():
+            for child, parents in cell_parents.items():
+                try:
+                    child_cell = cells().from_id(child)
+                except KeyError:
+                    continue
+                child_cell.force_tracking()
+                for parent in parents:
+                    try:
+                        parent_cell = cells().from_id(parent)
+                    except KeyError:
+                        continue
+                    parent_cell.force_tracking()
+                    child_cell.add_parent_edge(parent_cell, self.fake_edge_sym)
+
     def initialize(
         self,
         *,
@@ -309,19 +329,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 {"cell_metadata_by_id": cell_metadata_by_id},
                 is_reactively_executing=True,
             )
-        if cell_parents is not None:
-            for _ in self.mut_settings.iter_slicing_contexts():
-                for child, parents in cell_parents.items():
-                    try:
-                        child_cell = cells().from_id(child)
-                    except KeyError:
-                        continue
-                    for parent in parents:
-                        try:
-                            parent_cell = cells().from_id(parent)
-                        except KeyError:
-                            continue
-                        child_cell.add_parent_edge(parent_cell, self.fake_edge_sym)
+        self._initialize_cell_parents(cell_parents)
 
     @property
     def is_dev_mode(self) -> bool:
@@ -677,22 +685,17 @@ class NotebookFlow(singletons.NotebookFlow):
         cell_parents = {}
         cell_children = {}
         for cell in cells_to_check:
+            if not cell.is_tracked:
+                continue
             this_cell_parents: Set[IdType] = set()
             this_cell_children: Set[IdType] = set()
             for _ in self.mut_settings.iter_slicing_contexts():
                 for par_id, syms in cell.directional_parents.items():
-                    if cell.cell_ctr > 0 or self.fake_edge_sym in syms:
-                        this_cell_parents.add(par_id)
+                    this_cell_parents.add(par_id)
                 for child_id, syms in cell.directional_children.items():
-                    if cell.cell_ctr > 0 or self.fake_edge_sym in syms:
-                        this_cell_children.add(child_id)
-            if (
-                len(this_cell_parents) > 0
-                or len(this_cell_children) > 0
-                or cell.cell_ctr > 0
-            ):
-                cell_parents[cell.id] = list(this_cell_parents)
-                cell_children[cell.id] = list(this_cell_children)
+                    this_cell_children.add(child_id)
+            cell_parents[cell.id] = list(this_cell_parents)
+            cell_children[cell.id] = list(this_cell_children)
         response["cell_parents"] = cell_parents
         response["cell_children"] = cell_children
         return response

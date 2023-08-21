@@ -81,6 +81,7 @@ class Cell(SliceableMixin):
         tags: Tuple[str, ...],
         prev_cell: Optional["Cell"] = None,
         placeholder_id: bool = False,
+        force_tracking: bool = False,
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
@@ -113,6 +114,7 @@ class Cell(SliceableMixin):
         self._ready: bool = False
         self._extra_stmt: Optional[ast.stmt] = None
         self._placeholder_id = placeholder_id
+        self._force_tracking = force_tracking
 
     @property
     def id(self) -> IdType:
@@ -165,6 +167,15 @@ class Cell(SliceableMixin):
                 if self.position < self.from_id(cell_id).position
             }
         return cast("Mapping[IdType, FrozenSet[Symbol]]", children)
+
+    @property
+    def is_tracked(self) -> bool:
+        if self.cell_ctr > 0:
+            return True
+        return self._force_tracking
+
+    def force_tracking(self) -> None:
+        self._force_tracking = True
 
     @classmethod
     def clear(cls):

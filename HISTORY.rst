@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.181 (2022-08-20)
+0.0.182 (2022-08-20)
 --------------------
 * [lab][kernel] Persist dependency DAG across restarts;
 * [lab] Continuous file sync for cell input content changes;

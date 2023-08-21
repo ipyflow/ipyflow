@@ -368,7 +368,6 @@ class SliceableMixin(Protocol):
     def children(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
         dangling_ctx = dangling_ctx_var.get()
-        assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
             return (
                 self.dangling_dynamic_children
@@ -379,8 +378,16 @@ class SliceableMixin(Protocol):
             return (
                 self.dangling_static_children if dangling_ctx else self.static_children
             )
-        else:
-            assert False
+        flow_ = flow()
+        # TODO: rather than asserting test context,
+        #  assert that we're being called from the notebook
+        assert not flow_.is_test
+        settings = flow_.mut_settings
+        children: Dict[IdType, Set["Symbol"]] = {}
+        for _ in settings.iter_slicing_contexts():
+            for pid, syms in self.children.items():
+                children.setdefault(pid, set()).update(syms)
+        return children
 
     @children.setter
     def children(self, new_children: Dict[IdType, Set["Symbol"]]) -> None:

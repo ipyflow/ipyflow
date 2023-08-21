@@ -680,8 +680,13 @@ class NotebookFlow(singletons.NotebookFlow):
                 for child_id, syms in cell.directional_children.items():
                     if cell.cell_ctr > 0 or self.fake_edge_sym in syms:
                         this_cell_children.add(child_id)
-            cell_parents[cell.id] = list(this_cell_parents)
-            cell_children[cell.id] = list(this_cell_children)
+            if (
+                len(this_cell_parents) > 0
+                or len(this_cell_children) > 0
+                or cell.cell_ctr > 0
+            ):
+                cell_parents[cell.id] = list(this_cell_parents)
+                cell_children[cell.id] = list(this_cell_children)
         response["cell_parents"] = cell_parents
         response["cell_children"] = cell_children
         return response

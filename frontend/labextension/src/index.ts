@@ -206,6 +206,20 @@ function computeTransitiveClosureHelper(
   );
 }
 
+function mergeMaps<V>(
+  priority: { [id: string]: V },
+  backup: { [id: string]: V }
+): { [id: string]: V } {
+  const merged: { [id: string]: V } = {};
+  for (const key in backup) {
+    merged[key] = backup[key];
+  }
+  for (const key in priority) {
+    merged[key] = priority[key];
+  }
+  return merged;
+}
+
 /**
  * Initialization data for the jupyterlab-ipyflow extension.
  */
@@ -979,8 +993,19 @@ const connectToComm = (
       state.settings.exec_mode = payload.exec_mode as string;
     } else if (payload.type === 'compute_exec_schedule') {
       state.settings = payload.settings as { [key: string]: string };
-      state.cellParents = payload.cell_parents as { [id: string]: string[] };
-      state.cellChildren = payload.cell_children as { [id: string]: string[] };
+      const ipyflow_metadata = (notebook.model as any).getMetadata(
+        'ipyflow'
+      ) as any;
+      const parentsFromMetadata = ipyflow_metadata?.cell_parents ?? {};
+      const childrenFromMetadata = ipyflow_metadata?.cell_children ?? {};
+      state.cellParents = mergeMaps(
+        payload.cell_parents as { [id: string]: string[] },
+        parentsFromMetadata
+      );
+      state.cellChildren = mergeMaps(
+        payload.cell_children as { [id: string]: string[] },
+        childrenFromMetadata
+      );
       (notebook.model as any).setMetadata('ipyflow', {
         cell_parents: state.cellParents,
         cell_children: state.cellChildren,

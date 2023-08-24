@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.183 (2022-08-24)
+--------------------
+* [kernel] Add a couple more comm handlers;
+
 0.0.182 (2022-08-20)
 --------------------
 * [lab][kernel] Persist dependency DAG across restarts;

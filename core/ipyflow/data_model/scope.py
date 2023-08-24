@@ -55,6 +55,18 @@ class Scope:
     def __repr__(self):
         return str(self)
 
+    def __getitem__(self, item: SupportedIndexType) -> Symbol:
+        ret = self.get(item)
+        if ret is None:
+            raise KeyError("item not found: %s" % item)
+        return ret
+
+    def __contains__(self, item: SupportedIndexType) -> bool:
+        return self.get(item) is not None
+
+    def get(self, item: SupportedIndexType) -> Optional[Symbol]:
+        return self.lookup_data_symbol_by_name_this_indentation(item)
+
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
             raise ValueError("Only namespace scopes carry subscripts")

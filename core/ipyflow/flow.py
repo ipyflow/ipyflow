@@ -196,6 +196,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._tags: Tuple[str, ...] = ()
         self.last_executed_content: Optional[str] = None
         self.last_executed_cell_id: Optional[IdType] = None
+        self.tracked_timestamps: Dict[str, Timestamp] = {}
         self._comm_handlers: Dict[
             str, Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]
         ] = {}
@@ -209,6 +210,8 @@ class NotebookFlow(singletons.NotebookFlow):
         self.register_comm_handler("reactivity_cleanup", self.handle_reactivity_cleanup)
         self.register_comm_handler("refresh_symbols", self.handle_refresh_symbols)
         self.register_comm_handler("upsert_symbol", self.handle_upsert_symbol)
+        self.register_comm_handler("get_code", self.handle_get_code)
+        self.register_comm_handler("bump_timestamp", self.handle_bump_timestamp)
         self.register_comm_handler(
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
         )
@@ -742,6 +745,23 @@ class NotebookFlow(singletons.NotebookFlow):
             self.global_scope.upsert_data_symbol_for_name(
                 symbol_name, obj, dep_symbols, ast.parse("pass").body[0]
             )
+        return None
+
+    def handle_get_code(self, request) -> Dict[str, Any]:
+        symbol_name = request["symbol"]
+        sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(
+            symbol_name
+        )
+        if sym is None:
+            return {"success": False}
+        return {
+            "symbol": symbol_name,
+            "code": sym.code(format_type=str),
+        }
+
+    def handle_bump_timestamp(self, request) -> None:
+        timestamp_name = request["timestamp"]
+        self.tracked_timestamps[timestamp_name] = Timestamp.current()
         return None
 
     def handle_register_dynamic_comm_handler(self, request) -> Optional[Dict[str, Any]]:

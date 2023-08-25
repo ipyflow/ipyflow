@@ -774,7 +774,7 @@ class NotebookFlow(singletons.NotebookFlow):
             return {"success": False}
         return {
             "symbol": symbol_name,
-            "code": sym.code(format_type=str),
+            "code": str(sym.code(format_type=str)),
         }
 
     def handle_bump_timestamp(self, request) -> None:

@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.185 (2022-08-24)
+0.0.186 (2022-08-25)
 --------------------
 * [kernel] Add a couple more comm handlers;
 * [kernel] Allow reactivity_mode to be configured on client initialization;

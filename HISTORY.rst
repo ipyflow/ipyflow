@@ -1,11 +1,13 @@
 History
 =======
 
-0.0.183 (2022-08-24)
+0.0.185 (2022-08-24)
 --------------------
 * [kernel] Add a couple more comm handlers;
+* [kernel] Allow reactivity_mode to be configured on client initialization;
+* [kernel] Improve compatibility with other interfaces;
 
-0.0.182 (2022-08-20)
+0.0.183 (2022-08-20)
 --------------------
 * [lab][kernel] Persist dependency DAG across restarts;
 * [lab] Continuous file sync for cell input content changes;

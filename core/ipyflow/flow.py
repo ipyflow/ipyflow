@@ -309,6 +309,13 @@ class NotebookFlow(singletons.NotebookFlow):
         self.mut_settings.highlights = Highlights(
             getattr(config, "highlights", kwargs.get("highlights", Highlights.EXECUTED))
         )
+        self.mut_settings.reactivity_mode = ReactivityMode(
+            getattr(
+                config,
+                "reactivity_mode",
+                kwargs.get("reactivity_mode", ReactivityMode.BATCH),
+            )
+        )
         self.mut_settings.max_external_call_depth_for_tracing = getattr(
             config,
             "max_external_call_depth_for_tracing",
@@ -636,7 +643,7 @@ class NotebookFlow(singletons.NotebookFlow):
         else:
             return None
 
-    def handle_compute_exec_schedule(
+    def _handle_compute_exec_schedule_impl(
         self, request: Dict[str, Any], notify_content_changed: bool = True
     ) -> Optional[Dict[str, Any]]:
         if not self.mut_settings.dataflow_enabled:
@@ -644,6 +651,9 @@ class NotebookFlow(singletons.NotebookFlow):
         is_reactively_executing = request.get("is_reactively_executing", False)
         if self.active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
+            prev_cell = cells().current_cell()
+            if prev_cell.is_placeholder_id:
+                prev_cell.update_id(self.active_cell_id)
         if notify_content_changed and request.get("notify_content_changed", True):
             self.handle_notify_content_changed(
                 request, is_reactively_executing=is_reactively_executing
@@ -702,6 +712,16 @@ class NotebookFlow(singletons.NotebookFlow):
         response["cell_parents"] = cell_parents
         response["cell_children"] = cell_children
         return response
+
+    def handle_compute_exec_schedule(
+        self, request: Dict[str, Any], notify_content_changed: bool = True
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            return self._handle_compute_exec_schedule_impl(
+                request, notify_content_changed=notify_content_changed
+            )
+        finally:
+            self.active_cell_id = None
 
     def handle_reactivity_cleanup(self, _request=None) -> None:
         self.min_cascading_reactive_cell_num = self.cell_counter()

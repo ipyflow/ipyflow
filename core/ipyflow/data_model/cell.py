@@ -133,6 +133,10 @@ class Cell(SliceableMixin):
         return self.sanitized_content().strip()
 
     @property
+    def is_placeholder_id(self) -> bool:
+        return self._placeholder_id
+
+    @property
     def position(self) -> int:
         pos = self._position_by_cell_id.get(self.cell_id, -1)
         if pos == -1:

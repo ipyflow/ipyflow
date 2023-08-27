@@ -211,6 +211,9 @@ class NotebookFlow(singletons.NotebookFlow):
         self.register_comm_handler("refresh_symbols", self.handle_refresh_symbols)
         self.register_comm_handler("upsert_symbol", self.handle_upsert_symbol)
         self.register_comm_handler("get_code", self.handle_get_code)
+        self.register_comm_handler(
+            "get_last_updated_cell_id", self.handle_get_last_updated_cell_id
+        )
         self.register_comm_handler("bump_timestamp", self.handle_bump_timestamp)
         self.register_comm_handler(
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
@@ -775,6 +778,20 @@ class NotebookFlow(singletons.NotebookFlow):
         return {
             "symbol": symbol_name,
             "code": str(sym.code(format_type=str)),
+        }
+
+    def handle_get_last_updated_cell_id(self, request) -> Dict[str, Any]:
+        symbol_name = request["symbol"]
+        sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_name)
+        if sym is None:
+            return {"success": False}
+        try:
+            last_updated_cell_id = cells().at_timestamp(sym.timestamp).id
+        except KeyError:
+            return {"success": False}
+        return {
+            "symbol": symbol_name,
+            "cell_id": last_updated_cell_id,
         }
 
     def handle_bump_timestamp(self, request) -> None:

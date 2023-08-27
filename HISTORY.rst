@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.187 (2022-08-26)
+--------------------
+* [kernel] Add another comm handler for last_updated_cell_id;
+
 0.0.186 (2022-08-25)
 --------------------
 * [kernel] Add a couple more comm handlers;

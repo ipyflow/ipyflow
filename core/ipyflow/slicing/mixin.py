@@ -413,7 +413,10 @@ class SliceableMixin(Protocol):
         closure.add(self)
         for _ in flow().mut_settings.iter_slicing_contexts():
             for pid in self.parents.keys():
-                self.from_id(pid)._make_slice_helper(closure)
+                parent = self.from_id(pid)
+                while parent.timestamp > self.timestamp:
+                    parent = parent.prev
+                parent._make_slice_helper(closure)
 
     def make_slice(self) -> List["SliceableMixin"]:
         return self.make_multi_slice([self])

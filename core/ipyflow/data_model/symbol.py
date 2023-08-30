@@ -260,6 +260,8 @@ class Symbol:
         return timestamps
 
     def _get_timestamps_for_version(self, version: int) -> Set[Timestamp]:
+        if len(self._snapshot_timestamps) == 0:
+            return {self.timestamp}
         ts = self._snapshot_timestamps[version]
         if ts.cell_num == -1:
             return {Timestamp(self.defined_cell_num, ts.stmt_num)}
@@ -848,7 +850,7 @@ class Symbol:
             return False
         only_dep: Symbol = next(iter(new_deps))
         # obj ids can get reused for anon symbols like literals
-        return not only_dep.is_anonymous and self.cached_obj_id == only_dep.obj_id
+        return not only_dep.is_anonymous and self.obj_id == only_dep.obj_id
 
     def update_deps(
         self,

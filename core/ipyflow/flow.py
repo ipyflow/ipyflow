@@ -915,11 +915,25 @@ class NotebookFlow(singletons.NotebookFlow):
         ):
             parent_symbols |= syms
         for _ in SlicingContext.iter_slicing_contexts():
+            new_parents = list(cell.parents.items())
+            to_remove_from_dangling = set()
             for cell_id, sym_edges in prev_cell.parents.items():
-                cell.add_parent_edges(cell_id, sym_edges & parent_symbols)
+                prev_pos = cells().from_id(cell_id).position
+                for new_pid, new_edges in new_parents:
+                    if (
+                        self.mut_settings.flow_order == FlowDirection.IN_ORDER
+                        and cells().from_id(new_pid).position > prev_pos
+                    ):
+                        cell.remove_parent_edges(cell_id, sym_edges & new_edges)
+                        to_remove_from_dangling |= new_edges
+                    else:
+                        cell.add_parent_edges(cell_id, sym_edges & new_edges)
                 cell.remove_parent_edges(cell_id, sym_edges - parent_symbols)
                 with dangling_context():
-                    cell.add_parent_edges(cell_id, sym_edges & cell.used_symbols)
+                    cell.add_parent_edges(
+                        cell_id,
+                        sym_edges & (cell.used_symbols - to_remove_from_dangling),
+                    )
 
     @property
     def line_magic_name(self):

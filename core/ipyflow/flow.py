@@ -909,11 +909,6 @@ class NotebookFlow(singletons.NotebookFlow):
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
-        parent_symbols = set()
-        for syms in itertools.chain(
-            cell.dynamic_parents.values(), cell.static_parents.values()
-        ):
-            parent_symbols |= syms
         for _ in SlicingContext.iter_slicing_contexts():
             new_parents = list(cell.parents.items())
             to_remove_from_dangling = set()
@@ -929,7 +924,7 @@ class NotebookFlow(singletons.NotebookFlow):
                         to_remove_from_dangling |= new_edges
                     elif new_parent.position <= cell.position:
                         cell.add_parent_edges(cell_id, sym_edges & new_edges)
-                cell.remove_parent_edges(cell_id, sym_edges - parent_symbols)
+                    cell.remove_parent_edges(cell_id, sym_edges - new_edges)
                 with dangling_context():
                     cell.add_parent_edges(
                         cell_id,

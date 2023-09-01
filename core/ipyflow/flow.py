@@ -920,13 +920,14 @@ class NotebookFlow(singletons.NotebookFlow):
             for cell_id, sym_edges in prev_cell.parents.items():
                 prev_pos = cells().from_id(cell_id).position
                 for new_pid, new_edges in new_parents:
+                    new_parent = cells().from_id(new_pid)
                     if (
                         self.mut_settings.flow_order == FlowDirection.IN_ORDER
-                        and cells().from_id(new_pid).position > prev_pos
+                        and cell.position >= new_parent.position > prev_pos
                     ):
                         cell.remove_parent_edges(cell_id, sym_edges & new_edges)
                         to_remove_from_dangling |= new_edges
-                    else:
+                    elif new_parent.position <= cell.position:
                         cell.add_parent_edges(cell_id, sym_edges & new_edges)
                 cell.remove_parent_edges(cell_id, sym_edges - parent_symbols)
                 with dangling_context():

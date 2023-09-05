@@ -182,10 +182,11 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             allow_stdin=False,
             cell_id=None,
         ):
+            super_ = super()
             kwargs = {}
             if self._has_cell_id:
                 kwargs["cell_id"] = cell_id
-            ret = await super().do_execute(
+            ret = await super_.do_execute(
                 code,
                 silent,
                 store_history,
@@ -207,12 +208,13 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             allow_stdin=False,
             cell_id=None,
         ):
+            super_ = super()
             kwargs = {}
             if self._has_cell_id:
                 kwargs["cell_id"] = cell_id
 
             async def _run_cell_func(cell):
-                ret = super().do_execute(
+                ret = super_.do_execute(
                     cell,
                     silent,
                     store_history,

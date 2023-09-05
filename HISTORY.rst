@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.189 (2022-09-05)
+--------------------
+* [kernel] Fix Colab kernel incompatibility;
+
 0.0.188 (2022-09-01)
 --------------------
 * [kernel] Misc bugfixes;

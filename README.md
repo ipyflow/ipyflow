@@ -239,11 +239,11 @@ JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
 :-------------------------------:|:--------------------------------:
 ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-notebook.png)
 
-Colab and VSCode
-----------------
-Reactivity and other frontend features are not yet working in Colab or VSCode,
-but you can still use IPyflow's dataflow API on these surfaces by initializing
-your notebook session with the following code:
+Colab, VSCode, and other Interfaces
+-----------------------------------
+Reactivity and other frontend features are not yet working in interfaces like
+Colab or VSCode, but you can still use IPyflow's dataflow API on these surfaces
+by initializing your notebook session with the following code:
 ```
 %pip install ipyflow
 %load_ext ipyflow

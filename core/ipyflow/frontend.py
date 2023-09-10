@@ -410,7 +410,7 @@ class FrontendCheckerResult(NamedTuple):
             last_executed_cell_id
         )
         if cells_to_check is None:
-            cells_to_check = cells().all_cells_most_recently_run_for_each_id()
+            cells_to_check = cells().current_cells_for_each_id()
         if flow_.mut_settings.highlights == Highlights.EXECUTED:
             cells_to_check = (cell for cell in cells_to_check if cell.is_tracked)
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)

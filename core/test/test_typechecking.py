@@ -24,7 +24,7 @@ def run_cell(cell, cell_id=None, **kwargs):
 def get_cell_ids_needing_typecheck() -> Set[IdType]:
     return {
         cell.cell_id
-        for cell in cells().all_cells_most_recently_run_for_each_id()
+        for cell in cells().current_cells_for_each_id()
         if cell.needs_typecheck
     }
 

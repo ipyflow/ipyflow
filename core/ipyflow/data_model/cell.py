@@ -369,10 +369,14 @@ class Cell(SliceableMixin):
         return cls.exec_counter() + 1
 
     @classmethod
-    def all_cells_most_recently_run_for_each_id(
-        cls,
-    ) -> Generator["Cell", None, None]:
+    def current_cells_for_each_id(cls) -> Generator["Cell", None, None]:
         yield from cls._current_cell_by_cell_id.values()
+
+    @classmethod
+    def all_executed_cell_ids(cls) -> Generator[IdType, None, None]:
+        for cell in cls._cell_by_cell_ctr.values():
+            if cell.cell_ctr > 0:
+                yield cell.cell_id
 
     @classmethod
     def at_counter(cls, ctr: int) -> "Cell":

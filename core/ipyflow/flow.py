@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import ast
-import itertools
 import logging
 import os
 import sys
@@ -714,6 +713,7 @@ class NotebookFlow(singletons.NotebookFlow):
             cell_children[cell.id] = list(this_cell_children)
         response["cell_parents"] = cell_parents
         response["cell_children"] = cell_children
+        response["executed_cells"] = list(cells().all_executed_cell_ids())
         return response
 
     def handle_compute_exec_schedule(

@@ -56,6 +56,7 @@ class IpyflowSessionState {
   isIpyflowCommConnected = false;
   executionScheduledCells: string[] = [];
   selectedCells: string[] = [];
+  executedCells: Set<string> = new Set();
   dirtyCells: Set<string> = new Set();
   waitingCells: Set<string> = new Set();
   readyCells: Set<string> = new Set();
@@ -112,6 +113,8 @@ class IpyflowSessionState {
         if (cell.promptNode.textContent?.includes('[*]')) {
           // can happen if a preceding cell errored
           cell.setPrompt('');
+        } else {
+          this.executedCells.add(cell.model.id);
         }
         if (++numFinished === cells.length) {
           this.requestComputeExecSchedule();
@@ -148,6 +151,36 @@ class IpyflowSessionState {
     });
   }
 
+  computeTransitiveClosureHelper(
+    closure: Set<string>,
+    cellId: string,
+    edges: { [id: string]: string[] },
+    onlyIncludeUnexecuted = false,
+    skipFirstCheck = false
+  ): void {
+    if (!skipFirstCheck) {
+      if (closure.has(cellId)) {
+        return;
+      }
+      if (onlyIncludeUnexecuted && this.executedCells.has(cellId)) {
+        return;
+      }
+    }
+    closure.add(cellId);
+    const children = edges[cellId];
+    if (children === undefined) {
+      return;
+    }
+    children.forEach((child) =>
+      this.computeTransitiveClosureHelper(
+        closure,
+        child,
+        edges,
+        onlyIncludeUnexecuted
+      )
+    );
+  }
+
   computeTransitiveClosure(
     cellIds: string[],
     inclusive = true,
@@ -156,9 +189,20 @@ class IpyflowSessionState {
     const closure = new Set<string>();
     for (const cellId of cellIds) {
       if (parents) {
-        computeTransitiveClosureHelper(closure, cellId, this.cellParents);
+        this.computeTransitiveClosureHelper(closure, cellId, this.cellParents);
       } else {
-        computeTransitiveClosureHelper(closure, cellId, this.cellChildren);
+        this.computeTransitiveClosureHelper(closure, cellId, this.cellChildren);
+      }
+    }
+    if (!parents) {
+      for (const cellId of closure) {
+        this.computeTransitiveClosureHelper(
+          closure,
+          cellId,
+          this.cellParents,
+          true,
+          true
+        );
       }
     }
     if (!inclusive) {
@@ -186,24 +230,6 @@ function initSessionState(session_id: string): void {
 
 function resetSessionState(session_id: string): void {
   delete ipyflowState[session_id];
-}
-
-function computeTransitiveClosureHelper(
-  closure: Set<string>,
-  cellId: string,
-  edges: { [id: string]: string[] }
-): void {
-  if (closure.has(cellId)) {
-    return;
-  }
-  closure.add(cellId);
-  const children = edges[cellId];
-  if (children === undefined) {
-    return;
-  }
-  children.forEach((child) =>
-    computeTransitiveClosureHelper(closure, child, edges)
-  );
 }
 
 function mergeMaps<V>(
@@ -248,6 +274,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         const altModeExecuteCells = state.altModeExecuteCells;
         state.altModeExecuteCells = null;
         if (!(state.isIpyflowCommConnected ?? false)) {
+          state.executedCells.add(notebooks.activeCell.model.id);
           CodeCell.execute(notebooks.activeCell as CodeCell, session);
           return;
         }
@@ -263,12 +290,12 @@ const extension: JupyterFrontEndPlugin<void> = {
         state.numAltModeExecutes++;
         if (state.settings.reactivity_mode === 'incremental') {
           if (state.numAltModeExecutes === 1) {
-            state
-              .toggleReactivity()
-              .done.then(() =>
-                CodeCell.execute(notebooks.activeCell as CodeCell, session)
-              );
+            state.toggleReactivity().done.then(() => {
+              state.executedCells.add(notebooks.activeCell.model.id);
+              CodeCell.execute(notebooks.activeCell as CodeCell, session);
+            });
           } else {
+            state.executedCells.add(notebooks.activeCell.model.id);
             CodeCell.execute(notebooks.activeCell as CodeCell, session);
           }
         } else if (state.settings.reactivity_mode === 'batch') {
@@ -713,6 +740,7 @@ const connectToComm = (
     if (args.name !== 'executionCount' || args.newValue === null) {
       return;
     }
+    state.executedCells.add(cell.id);
     state.dirtyCells.delete(cell.id);
     notebook.widgets.forEach((itercell) => {
       if (itercell.model.id === cell.id) {
@@ -938,10 +966,19 @@ const connectToComm = (
           ...state.cellChildren[cellId],
           ...state.cellParents[cellId],
         ]);
-        computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
+        state.computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
         slice.delete(cellId);
-        computeTransitiveClosureHelper(slice, cellId, state.cellParents);
+        state.computeTransitiveClosureHelper(slice, cellId, state.cellParents);
       }
+    }
+    for (const cellId of slice) {
+      state.computeTransitiveClosureHelper(
+        slice,
+        cellId,
+        state.cellParents,
+        true,
+        true
+      );
     }
     for (const [id] of Object.entries(state.cellsById)) {
       updateOneCellUI(
@@ -1006,6 +1043,7 @@ const connectToComm = (
         payload.cell_children as { [id: string]: string[] },
         childrenFromMetadata
       );
+      state.executedCells = new Set(payload.executed_cells as string[]);
       (notebook.model as any).setMetadata('ipyflow', {
         cell_parents: state.cellParents,
         cell_children: state.cellChildren,
@@ -1143,6 +1181,7 @@ const connectToComm = (
           doneReactivelyExecuting = true;
         } else {
           state.isReactivelyExecuting = true;
+          state.executedCells.add(state.cellPendingExecution.model.id);
           CodeCell.execute(state.cellPendingExecution, session);
         }
       }

@@ -42,7 +42,7 @@ def load_jupyter_server_extension(nbapp):
     patch_jupyter_taskrunner_run()
 
 
-def load_ipython_extension(ipy: "InteractiveShell") -> None:
+def load_ipython_extension(ipy: "InteractiveShell", do_asyncio_patches: bool = True) -> None:
     load_ipyflow_extension(ipy)
     kernel = getattr(ipy, "kernel", None)
     if kernel is None:
@@ -53,7 +53,7 @@ def load_ipython_extension(ipy: "InteractiveShell") -> None:
     else:
         class GeneratedIPyflowKernel(singletons.IPyflowKernel, cur_kernel_cls, metaclass=UsesIPyflowKernel):  # type: ignore
             pass
-        GeneratedIPyflowKernel.inject(prev_kernel_class=cur_kernel_cls)  # type: ignore
+        GeneratedIPyflowKernel.inject(prev_kernel_class=cur_kernel_cls, do_asyncio_patches=do_asyncio_patches)  # type: ignore
 
     if IPyflowKernel.client_comm is None:  # type: ignore
         from ipykernel.comm import Comm

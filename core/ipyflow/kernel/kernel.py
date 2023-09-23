@@ -96,15 +96,16 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         NotebookFlow.instance().register_comm_target(ret)
         return ret
 
-    def _initialize(self) -> None:
-        from ipyflow.kernel import patched_nest_asyncio
+    def _initialize(self, do_asyncio_patches: bool = True) -> None:
+        if do_asyncio_patches:
+            from ipyflow.kernel import patched_nest_asyncio
 
-        patched_nest_asyncio.apply()
+            patched_nest_asyncio.apply()
 
-        # As of 2023/05/21, it seems like this is only necessary in
-        # the server extension, but seems like it can't hurt to do
-        # it here as well.
-        patch_jupyter_taskrunner_run()
+            # As of 2023/05/21, it seems like this is only necessary in
+            # the server extension, but seems like it can't hurt to do
+            # it here as well.
+            patch_jupyter_taskrunner_run()
         patch_pydevd_file_filters()
         self._has_cell_id: bool = (
             "cell_id" in inspect.signature(super().do_execute).parameters
@@ -132,12 +133,16 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         return await super().do_debug_request(msg)
 
     @classmethod
-    def inject(kernel_class, prev_kernel_class: TypeType[IPythonKernel]) -> None:
+    def inject(
+        kernel_class,
+        prev_kernel_class: TypeType[IPythonKernel],
+        do_asyncio_patches: bool = True,
+    ) -> None:
         ipy = get_ipython()
         kernel = ipy.kernel
         kernel.__class__ = kernel_class
         if kernel_class.prev_kernel_class is None:
-            kernel._initialize()
+            kernel._initialize(do_asyncio_patches=do_asyncio_patches)
             for subclass in singletons.IPyflowKernel._walk_mro():
                 subclass._instance = kernel
         NotebookFlow.instance().register_comm_target(kernel)

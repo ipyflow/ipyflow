@@ -42,7 +42,7 @@ def load_jupyter_server_extension(nbapp):
     patch_jupyter_taskrunner_run()
 
 
-def load_ipython_extension(ipy: "InteractiveShell", do_asyncio_patches: bool = True) -> None:
+def load_ipython_extension(ipy: "InteractiveShell", do_asyncio_patches: bool = False) -> None:
     load_ipyflow_extension(ipy)
     kernel = getattr(ipy, "kernel", None)
     if kernel is None:

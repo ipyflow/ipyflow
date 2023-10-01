@@ -96,7 +96,7 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         NotebookFlow.instance().register_comm_target(ret)
         return ret
 
-    def _initialize(self, do_asyncio_patches: bool = True) -> None:
+    def _initialize(self, do_asyncio_patches: bool = False) -> None:
         if do_asyncio_patches:
             from ipyflow.kernel import patched_nest_asyncio
 
@@ -136,7 +136,7 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
     def inject(
         kernel_class,
         prev_kernel_class: TypeType[IPythonKernel],
-        do_asyncio_patches: bool = True,
+        do_asyncio_patches: bool = False,
     ) -> None:
         ipy = get_ipython()
         kernel = ipy.kernel
@@ -203,6 +203,9 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             return ret
 
     else:
+        from ipyflow.kernel import patched_nest_asyncio
+
+        patched_nest_asyncio.apply()
 
         def do_execute(
             self,

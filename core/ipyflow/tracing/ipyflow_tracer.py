@@ -140,7 +140,7 @@ class StackFrameManager(SingletonBaseTracer):
         return False
 
     _FILTERED_PATH_REGEX = re.compile(
-        rf"[/\\]({'|'.join(['IPython', 'ipykernel', '_?pytest', 'pluggy', 'test'])})[/\\]"
+        rf"[/\\]({'|'.join(['IPython', 'ipykernel', '_?pytest.*', 'pluggy', 'test'])})[/\\]"
     )
 
     @classmethod
@@ -1554,6 +1554,8 @@ class DataflowTracer(StackFrameManager):
     ):
         cell_num, lineno = flow().get_position(frame)
         assert cell_num is not None
+        if lineno == 0:
+            return None
         stmt_node = self._get_stmt_node_for_sys_event(event, cell_num, lineno)
         trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
         self._maybe_log_event(event, stmt_node, trace_stmt)

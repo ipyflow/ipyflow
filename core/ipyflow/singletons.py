@@ -34,22 +34,22 @@ class SingletonBaseTracer(pyc.BaseTracer):
 
 def shell() -> "IPyflowShellInstance":
     assert IPyflowShell.initialized()
-    return IPyflowShell.instance()
+    return IPyflowShell.instance()  # type: ignore
 
 
 def kernel() -> "IPyflowKernelInstance":
     assert IPyflowKernel.initialized()
-    return IPyflowKernel.instance()
+    return IPyflowKernel.instance()  # type: ignore
 
 
 def flow() -> "NotebookFlowInstance":
     assert NotebookFlow.initialized()
-    return NotebookFlow.instance()
+    return NotebookFlow.instance()  # type: ignore
 
 
 def tracer() -> "TracerInstance":
     assert SingletonBaseTracer.initialized()
-    return SingletonBaseTracer.instance()
+    return SingletonBaseTracer.instance()  # type: ignore
 
 
 def tracer_initialized() -> bool:

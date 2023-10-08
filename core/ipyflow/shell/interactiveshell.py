@@ -441,6 +441,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if flow_._saved_debug_message is not None:  # pragma: no cover
             logger.error(flow_._saved_debug_message)
             flow_._saved_debug_message = None
+        if not store_history:
+            return None
 
         if cell_id is not None:
             flow_.active_cell_id = cell_id

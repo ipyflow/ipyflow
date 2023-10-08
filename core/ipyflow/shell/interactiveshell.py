@@ -342,7 +342,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         ret = None
         # Stage 1: Run pre-execute hook
         maybe_new_content = self.before_run_cell(
-            raw_cell, store_history=store_history, **kwargs
+            raw_cell, store_history=store_history, silent=silent, **kwargs
         )
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
@@ -413,7 +413,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         singletons.flow().init_virtual_symbols()
         with singletons.tracer().dataflow_tracing_disabled_patch(
             get_ipython(),
-            "run_line_magic",
+            "run_line_magic",  # type: ignore
             kwarg_transforms={"_stack_depth": (1, lambda d: d + 1)},
         ):
             with singletons.tracer().dataflow_tracing_disabled_patch(
@@ -425,7 +425,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         return singletons.flow().mut_settings.dataflow_enabled
 
     def before_run_cell(
-        self, cell_content: str, store_history: bool, cell_id: Optional[str] = None
+        self,
+        cell_content: str,
+        store_history: bool,
+        silent: bool,
+        cell_id: Optional[str] = None,
     ) -> Optional[str]:
         flow_ = singletons.flow()
         settings = flow_.mut_settings
@@ -441,7 +445,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if flow_._saved_debug_message is not None:  # pragma: no cover
             logger.error(flow_._saved_debug_message)
             flow_._saved_debug_message = None
-        if not store_history:
+        if silent or (not store_history and not flow_.is_test):
             return None
 
         if cell_id is not None:

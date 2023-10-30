@@ -640,13 +640,16 @@ class NotebookFlow(singletons.NotebookFlow):
         self._create_untracked_cells_for_content(content_by_cell_id)
         if should_recompute_exec_schedule:
             return self.handle_compute_exec_schedule(
-                request, notify_content_changed=False
+                request, notify_content_changed=False, allow_new_ready=False
             )
         else:
             return None
 
     def _handle_compute_exec_schedule_impl(
-        self, request: Dict[str, Any], notify_content_changed: bool = True
+        self,
+        request: Dict[str, Any],
+        notify_content_changed: bool = True,
+        allow_new_ready: bool = True,
     ) -> Optional[Dict[str, Any]]:
         if not self.mut_settings.dataflow_enabled:
             return {"success": False, "error": "dataflow not enabled"}
@@ -684,7 +687,7 @@ class NotebookFlow(singletons.NotebookFlow):
         response = self.check_and_link_multiple_cells(
             cells_to_check=cells_to_check,
             last_executed_cell_id=last_cell_id,
-            allow_new_ready=request.get("allow_new_ready", True),
+            allow_new_ready=request.get("allow_new_ready", allow_new_ready),
         ).to_json()
         response["type"] = "compute_exec_schedule"
         response["exec_mode"] = self.mut_settings.exec_mode.value
@@ -719,11 +722,16 @@ class NotebookFlow(singletons.NotebookFlow):
         return response
 
     def handle_compute_exec_schedule(
-        self, request: Dict[str, Any], notify_content_changed: bool = True
+        self,
+        request: Dict[str, Any],
+        notify_content_changed: bool = True,
+        allow_new_ready: bool = True,
     ) -> Optional[Dict[str, Any]]:
         try:
             return self._handle_compute_exec_schedule_impl(
-                request, notify_content_changed=notify_content_changed
+                request,
+                notify_content_changed=notify_content_changed,
+                allow_new_ready=allow_new_ready,
             )
         finally:
             self.active_cell_id = None

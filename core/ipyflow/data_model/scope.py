@@ -11,6 +11,7 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    Union,
     cast,
 )
 
@@ -117,6 +118,22 @@ class Scope:
                 name, **kwargs
             )
         return ret
+
+    def lookup_data_symbol_by_qualified_name(
+        self, qualified_name: str
+    ) -> Optional[Symbol]:
+        scope_or_sym: Union["Scope", Symbol] = self
+        for part in qualified_name.split("."):
+            if isinstance(scope_or_sym, Symbol):
+                scope_or_sym = scope_or_sym.namespace
+            if not isinstance(scope_or_sym, Scope):
+                return None
+            scope_or_sym = scope_or_sym.lookup_data_symbol_by_name_this_indentation(
+                part, is_subscript=False
+            )
+            if not isinstance(scope_or_sym, Symbol):
+                return None
+        return scope_or_sym if isinstance(scope_or_sym, Symbol) else None
 
     def gen_data_symbols_for_attrsub_chain(
         self, symbol_ref: SymbolRef

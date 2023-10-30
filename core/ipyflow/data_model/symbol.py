@@ -47,14 +47,15 @@ _override_unused_warning_symbols = symbols
 
 
 @debounce(0.1)
-def _debounced_exec_schedule(executed_cell_id: IdType) -> None:
+def _debounced_exec_schedule(executed_cell_id: IdType, reactive: bool) -> None:
     flow_ = flow()
     flow_.get_and_set_exception_raised_during_execution(None)
     flow_.handle(
         {
             "type": "compute_exec_schedule",
             "executed_cell_id": executed_cell_id,
-            "is_reactively_executing": True,
+            "is_reactively_executing": reactive,
+            "allow_new_ready": reactive,
         }
     )
 
@@ -1005,7 +1006,12 @@ class Symbol:
                 sym,
                 add_only_if_parent_new=False,
             )
-        _debounced_exec_schedule(cells().at_timestamp(self.timestamp).cell_id)
+        self.debounced_exec_schedule(reactive=True)
+
+    def debounced_exec_schedule(self, reactive: bool) -> None:
+        _debounced_exec_schedule(
+            cells().at_timestamp(self.timestamp).cell_id, reactive=reactive
+        )
 
     def namespaced(self) -> "Namespace":
         ns = self.namespace

@@ -682,7 +682,9 @@ class NotebookFlow(singletons.NotebookFlow):
             if cell is not None
         )
         response = self.check_and_link_multiple_cells(
-            cells_to_check=cells_to_check, last_executed_cell_id=last_cell_id
+            cells_to_check=cells_to_check,
+            last_executed_cell_id=last_cell_id,
+            allow_new_ready=request.get("allow_new_ready", True),
         ).to_json()
         response["type"] = "compute_exec_schedule"
         response["exec_mode"] = self.mut_settings.exec_mode.value
@@ -823,8 +825,9 @@ class NotebookFlow(singletons.NotebookFlow):
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[IdType] = None,
         clear_updated_reactive_symbols: bool = False,
+        allow_new_ready: bool = True,
     ) -> FrontendCheckerResult:
-        result = FrontendCheckerResult.empty()
+        result = FrontendCheckerResult.empty(allow_new_ready=allow_new_ready)
         try:
             if (
                 DataflowTracer not in singletons.shell().registered_tracers

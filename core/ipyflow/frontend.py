@@ -40,9 +40,10 @@ class FrontendCheckerResult(NamedTuple):
     waiter_links: Dict[IdType, Set[IdType]]
     ready_maker_links: Dict[IdType, Set[IdType]]
     phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]]
+    allow_new_ready: bool
 
     @classmethod
-    def empty(cls):
+    def empty(cls, allow_new_ready: bool = True):
         return cls(
             waiting_cells=set(),
             ready_cells=set(),
@@ -55,6 +56,7 @@ class FrontendCheckerResult(NamedTuple):
             waiter_links=defaultdict(set),
             ready_maker_links=defaultdict(set),
             phantom_cell_info={},
+            allow_new_ready=allow_new_ready,
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -63,7 +65,9 @@ class FrontendCheckerResult(NamedTuple):
             #  or at least change the name to a more general "unsafe_cells" or equivalent
             "waiting_cells": list(self.waiting_cells | self.typecheck_error_cells),
             "ready_cells": list(self.ready_cells),
-            "new_ready_cells": list(self.new_ready_cells),
+            "new_ready_cells": list(self.new_ready_cells)
+            if self.allow_new_ready
+            else [],
             "forced_reactive_cells": list(self.forced_reactive_cells),
             "forced_cascading_reactive_cells": list(
                 self.forced_cascading_reactive_cells
@@ -251,7 +255,7 @@ class FrontendCheckerResult(NamedTuple):
             )
         ):
             max_used_live_sym_ctr = cell.get_max_used_live_symbol_cell_counter(
-                checker_result.live
+                checker_result.live, dead_symbols=checker_result.dead
             )
             if max_used_live_sym_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 is_ready = True
@@ -398,6 +402,7 @@ class FrontendCheckerResult(NamedTuple):
         cells_to_check: Optional[Iterable[Cell]] = None,
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[IdType] = None,
+        allow_new_ready: bool = True,
     ) -> "FrontendCheckerResult":
         flow_ = flow()
         if last_executed_cell_id is None:

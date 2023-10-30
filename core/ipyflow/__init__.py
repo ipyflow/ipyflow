@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 import ipyflow.api
 from ipyflow import singletons
 from ipyflow.api import *
+from ipyflow.flow import NotebookFlow
 from ipyflow.kernel.kernel import IPyflowKernel, UsesIPyflowKernel
 from ipyflow.shell import load_ipython_extension as load_ipyflow_extension, unload_ipython_extension as unload_ipyflow_extension
 from ipyflow.models import cell_above, cell_below, cell_at_offset, cells, last_run_cell, namespaces, scopes, statements, symbols, timestamps

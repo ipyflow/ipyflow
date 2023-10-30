@@ -486,6 +486,7 @@ class Cell(SliceableMixin):
         live_symbols: Set[ResolvedSymbol],
         filter_to_reactive: bool = False,
         filter_to_cascading_reactive: bool = False,
+        dead_symbols: Optional[Set["Symbol"]] = None,
     ) -> int:
         min_allowed_cell_position_by_symbol: Optional[Dict["Symbol", int]] = None
         flow_ = flow()
@@ -537,6 +538,23 @@ class Cell(SliceableMixin):
                                 live_sym_updated_cell_ctr,
                                 sym.dsym._override_ready_liveness_cell_num,
                             )
+            for symbol in dead_symbols or []:
+                if not symbol.is_import:
+                    continue
+                try:
+                    module_symbol = (
+                        flow_.global_scope.lookup_data_symbol_by_qualified_name(
+                            symbol.imported_module
+                        )
+                    )
+                except (ValueError, TypeError):
+                    module_symbol = None
+                if module_symbol is None:
+                    continue
+                max_used_cell_ctr = max(
+                    max_used_cell_ctr,
+                    module_symbol._override_ready_liveness_cell_num,
+                )
             return max_used_cell_ctr
 
     def _get_live_dead_symbol_refs(

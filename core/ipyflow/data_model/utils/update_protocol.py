@@ -127,7 +127,7 @@ class UpdateProtocol:
                 dsym_ns = dsym.namespace
                 if dsym_ns is not None:
                     self._collect_updated_symbols_and_refresh_namespaces(
-                        dsym_ns.all_data_symbols_this_indentation(),
+                        dsym_ns.all_symbols_this_indentation(),
                         refresh_descendent_namespaces,
                     )
 
@@ -178,7 +178,7 @@ class UpdateProtocol:
         self_ns = flow().namespaces.get(dsym.obj_id, None)
         if self_ns is None:
             return
-        for ns_child in self_ns.all_data_symbols_this_indentation(exclude_class=True):
+        for ns_child in self_ns.all_symbols_this_indentation(exclude_class=True):
             logger.warning("propagate from %s to namespace child %s", dsym, ns_child)
             self._propagate_waiting_to_deps(ns_child)
 

@@ -263,7 +263,7 @@ def show_waiting(line_: str) -> Optional[str]:
     line = line_.split()
     if len(line) == 0 or line[0] == "global":
         dsym_sets: Iterable[Iterable[Symbol]] = [
-            flow().global_scope.all_data_symbols_this_indentation()
+            flow().global_scope.all_symbols_this_indentation()
         ]
     elif line[0] == "all":
         dsym_sets = flow().aliases.values()

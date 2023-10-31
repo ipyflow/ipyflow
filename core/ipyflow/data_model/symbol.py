@@ -254,7 +254,7 @@ class Symbol:
         if self in seen:
             return timestamps
         seen.add(self)
-        for dsym in ns.all_data_symbols_this_indentation():
+        for dsym in ns.all_symbols_this_indentation():
             timestamps |= dsym._compute_namespace_timestamps(
                 seen=seen, version_ubound=version_ubound
             )
@@ -542,7 +542,7 @@ class Symbol:
         if self.is_subscript and containing_ns is not None:
             containing_ns._subscript_data_symbol_by_name.pop(self.name, None)
         elif not self.is_subscript:
-            self.containing_scope._data_symbol_by_name.pop(self.name, None)
+            self.containing_scope._symbol_by_name.pop(self.name, None)
         else:
             logger.warning(
                 "could not find symbol %s in its scope %s", self, self.containing_scope
@@ -1082,7 +1082,7 @@ class Symbol:
         if ns is None or self in seen:
             return self
         seen.add(self)
-        for dsym in ns.all_data_symbols_this_indentation():
+        for dsym in ns.all_symbols_this_indentation():
             dsym.update_usage_info(
                 used_time=used_time,
                 used_node=None,
@@ -1143,7 +1143,7 @@ class Symbol:
             seen.add(self)
             ns = self.namespace
             if ns is not None:
-                for dsym in ns.all_data_symbols_this_indentation(exclude_class=True):
+                for dsym in ns.all_symbols_this_indentation(exclude_class=True):
                     # this is to handle cases like `x = x.mutate(42)`, where
                     # we could have changed some member of x but returned the
                     # original object -- in this case, just assume that all

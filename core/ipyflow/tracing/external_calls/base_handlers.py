@@ -284,7 +284,7 @@ class NamespaceClear(StandardMutation):
         for name in sorted(
             (
                 dsym.name
-                for dsym in namespace.all_data_symbols_this_indentation(
+                for dsym in namespace.all_symbols_this_indentation(
                     exclude_class=True, is_subscript=True
                 )
             ),

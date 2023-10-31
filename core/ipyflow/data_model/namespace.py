@@ -81,7 +81,7 @@ class Namespace(Scope):
 
     @property
     def size(self) -> int:
-        return len(self._subscript_data_symbol_by_name) + len(self._data_symbol_by_name)
+        return len(self._subscript_data_symbol_by_name) + len(self._symbol_by_name)
 
     def _iter_inner(self) -> Generator[Optional[Symbol], None, None]:
         for i in range(len(self.obj)):
@@ -135,7 +135,7 @@ class Namespace(Scope):
         if self.is_garbage:
             return
         self._tombstone = True
-        for sym in self.all_data_symbols_this_indentation(exclude_class=True):
+        for sym in self.all_symbols_this_indentation(exclude_class=True):
             sym.mark_garbage()
 
     def unmark_garbage(self) -> None:
@@ -143,9 +143,7 @@ class Namespace(Scope):
 
     def collect_self_garbage(self) -> None:
         assert self.is_garbage
-        assert (
-            len(list(self.all_data_symbols_this_indentation(exclude_class=True))) == 0
-        )
+        assert len(list(self.all_symbols_this_indentation(exclude_class=True))) == 0
         flow().namespaces.pop(self.obj_id, None)
 
     @property
@@ -162,7 +160,7 @@ class Namespace(Scope):
                 dsym.cascading_reactive_cell_num(
                     seen=seen, consider_containing_symbols=False
                 )
-                for dsym in self.all_data_symbols_this_indentation()
+                for dsym in self.all_symbols_this_indentation()
             ),
             default=-1,
         )
@@ -180,7 +178,7 @@ class Namespace(Scope):
         if is_subscript:
             return self._subscript_data_symbol_by_name
         else:
-            return self._data_symbol_by_name
+            return self._symbol_by_name
 
     def clone(self, obj: Any) -> "Namespace":
         cloned = Namespace(obj, self.scope_name, self.parent_scope)
@@ -227,13 +225,13 @@ class Namespace(Scope):
         **kwargs: Any,
     ) -> Optional[Symbol]:
         if is_subscript is None:
-            ret = self._data_symbol_by_name.get(name, None)
+            ret = self._symbol_by_name.get(name, None)
             if ret is None:
                 ret = self._lookup_subscript(name)
         elif is_subscript:
             ret = self._lookup_subscript(name)
         else:
-            ret = self._data_symbol_by_name.get(name, None)
+            ret = self._symbol_by_name.get(name, None)
         if (
             not skip_cloned_lookup
             and ret is None
@@ -291,21 +289,21 @@ class Namespace(Scope):
         else:
             super().delete_data_symbol_for_name(name)
 
-    def all_data_symbols_this_indentation(
+    def all_symbols_this_indentation(
         self, exclude_class=False, is_subscript=None
     ) -> Iterable[Symbol]:
         if is_subscript is None:
             dsym_collections_to_chain: List[Iterable] = [
-                self._data_symbol_by_name.values(),
+                self._symbol_by_name.values(),
                 self._subscript_data_symbol_by_name.values(),
             ]
         elif is_subscript:
             dsym_collections_to_chain = [self._subscript_data_symbol_by_name.values()]
         else:
-            dsym_collections_to_chain = [self._data_symbol_by_name.values()]
+            dsym_collections_to_chain = [self._symbol_by_name.values()]
         if self.cloned_from is not None and not exclude_class:
             dsym_collections_to_chain.append(
-                self.cloned_from.all_data_symbols_this_indentation()
+                self.cloned_from.all_symbols_this_indentation()
             )
         return itertools.chain(*dsym_collections_to_chain)
 
@@ -315,7 +313,7 @@ class Namespace(Scope):
         elif not isinstance(name, str):  # pragma: no cover
             raise TypeError("%s should be a string" % name)
         else:
-            self._data_symbol_by_name[name] = val
+            self._symbol_by_name[name] = val
         val.containing_scope = self
 
     def refresh(self) -> None:
@@ -334,9 +332,7 @@ class Namespace(Scope):
             return ret
         if obj_id in (
             dsym.obj_id
-            for dsym in self.all_data_symbols_this_indentation(
-                is_subscript=is_subscript
-            )
+            for dsym in self.all_symbols_this_indentation(is_subscript=is_subscript)
         ):
             return self
         else:
@@ -356,9 +352,7 @@ class Namespace(Scope):
 
     def transfer_symbols_to(self, new_ns: "Namespace") -> None:
         for dsym in list(
-            self.all_data_symbols_this_indentation(
-                exclude_class=True, is_subscript=False
-            )
+            self.all_symbols_this_indentation(exclude_class=True, is_subscript=False)
         ):
             try:
                 inner_obj = flow().retrieve_namespace_attr_or_sub(
@@ -370,13 +364,11 @@ class Namespace(Scope):
                 break
             dsym.update_obj_ref(inner_obj)
             logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
-            self._data_symbol_by_name.pop(dsym.name, None)
-            new_ns._data_symbol_by_name[dsym.name] = dsym
+            self._symbol_by_name.pop(dsym.name, None)
+            new_ns._symbol_by_name[dsym.name] = dsym
             dsym.containing_scope = new_ns
         for dsym in list(
-            self.all_data_symbols_this_indentation(
-                exclude_class=True, is_subscript=True
-            )
+            self.all_symbols_this_indentation(exclude_class=True, is_subscript=True)
         ):
             try:
                 inner_obj = flow().retrieve_namespace_attr_or_sub(

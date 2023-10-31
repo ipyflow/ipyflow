@@ -45,7 +45,7 @@ class Scope:
         self.scope_name = str(scope_name)
         self.parent_scope = parent_scope  # None iff this is the global scope
         self.symtab = symtab
-        self._data_symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
+        self._symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
 
     def __hash__(self):
         return hash(id(self))
@@ -71,7 +71,7 @@ class Scope:
     def data_symbol_by_name(self, is_subscript=False):
         if is_subscript:
             raise ValueError("Only namespace scopes carry subscripts")
-        return self._data_symbol_by_name
+        return self._symbol_by_name
 
     @property
     def non_namespace_parent_scope(self) -> Optional["Scope"]:
@@ -98,16 +98,16 @@ class Scope:
         return Scope(scope_name, parent_scope=self, symtab=child_symtab)
 
     def put(self, name: SupportedIndexType, val: Symbol) -> None:
-        self._data_symbol_by_name[name] = val
+        self._symbol_by_name[name] = val
         val.containing_scope = self
 
     def lookup_data_symbol_by_name_this_indentation(
         self, name: SupportedIndexType, **_: Any
     ) -> Optional[Symbol]:
-        return self._data_symbol_by_name.get(name, None)
+        return self._symbol_by_name.get(name, None)
 
-    def all_data_symbols_this_indentation(self):
-        return self._data_symbol_by_name.values()
+    def all_symbols_this_indentation(self):
+        return self._symbol_by_name.values()
 
     def lookup_data_symbol_by_name(
         self, name: SupportedIndexType, **kwargs: Any
@@ -333,7 +333,7 @@ class Scope:
         self, name: SupportedIndexType, is_subscript: bool = False
     ):
         assert not is_subscript
-        dsym = self._data_symbol_by_name.pop(name, None)
+        dsym = self._symbol_by_name.pop(name, None)
         if dsym is not None:
             dsym.update_deps(set(), deleted=True)
             dsym.mark_garbage()

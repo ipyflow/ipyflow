@@ -155,14 +155,19 @@ class IpyflowSessionState {
     closure: Set<string>,
     cellId: string,
     edges: { [id: string]: string[] },
-    onlyIncludeUnexecuted = false,
+    onlyIncludeCellsNeedingRefresh = false,
     skipFirstCheck = false
   ): void {
     if (!skipFirstCheck) {
       if (closure.has(cellId)) {
         return;
       }
-      if (onlyIncludeUnexecuted && this.executedCells.has(cellId)) {
+      if (
+        onlyIncludeCellsNeedingRefresh &&
+        this.executedCells.has(cellId) &&
+        !this.waitingCells.has(cellId) &&
+        !this.readyCells.has(cellId)
+      ) {
         return;
       }
     }
@@ -176,7 +181,7 @@ class IpyflowSessionState {
         closure,
         child,
         edges,
-        onlyIncludeUnexecuted
+        onlyIncludeCellsNeedingRefresh
       )
     );
   }

@@ -209,6 +209,19 @@ class IpyflowSessionState {
           true
         );
       }
+      if (this.settings.flow_order === 'in_order') {
+        const minSeedPosition = Math.min(
+          ...cellIds.map((id) => this.orderIdxById[id])
+        );
+        for (const cellId of Array.from(closure)) {
+          const pos = this.orderIdxById[cellId];
+          if (pos === undefined) {
+            closure.delete(cellId);
+          } else if (pos < minSeedPosition) {
+            closure.delete(cellId);
+          }
+        }
+      }
     }
     if (!inclusive) {
       for (const cellId of cellIds) {

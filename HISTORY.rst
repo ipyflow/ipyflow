@@ -1,25 +1,30 @@
 History
 =======
 
-0.0.189 (2022-09-05)
+0.0.190 (2023-11-03)
+--------------------
+* [kernel] Start getting kernel ready for autoreload integrations;
+* [lab] Reactive running also refreshes ready parents of dependencies;
+
+0.0.189 (2023-09-05)
 --------------------
 * [kernel] Fix Colab kernel incompatibility;
 
-0.0.188 (2022-09-01)
+0.0.188 (2023-09-01)
 --------------------
 * [kernel] Misc bugfixes;
 
-0.0.187 (2022-08-26)
+0.0.187 (2023-08-26)
 --------------------
 * [kernel] Add another comm handler for last_updated_cell_id;
 
-0.0.186 (2022-08-25)
+0.0.186 (2023-08-25)
 --------------------
 * [kernel] Add a couple more comm handlers;
 * [kernel] Allow reactivity_mode to be configured on client initialization;
 * [kernel] Improve compatibility with other interfaces;
 
-0.0.183 (2022-08-20)
+0.0.183 (2023-08-20)
 --------------------
 * [lab][kernel] Persist dependency DAG across restarts;
 * [lab] Continuous file sync for cell input content changes;
@@ -28,7 +33,7 @@ History
 * [kernel] Improve accuracy by expanding cases for tracing reenablement;
 * [kernel] Misc bugfixes;
 
-0.0.178 (2022-07-29)
+0.0.178 (2023-07-29)
 --------------------
 * [lab] Add batch reactivity_mode and make it the default (previously was incremental);
 * [lab] Add slice indicators to the left of cell counters;
@@ -41,54 +46,54 @@ History
 * [kernel] Make sure ipython also captures static dependencies;
 * [kernel] Various minor bugfixes;
 
-0.0.177 (2022-06-26)
+0.0.177 (2023-06-26)
 --------------------
 * Set consistent comm ids when APIs permit;
 
-0.0.176 (2022-06-11)
+0.0.176 (2023-06-11)
 --------------------
 * Small improvements to reactivity semantics;
 * Hopefully fix deps for conda-forge;
 
-0.0.175 (2022-06-03)
+0.0.175 (2023-06-03)
 --------------------
 * Fix scrolling functionality in slicing widget for jupyterlab>=4;
 * Fix bug that allowed attempted usage updates to symbols with uninitialized timestamps;
 
-0.0.174 (2022-05-29)
+0.0.174 (2023-05-29)
 --------------------
 * Allow activation of frontend features via `%load_ext ipyflow` (even on ipykernel);
 * Scope frontend state to session;
 * Fixes for various corner cases around page refresh;
 
-0.0.173 (2022-05-25)
+0.0.173 (2023-05-25)
 --------------------
 * Fix potential bug in nest_asyncio patching;
 
-0.0.172 (2022-05-21)
+0.0.172 (2023-05-21)
 --------------------
 * Workaround for jupyter_core asyncio bug;
 * Jupyter server extension to enable aforementioned workaround;
 * Stop pinning requirements thanks to aforementioned software workarounds;
 
-0.0.170 (2022-05-13)
+0.0.170 (2023-05-13)
 --------------------
 * Fix alt mode execute when reactivity is default;
 * Future proofing in anticipitation of Notebook 7 / JupyterLab 4.0;
 
-0.0.169 (2022-05-12)
+0.0.169 (2023-05-12)
 --------------------
 * Fix _stack_depth issue on run_line_magic function;
 
-0.0.167 (2022-05-10)
+0.0.167 (2023-05-10)
 --------------------
 * Fix issue around spurious edge introduction for previously executed parent;
 
-0.0.166 (2022-05-09)
+0.0.166 (2023-05-09)
 --------------------
 * Always get freshest variable references during analysis and fix resulting reactivity bugs;
 
-0.0.165 (2022-04-28)
+0.0.165 (2023-04-28)
 --------------------
 * Bugfix for restart / run all;
 * Bugfix for IPython version
@@ -100,11 +105,11 @@ History
 * Code HTML widget with links for jumping to cells / copying slice;
 * Misc other bugfixes;
 
-0.0.163 (2022-04-09)
+0.0.163 (2023-04-09)
 --------------------
 * Allow for loading / unloading as an ipython extension;
 
-0.0.162 (2022-04-07)
+0.0.162 (2023-04-07)
 --------------------
 * Bugfix for nbextension active cell notification;
 

@@ -113,7 +113,6 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
     @pytest.fixture(autouse=True)
     def init_or_reset_dependency_graph():
         # IPyflowInteractiveShell.clear_instance()
-        print(IPyflowInteractiveShell.instance())
         NotebookFlow.clear_instance()
         NotebookFlow.instance(
             test_context=test_context,

@@ -6,6 +6,8 @@ import sys
 from types import FrameType
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, Union, cast
 
+from IPython import get_ipython
+
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
@@ -534,6 +536,11 @@ class Statement(SliceableMixin):
                     module = sys.modules.get(
                         f"{self.stmt_node.module}.{dep_node_as_alias.name}"
                     ) or sys.modules.get(self.stmt_node.module)
+                    if self.frame.f_locals is get_ipython().user_ns:
+                        for alias in self.stmt_node.names:
+                            if alias.name == "*":
+                                flow().starred_import_modules.add(module.__name__)
+                                break
                 else:
                     module = sys.modules.get(dep_node_as_alias.name)
                 if module not in (None, builtins):

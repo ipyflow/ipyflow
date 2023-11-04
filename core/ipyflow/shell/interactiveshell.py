@@ -48,7 +48,7 @@ class OutputRecorder(pyc.BaseTracer):
         return False
 
 
-class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
+class IPyflowInteractiveShell(singletons.IPyflowShell):
     prev_shell_class: Optional[Type[InteractiveShell]] = None
     replacement_class: Optional[Type[InteractiveShell]] = None
 
@@ -324,7 +324,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 ret = self._ipyflow_run_cell(
                     raw_cell,
                     store_history=store_history,
-                    silent=silent,
                     shell_futures=shell_futures,
                     **kwargs,
                 )
@@ -335,14 +334,13 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self,
         raw_cell: str,
         store_history=False,
-        silent=False,
         shell_futures=True,
         **kwargs,
     ) -> ExecutionResult:
         ret = None
         # Stage 1: Run pre-execute hook
         maybe_new_content = self.before_run_cell(
-            raw_cell, store_history=store_history, silent=silent, **kwargs
+            raw_cell, store_history=store_history, **kwargs
         )
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
@@ -362,7 +360,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 ret = super()._run_cell(
                     raw_cell,
                     store_history=store_history,
-                    silent=silent,
+                    silent=False,
                     shell_futures=shell_futures,
                     **kwargs,
                 )  # pragma: no cover
@@ -375,7 +373,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                         outvar, get_ipython().user_ns.get(outvar)
                     )
             # Stage 3:  Run post-execute hook
-            self.after_run_cell(raw_cell)
+            if should_trace:
+                self.after_run_cell(raw_cell)
             if should_capture_output:
                 self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
                 output_captured = True
@@ -428,7 +427,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self,
         cell_content: str,
         store_history: bool,
-        silent: bool,
         cell_id: Optional[str] = None,
     ) -> Optional[str]:
         flow_ = singletons.flow()
@@ -445,8 +443,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if flow_._saved_debug_message is not None:  # pragma: no cover
             logger.error(flow_._saved_debug_message)
             flow_._saved_debug_message = None
-        if silent or (not store_history and not flow_.is_test):
-            return None
 
         if cell_id is not None:
             flow_.active_cell_id = cell_id

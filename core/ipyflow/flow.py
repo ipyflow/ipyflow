@@ -21,7 +21,6 @@ from typing import (
 import pyccolo as pyc
 from ipykernel.comm import Comm
 from ipykernel.ipkernel import IPythonKernel
-from IPython import get_ipython
 from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 
 from ipyflow import singletons
@@ -44,6 +43,7 @@ from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.frontend import FrontendCheckerResult
 from ipyflow.line_magics import make_line_magic
+from ipyflow.singletons import shell
 from ipyflow.slicing.context import (
     SlicingContext,
     dangling_context,
@@ -67,7 +67,7 @@ class NotebookFlow(singletons.NotebookFlow):
         super().__init__()
         cells().clear()
         statements().clear()
-        config = get_ipython().config.ipyflow
+        config = shell().config.ipyflow
         self._line_magic = make_line_magic(self)
         self.settings: DataflowSettings = DataflowSettings(
             test_context=kwargs.pop("test_context", False),
@@ -167,6 +167,7 @@ class NotebookFlow(singletons.NotebookFlow):
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
         self.aliases: Dict[int, Set[Symbol]] = {}
+        self.starred_import_modules: Set[str] = set()
         self.stmt_deferred_static_parents: Dict[
             Timestamp, Dict[Timestamp, Set[Symbol]]
         ] = {}
@@ -268,7 +269,7 @@ class NotebookFlow(singletons.NotebookFlow):
         cell_parents: Optional[Dict[IdType, List[IdType]]] = None,
         **kwargs,
     ) -> None:
-        config = get_ipython().config.ipyflow
+        config = shell().config.ipyflow
         try:
             iface = Interface(interface)
         except ValueError:
@@ -760,7 +761,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_upsert_symbol(self, request) -> Optional[Dict[str, Any]]:
         symbol_name = request["symbol"]
-        user_globals = get_ipython().user_global_ns
+        user_globals = shell().user_global_ns
         if symbol_name not in user_globals:
             return {"success": False}
         dep_symbols = set()
@@ -883,7 +884,7 @@ class NotebookFlow(singletons.NotebookFlow):
             if not dsym.containing_scope.is_global:
                 continue
             try:
-                obj = get_ipython().user_global_ns.get(dsym.name, None)
+                obj = shell().user_global_ns.get(dsym.name, None)
                 if obj is None:
                     continue
             except:  # noqa

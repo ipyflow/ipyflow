@@ -2,7 +2,7 @@
 from typing import TYPE_CHECKING
 
 import pyccolo as pyc
-from IPython.core.interactiveshell import InteractiveShell, InteractiveShellABC
+from IPython.core.interactiveshell import InteractiveShellABC
 from traitlets.config.configurable import SingletonConfigurable
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ class NotebookFlow(SingletonConfigurable):
     pass
 
 
-class IPyflowShell(InteractiveShell):
+class IPyflowShell(SingletonConfigurable):
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         InteractiveShellABC.register(cls)

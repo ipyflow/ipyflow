@@ -48,7 +48,7 @@ class OutputRecorder(pyc.BaseTracer):
         return False
 
 
-class IPyflowInteractiveShell(singletons.IPyflowShell):
+class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     prev_shell_class: Optional[Type[InteractiveShell]] = None
     replacement_class: Optional[Type[InteractiveShell]] = None
 

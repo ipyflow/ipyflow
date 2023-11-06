@@ -42,9 +42,8 @@ const readyMakingClass = 'ready-making-cell';
 const readyMakingInputClass = 'ready-making-input-cell';
 const linkedWaitingClass = 'linked-waiting';
 const linkedReadyMakerClass = 'linked-ready-maker';
-const selfSliceClass = 'ipyflow-slice-self';
-const directSliceClass = 'ipyflow-slice-direct';
 const sliceClass = 'ipyflow-slice';
+const executeSliceClass = 'ipyflow-slice-execute';
 
 const cleanup = new Event('cleanup');
 
@@ -154,7 +153,7 @@ class IpyflowSessionState {
   computeTransitiveClosureHelper(
     closure: Set<string>,
     cellId: string,
-    edges: { [id: string]: string[] },
+    edges: { [id: string]: string[] } | undefined | null,
     addCellsNeedingRefresh = false,
     skipFirstCheck = false
   ): void {
@@ -164,7 +163,7 @@ class IpyflowSessionState {
     if (!addCellsNeedingRefresh) {
       closure.add(cellId);
     }
-    const children = edges[cellId];
+    const children = edges?.[cellId];
     if (children === undefined) {
       return;
     }
@@ -484,7 +483,6 @@ const extension: JupyterFrontEndPlugin<void> = {
     app.commands.commandExecuted.connect((_, args) => {
       if (args.id === 'notebook:run-cell') {
         if (isBatchReactive()) {
-          console.log('execute batch reactive');
           executeBatchReactive();
         } else {
           getIpyflowState()?.requestComputeExecSchedule();
@@ -661,8 +659,6 @@ const clearCellState = (notebook: Notebook) => {
     cell.node.classList.remove(readyMakingClass);
     cell.node.classList.remove(readyClass);
     cell.node.classList.remove(readyMakingInputClass);
-    cell.node.classList.remove(selfSliceClass);
-    cell.node.classList.remove(directSliceClass);
     cell.node.classList.remove(sliceClass);
 
     // clear any old event listeners
@@ -867,9 +863,8 @@ const connectToComm = (
 
   const updateOneCellUI = (
     id: string,
-    isSelf: boolean,
-    inDirectSlice: boolean,
     inSlice: boolean,
+    inExecuteSlice: boolean,
     showCollapserHighlights: boolean
   ) => {
     const model = state.cellsById[id].model;
@@ -881,17 +876,12 @@ const connectToComm = (
       return;
     }
     const elem = state.cellsById[id].node;
-    if (isSelf) {
-      elem.classList.add(selfSliceClass);
+    if (inExecuteSlice) {
+      elem.classList.add(executeSliceClass);
     } else {
-      elem.classList.remove(selfSliceClass);
+      elem.classList.remove(executeSliceClass);
     }
-    if (inDirectSlice && !isSelf) {
-      elem.classList.add(directSliceClass);
-    } else {
-      elem.classList.remove(directSliceClass);
-    }
-    if (inSlice && !inDirectSlice && !isSelf) {
+    if (inSlice && !inExecuteSlice) {
       elem.classList.add(sliceClass);
     } else {
       elem.classList.remove(sliceClass);
@@ -971,42 +961,32 @@ const connectToComm = (
     clearCellState(notebook);
     refreshNodeMapping(notebook);
     const slice = new Set<string>();
-    let directSlice = new Set<string>();
     let closureCellIds = state.selectedCells;
     if (closureCellIds.length === 0) {
       closureCellIds = [state.activeCell.model.id];
     }
     for (const cellId of closureCellIds) {
-      if (
-        state.cellChildren[cellId] !== undefined ||
-        state.cellParents[cellId] !== undefined
-      ) {
-        directSlice = new Set([
-          cellId,
-          ...directSlice,
-          ...state.cellChildren[cellId],
-          ...state.cellParents[cellId],
-        ]);
-        state.computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
-        slice.delete(cellId);
-        state.computeTransitiveClosureHelper(slice, cellId, state.cellParents);
-      }
+      state.computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
     }
+    const executeSlice = new Set(slice);
     for (const cellId of slice) {
       state.computeTransitiveClosureHelper(
-        slice,
+        executeSlice,
         cellId,
         state.cellParents,
         true,
         true
       );
     }
+    for (const cellId of closureCellIds) {
+      slice.delete(cellId);
+      state.computeTransitiveClosureHelper(slice, cellId, state.cellParents);
+    }
     for (const [id] of Object.entries(state.cellsById)) {
       updateOneCellUI(
         id,
-        id === state.activeCell.model.id && directSlice.has(id),
-        directSlice.has(id),
         slice.has(id),
+        executeSlice.has(id),
         state.lastExecutionHighlights !== 'none'
       );
     }

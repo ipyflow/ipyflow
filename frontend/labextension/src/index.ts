@@ -116,7 +116,8 @@ class IpyflowSessionState {
           this.executedCells.add(cell.model.id);
         }
         if (++numFinished === cells.length) {
-          this.requestComputeExecSchedule();
+          // wait a tick first to allow the disk changes to propagate up
+          setTimeout(() => this.requestComputeExecSchedule(), 0);
         }
       });
     }

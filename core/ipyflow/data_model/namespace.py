@@ -246,6 +246,11 @@ class Namespace(Scope):
                 )
         return ret
 
+    def lookup_data_symbol_by_name(
+        self, name: SupportedIndexType, *args: Any, **kwargs: Any
+    ) -> Optional[Symbol]:
+        return self.lookup_data_symbol_by_name_this_indentation(name, *args, **kwargs)
+
     def _remap_sym(self, from_idx: int, to_idx: int, prev_obj: Optional[Any]) -> None:
         subsym = self._subscript_data_symbol_by_name.pop(from_idx, None)
         if subsym is None:

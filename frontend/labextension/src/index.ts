@@ -155,35 +155,37 @@ class IpyflowSessionState {
     closure: Set<string>,
     cellId: string,
     edges: { [id: string]: string[] },
-    onlyIncludeCellsNeedingRefresh = false,
+    addCellsNeedingRefresh = false,
     skipFirstCheck = false
   ): void {
-    if (!skipFirstCheck) {
-      if (closure.has(cellId)) {
-        return;
-      }
-      if (
-        onlyIncludeCellsNeedingRefresh &&
-        this.executedCells.has(cellId) &&
-        !this.waitingCells.has(cellId) &&
-        !this.readyCells.has(cellId)
-      ) {
-        return;
-      }
+    if (!skipFirstCheck && closure.has(cellId)) {
+      return;
     }
-    closure.add(cellId);
+    if (!addCellsNeedingRefresh) {
+      closure.add(cellId);
+    }
     const children = edges[cellId];
     if (children === undefined) {
       return;
     }
+    const prevClosureSize = closure.size;
     children.forEach((child) =>
       this.computeTransitiveClosureHelper(
         closure,
         child,
         edges,
-        onlyIncludeCellsNeedingRefresh
+        addCellsNeedingRefresh
       )
     );
+    if (
+      addCellsNeedingRefresh &&
+      (closure.size > prevClosureSize ||
+        !this.executedCells.has(cellId) ||
+        this.readyCells.has(cellId) ||
+        this.waitingCells.has(cellId))
+    ) {
+      closure.add(cellId);
+    }
   }
 
   computeTransitiveClosure(
@@ -209,19 +211,19 @@ class IpyflowSessionState {
           true
         );
       }
-      if (this.settings.flow_order === 'in_order') {
-        const minSeedPosition = Math.min(
-          ...cellIds.map((id) => this.orderIdxById[id])
-        );
-        for (const cellId of Array.from(closure)) {
-          const pos = this.orderIdxById[cellId];
-          if (pos === undefined) {
-            closure.delete(cellId);
-          } else if (pos < minSeedPosition) {
-            closure.delete(cellId);
-          }
-        }
-      }
+      // if (this.settings.flow_order === 'in_order') {
+      //   const minSeedPosition = Math.min(
+      //     ...cellIds.map((id) => this.orderIdxById[id])
+      //   );
+      //   for (const cellId of Array.from(closure)) {
+      //     const pos = this.orderIdxById[cellId];
+      //     if (pos === undefined) {
+      //       closure.delete(cellId);
+      //     } else if (pos < minSeedPosition) {
+      //       closure.delete(cellId);
+      //     }
+      //   }
+      // }
     }
     if (!inclusive) {
       for (const cellId of cellIds) {
@@ -417,20 +419,46 @@ const extension: JupyterFrontEndPlugin<void> = {
       selector: '.jp-Notebook',
     });
 
-    const executeRemaining = () => {
+    const runCellCommand = (app.commands as any)._commands.get(
+      'notebook:run-cell'
+    );
+    const runCellCommandExecute = runCellCommand.execute;
+
+    const getIpyflowState = () => {
       const session = notebooks.currentWidget.sessionContext;
       if (!session.isReady) {
-        return;
+        return {} as IpyflowSessionState;
       }
-      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
-        {}) as IpyflowSessionState;
+      return (ipyflowState[session.session.id] ?? {}) as IpyflowSessionState;
+    };
+
+    const isBatchReactive = () => {
+      const state = getIpyflowState();
+      const settings = state.settings;
+      return (
+        (state.isIpyflowCommConnected ?? false) &&
+        settings?.exec_mode === 'reactive' &&
+        settings?.reactivity_mode === 'batch'
+      );
+    };
+
+    runCellCommand.execute = (...args: any[]) => {
+      if (isBatchReactive()) {
+        app.commands.execute('notebook:enter-command-mode');
+      } else {
+        runCellCommandExecute.call(runCellCommand, args);
+      }
+    };
+
+    const executeBatchReactive = () => {
+      const state = getIpyflowState();
       if (state.isIpyflowCommConnected ?? false) {
         let closureCellIds = state.executionScheduledCells;
         state.executionScheduledCells = [];
         if (closureCellIds.length === 0) {
           closureCellIds = [state.activeCell.model.id];
         }
-        const closure = state.computeTransitiveClosure(closureCellIds, false);
+        const closure = state.computeTransitiveClosure(closureCellIds, true);
         if (closure.length > 0) {
           state.executeCells(closure);
         } else {
@@ -444,57 +472,32 @@ const extension: JupyterFrontEndPlugin<void> = {
       if (notebook?.content !== args.notebook) {
         return;
       }
-      const session = notebook?.sessionContext;
-      if (!(session?.isReady ?? false)) {
-        return;
-      }
-      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
-        {}) as IpyflowSessionState;
-      if (!(state.isIpyflowCommConnected ?? false)) {
-        return;
-      }
-      const settings = state.settings;
-      const isBatch = settings?.reactivity_mode === 'batch';
-      const isReactive = settings?.exec_mode === 'reactive';
-      if (!isBatch || !isReactive) {
+      if (!isBatchReactive()) {
         return;
       }
       if (args.cell.model.type === 'code') {
+        const state = getIpyflowState();
         state.executionScheduledCells.push(args.cell.model.id);
       }
     });
 
     app.commands.commandExecuted.connect((_, args) => {
-      const notebook = notebooks?.currentWidget;
-      const session = notebook?.sessionContext;
-      if (!(session?.isReady ?? false)) {
-        return;
-      }
-      const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
-        {}) as IpyflowSessionState;
-      if (!(state.isIpyflowCommConnected ?? false)) {
-        return;
-      }
-      const settings = state.settings;
-      const isBatch = settings?.reactivity_mode === 'batch';
-      const isReactive = settings?.exec_mode === 'reactive';
-      if (!isBatch) {
-        return;
-      }
       if (args.id === 'notebook:run-cell') {
-        if (isReactive) {
-          executeRemaining();
+        if (isBatchReactive()) {
+          console.log('execute batch reactive');
+          executeBatchReactive();
         } else {
-          state.requestComputeExecSchedule();
+          getIpyflowState()?.requestComputeExecSchedule();
         }
       } else if (args.id === 'notebook:run-cell-and-select-next') {
+        const state = getIpyflowState();
         const origActiveCell = state.activeCell;
         try {
           state.activeCell = state.prevActiveCell;
-          if (isReactive) {
-            executeRemaining();
+          if (isBatchReactive()) {
+            executeBatchReactive();
           } else {
-            state.requestComputeExecSchedule();
+            state?.requestComputeExecSchedule();
           }
         } finally {
           state.activeCell = origActiveCell;
@@ -1235,6 +1238,7 @@ const connectToComm = (
     cell_metadata_by_id: state.gatherCellMetadataAndContent(),
     cell_parents: ipyflow_metadata?.cell_parents ?? {},
     cell_children: ipyflow_metadata?.cell_children ?? {},
+    exec_mode: 'reactive',
   });
   // return a disconnection handle
   return () => {

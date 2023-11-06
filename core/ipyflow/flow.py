@@ -291,7 +291,11 @@ class NotebookFlow(singletons.NotebookFlow):
             kwargs.get("syntax_transforms_only", False),
         )
         self.mut_settings.exec_mode = ExecutionMode(
-            getattr(config, "exec_mode", kwargs.get("exec_mode", ExecutionMode.NORMAL))
+            getattr(
+                config,
+                "exec_mode",
+                kwargs.get("exec_mode", ExecutionMode.NORMAL),
+            )
         )
         self.mut_settings.exec_schedule = ExecutionSchedule(
             getattr(

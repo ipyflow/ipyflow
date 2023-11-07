@@ -23,22 +23,24 @@ def cleanup_pop(d, key, val):
         d.pop(key, None)
 
 
-def debounce(wait: float) -> Callable[[Callable[..., None]], Callable[..., None]]:
+def debounce(wait: float) -> Callable[[Callable[..., None]], Callable[..., bool]]:
     """Decorator that will postpone a functions
     execution until after wait seconds
     have elapsed since the last time it was invoked."""
 
-    def decorator(fn: Callable[..., None]) -> Callable[..., None]:
-        def debounced(*args, **kwargs) -> None:
+    def decorator(fn: Callable[..., None]) -> Callable[..., bool]:
+        def debounced(*args, **kwargs) -> bool:
             def call_it():
                 fn(*args, **kwargs)
 
             try:
+                did_start_new = debounced.t.finished.is_set()  # type: ignore
                 debounced.t.cancel()  # type: ignore
             except AttributeError:
-                pass
+                did_start_new = True
             debounced.t = Timer(wait, call_it)  # type: ignore
             debounced.t.start()  # type: ignore
+            return did_start_new
 
         return debounced
 

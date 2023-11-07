@@ -49,15 +49,18 @@ _override_unused_warning_symbols = symbols
 @debounce(0.1)
 def _debounced_exec_schedule(executed_cell_id: IdType, reactive: bool) -> None:
     flow_ = flow()
-    flow_.get_and_set_exception_raised_during_execution(None)
-    flow_.handle(
-        {
-            "type": "compute_exec_schedule",
-            "executed_cell_id": executed_cell_id,
-            "is_reactively_executing": reactive,
-            "allow_new_ready": reactive,
-        }
-    )
+    try:
+        flow_.get_and_set_exception_raised_during_execution(None)
+        flow_.handle(
+            {
+                "type": "compute_exec_schedule",
+                "executed_cell_id": executed_cell_id,
+                "is_reactively_executing": reactive,
+                "allow_new_ready": reactive,
+            }
+        )
+    finally:
+        flow_.debounced_exec_schedule_pending = False
 
 
 class SymbolType(Enum):
@@ -1009,15 +1012,49 @@ class Symbol:
         self.debounced_exec_schedule(reactive=True)
 
     def debounced_exec_schedule(self, reactive: bool) -> None:
-        _debounced_exec_schedule(
+        if _debounced_exec_schedule(
             cells().at_timestamp(self.timestamp).cell_id, reactive=reactive
-        )
+        ):
+            flow().debounced_exec_schedule_pending = True
 
     def namespaced(self) -> "Namespace":
         ns = self.namespace
         if ns is not None:
             return ns
         return namespaces()(self.obj, self.name, parent_scope=self.containing_scope)
+
+    def update_usage_info_one_timestamp(
+        self,
+        used_time: Timestamp,
+        updated_time: Timestamp,
+        is_static: bool,
+        add_data_dep_only_if_parent_new: bool,
+    ) -> bool:
+        flow_ = flow()
+        is_usage = False
+        if is_static:
+            if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
+                is_usage = updated_time.positional < used_time.positional
+            else:
+                is_usage = updated_time < used_time
+            if is_usage:
+                with static_slicing_context():
+                    flow_.add_data_dep(
+                        used_time,
+                        updated_time,
+                        self,
+                        add_only_if_parent_new=add_data_dep_only_if_parent_new,
+                    )
+        elif not is_static and updated_time < used_time:
+            is_usage = True
+            with dynamic_slicing_context():
+                flow_.add_data_dep(
+                    used_time,
+                    updated_time,
+                    self,
+                    add_only_if_parent_new=add_data_dep_only_if_parent_new,
+                )
+        return is_usage
 
     def update_usage_info(
         self,
@@ -1029,13 +1066,12 @@ class Symbol:
         is_blocking: bool = False,
         add_data_dep_only_if_parent_new: bool = False,
     ) -> "Symbol":
-        flow_ = flow()
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
         if not used_time.is_initialized:
             return self
-        if flow_.is_dev_mode:
+        if flow().is_dev_mode:
             logger.info(
                 "sym `%s` used in cell %d last updated in cell %d",
                 self,
@@ -1047,31 +1083,23 @@ class Symbol:
             if is_static
             else self.timestamp_by_used_time
         )
-        ts_to_use = self._timestamp
-        if ts_to_use.is_initialized and not is_blocking:
+        if not is_blocking:
             is_usage = False
-            if is_static:
-                if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
-                    is_usage = ts_to_use.positional < used_time.positional
-                else:
-                    is_usage = ts_to_use < used_time
-                if is_usage:
-                    with static_slicing_context():
-                        flow_.add_data_dep(
-                            used_time,
-                            ts_to_use,
-                            self,
-                            add_only_if_parent_new=add_data_dep_only_if_parent_new,
-                        )
-            elif not is_static and ts_to_use < used_time:
-                is_usage = True
-                with dynamic_slicing_context():
-                    flow_.add_data_dep(
-                        used_time,
-                        ts_to_use,
-                        self,
-                        add_only_if_parent_new=add_data_dep_only_if_parent_new,
-                    )
+            ts_to_use = self._timestamp
+            for updated_ts in sorted(self.updated_timestamps, reverse=True):
+                if (
+                    not updated_ts.is_initialized
+                    or cells().at_timestamp(updated_ts).cell_id
+                    == cells().at_timestamp(used_time).cell_id
+                ):
+                    continue
+                is_usage = self.update_usage_info_one_timestamp(
+                    used_time,
+                    updated_ts,
+                    is_static=is_static,
+                    add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
+                )
+                break
             if is_usage:
                 timestamp_by_used_time[used_time] = ts_to_use
                 if used_node is not None:

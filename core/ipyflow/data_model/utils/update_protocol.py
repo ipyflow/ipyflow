@@ -103,7 +103,8 @@ class UpdateProtocol:
         for dsym in updated_symbols:
             if dsym.is_import or dsym in self.seen:
                 continue
-            dsym.updated_timestamps.add(Timestamp.current())
+            # TODO: why was this present before?
+            # dsym.updated_timestamps.add(Timestamp.current())
             dsym.required_timestamp = Timestamp.uninitialized()
             self.seen.add(dsym)
             for cell in dsym.cells_where_deep_live:

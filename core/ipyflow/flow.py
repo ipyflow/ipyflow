@@ -218,6 +218,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.register_comm_handler(
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
         )
+        self.debounced_exec_schedule_pending = False
         self.fs: Namespace = None
         self.display_sym: Symbol = None
         self.fake_edge_sym: Symbol = None
@@ -405,7 +406,8 @@ class NotebookFlow(singletons.NotebookFlow):
             and parent_cell.prev_cell.cell_ctr > 0
         ):
             return
-        child_cell.add_parent_edge(parent_cell, sym)
+        if child_cell.is_current and parent_cell.is_current:
+            child_cell.add_parent_edge(parent_cell, sym)
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
             statements().at_timestamp(child).add_parent_edge(
                 statements().at_timestamp(parent), sym
@@ -430,6 +432,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def reset_cell_counter(self):
         # only called in test context
         for sym in self.all_data_symbols():
+            sym.updated_timestamps.clear()
             sym._timestamp = (
                 sym._max_inner_timestamp
             ) = sym.required_timestamp = Timestamp.uninitialized()
@@ -486,6 +489,11 @@ class NotebookFlow(singletons.NotebookFlow):
         @comm.on_msg
         def _responder(msg):
             request = msg["content"]["data"]
+            if (
+                request.get("type") == "compute_exec_schedule"
+                and self.debounced_exec_schedule_pending
+            ):
+                return
             self.handle(request, comm=comm)
 
         self._comm = comm

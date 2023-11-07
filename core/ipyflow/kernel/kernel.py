@@ -93,7 +93,14 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
     @classmethod
     def instance(cls, *args, **kwargs) -> "IPyflowKernel":
         ret = super().instance(*args, **kwargs)
-        NotebookFlow.instance().register_comm_target(ret)
+        flow_ = NotebookFlow.instance()
+        flow_.register_comm_target(ret)
+        try:
+            from superduperreload import ModuleReloader
+
+            ModuleReloader.instance(shell=ret.shell, flow=flow_, enabled=False)
+        except:
+            pass
         return ret
 
     def _initialize(self, do_asyncio_patches: bool = False) -> None:

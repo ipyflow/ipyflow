@@ -402,7 +402,6 @@ class FrontendCheckerResult(NamedTuple):
         cells_to_check: Optional[Iterable[Cell]] = None,
         update_liveness_time_versions: bool = False,
         last_executed_cell_id: Optional[IdType] = None,
-        allow_new_ready: bool = True,
     ) -> "FrontendCheckerResult":
         flow_ = flow()
         if last_executed_cell_id is None:

@@ -15,7 +15,6 @@ class ExecutionSchedule(Enum):
     LIVENESS_BASED = "liveness_based"
     DAG_BASED = "dag_based"
     HYBRID_DAG_LIVENESS_BASED = "hybrid_dag_liveness_based"
-    STRICT = "strict"
 
 
 class FlowDirection(Enum):

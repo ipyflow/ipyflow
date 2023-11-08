@@ -431,13 +431,6 @@ def set_exec_schedule(line_: str) -> None:
         schedule = ExecutionSchedule.DAG_BASED
     elif line_.startswith("hybrid"):
         schedule = ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
-    elif line_.startswith("strict"):
-        if flow().mut_settings.flow_order != FlowDirection.IN_ORDER:
-            warn(
-                "Strict schedule only applicable for forward data flow; skipping",
-            )
-            return
-        schedule = ExecutionSchedule.STRICT
     else:
         warn(usage)
         return

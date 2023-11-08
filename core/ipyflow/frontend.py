@@ -261,20 +261,6 @@ class FrontendCheckerResult(NamedTuple):
                 is_ready = True
                 if max_used_live_sym_ctr >= flow_.min_new_ready_cell_counter():
                     is_new_ready = True
-        elif (
-            not is_new_ready
-            and flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
-        ):
-            for dead_sym in checker_result.dead:
-                if dead_sym.timestamp.cell_num > max(
-                    cell.cell_ctr, flow_.min_timestamp
-                ):
-                    is_ready = True
-                    if (
-                        dead_sym.timestamp.cell_num
-                        >= flow_.min_new_ready_cell_counter()
-                    ):
-                        is_new_ready = True
         return is_ready, is_new_ready
 
     def _check_one_cell(
@@ -296,10 +282,7 @@ class FrontendCheckerResult(NamedTuple):
                 logger.exception("exception occurred during checking")
             return None
         cell_id = cell.cell_id
-        if (
-            flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
-            or flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
-        ):
+        if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
             for live_sym in checker_result.live:
                 if not live_sym.is_deep or not live_sym.timestamp.is_initialized:
                     continue
@@ -429,13 +412,6 @@ class FrontendCheckerResult(NamedTuple):
             )
             if checker_result is not None:
                 checker_results_by_cid[cell.cell_id] = checker_result
-            if (
-                flow_.mut_settings.exec_schedule == ExecutionSchedule.STRICT
-                and cell.is_ready
-            ):
-                # in the case of strict scheduling, don't bother checking
-                # anything else once we get to the first ready cell
-                break
 
         self._compute_dag_based_waiters(cells_to_check)
         self._compute_reactive_cells_for_reactive_symbols(

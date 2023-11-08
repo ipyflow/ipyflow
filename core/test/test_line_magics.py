@@ -156,9 +156,6 @@ def test_set_exec_schedule_and_flow_order():
     assert flow().mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
     run_cell(f"%flow direction {FlowDirection.ANY_ORDER.value}")
     assert flow().mut_settings.flow_order == FlowDirection.ANY_ORDER
-    run_cell(f"%flow schedule {ExecutionSchedule.STRICT.value}")
-    # strict schedule only works for in_order semantics
-    assert flow().mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
 
 
 def test_set_reactivity():

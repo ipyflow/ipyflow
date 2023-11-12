@@ -26,6 +26,7 @@ from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 from ipyflow import singletons
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.config import (
+    ColorScheme,
     DataflowSettings,
     ExecutionMode,
     ExecutionSchedule,
@@ -127,6 +128,12 @@ class NotebookFlow(singletons.NotebookFlow):
                     ReactivityMode(
                         getattr(config, "reactivity_mode", ReactivityMode.BATCH)
                     ),
+                )
+            ),
+            color_scheme=ColorScheme(
+                kwargs.pop(
+                    "color_scheme",
+                    ColorScheme(getattr(config, "color_scheme", ColorScheme.NORMAL)),
                 )
             ),
             warn_out_of_order_usages=kwargs.pop(
@@ -322,6 +329,13 @@ class NotebookFlow(singletons.NotebookFlow):
                 config,
                 "reactivity_mode",
                 kwargs.get("reactivity_mode", ReactivityMode.BATCH),
+            )
+        )
+        self.mut_settings.color_scheme = ColorScheme(
+            getattr(
+                config,
+                "color_scheme",
+                kwargs.get("color_scheme", ColorScheme.NORMAL),
             )
         )
         self.mut_settings.max_external_call_depth_for_tracing = getattr(

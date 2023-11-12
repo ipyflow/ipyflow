@@ -1,4 +1,9 @@
 :root {
+  --waiting-color: #a539f6;
+  --ready-making-color: #ff8100;
+}
+
+.ipyflow-alt-colors {
   --waiting-color: rgb(254,0,82);
   --ready-making-color: rgb(0,197,158);
 }

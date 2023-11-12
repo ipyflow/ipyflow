@@ -44,6 +44,7 @@ const linkedWaitingClass = 'linked-waiting';
 const linkedReadyMakerClass = 'linked-ready-maker';
 const sliceClass = 'ipyflow-slice';
 const executeSliceClass = 'ipyflow-slice-execute';
+const altColorsClass = 'ipyflow-alt-colors';
 
 const cleanup = new Event('cleanup');
 
@@ -656,6 +657,7 @@ const addWaitingOutputInteractions = (
 
 const clearCellState = (notebook: Notebook) => {
   notebook.widgets.forEach((cell) => {
+    cell.node.classList.remove(altColorsClass);
     cell.node.classList.remove(waitingClass);
     cell.node.classList.remove(readyMakingClass);
     cell.node.classList.remove(readyClass);
@@ -877,6 +879,9 @@ const connectToComm = (
       return;
     }
     const elem = state.cellsById[id].node;
+    if ((state.settings.color_scheme ?? 'normal') === 'alt') {
+      elem.classList.add('ipyflow-alt-colors');
+    }
     if (inExecuteSlice) {
       elem.classList.add(executeSliceClass);
     } else {

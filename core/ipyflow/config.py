@@ -51,6 +51,11 @@ class Interface(Enum):
     UNKNOWN = "unknown"
 
 
+class ColorScheme(Enum):
+    NORMAL = "normal"
+    ALT = "alt"
+
+
 class JsonSerializableMixin:
     def to_json(self: Any) -> Dict[str, Any]:
         json = {}
@@ -83,6 +88,7 @@ class MutableDataflowSettings(JsonSerializableMixin):
     exec_schedule: ExecutionSchedule
     flow_order: FlowDirection
     reactivity_mode: ReactivityMode
+    color_scheme: ColorScheme
     warn_out_of_order_usages: bool
     lint_out_of_order_usages: bool
     syntax_transforms_enabled: bool

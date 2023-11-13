@@ -25,6 +25,7 @@ from ipyflow.utils.ipython_utils import (
     capture_output_tee,
     input_transformer_context,
     make_mro_inserter_metaclass,
+    print_purple,
     save_number_of_currently_executing_cell,
 )
 
@@ -429,6 +430,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         store_history: bool,
         cell_id: Optional[str] = None,
     ) -> Optional[str]:
+        original_content = cell_content
+        cell_content = Cell.get_memoized_content(cell_content)
+        is_memoized = cell_content is not None
+        if cell_content is None:
+            cell_content = original_content
         flow_ = singletons.flow()
         settings = flow_.mut_settings
         if settings.interface == Interface.UNKNOWN:
@@ -453,11 +459,13 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             to_create_cell_id = Cell.next_exec_counter()
         cell = Cell.create_and_track(
             to_create_cell_id,
-            cell_content,
+            original_content,
             flow_._tags,
             validate_ipython_counter=store_history,
             placeholder_id=placeholder_id,
+            is_memoized=is_memoized,
         )
+        cell.executed_content = cell_content
 
         last_content, flow_.last_executed_content = (
             flow_.last_executed_content,
@@ -470,6 +478,26 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
 
         if not flow_.mut_settings.dataflow_enabled:
             return None
+
+        if cell.is_memoized:
+            prev_cell = cell.prev_cell
+            should_skip = False
+            if (
+                prev_cell is not None
+                and prev_cell.memoized_params is not None
+                and prev_cell.executed_content == cell.executed_content
+            ):
+                for param, ts in prev_cell.memoized_params:
+                    if param.timestamp.cell_num != ts:
+                        break
+                else:
+                    should_skip = True
+            if should_skip:
+                cell.skipped_due_to_memoization = True
+                print_purple(
+                    "No changes to used symbols since previous execution; skipping due to memoization..."
+                )
+                return f"Out.get({prev_cell.cell_ctr})"
 
         # Stage 1: Precheck.
         if DataflowTracer in self.registered_tracers:
@@ -492,8 +520,22 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     "detected out of order usage of cell [%d]; showing previous output if any (run again to ignore force execution)",
                     used_out_of_order_counter,
                 )
+                cell.executed_content = None
                 return "pass"
-        return None
+        return cell_content
+
+    def _handle_memoization(self) -> None:
+        cell = Cell.current_cell()
+        if cell.skipped_due_to_memoization:
+            prev_cell = cell.prev_cell
+            assert prev_cell is not None
+            cell.memoized_params = prev_cell.memoized_params
+            prev_cell.memoized_params = None
+            cell.static_parents = prev_cell.static_parents
+            cell.dynamic_parents = prev_cell.dynamic_parents
+            cell.captured_output = prev_cell.captured_output
+        else:
+            cell._maybe_memoize_params()
 
     def _handle_output(self) -> None:
         flow_ = singletons.flow()
@@ -524,6 +566,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         cell.captured_output = self.tee_output_tracer.capture_output
 
     def after_run_cell(self, _cell_content: str) -> None:
+        self._handle_memoization()
         self._handle_output()
         # resync any defined symbols that could have gotten out-of-sync
         # due to tracing being disabled

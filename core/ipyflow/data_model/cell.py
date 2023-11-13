@@ -81,12 +81,13 @@ class Cell(SliceableMixin):
         tags: Tuple[str, ...],
         prev_cell: Optional["Cell"] = None,
         placeholder_id: bool = False,
+        is_memoized: bool = False,
         force_tracking: bool = False,
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
         self.history: List[int] = [cell_ctr] if cell_ctr > -1 else []
-        self.executed_content: str = content
+        self.executed_content: Optional[str] = None
         self.current_content: str = content
         self.last_ast_content: Optional[str] = None
         self.captured_output: Optional[CapturedIO] = None
@@ -114,11 +115,18 @@ class Cell(SliceableMixin):
         self._ready: bool = False
         self._extra_stmt: Optional[ast.stmt] = None
         self._placeholder_id = placeholder_id
+        self.is_memoized = is_memoized
+        self.skipped_due_to_memoization = False
+        self.memoized_params: Optional[List[Tuple["Symbol", int]]] = None
         self._force_tracking = force_tracking
 
     @property
     def id(self) -> IdType:
         return self.cell_id
+
+    @property
+    def is_dirty(self) -> bool:
+        return self.current_content != self.executed_content
 
     @property
     def timestamp(self) -> Timestamp:
@@ -268,6 +276,16 @@ class Cell(SliceableMixin):
     def get_reactive_ids_for_tag(cls, tag: str) -> Set[IdType]:
         return cls._reactive_cells_by_tag.get(tag, set())
 
+    def _maybe_memoize_params(self) -> None:
+        memoized_params: List[Tuple["Symbol", int]] = []
+        for _ in SlicingContext.iter_slicing_contexts():
+            for edges in self.parents.values():
+                for sym in edges:
+                    if sym.timestamp.cell_num >= self.cell_ctr:
+                        return
+                    memoized_params.append((sym, sym.timestamp.cell_num))
+        self.memoized_params = memoized_params
+
     @classmethod
     def create_and_track(
         cls,
@@ -277,6 +295,7 @@ class Cell(SliceableMixin):
         bump_cell_counter: bool = True,
         validate_ipython_counter: bool = True,
         placeholder_id: bool = False,
+        is_memoized: bool = False,
     ) -> "Cell":
         if bump_cell_counter:
             cls._cell_counter += 1
@@ -304,6 +323,7 @@ class Cell(SliceableMixin):
             tags,
             prev_cell=prev_cell,
             placeholder_id=placeholder_id,
+            is_memoized=is_memoized,
         )
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
@@ -423,10 +443,22 @@ class Cell(SliceableMixin):
     def from_tag(cls, tag: str) -> Set["Cell"]:
         return cls._cells_by_tag.get(tag, set())
 
+    @staticmethod
+    def get_memoized_content(content: str) -> Optional[str]:
+        cell_lines = content.strip().splitlines(keepends=True)
+        is_memoized = len(cell_lines) > 0 and cell_lines[0].strip() == "%%memoize"
+        if is_memoized:
+            return "".join(cell_lines[1:])
+        else:
+            return None
+
     def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
         # we transform magics, but for %time, we would ideally like to trace the statement being timed
         # TODO: how to do this?
-        content = get_ipython().transform_cell(self.current_content)
+        current_content = (
+            self.get_memoized_content(self.current_content) or self.current_content
+        )
+        content = get_ipython().transform_cell(current_content)
         ast_rewriter, syntax_augmenters = shell().make_rewriter_and_syntax_augmenters()
         for aug in syntax_augmenters:
             content = aug(content)

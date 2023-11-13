@@ -865,45 +865,41 @@ const connectToComm = (
   ];
 
   const updateOneCellUI = (
-    id: string,
+    cell: Cell<ICellModel>,
     inSlice: boolean,
     inExecuteSlice: boolean,
     showCollapserHighlights: boolean
   ) => {
-    const model = state.cellsById[id].model;
+    const { model, node } = cell;
+    const id = model.id;
     if (model.type !== 'code') {
       return;
     }
-    const codeModel = model as ICodeCellModel;
-    if (codeModel.executionCount == null) {
-      return;
-    }
-    const elem = state.cellsById[id].node;
     if ((state.settings.color_scheme ?? 'normal') === 'alt') {
-      elem.classList.add('ipyflow-alt-colors');
+      node.classList.add('ipyflow-alt-colors');
     }
     if (inExecuteSlice) {
-      elem.classList.add(executeSliceClass);
+      node.classList.add(executeSliceClass);
     } else {
-      elem.classList.remove(executeSliceClass);
+      node.classList.remove(executeSliceClass);
     }
     if (inSlice && !inExecuteSlice) {
-      elem.classList.add(sliceClass);
+      node.classList.add(sliceClass);
     } else {
-      elem.classList.remove(sliceClass);
+      node.classList.remove(sliceClass);
     }
     if (!showCollapserHighlights) {
       return;
     }
     if (state.waitingCells.has(id)) {
-      elem.classList.add(waitingClass);
-      elem.classList.add(readyClass);
-      elem.classList.remove(readyMakingInputClass);
-      addWaitingOutputInteractions(elem, linkedWaitingClass);
+      node.classList.add(waitingClass);
+      node.classList.add(readyClass);
+      node.classList.remove(readyMakingInputClass);
+      addWaitingOutputInteractions(node, linkedWaitingClass);
     } else if (state.readyCells.has(id)) {
-      elem.classList.add(readyMakingInputClass);
-      elem.classList.add(readyClass);
-      addWaitingOutputInteractions(elem, linkedReadyMakerClass);
+      node.classList.add(readyMakingInputClass);
+      node.classList.add(readyClass);
+      addWaitingOutputInteractions(node, linkedReadyMakerClass);
     }
 
     if (state.settings.exec_mode === 'reactive') {
@@ -913,7 +909,7 @@ const connectToComm = (
     if (state.waiterLinks[id] !== undefined) {
       actionUpdatePairs.forEach(({ action, update }) => {
         addUnsafeCellInteraction(
-          getJpInputCollapser(elem),
+          getJpInputCollapser(node),
           state.waiterLinks[id],
           state.cellsById,
           getJpInputCollapser,
@@ -923,7 +919,7 @@ const connectToComm = (
         );
 
         addUnsafeCellInteraction(
-          getJpOutputCollapser(elem),
+          getJpOutputCollapser(node),
           state.waiterLinks[id],
           state.cellsById,
           getJpInputCollapser,
@@ -936,12 +932,12 @@ const connectToComm = (
 
     if (state.readyMakerLinks[id] !== undefined) {
       if (!state.waitingCells.has(id)) {
-        elem.classList.add(readyMakingClass);
-        elem.classList.add(readyClass);
+        node.classList.add(readyMakingClass);
+        node.classList.add(readyClass);
       }
       actionUpdatePairs.forEach(({ action, update }) => {
         addUnsafeCellInteraction(
-          getJpInputCollapser(elem),
+          getJpInputCollapser(node),
           state.readyMakerLinks[id],
           state.cellsById,
           getJpInputCollapser,
@@ -951,7 +947,7 @@ const connectToComm = (
         );
 
         addUnsafeCellInteraction(
-          getJpInputCollapser(elem),
+          getJpInputCollapser(node),
           state.readyMakerLinks[id],
           state.cellsById,
           getJpOutputCollapser,
@@ -988,9 +984,10 @@ const connectToComm = (
       slice.delete(cellId);
       state.computeTransitiveClosureHelper(slice, cellId, state.cellParents);
     }
-    for (const [id] of Object.entries(state.cellsById)) {
+    for (const cell of notebook.widgets) {
+      const id = cell.model.id;
       updateOneCellUI(
-        id,
+        cell,
         slice.has(id),
         executeSlice.has(id),
         state.lastExecutionHighlights !== 'none'

@@ -7,6 +7,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
+    Any,
     Dict,
     FrozenSet,
     Generator,
@@ -117,7 +118,9 @@ class Cell(SliceableMixin):
         self._placeholder_id = placeholder_id
         self.is_memoized = is_memoized
         self.skipped_due_to_memoization = False
-        self.memoized_params: Optional[List[Tuple["Symbol", int]]] = None
+        self.memoized_params: List[
+            Tuple[Dict["Symbol", Tuple[int, Any]], Dict["Symbol", Any], int]
+        ] = []
         self._force_tracking = force_tracking
 
     @property
@@ -277,14 +280,23 @@ class Cell(SliceableMixin):
         return cls._reactive_cells_by_tag.get(tag, set())
 
     def _maybe_memoize_params(self) -> None:
-        memoized_params: List[Tuple["Symbol", int]] = []
+        memoized_params: Dict["Symbol", Tuple[int, Any]] = {}
         for _ in SlicingContext.iter_slicing_contexts():
             for edges in self.parents.values():
                 for sym in edges:
                     if sym.timestamp.cell_num >= self.cell_ctr:
                         return
-                    memoized_params.append((sym, sym.timestamp.cell_num))
-        self.memoized_params = memoized_params
+                    if sym not in memoized_params:
+                        memoized_params[sym] = (
+                            sym.timestamp.cell_num,
+                            sym.make_memoize_comparable(),
+                        )
+        outputs = {}
+        for sym in flow().updated_symbols:
+            if not sym.is_user_accessible or not sym.containing_scope.is_global:
+                continue
+            outputs[sym] = sym.obj
+        self.memoized_params.append((memoized_params, outputs, self.cell_ctr))
 
     @classmethod
     def create_and_track(

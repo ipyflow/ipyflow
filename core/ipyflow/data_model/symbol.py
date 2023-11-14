@@ -34,6 +34,13 @@ from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard, debounce
 
 if TYPE_CHECKING:
+    import astunparse
+elif hasattr(ast, "unparse"):
+    astunparse = ast
+else:
+    import astunparse
+
+if TYPE_CHECKING:
     # avoid circular imports
     from ipyflow.data_model.namespace import Namespace
     from ipyflow.data_model.scope import Scope
@@ -652,7 +659,7 @@ class Symbol:
 
     def _refresh_cached_obj(self) -> None:
         self._cached_out_of_sync = False
-        # don't keep an actual ref to avoid bumping prefcount
+        # don't keep an actual ref to avoid bumping refcount
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
 
@@ -1195,6 +1202,13 @@ class Symbol:
                         )
         if refresh_namespace_waiting:
             self.namespace_waiting_symbols.clear()
+
+    def make_memoize_comparable(self):
+        if isinstance(self.obj, (int, str)):
+            return self.obj
+        if isinstance(self.stmt_node, ast.FunctionDef):
+            return astunparse.unparse(self.stmt_node)
+        return self.NULL
 
 
 if len(_SymbolContainer) == 0:

@@ -13,6 +13,7 @@ from pyccolo.import_hooks import TraceFinder
 from ipyflow import singletons
 from ipyflow.config import Interface
 from ipyflow.data_model.cell import Cell
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
@@ -481,23 +482,36 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
 
         if cell.is_memoized:
             prev_cell = cell.prev_cell
-            should_skip = False
+            identical_result_ctr: Optional[int] = None
+            memoized_outputs = {}
             if (
                 prev_cell is not None
-                and prev_cell.memoized_params is not None
                 and prev_cell.executed_content == cell.executed_content
             ):
-                for param, ts in prev_cell.memoized_params:
-                    if param.timestamp.cell_num != ts:
+                for params, outputs, ctr in prev_cell.memoized_params:
+                    for param, (ts, comparable_obj) in params.items():
+                        if param.timestamp.cell_num == ts:
+                            continue
+                        elif (
+                            comparable_obj is Symbol.NULL
+                            or comparable_obj != param.make_memoize_comparable()
+                        ):
+                            break
+                    else:
+                        identical_result_ctr = ctr
+                        memoized_outputs = outputs
                         break
-                else:
-                    should_skip = True
-            if should_skip:
+            if identical_result_ctr is not None:
                 cell.skipped_due_to_memoization = True
                 print_purple(
-                    "No changes to used symbols since previous execution; skipping due to memoization..."
+                    "Detected identical symbol usages to previous run; skipping due to memoization..."
                 )
-                return f"Out.get({prev_cell.cell_ctr})"
+                for sym, obj in memoized_outputs.items():
+                    if sym.obj is not obj:
+                        self.user_ns[sym.name] = obj
+                        sym.update_obj_ref(obj)
+                        sym.refresh()
+                return f"Out.get({identical_result_ctr})"
 
         # Stage 1: Precheck.
         if DataflowTracer in self.registered_tracers:
@@ -526,15 +540,17 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
 
     def _handle_memoization(self) -> None:
         cell = Cell.current_cell()
+        prev_cell = cell.prev_cell
+        if prev_cell is not None:
+            if cell.executed_content == prev_cell.executed_content:
+                cell.memoized_params = prev_cell.memoized_params
+            prev_cell.memoized_params = []
         if cell.skipped_due_to_memoization:
-            prev_cell = cell.prev_cell
             assert prev_cell is not None
-            cell.memoized_params = prev_cell.memoized_params
-            prev_cell.memoized_params = None
             cell.static_parents = prev_cell.static_parents
             cell.dynamic_parents = prev_cell.dynamic_parents
             cell.captured_output = prev_cell.captured_output
-        else:
+        elif cell.is_memoized:
             cell._maybe_memoize_params()
 
     def _handle_output(self) -> None:

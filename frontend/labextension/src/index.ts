@@ -1017,6 +1017,10 @@ const connectToComm = (
   };
   notebooks.selectionChanged.connect(onSelectionChanged);
 
+  const debouncedSave = _.debounce(() => {
+    void notebooks.currentWidget.context.save();
+  }, 200);
+
   comm.onMsg = (msg) => {
     const payload = msg.content.data;
     if (disconnected || !(payload.success ?? true)) {
@@ -1052,7 +1056,7 @@ const connectToComm = (
         cell_parents: state.cellParents,
         cell_children: state.cellChildren,
       });
-      void notebooks.currentWidget.context.save();
+      debouncedSave();
       state.waitingCells = new Set(payload.waiting_cells as string[]);
       state.readyCells = new Set(payload.ready_cells as string[]);
       if (state.numPendingForcedReactiveCounterBumps === 0) {

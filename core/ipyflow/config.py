@@ -53,7 +53,7 @@ class Interface(Enum):
 
 class ColorScheme(Enum):
     NORMAL = "normal"
-    ALT = "alt"
+    CLASSIC = "classic"
 
 
 class JsonSerializableMixin:

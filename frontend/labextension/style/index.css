@@ -3,7 +3,7 @@
   --ready-making-color: #ff8100;
 }
 
-.ipyflow-alt-colors {
+.ipyflow-classic-colors {
   --waiting-color: rgb(254,0,82);
   --ready-making-color: rgb(0,197,158);
 }

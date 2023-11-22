@@ -1203,12 +1203,32 @@ class Symbol:
         if refresh_namespace_waiting:
             self.namespace_waiting_symbols.clear()
 
-    def make_memoize_comparable(self):
-        if isinstance(self.obj, (int, str)):
-            return self.obj
+    _MAX_MEMOIZE_COMPARABLE_SIZE = 10**6
+
+    @classmethod
+    def make_memoize_comparable_for_obj(cls, obj: Any) -> Tuple[Any, int]:
+        if isinstance(obj, (int, str)):
+            return obj, 1
+        elif isinstance(obj, (dict, frozenset, list, set, tuple)):
+            size = 0
+            comparable = []
+            for inner in obj:
+                inner_comp, inner_size = cls.make_memoize_comparable_for_obj(inner)
+                if inner_comp is cls.NULL:
+                    return cls.NULL, -1
+                size += inner_size + 1
+                if size > cls._MAX_MEMOIZE_COMPARABLE_SIZE:
+                    return cls.NULL, -1
+                comparable.append(inner_comp)
+            return type(obj)(comparable), size
+        else:
+            return cls.NULL, -1
+
+    def make_memoize_comparable(self) -> Any:
         if isinstance(self.stmt_node, ast.FunctionDef):
             return astunparse.unparse(self.stmt_node)
-        return self.NULL
+        else:
+            return self.make_memoize_comparable_for_obj(self.obj)[0]
 
 
 if len(_SymbolContainer) == 0:

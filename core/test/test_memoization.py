@@ -73,7 +73,6 @@ def test_strings():
     assert flow().global_scope["y"].obj == "hello world"
 
 
-@skipif_known_failing
 def test_sets():
     first = cells(run_cell("x = {0}", cell_id="first"))
     second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))

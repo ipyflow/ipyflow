@@ -3,7 +3,7 @@ import logging
 
 from ipyflow import cells, flow, shell
 
-from .utils import make_flow_fixture
+from .utils import make_flow_fixture, skipif_known_failing
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -71,3 +71,31 @@ def test_strings():
     assert second.skipped_due_to_memoization
     assert shell().user_ns["y"] == "hello world"
     assert flow().global_scope["y"].obj == "hello world"
+
+
+@skipif_known_failing
+def test_sets():
+    first = cells(run_cell("x = {0}", cell_id="first"))
+    second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
+    assert shell().user_ns["y"] == {0, 1}
+    assert flow().global_scope["y"].obj == {0, 1}
+    assert second.is_memoized
+    assert not second.skipped_due_to_memoization
+    run_cell("x = {0}", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
+    assert shell().user_ns["y"] == {0, 1}
+    assert flow().global_scope["y"].obj == {0, 1}
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization
+    run_cell("x = {2}", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
+    assert shell().user_ns["y"] == {1, 2}
+    assert flow().global_scope["y"].obj == {1, 2}
+    assert second.is_memoized
+    assert not second.skipped_due_to_memoization
+    run_cell("x = {0}", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
+    assert shell().user_ns["y"] == {0, 1}
+    assert flow().global_scope["y"].obj == {0, 1}
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization

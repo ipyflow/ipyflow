@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 import logging
 
-from ipyflow.data_model.cell import cells
+from ipyflow import cells, flow, shell
 
-from .utils import make_flow_fixture, skipif_known_failing
+from .utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 
@@ -21,16 +21,53 @@ def run_cell(cell, **kwargs) -> int:
     return run_cell_(cell, **kwargs)
 
 
-def test_simple():
+def test_ints():
     first = cells(run_cell("x = 0", cell_id="first"))
     second = cells(run_cell("%%memoize\ny = x + 1", cell_id="second"))
+    assert shell().user_ns["y"] == 1
+    assert flow().global_scope["y"].obj == 1
     assert second.is_memoized
     assert not second.skipped_due_to_memoization
     run_cell("x = 0", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + 1", cell_id=second.id))
     assert second.is_memoized
     assert second.skipped_due_to_memoization
+    assert shell().user_ns["y"] == 1
+    assert flow().global_scope["y"].obj == 1
     run_cell("x = 1", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + 1", cell_id=second.id))
+    assert shell().user_ns["y"] == 2
+    assert flow().global_scope["y"].obj == 2
     assert second.is_memoized
     assert not second.skipped_due_to_memoization
+    run_cell("x = 0", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x + 1", cell_id=second.id))
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization
+    assert shell().user_ns["y"] == 1
+    assert flow().global_scope["y"].obj == 1
+
+
+def test_strings():
+    first = cells(run_cell("x = 'hello'", cell_id="first"))
+    second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id="second"))
+    assert shell().user_ns["y"] == "hello world"
+    assert flow().global_scope["y"].obj == "hello world"
+    assert second.is_memoized
+    assert not second.skipped_due_to_memoization
+    run_cell("x = 'hello'", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id=second.id))
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization
+    run_cell("x = 'hi'", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id=second.id))
+    assert shell().user_ns["y"] == "hi world"
+    assert flow().global_scope["y"].obj == "hi world"
+    assert second.is_memoized
+    assert not second.skipped_due_to_memoization
+    run_cell("x = 'hello'", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id=second.id))
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization
+    assert shell().user_ns["y"] == "hello world"
+    assert flow().global_scope["y"].obj == "hello world"

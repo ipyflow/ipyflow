@@ -7,6 +7,7 @@ from types import FrameType
 from typing import (
     TYPE_CHECKING,
     Any,
+    Callable,
     Dict,
     Generator,
     List,
@@ -1205,30 +1206,59 @@ class Symbol:
 
     _MAX_MEMOIZE_COMPARABLE_SIZE = 10**6
 
+    @staticmethod
+    def _equal(obj1: Any, obj2: Any) -> bool:
+        return obj1 == obj2
+
+    @staticmethod
+    def _array_equal(obj1: Any, obj2: Any) -> bool:
+        import numpy as np
+
+        try:
+            return np.alltrue(obj1 == obj2)
+        except:  # noqa
+            return False
+
     @classmethod
-    def make_memoize_comparable_for_obj(cls, obj: Any) -> Tuple[Any, int]:
+    def make_memoize_comparable_for_obj(
+        cls, obj: Any
+    ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]], int]:
         if isinstance(obj, (int, str)):
-            return obj, 1
+            return obj, cls._equal, 1
         elif isinstance(obj, (dict, frozenset, list, set, tuple)):
             size = 0
             comparable = []
             for inner in obj:
-                inner_comp, inner_size = cls.make_memoize_comparable_for_obj(inner)
-                if inner_comp is cls.NULL:
-                    return cls.NULL, -1
+                inner_comp, inner_eq, inner_size = cls.make_memoize_comparable_for_obj(
+                    inner
+                )
+                if inner_comp is cls.NULL or inner_eq is not cls._equal:
+                    return cls.NULL, None, -1
                 size += inner_size + 1
                 if size > cls._MAX_MEMOIZE_COMPARABLE_SIZE:
-                    return cls.NULL, -1
+                    return cls.NULL, None, -1
                 comparable.append(inner_comp)
-            return type(obj)(comparable), size
+            return type(obj)(comparable), cls._equal, size
         else:
-            return cls.NULL, -1
+            # hacks to check if they are arrays or dataframes without explicitly importing these
+            module = getattr(type(obj), "__module__", "")
+            if not module.startswith(("modin", "numpy", "pandas")):
+                return cls.NULL, None, -1
+            name = getattr(type(obj), "__name__", "")
+            if name.endswith(("DataFrame", "Series", "ndarray")):
+                return obj, cls._array_equal, obj.size
+            return cls.NULL, None, -1
 
-    def make_memoize_comparable(self) -> Any:
+    def make_memoize_comparable(
+        self,
+    ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]]]:
         if isinstance(self.stmt_node, ast.FunctionDef):
             return astunparse.unparse(self.stmt_node)
+        obj, eq, size = self.make_memoize_comparable_for_obj(self.obj)
+        if size > self._MAX_MEMOIZE_COMPARABLE_SIZE:
+            return self.NULL, None
         else:
-            return self.make_memoize_comparable_for_obj(self.obj)[0]
+            return obj, eq
 
 
 if len(_SymbolContainer) == 0:

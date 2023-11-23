@@ -492,10 +492,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     for param, (ts, comparable_obj) in params.items():
                         if param.timestamp.cell_num == ts:
                             continue
-                        elif (
-                            comparable_obj is Symbol.NULL
-                            or comparable_obj != param.make_memoize_comparable()
-                        ):
+                        elif comparable_obj is Symbol.NULL:
+                            break
+                        comparable_param, eq = param.make_memoize_comparable()
+                        if not eq(comparable_param, comparable_obj):
                             break
                     else:
                         identical_result_ctr = ctr

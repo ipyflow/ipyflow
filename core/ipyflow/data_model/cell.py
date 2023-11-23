@@ -289,7 +289,7 @@ class Cell(SliceableMixin):
                     if sym not in memoized_params:
                         memoized_params[sym] = (
                             sym.timestamp.cell_num,
-                            sym.make_memoize_comparable(),
+                            sym.make_memoize_comparable()[0],
                         )
         outputs = {}
         for sym in flow().updated_symbols:

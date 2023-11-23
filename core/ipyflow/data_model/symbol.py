@@ -1215,7 +1215,7 @@ class Symbol:
         import numpy as np
 
         try:
-            return np.alltrue(obj1 == obj2)
+            return np.alltrue(obj1 == obj2)  # type: ignore
         except:  # noqa
             return False
 

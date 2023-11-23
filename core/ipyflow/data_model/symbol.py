@@ -1219,6 +1219,13 @@ class Symbol:
         except:  # noqa
             return False
 
+    @staticmethod
+    def _dataframe_equal(obj1: Any, obj2: Any) -> bool:
+        try:
+            return obj1.equals(obj2)  # type: ignore
+        except:  # noqa
+            return False
+
     @classmethod
     def make_memoize_comparable_for_obj(
         cls, obj: Any
@@ -1245,7 +1252,9 @@ class Symbol:
             if not module.startswith(("modin", "numpy", "pandas")):
                 return cls.NULL, None, -1
             name = getattr(type(obj), "__name__", "")
-            if name.endswith(("DataFrame", "Series", "ndarray")):
+            if name.endswith(("DataFrame", "Series")):
+                return obj, cls._dataframe_equal, obj.size
+            elif name.endswith("ndarray"):
                 return obj, cls._array_equal, obj.size
             return cls.NULL, None, -1
 

@@ -495,14 +495,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                         elif comparable_obj is Symbol.NULL:
                             break
                         comparable_param, eq = param.make_memoize_comparable()
-                        if not eq(comparable_param, comparable_obj):
+                        if eq is None or not eq(comparable_param, comparable_obj):
                             break
                     else:
                         identical_result_ctr = ctr
                         memoized_outputs = outputs
                         break
             if identical_result_ctr is not None:
-                cell.skipped_due_to_memoization = True
+                cell.skipped_due_to_memoization_ctr = identical_result_ctr
                 print_purple(
                     "Detected identical symbol usages to previous run; skipping due to memoization..."
                 )
@@ -542,10 +542,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         cell = Cell.current_cell()
         prev_cell = cell.prev_cell
         if prev_cell is not None:
-            if cell.executed_content == prev_cell.executed_content:
+            if cell.executed_content == prev_cell.executed_content and cell.is_memoized:
                 cell.memoized_params = prev_cell.memoized_params
             prev_cell.memoized_params = []
-        if cell.skipped_due_to_memoization:
+        if cell.skipped_due_to_memoization_ctr > 0:
+            prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None
             cell.static_parents = prev_cell.static_parents
             cell.dynamic_parents = prev_cell.dynamic_parents

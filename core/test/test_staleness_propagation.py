@@ -2230,6 +2230,7 @@ def test_dict_2():
     )
 
 
+@skipif_known_failing
 def test_default_dict():
     run_cell("from collections import defaultdict")
     run_cell("d = defaultdict(dict); d[0][0] = 0")

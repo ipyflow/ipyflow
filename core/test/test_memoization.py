@@ -27,11 +27,11 @@ def test_ints():
     assert shell().user_ns["y"] == 1
     assert flow().global_scope["y"].obj == 1
     assert second.is_memoized
-    assert not second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr == -1
     run_cell("x = 0", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + 1", cell_id=second.id))
     assert second.is_memoized
-    assert second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr > 0
     assert shell().user_ns["y"] == 1
     assert flow().global_scope["y"].obj == 1
     run_cell("x = 1", cell_id=first.id)
@@ -39,11 +39,11 @@ def test_ints():
     assert shell().user_ns["y"] == 2
     assert flow().global_scope["y"].obj == 2
     assert second.is_memoized
-    assert not second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr == -1
     run_cell("x = 0", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + 1", cell_id=second.id))
     assert second.is_memoized
-    assert second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr > 0
     assert shell().user_ns["y"] == 1
     assert flow().global_scope["y"].obj == 1
 
@@ -54,21 +54,21 @@ def test_strings():
     assert shell().user_ns["y"] == "hello world"
     assert flow().global_scope["y"].obj == "hello world"
     assert second.is_memoized
-    assert not second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr == -1
     run_cell("x = 'hello'", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id=second.id))
     assert second.is_memoized
-    assert second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr > 0
     run_cell("x = 'hi'", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id=second.id))
     assert shell().user_ns["y"] == "hi world"
     assert flow().global_scope["y"].obj == "hi world"
     assert second.is_memoized
-    assert not second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr == -1
     run_cell("x = 'hello'", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x + ' world'", cell_id=second.id))
     assert second.is_memoized
-    assert second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr > 0
     assert shell().user_ns["y"] == "hello world"
     assert flow().global_scope["y"].obj == "hello world"
 
@@ -79,22 +79,22 @@ def test_sets():
     assert shell().user_ns["y"] == {0, 1}
     assert flow().global_scope["y"].obj == {0, 1}
     assert second.is_memoized
-    assert not second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr == -1
     run_cell("x = {0}", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
     assert shell().user_ns["y"] == {0, 1}
     assert flow().global_scope["y"].obj == {0, 1}
     assert second.is_memoized
-    assert second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr > 0
     run_cell("x = {2}", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
     assert shell().user_ns["y"] == {1, 2}
     assert flow().global_scope["y"].obj == {1, 2}
     assert second.is_memoized
-    assert not second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr == -1
     run_cell("x = {0}", cell_id=first.id)
     second = cells(run_cell("%%memoize\ny = x | {1}", cell_id="second"))
     assert shell().user_ns["y"] == {0, 1}
     assert flow().global_scope["y"].obj == {0, 1}
     assert second.is_memoized
-    assert second.skipped_due_to_memoization
+    assert second.skipped_due_to_memoization_ctr > 0

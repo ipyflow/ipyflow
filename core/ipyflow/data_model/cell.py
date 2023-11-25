@@ -117,7 +117,7 @@ class Cell(SliceableMixin):
         self._extra_stmt: Optional[ast.stmt] = None
         self._placeholder_id = placeholder_id
         self.is_memoized = is_memoized
-        self.skipped_due_to_memoization = False
+        self.skipped_due_to_memoization_ctr = -1
         self.memoized_params: List[
             Tuple[Dict["Symbol", Tuple[int, Any]], Dict["Symbol", Any], int]
         ] = []

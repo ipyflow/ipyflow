@@ -924,9 +924,10 @@ class Symbol:
             prev_cell = None
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
         if overwrite:
+            flow_ = flow()
             self._cascading_reactive_cell_num = -1
-            flow().updated_reactive_symbols.discard(self)
-            flow().updated_deep_reactive_symbols.discard(self)
+            flow_.updated_reactive_symbols.discard(self)
+            flow_.updated_deep_reactive_symbols.discard(self)
         if is_cascading_reactive is not None:
             is_cascading_reactive = is_cascading_reactive or any(
                 dsym.is_cascading_reactive_at_counter(prev_cell_ctr)

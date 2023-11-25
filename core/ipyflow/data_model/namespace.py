@@ -364,7 +364,7 @@ class Namespace(Scope):
                     new_ns.obj, dsym.name, is_subscript=False
                 )
             except AttributeError:
-                inner_obj = None
+                continue
             except TypeError:
                 break
             dsym.update_obj_ref(inner_obj)
@@ -380,7 +380,7 @@ class Namespace(Scope):
                     new_ns.obj, dsym.name, is_subscript=True
                 )
             except (IndexError, KeyError):
-                inner_obj = None
+                continue
             except TypeError:
                 break
             dsym.update_obj_ref(inner_obj)

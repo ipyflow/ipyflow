@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 import ast
+import itertools
 import logging
 import sys
 from enum import Enum
-from types import FrameType
+from types import FrameType, FunctionType
 from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
     Dict,
     Generator,
+    Iterable,
     List,
     Optional,
     Set,
@@ -1229,24 +1231,39 @@ class Symbol:
 
     @classmethod
     def make_memoize_comparable_for_obj(
-        cls, obj: Any
+        cls, obj: Any, seen_ids: Set[int]
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]], int]:
+        if id(obj) in seen_ids:
+            return cls.NULL, None, -1
+        seen_ids.add(id(obj))
         if isinstance(obj, (int, str)):
             return obj, cls._equal, 1
         elif isinstance(obj, (dict, frozenset, list, set, tuple)):
             size = 0
-            comparable = []
-            for inner in obj:
+            comp = []
+            if isinstance(obj, dict):
+                iterable: "Iterable[Any]" = sorted(obj.items())
+            else:
+                iterable = obj
+            for inner in iterable:
                 inner_comp, inner_eq, inner_size = cls.make_memoize_comparable_for_obj(
-                    inner
+                    inner, seen_ids
                 )
                 if inner_comp is cls.NULL or inner_eq is not cls._equal:
                     return cls.NULL, None, -1
                 size += inner_size + 1
                 if size > cls._MAX_MEMOIZE_COMPARABLE_SIZE:
                     return cls.NULL, None, -1
-                comparable.append(inner_comp)
-            return comparable, cls._equal, size
+                comp.append(inner_comp)
+            ret = frozenset(comp) if isinstance(obj, (frozenset, set)) else comp
+            return ret, cls._equal, size
+        elif type(obj) in (type, FunctionType):
+            # try to determine it based on the symbol
+            for sym in flow().aliases.get(id(obj), []):
+                comp, eq = sym.make_memoize_comparable(seen_ids=seen_ids)
+                if comp is not cls.NULL and eq is not None:
+                    return comp, eq, 1
+            return cls.NULL, None, -1
         else:
             # hacks to check if they are arrays or dataframes without explicitly importing these
             module = getattr(type(obj), "__module__", "")
@@ -1260,11 +1277,15 @@ class Symbol:
             return cls.NULL, None, -1
 
     def make_memoize_comparable(
-        self,
+        self, seen_ids: Optional[Set[int]] = None
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]]]:
         if isinstance(self.stmt_node, (ast.ClassDef, ast.FunctionDef)):
+            # TODO: should additionally include deps such as super / kw defaults
+            #   maybe suffices just to look at deps?
             return astunparse.unparse(self.stmt_node), self._equal
-        obj, eq, size = self.make_memoize_comparable_for_obj(self.obj)
+        if seen_ids is None:
+            seen_ids = set()
+        obj, eq, size = self.make_memoize_comparable_for_obj(self.obj, seen_ids)
         if size > self._MAX_MEMOIZE_COMPARABLE_SIZE:
             return self.NULL, None
         else:

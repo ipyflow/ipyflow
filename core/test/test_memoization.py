@@ -98,3 +98,30 @@ def test_sets():
     assert flow().global_scope["y"].obj == {0, 1}
     assert second.is_memoized
     assert second.skipped_due_to_memoization_ctr > 0
+
+
+def test_functions():
+    first = cells(run_cell("def foo(): return 42"))
+    second = cells(run_cell("%%memoize\ny = foo() + 1", cell_id="second"))
+    assert shell().user_ns["y"] == 43
+    assert flow().global_scope["y"].obj == 43
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization_ctr == -1
+    run_cell("def foo(): return 42", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = foo() + 1", cell_id="second"))
+    assert shell().user_ns["y"] == 43
+    assert flow().global_scope["y"].obj == 43
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization_ctr > 0
+    run_cell("def foo(): return 44", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = foo() + 1", cell_id="second"))
+    assert shell().user_ns["y"] == 45
+    assert flow().global_scope["y"].obj == 45
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization_ctr == -1
+    run_cell("def foo(): return 42", cell_id=first.id)
+    second = cells(run_cell("%%memoize\ny = foo() + 1", cell_id="second"))
+    assert shell().user_ns["y"] == 43
+    assert flow().global_scope["y"].obj == 43
+    assert second.is_memoized
+    assert second.skipped_due_to_memoization_ctr > 0

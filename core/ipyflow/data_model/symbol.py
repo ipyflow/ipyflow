@@ -1246,7 +1246,7 @@ class Symbol:
                 if size > cls._MAX_MEMOIZE_COMPARABLE_SIZE:
                     return cls.NULL, None, -1
                 comparable.append(inner_comp)
-            return type(obj)(comparable), cls._equal, size
+            return comparable, cls._equal, size
         else:
             # hacks to check if they are arrays or dataframes without explicitly importing these
             module = getattr(type(obj), "__module__", "")
@@ -1262,8 +1262,8 @@ class Symbol:
     def make_memoize_comparable(
         self,
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]]]:
-        if isinstance(self.stmt_node, ast.FunctionDef):
-            return astunparse.unparse(self.stmt_node)
+        if isinstance(self.stmt_node, (ast.ClassDef, ast.FunctionDef)):
+            return astunparse.unparse(self.stmt_node), self._equal
         obj, eq, size = self.make_memoize_comparable_for_obj(self.obj)
         if size > self._MAX_MEMOIZE_COMPARABLE_SIZE:
             return self.NULL, None

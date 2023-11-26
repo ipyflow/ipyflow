@@ -504,7 +504,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             if identical_result_ctr is not None:
                 cell.skipped_due_to_memoization_ctr = identical_result_ctr
                 print_purple(
-                    "Detected identical symbol usages to previous run; skipping due to memoization..."
+                    "Detected identical symbol usages to previous run; reusing memoized result..."
                 )
                 for sym, obj in memoized_outputs.items():
                     if sym.obj is not obj:

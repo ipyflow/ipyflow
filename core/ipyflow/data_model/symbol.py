@@ -203,6 +203,9 @@ class Symbol:
     def __hash__(self) -> int:
         return hash(id(self))
 
+    def __lt__(self, other) -> bool:
+        return id(self) < id(other)
+
     def add_tag(self, tag_value: str) -> None:
         self._tags.add(tag_value)
 
@@ -1279,12 +1282,16 @@ class Symbol:
     def make_memoize_comparable(
         self, seen_ids: Optional[Set[int]] = None
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]]]:
-        if isinstance(self.stmt_node, (ast.ClassDef, ast.FunctionDef)):
-            # TODO: should additionally include deps such as super / kw defaults
-            #   maybe suffices just to look at deps?
-            return astunparse.unparse(self.stmt_node), self._equal
         if seen_ids is None:
             seen_ids = set()
+        if isinstance(self.stmt_node, (ast.ClassDef, ast.FunctionDef)):
+            comps = [astunparse.unparse(self.stmt_node)]
+            for sym in sorted(self.parents.keys()):
+                par_comp, eq = sym.make_memoize_comparable(seen_ids=seen_ids)
+                if par_comp is self.NULL or eq is not self._equal:
+                    return self.NULL, None
+                comps.append(par_comp)
+            return comps, self._equal
         obj, eq, size = self.make_memoize_comparable_for_obj(self.obj, seen_ids)
         if size > self._MAX_MEMOIZE_COMPARABLE_SIZE:
             return self.NULL, None

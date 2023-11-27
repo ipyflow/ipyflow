@@ -13,7 +13,9 @@ from pyccolo.import_hooks import TraceFinder
 from ipyflow import singletons
 from ipyflow.config import Interface
 from ipyflow.data_model.cell import Cell
+from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
+from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
@@ -506,11 +508,12 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 print_purple(
                     "Detected identical symbol usages to previous run; reusing memoized result..."
                 )
-                for sym, obj in memoized_outputs.items():
+                for sym, (obj, mem_ts) in memoized_outputs.items():
                     if sym.obj is not obj:
                         self.user_ns[sym.name] = obj
                         sym.update_obj_ref(obj)
-                        sym.refresh()
+                        new_updated_ts = Timestamp(self.cell_counter(), mem_ts.stmt_num)
+                        sym.refresh(timestamp=new_updated_ts)
                 return f"Out.get({identical_result_ctr})"
 
         # Stage 1: Precheck.

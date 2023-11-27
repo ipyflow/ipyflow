@@ -119,7 +119,11 @@ class Cell(SliceableMixin):
         self.is_memoized = is_memoized
         self.skipped_due_to_memoization_ctr = -1
         self.memoized_params: List[
-            Tuple[Dict["Symbol", Tuple[int, Any]], Dict["Symbol", Any], int]
+            Tuple[
+                Dict["Symbol", Tuple[int, Any]],
+                Dict["Symbol", Tuple[Any, Timestamp]],
+                int,
+            ]
         ] = []
         self._force_tracking = force_tracking
 
@@ -295,7 +299,7 @@ class Cell(SliceableMixin):
         for sym in flow().updated_symbols:
             if not sym.is_user_accessible or not sym.containing_scope.is_global:
                 continue
-            outputs[sym] = sym.obj
+            outputs[sym] = (sym.obj, sym.timestamp_excluding_ns_descendents)
         self.memoized_params.append((memoized_params, outputs, self.cell_ctr))
 
     @classmethod

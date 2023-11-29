@@ -75,6 +75,8 @@ class Timestamp(NamedTuple):
             _stmt_offset -= stmt_offset
 
     def __eq__(self, other) -> bool:
+        if other is None:
+            return False
         if not isinstance(other, Timestamp):
             raise TypeError(
                 "cannot compare non-timestamp value %s with timestamp %s"

@@ -289,10 +289,12 @@ class Cell(SliceableMixin):
                         inputs[sym] = MemoizedInput(
                             sym,
                             sym.timestamp,
+                            sym.obj_id,
                             sym.make_memoize_comparable()[0],
                         )
         outputs: Dict["Symbol", MemoizedOutput] = {}
         for sym in flow().updated_symbols:
+            sym.last_updated_timestamp_by_obj_id[sym.obj_id] = sym.timestamp
             if not sym.is_user_accessible or not sym.containing_scope.is_global:
                 continue
             outputs[sym] = MemoizedOutput(

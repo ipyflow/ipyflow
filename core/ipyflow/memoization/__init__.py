@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 class MemoizedInput(NamedTuple):
     symbol: "Symbol"
     ts_at_execution: "Timestamp"
+    obj_id_at_execution: int
     comparable: Any
 
 

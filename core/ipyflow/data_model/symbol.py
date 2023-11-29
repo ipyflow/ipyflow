@@ -153,6 +153,8 @@ class Symbol:
         self.timestamp_by_liveness_time: Dict[Timestamp, Timestamp] = {}
         # All timestamps associated with updates to this symbol
         self.updated_timestamps: Set[Timestamp] = set()
+        # The most recent timestamp associated with a particular object id
+        self.last_updated_timestamp_by_obj_id: Dict[int, Timestamp] = {}
 
         self.fresher_ancestors: Set["Symbol"] = set()
         self.fresher_ancestor_timestamps: Set[Timestamp] = set()

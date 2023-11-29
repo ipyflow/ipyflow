@@ -490,8 +490,13 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             for content, inputs, outputs, ctr in prev_cell.memoized_executions:
                 if content != cell.executed_content:
                     continue
-                for (sym, in_ts, comparable) in inputs:
+                for sym, in_ts, obj_id, comparable in inputs:
                     if sym.timestamp.cell_num == in_ts.cell_num:
+                        continue
+                    elif (
+                        sym.obj_id == obj_id
+                        and sym.last_updated_timestamp_by_obj_id.get(obj_id) == in_ts
+                    ):
                         continue
                     elif comparable is Symbol.NULL:
                         break
@@ -508,7 +513,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             print_purple(
                 "Detected identical symbol usages to previous run; reusing memoized result..."
             )
-            for (sym, out_ts, value) in memoized_outputs:
+            for sym, out_ts, value in memoized_outputs:
                 if sym.obj is not value:
                     self.user_ns[sym.name] = value
                     sym.update_obj_ref(value)

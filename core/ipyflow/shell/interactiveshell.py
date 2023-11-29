@@ -482,39 +482,39 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if not flow_.mut_settings.dataflow_enabled:
             return None
 
-        if cell.is_memoized:
-            prev_cell = cell.prev_cell
-            identical_result_ctr: Optional[int] = None
-            memoized_outputs = {}
-            if (
-                prev_cell is not None
-                and prev_cell.executed_content == cell.executed_content
-            ):
-                for params, outputs, ctr in prev_cell.memoized_params:
-                    for param, (ts, comparable_obj) in params.items():
-                        if param.timestamp.cell_num == ts:
-                            continue
-                        elif comparable_obj is Symbol.NULL:
-                            break
-                        comparable_param, eq = param.make_memoize_comparable()
-                        if eq is None or not eq(comparable_param, comparable_obj):
-                            break
-                    else:
-                        identical_result_ctr = ctr
-                        memoized_outputs = outputs
+        identical_result_ctr: Optional[int] = None
+        memoized_outputs = []
+
+        prev_cell = cell.prev_cell
+        if cell.is_memoized and prev_cell is not None:
+            for content, inputs, outputs, ctr in prev_cell.memoized_executions:
+                if content != cell.executed_content:
+                    continue
+                for (sym, in_ts, comparable) in inputs:
+                    if sym.timestamp.cell_num == in_ts.cell_num:
+                        continue
+                    elif comparable is Symbol.NULL:
                         break
-            if identical_result_ctr is not None:
-                cell.skipped_due_to_memoization_ctr = identical_result_ctr
-                print_purple(
-                    "Detected identical symbol usages to previous run; reusing memoized result..."
-                )
-                for sym, (obj, mem_ts) in memoized_outputs.items():
-                    if sym.obj is not obj:
-                        self.user_ns[sym.name] = obj
-                        sym.update_obj_ref(obj)
-                        new_updated_ts = Timestamp(self.cell_counter(), mem_ts.stmt_num)
-                        sym.refresh(timestamp=new_updated_ts)
-                return f"Out.get({identical_result_ctr})"
+                    current_comp, eq = sym.make_memoize_comparable()
+                    if eq is None or not eq(current_comp, comparable):
+                        break
+                else:
+                    identical_result_ctr = ctr
+                    memoized_outputs = outputs
+                    break
+
+        if identical_result_ctr is not None:
+            cell.skipped_due_to_memoization_ctr = identical_result_ctr
+            print_purple(
+                "Detected identical symbol usages to previous run; reusing memoized result..."
+            )
+            for (sym, out_ts, value) in memoized_outputs:
+                if sym.obj is not value:
+                    self.user_ns[sym.name] = value
+                    sym.update_obj_ref(value)
+                    new_updated_ts = Timestamp(self.cell_counter(), out_ts.stmt_num)
+                    sym.refresh(timestamp=new_updated_ts)
+            return f"Out.get({identical_result_ctr})"
 
         # Stage 1: Precheck.
         if DataflowTracer in self.registered_tracers:
@@ -546,8 +546,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         prev_cell = cell.prev_cell
         if prev_cell is not None:
             if cell.executed_content == prev_cell.executed_content and cell.is_memoized:
-                cell.memoized_params = prev_cell.memoized_params
-            prev_cell.memoized_params = []
+                cell.memoized_executions = prev_cell.memoized_executions
+            prev_cell.memoized_executions = []
         if cell.skipped_due_to_memoization_ctr > 0:
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None

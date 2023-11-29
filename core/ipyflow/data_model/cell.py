@@ -35,6 +35,7 @@ from ipyflow.analysis.live_refs import (
 from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.config import ExecutionSchedule, FlowDirection, Interface
 from ipyflow.data_model.timestamp import Timestamp
+from ipyflow.memoization import MemoizedCellExecution, MemoizedInput, MemoizedOutput
 from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.context import SlicingContext
@@ -118,13 +119,7 @@ class Cell(SliceableMixin):
         self._placeholder_id = placeholder_id
         self.is_memoized = is_memoized
         self.skipped_due_to_memoization_ctr = -1
-        self.memoized_params: List[
-            Tuple[
-                Dict["Symbol", Tuple[int, Any]],
-                Dict["Symbol", Tuple[Any, Timestamp]],
-                int,
-            ]
-        ] = []
+        self.memoized_executions: List[MemoizedCellExecution] = []
         self._force_tracking = force_tracking
 
     @property
@@ -284,23 +279,33 @@ class Cell(SliceableMixin):
         return cls._reactive_cells_by_tag.get(tag, set())
 
     def _maybe_memoize_params(self) -> None:
-        memoized_params: Dict["Symbol", Tuple[int, Any]] = {}
+        inputs: Dict["Symbol", MemoizedInput] = {}
         for _ in SlicingContext.iter_slicing_contexts():
             for edges in self.parents.values():
                 for sym in edges:
                     if sym.timestamp.cell_num >= self.cell_ctr:
                         return
-                    if sym not in memoized_params:
-                        memoized_params[sym] = (
-                            sym.timestamp.cell_num,
+                    if sym not in inputs:
+                        inputs[sym] = MemoizedInput(
+                            sym,
+                            sym.timestamp,
                             sym.make_memoize_comparable()[0],
                         )
-        outputs = {}
+        outputs: Dict["Symbol", MemoizedOutput] = {}
         for sym in flow().updated_symbols:
             if not sym.is_user_accessible or not sym.containing_scope.is_global:
                 continue
-            outputs[sym] = (sym.obj, sym.timestamp_excluding_ns_descendents)
-        self.memoized_params.append((memoized_params, outputs, self.cell_ctr))
+            outputs[sym] = MemoizedOutput(
+                sym, sym.timestamp_excluding_ns_descendents, sym.obj
+            )
+        self.memoized_executions.append(
+            MemoizedCellExecution(
+                self.executed_content,
+                list(inputs.values()),
+                list(outputs.values()),
+                self.cell_ctr,
+            )
+        )
 
     @classmethod
     def create_and_track(

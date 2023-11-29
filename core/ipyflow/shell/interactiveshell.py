@@ -13,7 +13,6 @@ from pyccolo.import_hooks import TraceFinder
 from ipyflow import singletons
 from ipyflow.config import Interface
 from ipyflow.data_model.cell import Cell
-from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
@@ -427,6 +426,50 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def should_trace(self) -> bool:
         return singletons.flow().mut_settings.dataflow_enabled
 
+    def _get_content_for_memoized_run(self, cell: Cell) -> Optional[str]:
+        prev_cell = cell.prev_cell
+        if not cell.is_memoized or prev_cell is None:
+            return None
+
+        identical_result_ctr: Optional[int] = None
+        memoized_outputs = []
+
+        for content, inputs, outputs, ctr in prev_cell.memoized_executions:
+            if content != cell.executed_content:
+                continue
+            for sym, in_ts, obj_id, comparable in inputs:
+                if sym.timestamp.cell_num == in_ts.cell_num:
+                    continue
+                elif (
+                    sym.obj_id == obj_id
+                    and sym.last_updated_timestamp_by_obj_id.get(obj_id) == in_ts
+                ):
+                    continue
+                elif comparable is Symbol.NULL:
+                    break
+                current_comp, eq = sym.make_memoize_comparable()
+                if eq is None or not eq(current_comp, comparable):
+                    break
+            else:
+                identical_result_ctr = ctr
+                memoized_outputs = outputs
+                break
+
+        if identical_result_ctr is None:
+            return None
+
+        cell.skipped_due_to_memoization_ctr = identical_result_ctr
+        print_purple(
+            "Detected identical symbol usages to previous run; reusing memoized result..."
+        )
+        for sym, out_ts, value in memoized_outputs:
+            if sym.obj is not value:
+                self.user_ns[sym.name] = value
+                sym.update_obj_ref(value)
+            new_updated_ts = Timestamp(self.cell_counter(), out_ts.stmt_num)
+            sym.refresh(timestamp=new_updated_ts)
+        return f"Out.get({identical_result_ctr})"
+
     def before_run_cell(
         self,
         cell_content: str,
@@ -482,44 +525,9 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if not flow_.mut_settings.dataflow_enabled:
             return None
 
-        identical_result_ctr: Optional[int] = None
-        memoized_outputs = []
-
-        prev_cell = cell.prev_cell
-        if cell.is_memoized and prev_cell is not None:
-            for content, inputs, outputs, ctr in prev_cell.memoized_executions:
-                if content != cell.executed_content:
-                    continue
-                for sym, in_ts, obj_id, comparable in inputs:
-                    if sym.timestamp.cell_num == in_ts.cell_num:
-                        continue
-                    elif (
-                        sym.obj_id == obj_id
-                        and sym.last_updated_timestamp_by_obj_id.get(obj_id) == in_ts
-                    ):
-                        continue
-                    elif comparable is Symbol.NULL:
-                        break
-                    current_comp, eq = sym.make_memoize_comparable()
-                    if eq is None or not eq(current_comp, comparable):
-                        break
-                else:
-                    identical_result_ctr = ctr
-                    memoized_outputs = outputs
-                    break
-
-        if identical_result_ctr is not None:
-            cell.skipped_due_to_memoization_ctr = identical_result_ctr
-            print_purple(
-                "Detected identical symbol usages to previous run; reusing memoized result..."
-            )
-            for sym, out_ts, value in memoized_outputs:
-                if sym.obj is not value:
-                    self.user_ns[sym.name] = value
-                    sym.update_obj_ref(value)
-                new_updated_ts = Timestamp(self.cell_counter(), out_ts.stmt_num)
-                sym.refresh(timestamp=new_updated_ts)
-            return f"Out.get({identical_result_ctr})"
+        memoized_run_content = self._get_content_for_memoized_run(cell)
+        if memoized_run_content is not None:
+            return memoized_run_content
 
         # Stage 1: Precheck.
         if DataflowTracer in self.registered_tracers:

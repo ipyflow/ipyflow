@@ -517,8 +517,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 if sym.obj is not value:
                     self.user_ns[sym.name] = value
                     sym.update_obj_ref(value)
-                    new_updated_ts = Timestamp(self.cell_counter(), out_ts.stmt_num)
-                    sym.refresh(timestamp=new_updated_ts)
+                new_updated_ts = Timestamp(self.cell_counter(), out_ts.stmt_num)
+                sym.refresh(timestamp=new_updated_ts)
             return f"Out.get({identical_result_ctr})"
 
         # Stage 1: Precheck.

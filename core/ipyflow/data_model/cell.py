@@ -505,6 +505,7 @@ class Cell(SliceableMixin):
             return self._cached_ast
         if (
             self._cached_ast is None
+            or self.last_ast_content is None
             or len(self.last_ast_content) != len(self.current_content)
             or self.last_ast_content != self.current_content
         ):

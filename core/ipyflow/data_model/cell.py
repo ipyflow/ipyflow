@@ -7,7 +7,6 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
-    Any,
     Dict,
     FrozenSet,
     Generator,
@@ -88,6 +87,7 @@ class Cell(SliceableMixin):
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
+        self.error_in_exec: Optional[BaseException] = None
         self.history: List[int] = [cell_ctr] if cell_ctr > -1 else []
         self.executed_content: Optional[str] = None
         self.current_content: str = content
@@ -125,6 +125,10 @@ class Cell(SliceableMixin):
     @property
     def id(self) -> IdType:
         return self.cell_id
+
+    @property
+    def is_error(self) -> bool:
+        return self.error_in_exec is not None
 
     @property
     def is_dirty(self) -> bool:
@@ -279,16 +283,21 @@ class Cell(SliceableMixin):
         return cls._reactive_cells_by_tag.get(tag, set())
 
     def _maybe_memoize_params(self) -> None:
+        if self.is_error:
+            return
         inputs: Dict["Symbol", MemoizedInput] = {}
         for _ in SlicingContext.iter_slicing_contexts():
             for edges in self.parents.values():
                 for sym in edges:
-                    if sym.timestamp.cell_num >= self.cell_ctr:
+                    if sym.timestamp.cell_num == self.cell_ctr:
+                        continue
+                    elif sym.timestamp.cell_num > self.cell_ctr:
                         return
                     if sym not in inputs:
                         inputs[sym] = MemoizedInput(
                             sym,
                             sym.timestamp,
+                            sym.memoize_timestamp,
                             sym.obj_id,
                             sym.make_memoize_comparable()[0],
                         )

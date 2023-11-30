@@ -240,6 +240,10 @@ class Symbol:
             return max(self._timestamp, self._override_timestamp)
 
     @property
+    def memoize_timestamp(self) -> Optional[Timestamp]:
+        return self.last_updated_timestamp_by_obj_id.get(self.obj_id)
+
+    @property
     def timestamp(self) -> Timestamp:
         ts = self.timestamp_excluding_ns_descendents
         if self.is_import or self.is_module:

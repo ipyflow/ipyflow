@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from typing import TYPE_CHECKING, Any, List, NamedTuple
+from typing import TYPE_CHECKING, Any, List, NamedTuple, Optional
 
 if TYPE_CHECKING:
     from ipyflow.data_model.symbol import Symbol
@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 class MemoizedInput(NamedTuple):
     symbol: "Symbol"
     ts_at_execution: "Timestamp"
+    mem_ts_at_execution: Optional["Timestamp"]
     obj_id_at_execution: int
     comparable: Any
 

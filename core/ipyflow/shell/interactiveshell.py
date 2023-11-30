@@ -345,6 +345,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         maybe_new_content = self.before_run_cell(
             raw_cell, store_history=store_history, **kwargs
         )
+        cell = Cell.from_counter(self.cell_counter())
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
 
@@ -367,6 +368,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     shell_futures=shell_futures,
                     **kwargs,
                 )  # pragma: no cover
+                cell.error_in_exec = ret.error_in_exec
                 if is_already_recording_output:
                     outvar = (
                         raw_cell.strip().splitlines()[0][len("%%capture") :].strip()
@@ -437,12 +439,12 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         for content, inputs, outputs, ctr in prev_cell.memoized_executions:
             if content != cell.executed_content:
                 continue
-            for sym, in_ts, obj_id, comparable in inputs:
+            for sym, in_ts, mem_ts, obj_id, comparable in inputs:
                 if sym.timestamp.cell_num == in_ts.cell_num:
                     continue
-                elif (
-                    sym.obj_id == obj_id
-                    and sym.last_updated_timestamp_by_obj_id.get(obj_id) == in_ts
+                elif sym.obj_id == obj_id and sym.memoize_timestamp in (
+                    in_ts,
+                    mem_ts or Timestamp.uninitialized(),
                 ):
                     continue
                 elif comparable is Symbol.NULL:

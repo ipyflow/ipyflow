@@ -6,37 +6,43 @@ from typing import Any, Dict, Generator, List
 from ipyflow.slicing.context import SlicingContext, iter_slicing_contexts
 
 
-class ExecutionMode(Enum):
+class EnumWithDefault(Enum):
+    @classmethod
+    def _missing_(cls, value):
+        return cls(cls.__default__)  # type: ignore
+
+
+class ExecutionMode(EnumWithDefault):
     NORMAL = "normal"
-    REACTIVE = "reactive"
+    REACTIVE = __default__ = "reactive"  # type: ignore
 
 
-class ExecutionSchedule(Enum):
+class ExecutionSchedule(EnumWithDefault):
     LIVENESS_BASED = "liveness_based"
     DAG_BASED = "dag_based"
-    HYBRID_DAG_LIVENESS_BASED = "hybrid_dag_liveness_based"
+    HYBRID_DAG_LIVENESS_BASED = __default__ = "hybrid_dag_liveness_based"  # type: ignore
 
 
-class FlowDirection(Enum):
+class FlowDirection(EnumWithDefault):
     ANY_ORDER = "any_order"
-    IN_ORDER = "in_order"
+    IN_ORDER = __default__ = "in_order"  # type: ignore
 
 
-class Highlights(Enum):
+class Highlights(EnumWithDefault):
     ALL = "all"
     NONE = "none"
-    EXECUTED = "executed"
+    EXECUTED = __default__ = "executed"  # type: ignore
     REACTIVE = "reactive"
 
 
-class ReactivityMode(Enum):
-    BATCH = "batch"
+class ReactivityMode(EnumWithDefault):
+    BATCH = __default__ = "batch"  # type: ignore
     INCREMENTAL = "incremental"
 
 
 # TODO: figure out how to represent different versions of
 #  same interface (e.g. jupyterlab 4.0, notebook v7, etc)
-class Interface(Enum):
+class Interface(EnumWithDefault):
     BENTO = "bento"  # ~TODO
     COLAB = "colab"  # TODO
     DATABRICKS = "databricks"  # TODO
@@ -48,11 +54,11 @@ class Interface(Enum):
     JUPYTERLAB = "jupyterlab"
     NOTEABLE = "noteable"  # TODO
     VSCODE = "vscode"  # TODO
-    UNKNOWN = "unknown"
+    UNKNOWN = __default__ = "unknown"  # type: ignore
 
 
-class ColorScheme(Enum):
-    NORMAL = "normal"
+class ColorScheme(EnumWithDefault):
+    NORMAL = __default__ = "normal"  # type: ignore
     CLASSIC = "classic"
 
 

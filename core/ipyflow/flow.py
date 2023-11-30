@@ -101,39 +101,31 @@ class NotebookFlow(singletons.NotebookFlow):
             exec_mode=ExecutionMode(
                 kwargs.pop(
                     "exec_mode",
-                    ExecutionMode(getattr(config, "exec_mode", ExecutionMode.NORMAL)),
+                    getattr(config, "exec_mode", ExecutionMode.NORMAL),
                 )
             ),
             exec_schedule=ExecutionSchedule(
                 kwargs.pop(
                     "exec_schedule",
-                    ExecutionSchedule(
-                        getattr(
-                            config, "exec_schedule", ExecutionSchedule.LIVENESS_BASED
-                        )
-                    ),
+                    getattr(config, "exec_schedule", ExecutionSchedule.LIVENESS_BASED),
                 )
             ),
             flow_order=FlowDirection(
                 kwargs.pop(
                     "flow_direction",
-                    FlowDirection(
-                        getattr(config, "flow_direction", FlowDirection.IN_ORDER)
-                    ),
+                    getattr(config, "flow_direction", FlowDirection.IN_ORDER),
                 )
             ),
             reactivity_mode=ReactivityMode(
                 kwargs.pop(
                     "reactivity_mode",
-                    ReactivityMode(
-                        getattr(config, "reactivity_mode", ReactivityMode.BATCH)
-                    ),
+                    getattr(config, "reactivity_mode", ReactivityMode.BATCH),
                 )
             ),
             color_scheme=ColorScheme(
                 kwargs.pop(
                     "color_scheme",
-                    ColorScheme(getattr(config, "color_scheme", ColorScheme.NORMAL)),
+                    getattr(config, "color_scheme", ColorScheme.NORMAL),
                 )
             ),
             warn_out_of_order_usages=kwargs.pop(
@@ -278,10 +270,7 @@ class NotebookFlow(singletons.NotebookFlow):
         **kwargs,
     ) -> None:
         config = shell().config.ipyflow
-        try:
-            iface = Interface(interface)
-        except ValueError:
-            iface = Interface.UNKNOWN
+        iface = Interface(interface)
         if self.mut_settings.interface == iface:
             return
         self.mut_settings.interface = iface
@@ -302,40 +291,38 @@ class NotebookFlow(singletons.NotebookFlow):
             getattr(
                 config,
                 "exec_mode",
-                kwargs.get("exec_mode", ExecutionMode.NORMAL),
+                kwargs.get("exec_mode"),
             )
         )
         self.mut_settings.exec_schedule = ExecutionSchedule(
             getattr(
                 config,
                 "exec_schedule",
-                kwargs.get(
-                    "exec_schedule", ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
-                ),
+                kwargs.get("exec_schedule"),
             )
         )
         self.mut_settings.flow_order = FlowDirection(
             getattr(
                 config,
                 "flow_direction",
-                kwargs.get("flow_direction", FlowDirection.IN_ORDER),
+                kwargs.get("flow_direction"),
             )
         )
         self.mut_settings.highlights = Highlights(
-            getattr(config, "highlights", kwargs.get("highlights", Highlights.EXECUTED))
+            getattr(config, "highlights", kwargs.get("highlights"))
         )
         self.mut_settings.reactivity_mode = ReactivityMode(
             getattr(
                 config,
                 "reactivity_mode",
-                kwargs.get("reactivity_mode", ReactivityMode.BATCH),
+                kwargs.get("reactivity_mode"),
             )
         )
         self.mut_settings.color_scheme = ColorScheme(
             getattr(
                 config,
                 "color_scheme",
-                kwargs.get("color_scheme", ColorScheme.NORMAL),
+                kwargs.get("color_scheme"),
             )
         )
         self.mut_settings.max_external_call_depth_for_tracing = getattr(

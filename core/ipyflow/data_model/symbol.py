@@ -1107,11 +1107,7 @@ class Symbol:
             is_usage = False
             ts_to_use = self._timestamp
             for updated_ts in sorted(self.updated_timestamps, reverse=True):
-                if (
-                    not updated_ts.is_initialized
-                    or cells().at_timestamp(updated_ts).cell_id
-                    == cells().at_timestamp(used_time).cell_id
-                ):
+                if not updated_ts.is_initialized:
                     continue
                 is_usage = self.update_usage_info_one_timestamp(
                     used_time,

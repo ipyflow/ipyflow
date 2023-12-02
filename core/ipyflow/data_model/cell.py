@@ -193,9 +193,9 @@ class Cell(SliceableMixin):
         return self._force_tracking
 
     def statements(self) -> List["Statement"]:
-        stmts = []
+        stmts: List["Statement"] = []
         for stmt_num in range(len(self.to_ast().body)):
-            stmts.append(statements().from_timestamp(self.cell_ctr, stmt_num))
+            stmts.append(statements().from_timestamp(self.cell_ctr, stmt_num))  # type: ignore
         return stmts
 
     def force_tracking(self) -> None:

@@ -76,6 +76,15 @@ def test_simple():
     assert deps == {1, 2, 4}, "got %s" % deps
 
 
+def test_simple_augassign():
+    run_cell("a = 0")
+    run_cell("a += 1")
+    run_cell("b = a")
+    run_cell("logging.info(a)")
+    deps = set(compute_unparsed_slice(4).keys())
+    assert deps == {1, 2, 4}, "got %s" % deps
+
+
 def test_simple_function():
     run_cell("a = 1")
     run_cell("def f(): return a")

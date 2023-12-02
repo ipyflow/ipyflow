@@ -13,9 +13,11 @@ from pyccolo.import_hooks import TraceFinder
 from ipyflow import singletons
 from ipyflow.config import Interface
 from ipyflow.data_model.cell import Cell
+from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
+from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
     DataflowTracer,
@@ -460,6 +462,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if identical_result_ctr is None:
             return None
 
+        for idx, stmt_node in enumerate(cell.to_ast().body):
+            Statement.create_and_track(
+                stmt_node, timestamp=Timestamp(self.cell_counter(), idx)
+            )
+
         cell.skipped_due_to_memoization_ctr = identical_result_ctr
         print_purple(
             "Detected identical symbol usages to previous run; reusing memoized result..."
@@ -566,9 +573,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if cell.skipped_due_to_memoization_ctr > 0:
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None
-            cell.static_parents = prev_cell.static_parents
-            cell.dynamic_parents = prev_cell.dynamic_parents
+            for parent, syms in prev_cell.static_parents.items():
+                with static_slicing_context():
+                    cell.add_parent_edges(parent, syms)
+            for parent, syms in prev_cell.dynamic_parents.items():
+                with dynamic_slicing_context():
+                    cell.add_parent_edges(parent, syms)
             cell.captured_output = prev_cell.captured_output
+            cell.to_ast(override=prev_cell.to_ast())
         elif cell.is_memoized:
             cell._maybe_memoize_params()
 
@@ -601,7 +613,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         cell.captured_output = self.tee_output_tracer.capture_output
 
     def after_run_cell(self, _cell_content: str) -> None:
-        self._handle_memoization()
         self._handle_output()
         # resync any defined symbols that could have gotten out-of-sync
         # due to tracing being disabled
@@ -616,6 +627,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 if sym.timestamp.cell_num == Cell.exec_counter()
             ]
         )
+        self._handle_memoization()
         flow_._add_applicable_prev_cell_parents_to_current()
         flow_.gc()
 

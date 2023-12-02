@@ -330,14 +330,16 @@ class SymbolRef(CommonEqualityMixin):
     def from_string(cls, symbol_str: str) -> "SymbolRef":
         return cls(ast.parse(symbol_str, mode="eval").body)
 
-    @classmethod
-    def resolve(cls, symbol_str: str) -> Optional["Symbol"]:
-        ref = cls.from_string(symbol_str)
-        for resolved in ref.gen_resolved_symbols(
+    def to_symbol(self) -> Optional["Symbol"]:
+        for resolved in self.gen_resolved_symbols(
             flow().global_scope, only_yield_final_symbol=True, yield_in_reverse=False
         ):
             return resolved.dsym
         return None
+
+    @classmethod
+    def resolve(cls, symbol_str: str) -> Optional["Symbol"]:
+        return cls.from_string(symbol_str).to_symbol()
 
     def __hash__(self) -> int:
         return hash(self.chain)
@@ -424,6 +426,9 @@ class LiveSymbolRef(CommonEqualityMixin):
     @staticmethod
     def resolve(symbol_str: str) -> Optional["Symbol"]:
         return SymbolRef.resolve(symbol_str)
+
+    def to_symbol(self) -> Optional["Symbol"]:
+        return self.ref.to_symbol()
 
     def __hash__(self) -> int:
         return hash((self.ref, self.timestamp, self.is_lhs_ref))

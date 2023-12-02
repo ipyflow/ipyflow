@@ -6,9 +6,10 @@ import sys
 from types import FrameType
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, Union, cast
 
-from IPython import get_ipython
-
-from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
+from ipyflow.analysis.live_refs import (
+    compute_live_dead_symbol_refs,
+    stmt_contains_cascading_reactive_rval,
+)
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval
@@ -18,7 +19,7 @@ from ipyflow.data_model.scope import Scope
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import _StatementContainer, cells, statements
-from ipyflow.singletons import flow, tracer
+from ipyflow.singletons import flow, shell, tracer
 from ipyflow.slicing.context import SlicingContext, static_slicing_context
 from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
@@ -69,6 +70,10 @@ class Statement(SliceableMixin):
         self.dynamic_children: Dict[IdType, Set[Symbol]] = {}
         self.static_parents: Dict[IdType, Set[Symbol]] = {}
         self.static_children: Dict[IdType, Set[Symbol]] = {}
+
+    @classmethod
+    def current(cls) -> "Statement":
+        return cls.at_timestamp(Timestamp.current())
 
     @property
     def id(self) -> IdType:
@@ -141,6 +146,9 @@ class Statement(SliceableMixin):
                 stmt.add_parent_edges(parent, syms)
         flow().stmt_deferred_static_parents.pop(stmt.timestamp, None)
         return stmt
+
+    def is_module_stmt(self) -> bool:
+        return tracer().parent_stmt_by_id.get(self.stmt_id) is None
 
     @classmethod
     def clear(cls):
@@ -351,7 +359,7 @@ class Statement(SliceableMixin):
                     subscript_vals_to_use.append(not is_subscript)
                     break
         for subscript_val in subscript_vals_to_use:
-            upserted = scope.upsert_data_symbol_for_name(
+            upserted = scope.upsert_symbol_for_name(
                 name,
                 obj,
                 deps - excluded_deps,
@@ -399,7 +407,7 @@ class Statement(SliceableMixin):
             ns = Namespace(obj, str(name), parent_scope=scope)
         for i, inner_dep in enumerate(inner_deps):
             deps = set() if inner_dep is None else {inner_dep}
-            ns.upsert_data_symbol_for_name(
+            ns.upsert_symbol_for_name(
                 i,
                 inner_dep.obj,
                 deps,
@@ -407,7 +415,7 @@ class Statement(SliceableMixin):
                 is_subscript=True,
                 is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
             )
-        scope.upsert_data_symbol_for_name(
+        scope.upsert_symbol_for_name(
             name,
             obj,
             set(),
@@ -536,7 +544,7 @@ class Statement(SliceableMixin):
                     module = sys.modules.get(
                         f"{self.stmt_node.module}.{dep_node_as_alias.name}"
                     ) or sys.modules.get(self.stmt_node.module)
-                    if self.frame.f_locals is get_ipython().user_ns:
+                    if self.frame.f_locals is shell().user_ns:
                         for alias in self.stmt_node.names:
                             if alias.name == "*":
                                 flow().starred_import_modules.add(module.__name__)
@@ -569,7 +577,7 @@ class Statement(SliceableMixin):
                     is_subscript,
                     excluded_deps,
                 ) = tracer().resolve_store_data_for_target(target, self.frame)
-                scope.upsert_data_symbol_for_name(
+                scope.upsert_symbol_for_name(
                     name,
                     obj,
                     rval_deps - excluded_deps,

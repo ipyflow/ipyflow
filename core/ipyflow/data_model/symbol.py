@@ -771,7 +771,7 @@ class Symbol:
         logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
             seen_def_args.add(def_arg.arg)
-            sym = self.call_scope.upsert_data_symbol_for_name(
+            sym = self.call_scope.upsert_symbol_for_name(
                 def_arg.arg,
                 call_frame.f_locals.get(def_arg.arg),
                 deps,
@@ -783,7 +783,7 @@ class Symbol:
         for def_arg in self.get_definition_args():
             if def_arg.arg in seen_def_args:
                 continue
-            self.call_scope.upsert_data_symbol_for_name(
+            self.call_scope.upsert_symbol_for_name(
                 def_arg.arg,
                 None,
                 set(),
@@ -989,9 +989,7 @@ class Symbol:
             or not hasattr(self.obj, "value")
         ):
             return
-        self.namespaced().upsert_data_symbol_for_name(
-            "value", None, set(), self.stmt_node
-        )
+        self.namespaced().upsert_symbol_for_name("value", None, set(), self.stmt_node)
         self.obj.observe(self._observe_widget)
         self._num_widget_observers += 1
 
@@ -1126,8 +1124,8 @@ class Symbol:
         if ns is None or self in seen:
             return self
         seen.add(self)
-        for dsym in ns.all_symbols_this_indentation():
-            dsym.update_usage_info(
+        for sym in ns.all_symbols_this_indentation():
+            sym.update_usage_info(
                 used_time=used_time,
                 used_node=None,
                 exclude_ns=False,

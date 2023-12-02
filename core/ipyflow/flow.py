@@ -233,10 +233,10 @@ class NotebookFlow(singletons.NotebookFlow):
         if self._virtual_symbols_inited:
             return
         self.fs = Namespace(Namespace.FILE_SYSTEM, "fs")
-        self.display_sym = self.virtual_symbols.upsert_data_symbol_for_name(
+        self.display_sym = self.virtual_symbols.upsert_symbol_for_name(
             "display", Symbol.DISPLAY, propagate=False, implicit=True
         )
-        self.fake_edge_sym = self.virtual_symbols.upsert_data_symbol_for_name(
+        self.fake_edge_sym = self.virtual_symbols.upsert_symbol_for_name(
             "fake_edge_sym", object(), propagate=False, implicit=True
         )
         self._virtual_symbols_inited = True
@@ -789,7 +789,7 @@ class NotebookFlow(singletons.NotebookFlow):
         if prev_sym is not None and prev_sym.obj is obj:
             return {"success": False}
         with Timestamp.offset(stmt_offset=-1):
-            self.global_scope.upsert_data_symbol_for_name(
+            self.global_scope.upsert_symbol_for_name(
                 symbol_name, obj, dep_symbols, ast.parse("pass").body[0]
             )
         return None
@@ -893,20 +893,20 @@ class NotebookFlow(singletons.NotebookFlow):
                     )
 
     def _resync_symbols(self, symbols: Iterable[Symbol]):
-        for dsym in symbols:
-            if not dsym.containing_scope.is_global:
+        for sym in symbols:
+            if not sym.containing_scope.is_global:
                 continue
             try:
-                obj = shell().user_global_ns.get(dsym.name, None)
+                obj = shell().user_ns.get(sym.name)
                 if obj is None:
                     continue
             except:  # noqa
                 # cinder runtime can throw an exception here due to lazy imports that fail
                 continue
-            if dsym.obj_id == id(obj):
+            if sym.obj_id == id(obj):
                 continue
-            for alias in self.aliases.get(dsym.cached_obj_id, set()) | self.aliases.get(
-                dsym.obj_id, set()
+            for alias in self.aliases.get(sym.cached_obj_id, set()) | self.aliases.get(
+                sym.obj_id, set()
             ):
                 containing_namespace = alias.containing_namespace
                 if containing_namespace is None:
@@ -924,10 +924,10 @@ class NotebookFlow(singletons.NotebookFlow):
                     containing_namespace._subscript_data_symbol_by_name[
                         alias.name
                     ] = alias
-            cleanup_discard(self.aliases, dsym.cached_obj_id, dsym)
-            cleanup_discard(self.aliases, dsym.obj_id, dsym)
-            self.aliases.setdefault(id(obj), set()).add(dsym)
-            dsym.update_obj_ref(obj)
+            cleanup_discard(self.aliases, sym.cached_obj_id, sym)
+            cleanup_discard(self.aliases, sym.obj_id, sym)
+            self.aliases.setdefault(id(obj), set()).add(sym)
+            sym.update_obj_ref(obj)
 
     def _add_applicable_prev_cell_parents_to_current(self) -> None:
         cell = cells().at_counter(self.cell_counter())

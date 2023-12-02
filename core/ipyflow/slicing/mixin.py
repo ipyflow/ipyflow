@@ -208,6 +208,10 @@ class SliceableMixin(Protocol):
     dangling_static_children: Dict[IdType, Set["Symbol"]]
 
     @classmethod
+    def current(cls) -> "SliceableMixin":
+        ...
+
+    @classmethod
     def at_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
     ) -> "SliceableMixin":

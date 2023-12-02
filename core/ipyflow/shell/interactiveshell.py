@@ -376,7 +376,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                         raw_cell.strip().splitlines()[0][len("%%capture") :].strip()
                     )
                     # TODO: add all live refs as dependencies
-                    singletons.flow().global_scope.upsert_data_symbol_for_name(
+                    singletons.flow().global_scope.upsert_symbol_for_name(
                         outvar, get_ipython().user_ns.get(outvar)
                     )
             # Stage 3:  Run post-execute hook

@@ -45,7 +45,7 @@ from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import symbols as api_symbols
-from ipyflow.singletons import SingletonBaseTracer, flow
+from ipyflow.singletons import SingletonBaseTracer, flow, shell
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
@@ -448,12 +448,14 @@ class DataflowTracer(StackFrameManager):
                             if dsym_to_attach.obj_id != id(ret):
                                 dsym_to_attach = None
                         if dsym_to_attach is None and len(rvals) > 0:
-                            dsym_to_attach = self.cur_frame_original_scope.upsert_data_symbol_for_name(
-                                "<return_sym_%d>" % id(ret),
-                                ret,
-                                rvals,
-                                trace_stmt.stmt_node,
-                                is_anonymous=True,
+                            dsym_to_attach = (
+                                self.cur_frame_original_scope.upsert_symbol_for_name(
+                                    "<return_sym_%d>" % id(ret),
+                                    ret,
+                                    rvals,
+                                    trace_stmt.stmt_node,
+                                    is_anonymous=True,
+                                )
                             )
                         if dsym_to_attach is not None:
                             return_to_node_id = self.call_stack.get_field(
@@ -706,7 +708,7 @@ class DataflowTracer(StackFrameManager):
                 sym_name = f"<{sym_name}>"
             symbol = next(iter(flow().aliases.get(id(module), {None})))
             if symbol is None:
-                symbol = cur_scope.upsert_data_symbol_for_name(
+                symbol = cur_scope.upsert_symbol_for_name(
                     sym_name,
                     module,
                     set(),
@@ -756,7 +758,7 @@ class DataflowTracer(StackFrameManager):
             )
             parents = set() if parent is None else {parent}
             is_default_dict = isinstance(obj, defaultdict)
-            data_sym = scope.upsert_data_symbol_for_name(
+            data_sym = scope.upsert_symbol_for_name(
                 attr_or_subscript,
                 obj_attr_or_sub,
                 parents,
@@ -970,7 +972,7 @@ class DataflowTracer(StackFrameManager):
                         sym_for_obj is None
                         and self.prev_trace_stmt_in_cur_frame is not None
                     ):
-                        sym_for_obj = self.active_scope.upsert_data_symbol_for_name(
+                        sym_for_obj = self.active_scope.upsert_symbol_for_name(
                             obj_name or "<anonymous_symbol_%d>" % id(obj),
                             obj,
                             set(),
@@ -1071,7 +1073,7 @@ class DataflowTracer(StackFrameManager):
             assert self.active_scope is self.cur_frame_original_scope
             arg_dsym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
             if arg_dsym is None:
-                self.active_scope.upsert_data_symbol_for_name(
+                self.active_scope.upsert_symbol_for_name(
                     arg_node.id,
                     arg_obj,
                     set(),
@@ -1251,7 +1253,7 @@ class DataflowTracer(StackFrameManager):
                 if isinstance(
                     i, (int, str)
                 ):  # TODO: perform more general check for SupportedIndexType
-                    self.active_literal_scope.upsert_data_symbol_for_name(
+                    self.active_literal_scope.upsert_symbol_for_name(
                         i,
                         inner_obj,
                         inner_symbols,
@@ -1268,7 +1270,7 @@ class DataflowTracer(StackFrameManager):
             while parent_scope.is_namespace_scope:
                 parent_scope = parent_scope.parent_scope
             assert parent_scope is not None
-            literal_sym = parent_scope.upsert_data_symbol_for_name(
+            literal_sym = parent_scope.upsert_symbol_for_name(
                 "<literal_sym_%d>" % id(literal),
                 literal,
                 outer_deps,
@@ -1334,7 +1336,7 @@ class DataflowTracer(StackFrameManager):
         node = self.ast_node_by_id[lambda_node_id]
         for kw_default in node.args.defaults:  # type: ignore
             sym_deps.extend(self.resolve_loaded_symbols(kw_default))
-        sym = self.active_scope.upsert_data_symbol_for_name(
+        sym = self.active_scope.upsert_symbol_for_name(
             "<lambda_sym_%d>" % id(obj),
             obj,
             sym_deps,
@@ -1373,10 +1375,21 @@ class DataflowTracer(StackFrameManager):
             active_watchpoints.clear()
         return ret_expr
 
-    @pyc.register_raw_handler(pyc.after_module_stmt)
-    def after_module_stmt(self, _ret, node_id, *_, **__) -> Optional[Any]:
+    def _handle_skipped_sub_statements(self, stmt: ast.stmt) -> None:
+        live, dead = compute_live_dead_symbol_refs(stmt)
+        for sym in {ref.to_symbol() for ref in {r.ref for r in live} | dead} - {None}:
+            if sym in self.this_stmt_updated_symbols:
+                continue
+            if sym.obj is not shell().user_ns.get(sym.name):
+                # TODO: use other heuristics to detect changes, such as length changing from a cached value
+                sym.refresh()
+
+    @pyc.register_handler(pyc.after_module_stmt)
+    def after_module_stmt(self, _ret, stmt: ast.stmt, *_, **__) -> Optional[Any]:
         if self.is_tracing_enabled:
             assert self.cur_frame_original_scope.is_global
+        if self.tracing_disabled_since_last_module_stmt:
+            self._handle_skipped_sub_statements(stmt)
         ret = self._saved_stmt_ret_expr
         self._saved_stmt_ret_expr = None
         if ret is not None:
@@ -1393,8 +1406,7 @@ class DataflowTracer(StackFrameManager):
                 and len(flow_.aliases.get(prev_underscore_id, [])) <= 1
             ):
                 flow_.namespaces.pop(prev_underscore_id, None)
-            stmt: ast.stmt = self.ast_node_by_id[node_id]
-            flow_.global_scope.upsert_data_symbol_for_name(
+            flow_.global_scope.upsert_symbol_for_name(
                 "_",
                 ret,
                 resolve_rval_symbols(stmt, should_update_usage_info=False),

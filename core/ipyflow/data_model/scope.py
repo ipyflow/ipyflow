@@ -205,7 +205,7 @@ class Scope:
         else:
             return SymbolType.DEFAULT
 
-    def upsert_data_symbol_for_name(
+    def upsert_symbol_for_name(
         self,
         name: SupportedIndexType,
         obj: Any,

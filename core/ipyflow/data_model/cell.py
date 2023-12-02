@@ -552,6 +552,10 @@ class Cell(SliceableMixin):
     def current_cell(cls) -> "Cell":
         return cls._override_current_cell or cls._cell_by_cell_ctr[cls._cell_counter]
 
+    @classmethod
+    def current(cls) -> "Cell":
+        return cls.current_cell()
+
     def get_max_used_live_symbol_cell_counter(
         self,
         live_symbols: Set[ResolvedSymbol],

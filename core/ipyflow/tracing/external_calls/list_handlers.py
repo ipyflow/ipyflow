@@ -30,7 +30,7 @@ class ListExtend(ListMethod):
 
     def handle_namespace(self, namespace: "Namespace") -> None:
         for upsert_pos in range(self.orig_len, len(namespace.obj)):
-            namespace.upsert_data_symbol_for_name(
+            namespace.upsert_symbol_for_name(
                 upsert_pos,
                 namespace.obj[upsert_pos],
                 self.arg_dsyms,
@@ -57,7 +57,7 @@ class ListInsert(ListMethod):
         if len(inserted_syms) > 1:
             return
         namespace.shuffle_symbols_upward_from(self.insert_pos)
-        namespace.upsert_data_symbol_for_name(
+        namespace.upsert_symbol_for_name(
             self.insert_pos,
             namespace.obj[self.insert_pos],
             inserted_syms,

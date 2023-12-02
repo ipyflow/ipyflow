@@ -571,6 +571,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 cell.memoized_executions = prev_cell.memoized_executions
             prev_cell.memoized_executions = []
         if cell.skipped_due_to_memoization_ctr > 0:
+            cell.to_ast(override=prev_cell.to_ast())
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None
             for parent, syms in prev_cell.static_parents.items():
@@ -579,8 +580,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             for parent, syms in prev_cell.dynamic_parents.items():
                 with dynamic_slicing_context():
                     cell.add_parent_edges(parent, syms)
+            for stmt, prev_stmt in zip(cell.statements(), prev_cell.statements()):
+                for parent, syms in prev_stmt.static_parents.items():
+                    with static_slicing_context():
+                        stmt.add_parent_edges(parent, syms)
+                for parent, syms in prev_stmt.dynamic_parents.items():
+                    with dynamic_slicing_context():
+                        stmt.add_parent_edges(parent, syms)
             cell.captured_output = prev_cell.captured_output
-            cell.to_ast(override=prev_cell.to_ast())
         elif cell.is_memoized:
             cell._maybe_memoize_params()
 

@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import ast
-import itertools
 import logging
 import sys
 from enum import Enum
@@ -35,6 +34,11 @@ from ipyflow.slicing.mixin import FormatType, Slice
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
 from ipyflow.utils.misc_utils import cleanup_discard, debounce
+
+try:
+    from importlib.util import _LazyModule  # type: ignore
+except:
+    _LazyModule = None
 
 if TYPE_CHECKING:
     import astunparse
@@ -984,6 +988,7 @@ class Symbol:
         Widget = getattr(sys.modules.get("ipywidgets"), "Widget", None)
         if (
             Widget is None
+            or type(self.obj) is _LazyModule
             or not isinstance(self.obj, Widget)
             or not hasattr(self.obj, "observe")
             or not hasattr(self.obj, "value")

@@ -127,17 +127,22 @@ class Slice:
             classes = ""
         return HTML(
             textwrap.dedent(
-                f"""
+                """
             <div class="{classes}">
             <pre>
-            <a href="javascript:navigator.clipboard.writeText('{slice_text_no_cells.encode("unicode_escape").decode("utf-8")}')">Copy code</a>\
- | <a href="javascript:navigator.clipboard.writeText('{slice_text.encode("unicode_escape").decode("utf-8")}')">Copy cells</a>
+            <a href="javascript:navigator.clipboard.writeText('{copy_code}')">Copy code</a>\
+ | <a href="javascript:navigator.clipboard.writeText('{copy_cells}')">Copy cells</a>
      
-            {{code}}
+            {code}
             </pre>
             </div>
             """
-            ).format(code="\n\n".join(slice_text_linked_cells))
+            ).format(
+                classes=classes,
+                copy_code=slice_text_no_cells.encode("unicode_escape").decode("utf-8"),
+                copy_cells=slice_text.encode("unicode_escape").decode("utf-8"),
+                code="\n\n".join(slice_text_linked_cells),
+            )
         )
 
     def __str__(self) -> str:

@@ -1436,8 +1436,9 @@ class DataflowTracer(StackFrameManager):
             ):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         self.prev_trace_stmt_in_cur_frame = trace_stmt
-        if not self.is_tracing_enabled and self._try_reenable_tracing(
-            frame, dry_run=True
+        if not self.is_tracing_enabled and (
+            trace_stmt.is_module_stmt()
+            or self._try_reenable_tracing(frame, dry_run=True)
         ):
             self.after_stmt_reset_hook()
             self._tracked_enable_tracing()

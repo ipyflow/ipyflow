@@ -2,7 +2,15 @@
 import ast
 import logging
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, Iterable, NamedTuple, Optional, Union
+from typing import (
+    TYPE_CHECKING,
+    Generator,
+    Iterable,
+    NamedTuple,
+    Optional,
+    Tuple,
+    Union,
+)
 
 from ipyflow.models import _TimestampContainer, cells, timestamps
 from ipyflow.singletons import flow, tracer, tracer_initialized
@@ -73,6 +81,9 @@ class Timestamp(NamedTuple):
         finally:
             _cell_offset -= cell_offset
             _stmt_offset -= stmt_offset
+
+    def as_tuple(self) -> Tuple[int, int]:
+        return (self.cell_num, self.stmt_num)
 
     def __eq__(self, other) -> bool:
         if other is None:

@@ -130,8 +130,8 @@ class StackFrameManager(SingletonBaseTracer):
             self.external_call_depth -= not flow_.is_cell_file(
                 frame_filename
             ) and not is_project_file(frame_filename)
-            if flow_.is_dev_mode:
-                assert self.call_depth >= 0
+            self.call_depth = max(self.call_depth, 0)
+            self.external_call_depth = max(self.external_call_depth, 0)
             if self.call_depth == 0:
                 return pyc.SkipAll
 
@@ -1430,7 +1430,9 @@ class DataflowTracer(StackFrameManager):
         self.prev_trace_stmt_in_cur_frame = trace_stmt
         if not self.is_tracing_enabled and (
             self._try_reenable_tracing(
-                frame, dry_run=True, is_module_stmt=trace_stmt.is_module_stmt()
+                frame,
+                dry_run=True,
+                is_module_stmt=trace_stmt.is_module_stmt(),
             )
         ):
             self.after_stmt_reset_hook()

@@ -1480,6 +1480,9 @@ class DataflowTracer(StackFrameManager):
         )
         if not is_module_stmt and tracing_reenabled_call_stack_length == -1:
             return False
+        tracing_reenabled_call_stack_length = max(
+            tracing_reenabled_call_stack_length, 0
+        )
         assert tracing_reenabled_call_stack_length <= len(self.call_stack)
         while len(self.call_stack) > tracing_reenabled_call_stack_length:
             self.call_stack.pop()

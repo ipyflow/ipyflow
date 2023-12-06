@@ -444,7 +444,7 @@ const extension: JupyterFrontEndPlugin<void> = {
     };
 
     runCellCommand.execute = (...args: any[]) => {
-      if (isBatchReactive()) {
+      if (isBatchReactive() && getIpyflowState().activeCell.model.type === 'code') {
         app.commands.execute('notebook:enter-command-mode');
       } else {
         runCellCommandExecute.call(runCellCommand, args);

@@ -420,9 +420,12 @@ const extension: JupyterFrontEndPlugin<void> = {
       selector: '.jp-Notebook',
     });
 
-    const runCellCommand = (app.commands as any)._commands.get(
-      'notebook:run-cell'
-    );
+    let runCellCommand: any;
+    try {
+      runCellCommand = (app.commands as any)._commands.get('notebook:run-cell');
+    } catch (e) {
+      runCellCommand = (app.commands as any)._commands['notebook:run-cell'];
+    }
     const runCellCommandExecute = runCellCommand.execute;
 
     const getIpyflowState = () => {
@@ -444,7 +447,10 @@ const extension: JupyterFrontEndPlugin<void> = {
     };
 
     runCellCommand.execute = (...args: any[]) => {
-      if (isBatchReactive() && getIpyflowState().activeCell.model.type === 'code') {
+      if (
+        isBatchReactive() &&
+        getIpyflowState().activeCell.model.type === 'code'
+      ) {
         app.commands.execute('notebook:enter-command-mode');
       } else {
         runCellCommandExecute.call(runCellCommand, args);
@@ -1038,9 +1044,8 @@ const connectToComm = (
       state.settings.exec_mode = payload.exec_mode as string;
     } else if (payload.type === 'compute_exec_schedule') {
       state.settings = payload.settings as { [key: string]: string };
-      const ipyflow_metadata = (notebook.model as any).getMetadata(
-        'ipyflow'
-      ) as any;
+      const ipyflow_metadata =
+        (notebook.model as any).getMetadata?.('ipyflow') ?? ({} as any);
       const parentsFromMetadata = ipyflow_metadata?.cell_parents ?? {};
       const childrenFromMetadata = ipyflow_metadata?.cell_children ?? {};
       state.cellParents = mergeMaps(
@@ -1217,9 +1222,8 @@ const connectToComm = (
       }
     }
   };
-  const ipyflow_metadata = (notebook.model as any).getMetadata(
-    'ipyflow'
-  ) as any;
+  const ipyflow_metadata =
+    (notebook.model as any).getMetadata?.('ipyflow') ?? ({} as any);
   comm.open({
     interface: 'jupyterlab',
     cell_metadata_by_id: state.gatherCellMetadataAndContent(),

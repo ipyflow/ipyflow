@@ -1057,7 +1057,7 @@ const connectToComm = (
         childrenFromMetadata
       );
       state.executedCells = new Set(payload.executed_cells as string[]);
-      (notebook.model as any).setMetadata('ipyflow', {
+      (notebook.model as any).setMetadata?.('ipyflow', {
         cell_parents: state.cellParents,
         cell_children: state.cellChildren,
       });

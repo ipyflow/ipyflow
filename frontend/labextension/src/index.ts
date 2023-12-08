@@ -457,7 +457,7 @@ const extension: JupyterFrontEndPlugin<void> = {
       }
     };
 
-    const executeBatchReactive = () => {
+    const executeBatchReactive = (skipFirst = false) => {
       const state = getIpyflowState();
       if (state.isIpyflowCommConnected ?? false) {
         let closureCellIds = state.executionScheduledCells;
@@ -465,7 +465,10 @@ const extension: JupyterFrontEndPlugin<void> = {
         if (closureCellIds.length === 0) {
           closureCellIds = [state.activeCell.model.id];
         }
-        const closure = state.computeTransitiveClosure(closureCellIds, true);
+        let closure = state.computeTransitiveClosure(closureCellIds, true);
+        if (skipFirst) {
+          closure = closure.splice(1);
+        }
         if (closure.length > 0) {
           state.executeCells(closure);
         } else {
@@ -495,13 +498,15 @@ const extension: JupyterFrontEndPlugin<void> = {
         } else {
           getIpyflowState()?.requestComputeExecSchedule();
         }
-      } else if (args.id === 'notebook:run-cell-and-select-next') {
+      } else if (
+        ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(args.id)
+      ) {
         const state = getIpyflowState();
         const origActiveCell = state.activeCell;
         try {
           state.activeCell = state.prevActiveCell;
           if (isBatchReactive()) {
-            executeBatchReactive();
+            executeBatchReactive(true);
           } else {
             state?.requestComputeExecSchedule();
           }
@@ -1229,7 +1234,6 @@ const connectToComm = (
     cell_metadata_by_id: state.gatherCellMetadataAndContent(),
     cell_parents: ipyflow_metadata?.cell_parents ?? {},
     cell_children: ipyflow_metadata?.cell_children ?? {},
-    exec_mode: 'reactive',
   });
   // return a disconnection handle
   return () => {

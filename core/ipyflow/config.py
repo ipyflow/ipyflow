@@ -13,8 +13,8 @@ class EnumWithDefault(Enum):
 
 
 class ExecutionMode(EnumWithDefault):
-    NORMAL = "normal"
-    REACTIVE = __default__ = "reactive"  # type: ignore
+    NORMAL = __default__ = "normal"  # type: ignore
+    REACTIVE = "reactive"
 
 
 class ExecutionSchedule(EnumWithDefault):
@@ -58,8 +58,8 @@ class Interface(EnumWithDefault):
 
 
 class ColorScheme(EnumWithDefault):
-    NORMAL = __default__ = "normal"  # type: ignore
-    CLASSIC = "classic"
+    NORMAL = "normal"
+    CLASSIC = __default__ = "classic"  # type: ignore
 
 
 class JsonSerializableMixin:

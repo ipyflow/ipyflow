@@ -340,12 +340,13 @@ class Cell(SliceableMixin):
             cell_ctr = cls._cell_counter
             if validate_ipython_counter and cell_ctr != ipy_cell_counter():
                 actual_counter = get_ipython().execution_count
-                logger.warning(
-                    "mismatch between cell counter (%d) and saved ipython counter (%d)",
-                    cell_ctr,
-                    ipy_cell_counter(),
-                )
-                logger.warning("fixing up to actual counter of %d", actual_counter)
+                if flow().is_dev_mode:
+                    logger.warning(
+                        "mismatch between cell counter (%d) and saved ipython counter (%d)",
+                        cell_ctr,
+                        ipy_cell_counter(),
+                    )
+                    logger.warning("fixing up to actual counter of %d", actual_counter)
                 cell_ctr = cls._cell_counter = _IPY.cell_counter = actual_counter
         else:
             cell_ctr = -1

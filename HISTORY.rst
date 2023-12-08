@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.191 (2023-12-07)
+0.0.192 (2023-12-07)
 --------------------
 * [kernel] Add experimental `%%memoize` magic;
 * [kernel] Many bugfixes and other misc improvements;

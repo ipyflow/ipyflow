@@ -1,6 +1,14 @@
 History
 =======
 
+0.0.191 (2023-12-07)
+--------------------
+* [kernel] Add experimental `%%memoize` magic;
+* [kernel] Many bugfixes and other misc improvements;
+* [lab] Bugfix for run-cell-and-select-next;
+* [lab] Bugfix for execution of non-code cell types;
+* [lab] Support both JupyterLab 3 and 4;
+
 0.0.190 (2023-11-03)
 --------------------
 * [kernel] Start getting kernel ready for autoreload integrations;

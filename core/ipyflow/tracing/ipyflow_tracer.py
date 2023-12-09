@@ -1097,7 +1097,7 @@ class DataflowTracer(StackFrameManager):
     @pyc.before_call
     @pyc.skip_when_tracing_disabled
     def before_call(self, function_or_method, node: ast.Call, *_, **__):
-        if function_or_method.__qualname__.startswith(
+        if getattr(function_or_method, "__qualname__", "").startswith(
             self.dataflow_tracing_disabled_patch.__qualname__
         ):
             return

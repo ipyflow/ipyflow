@@ -1492,7 +1492,9 @@ class DataflowTracer(StackFrameManager):
         self.external_call_depth = self.saved_external_call_depth
         if len(self.call_stack) == 0 and empty_stack_call_depth is not None:
             self.call_depth = empty_stack_call_depth
-        self.lexical_call_stack.clear()
+        while len(self.lexical_call_stack) > 0:
+            # pop instead of clear to leave the top-level literal stack intact
+            self.lexical_call_stack.pop()
         if not dry_run:
             self._tracked_enable_tracing()
         return True

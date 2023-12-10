@@ -421,12 +421,25 @@ const extension: JupyterFrontEndPlugin<void> = {
     });
 
     let runCellCommand: any;
+    let runCellAndSelectNextCommand: any;
+    let runMenuRunCommand: any;
     try {
       runCellCommand = (app.commands as any)._commands.get('notebook:run-cell');
+      runCellAndSelectNextCommand = (app.commands as any)._commands.get(
+        'notebook:run-cell-and-select-next'
+      );
+      runMenuRunCommand = (app.commands as any)._commands.get('runmenu:run');
     } catch (e) {
       runCellCommand = (app.commands as any)._commands['notebook:run-cell'];
+      runCellAndSelectNextCommand = (app.commands as any)._commands[
+        'notebook:run-cell-and-select-next'
+      ];
+      runMenuRunCommand = (app.commands as any)._commands['runmenu:run'];
     }
     const runCellCommandExecute = runCellCommand.execute;
+    const runCellAndSelectNextCommandExecute =
+      runCellAndSelectNextCommand.execute;
+    const runMenuRunCommandExecute = runMenuRunCommand.execute;
 
     const getIpyflowState = () => {
       const session = notebooks.currentWidget.sessionContext;
@@ -446,16 +459,22 @@ const extension: JupyterFrontEndPlugin<void> = {
       );
     };
 
-    runCellCommand.execute = (...args: any[]) => {
-      if (
-        isBatchReactive() &&
-        getIpyflowState().activeCell.model.type === 'code'
-      ) {
-        app.commands.execute('notebook:enter-command-mode');
-      } else {
-        runCellCommandExecute.call(runCellCommand, args);
-      }
-    };
+    [
+      [runCellCommand, runCellCommandExecute],
+      [runCellAndSelectNextCommand, runCellAndSelectNextCommandExecute],
+      [runMenuRunCommand, runMenuRunCommandExecute],
+    ].forEach(([command, exec]) => {
+      command.execute = (...args: any[]) => {
+        if (
+          isBatchReactive() &&
+          getIpyflowState().activeCell.model.type === 'code'
+        ) {
+          app.commands.execute('notebook:enter-command-mode');
+        } else {
+          exec.call(command, args);
+        }
+      };
+    });
 
     const executeBatchReactive = (skipFirst = false) => {
       const state = getIpyflowState();
@@ -492,26 +511,24 @@ const extension: JupyterFrontEndPlugin<void> = {
     });
 
     app.commands.commandExecuted.connect((_, args) => {
-      if (args.id === 'notebook:run-cell') {
+      if (
+        [
+          'notebook:run-cell',
+          'notebook:run-cell-and-select-next',
+          'runmenu:run',
+        ].includes(args.id)
+      ) {
         if (isBatchReactive()) {
           executeBatchReactive();
+          if (
+            ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(
+              args.id
+            )
+          ) {
+            app.commands.execute('notebook:move-cursor-down');
+          }
         } else {
           getIpyflowState()?.requestComputeExecSchedule();
-        }
-      } else if (
-        ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(args.id)
-      ) {
-        const state = getIpyflowState();
-        const origActiveCell = state.activeCell;
-        try {
-          state.activeCell = state.prevActiveCell;
-          if (isBatchReactive()) {
-            executeBatchReactive(true);
-          } else {
-            state?.requestComputeExecSchedule();
-          }
-        } finally {
-          state.activeCell = origActiveCell;
         }
       }
     });

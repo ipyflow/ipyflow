@@ -80,6 +80,7 @@ class IpyflowSessionState {
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
   lastCellMetadataMap: CellMetadataMap | null = null;
+  executingLastCell = false;
 
   gatherCellMetadataAndContent() {
     const cell_metadata_by_id: CellMetadataMap = {};
@@ -465,9 +466,14 @@ const extension: JupyterFrontEndPlugin<void> = {
       [runMenuRunCommand, runMenuRunCommandExecute],
     ].forEach(([command, exec]) => {
       command.execute = (...args: any[]) => {
+        const state = getIpyflowState();
+        const lastCell =
+          state.notebook.widgets[state.notebook.widgets.length - 1];
+        state.executingLastCell = state.activeCell.id === lastCell.id;
         if (
           isBatchReactive() &&
-          getIpyflowState().activeCell.model.type === 'code'
+          state.activeCell.model.type === 'code' &&
+          !state.executingLastCell
         ) {
           app.commands.execute('notebook:enter-command-mode');
         } else {
@@ -518,7 +524,8 @@ const extension: JupyterFrontEndPlugin<void> = {
           'runmenu:run',
         ].includes(args.id)
       ) {
-        if (isBatchReactive()) {
+        const state = getIpyflowState();
+        if (isBatchReactive() && !(state?.executingLastCell ?? false)) {
           executeBatchReactive();
           if (
             ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(
@@ -527,8 +534,9 @@ const extension: JupyterFrontEndPlugin<void> = {
           ) {
             app.commands.execute('notebook:move-cursor-down');
           }
-        } else {
-          getIpyflowState()?.requestComputeExecSchedule();
+        } else if (state) {
+          state.executingLastCell = false;
+          state.requestComputeExecSchedule();
         }
       }
     });

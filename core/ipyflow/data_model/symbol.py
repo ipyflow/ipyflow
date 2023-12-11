@@ -1289,7 +1289,9 @@ class Symbol:
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]]]:
         if seen_ids is None:
             seen_ids = set()
-        if isinstance(self.stmt_node, (ast.ClassDef, ast.FunctionDef)):
+        if isinstance(
+            self.stmt_node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+        ):
             comps = [astunparse.unparse(self.stmt_node)]
             for sym in sorted(self.parents.keys()):
                 par_comp, eq = sym.make_memoize_comparable(seen_ids=seen_ids)

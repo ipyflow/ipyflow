@@ -1346,6 +1346,7 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
+        self._saved_stmt_ret_expr = ret_expr
         if not self.is_tracing_enabled and not self._try_reenable_tracing(
             frame, empty_stack_call_depth=1
         ):
@@ -1356,7 +1357,6 @@ class DataflowTracer(StackFrameManager):
             and self.traced_statements[stmt_id].finished
         ):
             return
-        self._saved_stmt_ret_expr = ret_expr
         stmt = self.ast_node_by_id.get(stmt_id)
         if stmt is not None:
             self.handle_other_sys_events(

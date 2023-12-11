@@ -592,6 +592,23 @@ def test_dag_edge_change():
         assert response.waiting_cells == set()
 
 
+def test_top_level_await():
+    cells = {
+        0: "async def foo(): return 42",
+        1: "bar = await foo() + 1",
+        2: "logging.info(bar)",
+    }
+    with override_settings(exec_schedule=ExecutionSchedule.DAG_BASED):
+        run_all_cells(cells)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == set()
+        assert response.waiting_cells == set()
+        run_cell("async def foo(): return 43", 0)
+        response = flow().check_and_link_multiple_cells()
+        assert response.ready_cells == {1}
+        assert response.waiting_cells == {2}
+
+
 def test_dag_edge_hybrid():
     cells = {
         0: "x = 0",

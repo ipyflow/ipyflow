@@ -304,20 +304,20 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def _is_code_empty(self, code: str) -> bool:
         return self.input_transformer_manager.transform_cell(code).strip() == ""
 
-    def _run_cell(
+    async def run_cell_async(
         self,
         raw_cell: str,
         store_history=False,
         silent=False,
         shell_futures=True,
         cell_id=None,
+        **kwargs,
     ) -> ExecutionResult:
-        kwargs = {}
         if self._has_cell_id:
             kwargs["cell_id"] = cell_id
         if silent or self._is_code_empty(raw_cell):
             # then it's probably a control message; don't run through ipyflow
-            ret = super()._run_cell(
+            ret = await super().run_cell_async(
                 raw_cell,
                 store_history=store_history,
                 silent=silent,
@@ -326,7 +326,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             )
         else:
             with save_number_of_currently_executing_cell():
-                ret = self._ipyflow_run_cell(
+                ret = await self._ipyflow_run_cell(
                     raw_cell,
                     store_history=store_history,
                     shell_futures=shell_futures,
@@ -335,7 +335,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self._maybe_eject()
         return ret
 
-    def _ipyflow_run_cell(
+    async def _ipyflow_run_cell(
         self,
         raw_cell: str,
         store_history=False,
@@ -347,10 +347,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         maybe_new_content = self.before_run_cell(
             raw_cell, store_history=store_history, **kwargs
         )
-        cell = Cell.from_counter(self.cell_counter())
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
-
         # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
         should_trace = self.should_trace()
         is_already_recording_output = raw_cell.strip().startswith("%%capture")
@@ -363,13 +361,19 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 and not raw_cell.strip().startswith("%%"),
                 should_capture_output,
             ) if should_trace else suppress():
-                ret = super()._run_cell(
-                    raw_cell,
+                has_transformed_cell = kwargs.pop("transformed_cell", None) is not None
+                transformed_cell = self.transform_cell(raw_cell)
+                if has_transformed_cell:
+                    kwargs["transformed_cell"] = transformed_cell
+                # discard any previous transformations that were done
+                ret = await super().run_cell_async(
+                    raw_cell if has_transformed_cell else transformed_cell,
                     store_history=store_history,
                     silent=False,
                     shell_futures=shell_futures,
                     **kwargs,
                 )  # pragma: no cover
+                cell = Cell.current_cell()
                 cell.error_in_exec = ret.error_in_exec
                 if is_already_recording_output:
                     outvar = (
@@ -484,6 +488,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         cell_content: str,
         store_history: bool,
         cell_id: Optional[str] = None,
+        **_kwargs,
     ) -> Optional[str]:
         original_content = cell_content
         cell_content = Cell.get_memoized_content(cell_content)

@@ -474,6 +474,25 @@ class SliceableMixin(Protocol):
     def make_cell_dict_slice(self) -> Dict[int, str]:
         return self.make_cell_dict_multi_slice([self])
 
+    @staticmethod
+    def _process_memoized_seeds(
+        seeds: Iterable[Union[TimestampOrCounter, "SliceableMixin"]]
+    ) -> Set[TimestampOrCounter]:
+        processed_seeds: Set[TimestampOrCounter] = set()
+        for seed in seeds:
+            if not isinstance(seed, (Timestamp, int)):
+                seed = seed.timestamp  # type: ignore
+            assert isinstance(seed, (Timestamp, int))
+            mem_ctr = cells().at_timestamp(seed).skipped_due_to_memoization_ctr
+            if mem_ctr == -1:
+                processed_seeds.add(seed)
+            else:
+                if isinstance(seed, int):
+                    processed_seeds.add(mem_ctr)
+                else:
+                    processed_seeds.add(Timestamp(mem_ctr, seed.stmt_num))
+        return processed_seeds
+
     @classmethod
     def format_multi_slice(
         cls,
@@ -482,6 +501,7 @@ class SliceableMixin(Protocol):
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
     ) -> Slice:
+        seeds = cls._process_memoized_seeds(seeds)
         return format_slice(
             cls.make_cell_dict_multi_slice(seeds, seed_only=seed_only),
             blacken=blacken,

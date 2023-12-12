@@ -350,7 +350,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
         # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-        should_trace = self.should_trace()
+        should_trace = singletons.flow().mut_settings.dataflow_enabled
         is_already_recording_output = raw_cell.strip().startswith("%%capture")
         should_capture_output = should_trace and not is_already_recording_output
         output_captured = False
@@ -430,9 +430,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 get_ipython(), "run_cell_magic"
             ):
                 yield
-
-    def should_trace(self) -> bool:
-        return singletons.flow().mut_settings.dataflow_enabled
 
     def _get_content_for_memoized_run(self, cell: Cell) -> Optional[str]:
         prev_cell = cell.prev_cell
@@ -579,18 +576,15 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             cell.to_ast(override=prev_cell.to_ast())
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None
-            for parent, syms in prev_cell.static_parents.items():
-                with static_slicing_context():
+            for _ in singletons.flow().mut_settings.iter_slicing_contexts():
+                for parent, syms in list(cell.parents.items()):
+                    cell.remove_parent_edges(parent, syms)
+                for parent, syms in prev_cell.parents.items():
                     cell.add_parent_edges(parent, syms)
-            for parent, syms in prev_cell.dynamic_parents.items():
-                with dynamic_slicing_context():
-                    cell.add_parent_edges(parent, syms)
-            for stmt, prev_stmt in zip(cell.statements(), prev_cell.statements()):
-                for parent, syms in prev_stmt.static_parents.items():
-                    with static_slicing_context():
-                        stmt.add_parent_edges(parent, syms)
-                for parent, syms in prev_stmt.dynamic_parents.items():
-                    with dynamic_slicing_context():
+                for stmt, prev_stmt in zip(cell.statements(), prev_cell.statements()):
+                    for parent, syms in list(stmt.parents.items()):
+                        stmt.remove_parent_edges(parent, syms)
+                    for parent, syms in prev_stmt.parents.items():
                         stmt.add_parent_edges(parent, syms)
             cell.captured_output = prev_cell.captured_output
         elif cell.is_memoized:

@@ -6,10 +6,7 @@ import sys
 from types import FrameType
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, Union, cast
 
-from ipyflow.analysis.live_refs import (
-    compute_live_dead_symbol_refs,
-    stmt_contains_cascading_reactive_rval,
-)
+from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.analysis.utils import stmt_contains_lval

@@ -18,11 +18,7 @@ import { ICommandPalette, ISessionContext } from '@jupyterlab/apputils';
 
 import { Cell, CodeCell, ICellModel, ICodeCellModel } from '@jupyterlab/cells';
 
-import {
-  INotebookTracker,
-  Notebook,
-  NotebookActions,
-} from '@jupyterlab/notebook';
+import { INotebookTracker, Notebook } from '@jupyterlab/notebook';
 
 import _ from 'lodash';
 
@@ -54,7 +50,6 @@ class IpyflowSessionState {
   notebook: Notebook | null = null;
   session: ISessionContext | null = null;
   isIpyflowCommConnected = false;
-  executionScheduledCells: string[] = [];
   selectedCells: string[] = [];
   executedCells: Set<string> = new Set();
   dirtyCells: Set<string> = new Set();
@@ -469,7 +464,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         const state = getIpyflowState();
         const lastCell =
           state.notebook.widgets[state.notebook.widgets.length - 1];
-        state.executingLastCell = state.activeCell.id === lastCell.id;
+        state.executingLastCell = state.activeCell.model.id === lastCell.model.id;
         if (
           isBatchReactive() &&
           state.activeCell.model.type === 'code' &&
@@ -478,6 +473,7 @@ const extension: JupyterFrontEndPlugin<void> = {
           app.commands.execute('notebook:enter-command-mode');
         } else {
           exec.call(command, args);
+          state.executingLastCell = false;
         }
       };
     });
@@ -485,10 +481,11 @@ const extension: JupyterFrontEndPlugin<void> = {
     const executeBatchReactive = (skipFirst = false) => {
       const state = getIpyflowState();
       if (state.isIpyflowCommConnected ?? false) {
-        let closureCellIds = state.executionScheduledCells;
-        state.executionScheduledCells = [];
-        if (closureCellIds.length === 0) {
-          closureCellIds = [state.activeCell.model.id];
+        const closureCellIds: string[] = [];
+        for (const cell of state.notebook.widgets) {
+          if (state.notebook.isSelectedOrActive(cell)) {
+            closureCellIds.push(cell.model.id);
+          }
         }
         let closure = state.computeTransitiveClosure(closureCellIds, true);
         if (skipFirst) {
@@ -501,20 +498,6 @@ const extension: JupyterFrontEndPlugin<void> = {
         }
       }
     };
-
-    NotebookActions.executionScheduled.connect((_, args) => {
-      const notebook = notebooks?.currentWidget;
-      if (notebook?.content !== args.notebook) {
-        return;
-      }
-      if (!isBatchReactive()) {
-        return;
-      }
-      if (args.cell.model.type === 'code') {
-        const state = getIpyflowState();
-        state.executionScheduledCells.push(args.cell.model.id);
-      }
-    });
 
     app.commands.commandExecuted.connect((_, args) => {
       if (

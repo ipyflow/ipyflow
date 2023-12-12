@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import textwrap
+from collections import defaultdict
 from types import FrameType
 from typing import (
     Any,
@@ -1004,12 +1005,14 @@ class NotebookFlow(singletons.NotebookFlow):
                 if is_subscript:
                     # TODO: more complete list of things that are checkable
                     #  or could cause side effects upon subscripting
+                    if type(obj) is defaultdict:
+                        raise TypeError("subscript on defaultdict not allowed")
                     return obj[attr_or_sub]
                 else:
                     if self.is_dev_mode:
                         assert isinstance(attr_or_sub, str)
                     return getattr(obj, cast(str, attr_or_sub))
-        except (AttributeError, IndexError, KeyError):
+        except (AttributeError, IndexError, KeyError, TypeError):
             raise
         except Exception as e:
             if self.is_dev_mode:

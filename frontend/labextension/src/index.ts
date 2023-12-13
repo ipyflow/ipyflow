@@ -75,7 +75,6 @@ class IpyflowSessionState {
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
   lastCellMetadataMap: CellMetadataMap | null = null;
-  executingLastCell = false;
 
   gatherCellMetadataAndContent() {
     const cell_metadata_by_id: CellMetadataMap = {};
@@ -462,19 +461,10 @@ const extension: JupyterFrontEndPlugin<void> = {
     ].forEach(([command, exec]) => {
       command.execute = (...args: any[]) => {
         const state = getIpyflowState();
-        const lastCell =
-          state.notebook.widgets[state.notebook.widgets.length - 1];
-        state.executingLastCell =
-          state.activeCell.model.id === lastCell.model.id;
-        if (
-          isBatchReactive() &&
-          state.activeCell.model.type === 'code' &&
-          !state.executingLastCell
-        ) {
+        if (isBatchReactive() && state?.activeCell?.model?.type === 'code') {
           app.commands.execute('notebook:enter-command-mode');
         } else {
           exec.call(command, args);
-          state.executingLastCell = false;
         }
       };
     });
@@ -509,17 +499,24 @@ const extension: JupyterFrontEndPlugin<void> = {
         ].includes(args.id)
       ) {
         const state = getIpyflowState();
-        if (isBatchReactive() && !(state?.executingLastCell ?? false)) {
+        if (isBatchReactive()) {
+          const lastCell =
+            state.notebook.widgets[state.notebook.widgets.length - 1];
+          const isExecutingLastCell =
+            state.activeCell.model.id === lastCell.model.id;
           executeBatchReactive();
           if (
             ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(
               args.id
             )
           ) {
-            app.commands.execute('notebook:move-cursor-down');
+            if (isExecutingLastCell) {
+              app.commands.execute('notebook:insert-cell-below');
+            } else {
+              app.commands.execute('notebook:move-cursor-down');
+            }
           }
         } else if (state) {
-          state.executingLastCell = false;
           state.requestComputeExecSchedule();
         }
       }

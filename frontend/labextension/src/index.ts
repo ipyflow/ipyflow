@@ -464,7 +464,8 @@ const extension: JupyterFrontEndPlugin<void> = {
         const state = getIpyflowState();
         const lastCell =
           state.notebook.widgets[state.notebook.widgets.length - 1];
-        state.executingLastCell = state.activeCell.model.id === lastCell.model.id;
+        state.executingLastCell =
+          state.activeCell.model.id === lastCell.model.id;
         if (
           isBatchReactive() &&
           state.activeCell.model.type === 'code' &&

@@ -3,7 +3,7 @@ import functools
 import logging
 import sys
 import textwrap
-from test.utils import make_flow_fixture
+from test.utils import make_flow_fixture, skipif_known_failing
 from typing import Dict
 
 from ipyflow.config import FlowDirection
@@ -456,6 +456,99 @@ def test_non_relevant_child_symbol_modified():
     assert deps == {1, 8}, "got %s" % deps
     slice_size = num_stmts_in_slice(7)
     assert slice_size == 3, "got %d" % slice_size
+
+
+@dynamic_only_test
+def test_correct_scopes_used():
+    run_cell(
+        """
+        def foo():
+            x, y = [[42], [43]]
+            x = x[:1]
+            y = y[:1]
+            return x, y
+
+        def bar(x, y, z):
+            return x + y + z
+    """
+    )
+    run_cell(
+        """
+        v = [int(z) for z in '12345']
+        for i in range(5):
+            x, y = foo()
+            v = bar(x, y, v)
+    """
+    )
+    slice_size = num_stmts_in_slice(2)
+    assert slice_size == 4, "got %d" % slice_size
+    run_cell(
+        """
+        v = [int(z) for z in '12345']
+        for i in range(5):
+            x, y = foo()
+            v = bar(x, y, v)
+    """
+    )
+    slice_size = num_stmts_in_slice(3)
+    assert slice_size == 4, "got %d" % slice_size
+    run_cell(
+        """
+        v = [int(z) for z in '12345']
+        for i in range(5):
+            x, y = foo()
+            v = bar(x, y, v)
+    """
+    )
+    slice_size = num_stmts_in_slice(4)
+    assert slice_size == 4, "got %d" % slice_size
+
+
+@skipif_known_failing
+@dynamic_only_test
+def test_correct_scopes_used_2():
+    run_cell(
+        """
+        def foo():
+            x, y = [[42], [43]]
+            x = x[:1]
+            y = y[:1]
+            return x, y
+
+        def bar(x, y, z):
+            return x + y + z
+    """
+    )
+    run_cell(
+        """
+        v = [int(x) for x in '12345']
+        for i in range(5):
+            x, y = foo()
+            v = bar(x, y, v)
+    """
+    )
+    slice_size = num_stmts_in_slice(2)
+    assert slice_size == 4, "got %d" % slice_size
+    run_cell(
+        """
+        v = [int(x) for x in '12345']
+        for i in range(5):
+            x, y = foo()
+            v = bar(x, y, v)
+    """
+    )
+    slice_size = num_stmts_in_slice(3)
+    assert slice_size == 4, "got %d" % slice_size
+    run_cell(
+        """
+        v = [int(x) for x in '12345']
+        for i in range(5):
+            x, y = foo()
+            v = bar(x, y, v)
+    """
+    )
+    slice_size = num_stmts_in_slice(4)
+    assert slice_size == 4, "got %d" % slice_size
 
 
 @dynamic_only_test

@@ -3,7 +3,7 @@ import functools
 import logging
 import sys
 import textwrap
-from test.utils import make_flow_fixture, skipif_known_failing
+from test.utils import make_flow_fixture
 from typing import Dict
 
 from ipyflow.config import FlowDirection
@@ -504,7 +504,6 @@ def test_correct_scopes_used():
     assert slice_size == 4, "got %d" % slice_size
 
 
-@skipif_known_failing
 @dynamic_only_test
 def test_correct_scopes_used_2():
     run_cell(

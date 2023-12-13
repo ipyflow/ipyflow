@@ -1078,10 +1078,19 @@ class DataflowTracer(StackFrameManager):
                     symbol_node=arg_node,
                 )
         if key is None:
-            ext_call_cand._process_arg_impl((arg_obj, resolve_rval_symbols(arg_node)))
+            ext_call_cand._process_arg_impl(
+                (
+                    arg_obj,
+                    resolve_rval_symbols(arg_node, should_update_usage_info=False),
+                )
+            )
         else:
             ext_call_cand._process_kwarg_impl(
-                key, (arg_obj, resolve_rval_symbols(arg_node))
+                key,
+                (
+                    arg_obj,
+                    resolve_rval_symbols(arg_node, should_update_usage_info=False),
+                ),
             )
         if is_last:
             self._resolve_external_call()

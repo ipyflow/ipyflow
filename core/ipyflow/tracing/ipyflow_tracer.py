@@ -26,6 +26,7 @@ import pyccolo as pyc
 from IPython import get_ipython
 
 from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
+from ipyflow.analysis.symbol_ref import resolve_slice_to_constant
 from ipyflow.annotations.compiler import compile_and_register_handlers_for_module
 from ipyflow.api.lift import code as api_code
 from ipyflow.api.lift import deps as api_deps
@@ -45,7 +46,7 @@ from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import symbols as api_symbols
-from ipyflow.singletons import SingletonBaseTracer, flow, shell
+from ipyflow.singletons import SingletonBaseTracer, flow
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
@@ -180,6 +181,7 @@ class DataflowTracer(StackFrameManager):
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 blocking_spec
             ]
+        self.tracing_disabled_since_last_stmt = False
         self.tracing_disabled_since_last_module_stmt = False
         self.guards_pending_deactivation: Set[str] = set()
         self._module_stmt_counter = 0
@@ -396,6 +398,7 @@ class DataflowTracer(StackFrameManager):
         self, frame: FrameType, check_enabled: bool = True
     ) -> None:
         self.tracing_disabled_since_last_module_stmt = True
+        self.tracing_disabled_since_last_stmt = True
         if self.is_tracing_enabled:
             self.tracing_disabled_user_call_depth = self.get_user_call_stack_depth(
                 frame
@@ -558,13 +561,43 @@ class DataflowTracer(StackFrameManager):
     def resolve_store_data_for_target(
         self, target: Union[str, int, ast.AST], frame: FrameType
     ) -> Tuple[Scope, AttrSubVal, Any, bool, Set[Symbol]]:
-        target = self._partial_resolve_ref(target)
-        if isinstance(target, str):
-            return self._resolve_store_data_for_simple_target(target, frame)
-        (scope, obj, attr_or_sub, is_subscript) = self.node_id_to_saved_store_data.pop(
-            target
-        )
-        if isinstance(obj, (dict, list)):
+        resolved_target = self._partial_resolve_ref(target)
+        if isinstance(resolved_target, str):
+            return self._resolve_store_data_for_simple_target(resolved_target, frame)
+        try:
+            (
+                scope,
+                obj,
+                attr_or_sub,
+                is_subscript,
+            ) = self.node_id_to_saved_store_data.pop(resolved_target)
+        except KeyError:
+            if not self.tracing_disabled_since_last_stmt:
+                raise
+            if not isinstance(target, ast.Subscript) or not isinstance(
+                target.value, ast.Name
+            ):
+                raise
+            # special handling for simple subscripts
+            is_subscript = True
+            obj = frame.f_locals.get(target.value.id)
+            if obj is None:
+                raise
+            scope = flow().namespaces.get(id(obj))
+            if scope is None:
+                raise
+            sliceval = resolve_slice_to_constant(target)
+            if isinstance(sliceval, ast.Name):
+                attr_or_sub = frame.f_locals.get(sliceval.id)
+            else:
+                attr_or_sub = sliceval
+            if attr_or_sub is None:
+                raise
+
+        if isinstance(obj, (dict, list)) and (
+            not self.tracing_disabled_since_last_stmt
+            or self.saved_assign_rhs_obj is not None
+        ):
             # we can be reasonably sure that the object on the rhs is the same thing
             # that gets stashed in `obj` for these cases, so use it instead of doing
             # the lookup (which may have side effects) to reduce intrusiveness
@@ -587,7 +620,7 @@ class DataflowTracer(StackFrameManager):
             attr_or_sub,
             attr_or_sub_obj,
             is_subscript,
-            self.node_id_to_saved_live_subscript_refs.pop(target, set()),
+            self.node_id_to_saved_live_subscript_refs.pop(resolved_target, set()),
         )
 
     def resolve_del_data_for_target(
@@ -1356,29 +1389,32 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
         self._saved_stmt_ret_expr = ret_expr
-        if not self.is_tracing_enabled and not self._try_reenable_tracing(
-            frame, empty_stack_call_depth=1
-        ):
-            return
-        assert self.is_tracing_enabled
-        if (
-            stmt_id in self.traced_statements
-            and self.traced_statements[stmt_id].finished
-        ):
-            return
-        stmt = self.ast_node_by_id.get(stmt_id)
-        if stmt is not None:
-            self.handle_other_sys_events(
-                None, 0, frame, pyc.after_stmt, stmt_node=cast(ast.stmt, stmt)
-            )
-        active_watchpoints = flow().active_watchpoints
-        if active_watchpoints:
-            if sys.version_info < (3, 7):
-                logger.warning("skipping watchpoint on Python < 3.7")
-            else:
-                breakpoint()
-            active_watchpoints.clear()
-        return ret_expr
+        try:
+            if not self.is_tracing_enabled and not self._try_reenable_tracing(
+                frame, empty_stack_call_depth=1
+            ):
+                return
+            assert self.is_tracing_enabled
+            if (
+                stmt_id in self.traced_statements
+                and self.traced_statements[stmt_id].finished
+            ):
+                return
+            stmt = self.ast_node_by_id.get(stmt_id)
+            if stmt is not None:
+                self.handle_other_sys_events(
+                    None, 0, frame, pyc.after_stmt, stmt_node=cast(ast.stmt, stmt)
+                )
+            active_watchpoints = flow().active_watchpoints
+            if active_watchpoints:
+                if sys.version_info < (3, 7):
+                    logger.warning("skipping watchpoint on Python < 3.7")
+                else:
+                    breakpoint()
+                active_watchpoints.clear()
+            return ret_expr
+        finally:
+            self.tracing_disabled_since_last_stmt = False
 
     def _handle_skipped_sub_statements(self, stmt: ast.stmt) -> None:
         live, dead = compute_live_dead_symbol_refs(stmt)

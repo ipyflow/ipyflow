@@ -1385,9 +1385,7 @@ class DataflowTracer(StackFrameManager):
         for sym in {ref.to_symbol() for ref in {r.ref for r in live} | dead} - {None}:
             if sym in self.this_stmt_updated_symbols:
                 continue
-            if sym.obj is not shell().user_ns.get(sym.name):
-                # TODO: use other heuristics to detect changes, such as length changing from a cached value
-                sym.refresh()
+            sym.resync_if_necessary(refresh=True)
 
     @pyc.register_handler(pyc.after_module_stmt)
     def after_module_stmt(self, _ret, stmt: ast.stmt, *_, **__) -> Optional[Any]:

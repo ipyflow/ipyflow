@@ -895,40 +895,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def _resync_symbols(self, symbols: Iterable[Symbol]):
         for sym in symbols:
-            if not sym.containing_scope.is_global:
-                continue
-            try:
-                obj = shell().user_ns.get(sym.name)
-                if obj is None:
-                    continue
-            except:  # noqa
-                # cinder runtime can throw an exception here due to lazy imports that fail
-                continue
-            if sym.obj_id == id(obj):
-                continue
-            for alias in self.aliases.get(sym.cached_obj_id, set()) | self.aliases.get(
-                sym.obj_id, set()
-            ):
-                containing_namespace = alias.containing_namespace
-                if containing_namespace is None:
-                    continue
-                containing_obj = containing_namespace.obj
-                if containing_obj is None:
-                    continue
-                # TODO: handle dict case too
-                if isinstance(containing_obj, list) and containing_obj[-1] is obj:
-                    containing_namespace._subscript_data_symbol_by_name.pop(
-                        alias.name, None
-                    )
-                    alias.name = len(containing_obj) - 1
-                    alias.update_obj_ref(obj)
-                    containing_namespace._subscript_data_symbol_by_name[
-                        alias.name
-                    ] = alias
-            cleanup_discard(self.aliases, sym.cached_obj_id, sym)
-            cleanup_discard(self.aliases, sym.obj_id, sym)
-            self.aliases.setdefault(id(obj), set()).add(sym)
-            sym.update_obj_ref(obj)
+            sym.resync_if_necessary(refresh=False)
 
     def _add_applicable_prev_cell_parents_to_current(self) -> None:
         cell = cells().at_counter(self.cell_counter())

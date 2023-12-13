@@ -332,7 +332,10 @@ class SymbolRef(CommonEqualityMixin):
 
     def to_symbol(self) -> Optional["Symbol"]:
         for resolved in self.gen_resolved_symbols(
-            flow().global_scope, only_yield_final_symbol=True, yield_in_reverse=False
+            flow().global_scope,
+            only_yield_final_symbol=False,
+            yield_all_intermediate_symbols=True,
+            yield_in_reverse=True,
         ):
             return resolved.dsym
         return None

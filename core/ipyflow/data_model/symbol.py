@@ -28,7 +28,7 @@ from ipyflow.data_model.utils.annotation_utils import (
 )
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, namespaces, statements, symbols
-from ipyflow.singletons import flow, tracer
+from ipyflow.singletons import flow, shell, tracer
 from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
 from ipyflow.slicing.mixin import FormatType, Slice
 from ipyflow.tracing.watchpoint import Watchpoints
@@ -122,6 +122,7 @@ class Symbol:
         self._cached_out_of_sync = True
         self.cached_obj_id: Optional[int] = None
         self.cached_obj_type: Optional[Type[object]] = None
+        self.cached_obj_len: Optional[int] = None
         if refresh_cached_obj:
             self._refresh_cached_obj()
         self.containing_scope = containing_scope or flow().global_scope
@@ -478,8 +479,21 @@ class Symbol:
         return id(self.obj)
 
     @property
+    def obj_len(self) -> Optional[int]:
+        try:
+            if not self.is_obj_lazy_module and hasattr(self.obj, "__len__"):
+                return len(self.obj)
+        except:  # noqa
+            pass
+        return None
+
+    @property
     def obj_type(self) -> Type[Any]:
         return type(self.obj)
+
+    @property
+    def is_obj_lazy_module(self) -> bool:
+        return self.obj_type is _LazyModule
 
     def get_type_annotation(self):
         return get_type_annotation(self.obj)
@@ -678,6 +692,7 @@ class Symbol:
         # don't keep an actual ref to avoid bumping refcount
         self.cached_obj_id = self.obj_id
         self.cached_obj_type = self.obj_type
+        self.cached_obj_len = self.obj_len
 
     def get_definition_args(self) -> List[ast.arg]:
         assert self.func_def_stmt is not None and isinstance(
@@ -988,7 +1003,7 @@ class Symbol:
         Widget = getattr(sys.modules.get("ipywidgets"), "Widget", None)
         if (
             Widget is None
-            or type(self.obj) is _LazyModule
+            or self.is_obj_lazy_module
             or not isinstance(self.obj, Widget)
             or not hasattr(self.obj, "observe")
             or not hasattr(self.obj, "value")
@@ -1214,6 +1229,46 @@ class Symbol:
                         )
         if refresh_namespace_waiting:
             self.namespace_waiting_symbols.clear()
+
+    def resync_if_necessary(self, refresh: bool) -> None:
+        if not self.containing_scope.is_global:
+            return
+        try:
+            obj = shell().user_ns[self.name]
+        except:  # noqa
+            # cinder runtime can throw an exception here due to lazy imports that fail
+            return
+        if self.obj is not obj:
+            flow_ = flow()
+            for alias in flow_.aliases.get(
+                self.cached_obj_id, set()
+            ) | flow_.aliases.get(self.obj_id, set()):
+                containing_namespace = alias.containing_namespace
+                if containing_namespace is None:
+                    continue
+                containing_obj = containing_namespace.obj
+                if containing_obj is None:
+                    continue
+                # TODO: handle dict case too
+                if isinstance(containing_obj, list) and containing_obj[-1] is obj:
+                    containing_namespace._subscript_data_symbol_by_name.pop(
+                        alias.name, None
+                    )
+                    alias.name = len(containing_obj) - 1
+                    alias.update_obj_ref(obj)
+                    containing_namespace._subscript_data_symbol_by_name[
+                        alias.name
+                    ] = alias
+            cleanup_discard(flow_.aliases, self.cached_obj_id, self)
+            cleanup_discard(flow_.aliases, self.obj_id, self)
+            flow_.aliases.setdefault(id(obj), set()).add(self)
+            self.update_obj_ref(obj)
+        elif self.obj_len != self.cached_obj_len:
+            self._refresh_cached_obj()
+        else:
+            return
+        if refresh:
+            self.refresh()
 
     _MAX_MEMOIZE_COMPARABLE_SIZE = 10**6
 

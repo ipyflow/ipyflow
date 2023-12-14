@@ -253,6 +253,27 @@ class DataflowTracer(StackFrameManager):
         except Exception:
             pass
 
+    @classmethod
+    def is_initial_frame_stmt(cls, node_or_id):
+        node_id = node_or_id if isinstance(node_or_id, int) else id(node_or_id)
+        containing_stmt = cls.containing_stmt_by_id.get(node_id, None)
+        parent_stmt = cls.parent_stmt_by_id.get(
+            node_id if containing_stmt is None else id(containing_stmt), None
+        )
+        outer_stmts_to_consider = (
+            ast.If,
+            ast.Try,
+            ast.With,
+            ast.AsyncWith,
+            ast.For,
+            ast.While,
+        )
+        while parent_stmt is not None and isinstance(
+            parent_stmt, outer_stmts_to_consider
+        ):
+            parent_stmt = cls.parent_stmt_by_id.get(id(parent_stmt), None)
+        return parent_stmt is None or isinstance(parent_stmt, ast.Module)
+
     @contextmanager
     def dataflow_tracing_disabled(self) -> Generator[None, None, None]:
         is_tracing_enabled = self.is_tracing_enabled
@@ -1391,7 +1412,9 @@ class DataflowTracer(StackFrameManager):
         self._saved_stmt_ret_expr = ret_expr
         try:
             if not self.is_tracing_enabled and not self._try_reenable_tracing(
-                frame, empty_stack_call_depth=1
+                frame,
+                empty_stack_call_depth=1,
+                is_initial_frame_stmt=self.is_initial_frame_stmt(stmt_id),
             ):
                 return
             assert self.is_tracing_enabled
@@ -1479,7 +1502,7 @@ class DataflowTracer(StackFrameManager):
             self._try_reenable_tracing(
                 frame,
                 dry_run=True,
-                is_module_stmt=trace_stmt.is_module_stmt(),
+                is_initial_frame_stmt=trace_stmt.is_initial_frame_stmt(),
             )
         ):
             self.after_stmt_reset_hook()
@@ -1522,12 +1545,12 @@ class DataflowTracer(StackFrameManager):
         frame: FrameType,
         empty_stack_call_depth: Optional[int] = None,
         dry_run: bool = False,
-        is_module_stmt: bool = False,
+        is_initial_frame_stmt: bool = False,
     ) -> bool:
         tracing_reenabled_call_stack_length = (
             self._call_stack_length_for_reenabling_tracing(frame)
         )
-        if not is_module_stmt and tracing_reenabled_call_stack_length == -1:
+        if not is_initial_frame_stmt and tracing_reenabled_call_stack_length == -1:
             return False
         tracing_reenabled_call_stack_length = max(
             tracing_reenabled_call_stack_length, 0

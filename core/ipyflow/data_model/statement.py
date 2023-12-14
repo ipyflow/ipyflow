@@ -6,6 +6,8 @@ import sys
 from types import FrameType
 from typing import TYPE_CHECKING, Dict, List, Optional, Set, Type, Union, cast
 
+import pyccolo as pyc
+
 from ipyflow.analysis.live_refs import stmt_contains_cascading_reactive_rval
 from ipyflow.analysis.symbol_edges import get_symbol_edges
 from ipyflow.analysis.symbol_ref import SymbolRef
@@ -146,6 +148,12 @@ class Statement(SliceableMixin):
 
     def is_module_stmt(self) -> bool:
         return tracer().parent_stmt_by_id.get(self.stmt_id) is None
+
+    def is_outer_stmt(self) -> bool:
+        return pyc.is_outer_stmt(self.stmt_id)
+
+    def is_initial_frame_stmt(self) -> bool:
+        return tracer().is_initial_frame_stmt(self.stmt_id)
 
     @classmethod
     def clear(cls):

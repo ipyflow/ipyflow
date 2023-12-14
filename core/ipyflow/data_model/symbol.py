@@ -1292,6 +1292,18 @@ class Symbol:
         except:  # noqa
             return False
 
+    @staticmethod
+    def _make_list_eq(
+        eqs: List[Callable[[Any, Any], bool]]
+    ) -> Callable[[List[Any], List[Any]], bool]:
+        def list_eq(lst1: List[Any], lst2: List[Any]) -> bool:
+            for eq, obj1, obj2 in zip(eqs, lst1, lst2):
+                if not eq(obj1, obj2):
+                    return False
+            return True
+
+        return list_eq
+
     @classmethod
     def make_memoize_comparable_for_obj(
         cls, obj: Any, seen_ids: Set[int]
@@ -1304,6 +1316,7 @@ class Symbol:
         elif isinstance(obj, (dict, frozenset, list, set, tuple)):
             size = 0
             comp = []
+            eqs: List[Callable[[Any, Any], bool]] = []
             if isinstance(obj, dict):
                 iterable: "Iterable[Any]" = sorted(obj.items())
             else:
@@ -1312,14 +1325,21 @@ class Symbol:
                 inner_comp, inner_eq, inner_size = cls.make_memoize_comparable_for_obj(
                     inner, seen_ids
                 )
-                if inner_comp is cls.NULL or inner_eq is not cls._equal:
+                if inner_comp is cls.NULL or inner_eq is None:
                     return cls.NULL, None, -1
                 size += inner_size + 1
                 if size > cls._MAX_MEMOIZE_COMPARABLE_SIZE:
                     return cls.NULL, None, -1
                 comp.append(inner_comp)
+                eqs.append(inner_eq)
+            if all(eq is cls._equal for eq in eqs):
+                iter_eq: Callable[[Any, Any], bool] = cls._equal
+            elif isinstance(obj, (frozenset, set)):
+                return cls.NULL, None, -1
+            else:
+                iter_eq = cls._make_list_eq(eqs)
             ret = frozenset(comp) if isinstance(obj, (frozenset, set)) else comp
-            return ret, cls._equal, size
+            return ret, iter_eq, size
         elif type(obj) in (type, FunctionType):
             # try to determine it based on the symbol
             for sym in flow().aliases.get(id(obj), []):

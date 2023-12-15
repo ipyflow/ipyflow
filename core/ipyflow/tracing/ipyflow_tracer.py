@@ -52,7 +52,7 @@ from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
-from ipyflow.types import SupportedIndexType
+from ipyflow.types import SubscriptIndices, SupportedIndexType
 from ipyflow.utils.misc_utils import is_project_file
 
 if TYPE_CHECKING:
@@ -831,6 +831,13 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_raw_handler(pyc.after_import)
     def after_import(self, *_, module: ModuleType, **__):
         compile_and_register_handlers_for_module(module)
+        if getattr(module, "__name__", "") == "numpy":
+            if TYPE_CHECKING:
+                import numpy
+            else:
+                numpy = module
+            # TODO: convert these to Python ints when used on Python objects
+            SubscriptIndices.types += (numpy.int32, numpy.int64)
 
     @pyc.register_raw_handler(
         (
@@ -937,9 +944,7 @@ class DataflowTracer(StackFrameManager):
 
         # Resolve symbol if necessary
         if sym_for_obj is None and obj_name is not None:
-            sym_for_obj = self.active_scope.lookup_data_symbol_by_name_this_indentation(
-                obj_name
-            )
+            sym_for_obj = self.active_scope.get(obj_name)
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         is_subscript = "subscript" in event.value
@@ -973,9 +978,11 @@ class DataflowTracer(StackFrameManager):
             if isinstance(attr_or_subscript, list):
                 attr_or_subscript = tuple(attr_or_subscript)
             if isinstance(attr_or_subscript, tuple):
-                if not all(isinstance(v, (str, int)) for v in attr_or_subscript):
+                if not all(
+                    isinstance(v, SubscriptIndices.types) for v in attr_or_subscript
+                ):
                     return
-            elif not isinstance(attr_or_subscript, (str, int)):
+            elif not isinstance(attr_or_subscript, SubscriptIndices.types):
                 return
             if "store" in event.value:
                 logger.warning(
@@ -1314,9 +1321,7 @@ class DataflowTracer(StackFrameManager):
                         outer_deps.update(resolve_rval_symbols(inner_key_node))
                 self.node_id_to_loaded_symbols.pop(id(inner_val_node), None)
                 inner_symbols.discard(None)
-                if isinstance(
-                    i, (int, str)
-                ):  # TODO: perform more general check for SupportedIndexType
+                if isinstance(i, SubscriptIndices.types):
                     self.active_literal_scope.upsert_symbol_for_name(
                         i,
                         inner_obj,
@@ -1371,7 +1376,7 @@ class DataflowTracer(StackFrameManager):
         # if we found a pending literal, assert that it's not dict unpacking
         assert key_node_id is not None
         key_obj = self.node_id_to_saved_dict_key.pop(key_node_id, None)
-        if isinstance(key_obj, (str, int)):
+        if isinstance(key_obj, SubscriptIndices.types):
             scope.scope_name = str(key_obj)
         return obj
 
@@ -1474,9 +1479,7 @@ class DataflowTracer(StackFrameManager):
         if ret is not None:
             flow_ = flow()
             # clean up prev _ namespace
-            prev_underscore_sym = (
-                flow_.global_scope.lookup_data_symbol_by_name_this_indentation("_")
-            )
+            prev_underscore_sym = flow_.global_scope.get("_")
             prev_underscore_id = (
                 None if prev_underscore_sym is None else prev_underscore_sym.obj_id
             )

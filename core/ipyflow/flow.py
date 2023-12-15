@@ -784,9 +784,7 @@ class NotebookFlow(singletons.NotebookFlow):
             if dep_sym is not None:
                 dep_symbols.add(dep_sym)
         obj = user_globals.get(symbol_name)
-        prev_sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(
-            symbol_name
-        )
+        prev_sym = self.global_scope.get(symbol_name)
         if prev_sym is not None and prev_sym.obj is obj:
             return {"success": False}
         with Timestamp.offset(stmt_offset=-1):
@@ -797,7 +795,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_get_code(self, request) -> Dict[str, Any]:
         symbol_name = request["symbol"]
-        sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_name)
+        sym = self.global_scope.get(symbol_name)
         if sym is None:
             return {"success": False}
         return {
@@ -807,7 +805,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_get_last_updated_cell_id(self, request) -> Dict[str, Any]:
         symbol_name = request["symbol"]
-        sym = self.global_scope.lookup_data_symbol_by_name_this_indentation(symbol_name)
+        sym = self.global_scope.get(symbol_name)
         if sym is None:
             return {"success": False}
         try:

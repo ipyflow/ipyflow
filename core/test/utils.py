@@ -58,9 +58,7 @@ def clear_registered_annotations(clear_afterwards=False):
 
 
 def lookup_symbol_by_name(name: str) -> Symbol:
-    ret = flow().global_scope.lookup_data_symbol_by_name_this_indentation(name)
-    assert ret is not None, "got None for %s" % name
-    return ret
+    return flow().global_scope[name]
 
 
 # Reset dependency graph before each test to prevent unexpected stale dependency

@@ -1,9 +1,12 @@
-from typing import Tuple, TypeVar, Union
+from types import NoneType
+from typing import Any, Tuple, Type, TypeVar, Union
 
 from ipyflow.data_model.timestamp import Timestamp
 
 IdType = Union[str, int]
-SupportedIndexType = Union[str, int, Tuple[Union[str, int], ...]]
+SupportedIndexType = Union[
+    str, int, bool, None, Tuple[Union[str, int, bool, None], ...]
+]
 TimestampOrCounter = TypeVar("TimestampOrCounter", Timestamp, int)
 
 IMMUTABLE_PRIMITIVE_TYPES = (
@@ -15,3 +18,7 @@ IMMUTABLE_PRIMITIVE_TYPES = (
     str,
     tuple,
 )
+
+
+class SubscriptIndices:
+    types: Tuple[Type[Any], ...] = (str, int, bool, NoneType)

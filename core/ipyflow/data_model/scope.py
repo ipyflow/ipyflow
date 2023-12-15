@@ -104,7 +104,7 @@ class Scope:
     def lookup_data_symbol_by_name_this_indentation(
         self, name: SupportedIndexType, **_: Any
     ) -> Optional[Symbol]:
-        return self._symbol_by_name.get(name, None)
+        return self._symbol_by_name.get(name)
 
     def all_symbols_this_indentation(self):
         return self._symbol_by_name.values()

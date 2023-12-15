@@ -46,7 +46,7 @@ from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import symbols as api_symbols
-from ipyflow.singletons import SingletonBaseTracer, flow
+from ipyflow.singletons import SingletonBaseTracer, flow, shell
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
@@ -1450,6 +1450,18 @@ class DataflowTracer(StackFrameManager):
             if sym in self.this_stmt_updated_symbols:
                 continue
             sym.resync_if_necessary(refresh=True)
+        user_ns = shell().user_ns
+        global_scope = flow().global_scope
+        unavailable = object()
+        for ref in dead:
+            if ref.to_symbol() is not None:
+                continue
+            if len(ref.chain) != 1:
+                continue
+            ref_name = ref.chain[0].value
+            ref_value = user_ns.get(ref_name, unavailable)
+            if ref_value is not unavailable and ref_name not in global_scope:
+                global_scope.upsert_symbol_for_name(ref_name, ref_value)
 
     @pyc.register_handler(pyc.after_module_stmt)
     def after_module_stmt(self, _ret, stmt: ast.stmt, *_, **__) -> Optional[Any]:

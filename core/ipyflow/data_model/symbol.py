@@ -907,14 +907,8 @@ class Symbol:
         is_cascading_reactive: Optional[bool] = None,
     ) -> None:
         if self.is_import and self.obj_id == self.cached_obj_id:
-            # skip updates for imported symbols
-            # just bump the version if it's newly created or if we're reactively executing
-            if (
-                mutated
-                or not self._timestamp.is_initialized
-                or flow().mut_settings.exec_mode == ExecutionMode.REACTIVE
-            ):
-                self.refresh()
+            # skip updates for imported symbols; just bump the version
+            self.refresh()
             return
         if overwrite and not self.is_globally_accessible:
             self.watchpoints.clear()

@@ -1,4 +1,3 @@
-from types import NoneType
 from typing import Any, Tuple, Type, TypeVar, Union
 
 from ipyflow.data_model.timestamp import Timestamp
@@ -21,4 +20,4 @@ IMMUTABLE_PRIMITIVE_TYPES = (
 
 
 class SubscriptIndices:
-    types: Tuple[Type[Any], ...] = (str, int, bool, NoneType)
+    types: Tuple[Type[Any], ...] = (str, int, bool, type(None))

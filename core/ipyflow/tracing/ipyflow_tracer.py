@@ -255,6 +255,7 @@ class DataflowTracer(StackFrameManager):
 
     @classmethod
     def is_initial_frame_stmt(cls, node_or_id):
+        # TODO: this should be exposed in pyccolo
         node_id = node_or_id if isinstance(node_or_id, int) else id(node_or_id)
         containing_stmt = cls.containing_stmt_by_id.get(node_id, None)
         parent_stmt = cls.parent_stmt_by_id.get(
@@ -520,8 +521,12 @@ class DataflowTracer(StackFrameManager):
         finally:
             if self.is_tracing_enabled:
                 self.call_stack.pop()
-            if flow().is_dev_mode and len(self.call_stack) == 0:
-                assert self.call_depth == 1
+            if (
+                flow().is_dev_mode
+                and not self.tracing_disabled_since_last_stmt
+                and len(self.call_stack) == 0
+            ):
+                assert self.call_depth == 1, "got %s" % self.call_depth
 
     def state_transition_hook(
         self,

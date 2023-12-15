@@ -424,6 +424,8 @@ class SliceableMixin(Protocol):
             for pid in self.parents.keys():
                 parent = self.from_id(pid)
                 while parent.timestamp > self.timestamp:
+                    if getattr(parent, "override", False):
+                        break
                     parent = parent.prev
                 parent._make_slice_helper(closure)
 

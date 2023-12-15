@@ -1029,6 +1029,7 @@ class Symbol:
         sym._override_timestamp = Timestamp(
             self._timestamp.cell_num, current_ts_cell.num_original_stmts
         )
+        sym.update_obj_ref(newval)
         statements().create_and_track(
             current_ts_cell._extra_stmt,
             timestamp=sym._override_timestamp,
@@ -1308,12 +1309,12 @@ class Symbol:
     def make_memoize_comparable_for_obj(
         cls, obj: Any, seen_ids: Set[int]
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]], int]:
+        if isinstance(obj, (bool, bytes, bytearray, int, float, str)):
+            return obj, cls._equal, 1
         if id(obj) in seen_ids:
             return cls.NULL, None, -1
         seen_ids.add(id(obj))
-        if isinstance(obj, (int, str)):
-            return obj, cls._equal, 1
-        elif isinstance(obj, (dict, frozenset, list, set, tuple)):
+        if isinstance(obj, (dict, frozenset, list, set, tuple)):
             size = 0
             comp = []
             eqs: List[Callable[[Any, Any], bool]] = []
@@ -1348,7 +1349,7 @@ class Symbol:
                     return comp, eq, 1
             return cls.NULL, None, -1
         else:
-            # hacks to check if they are arrays or dataframes without explicitly importing these
+            # hacks to check if they are arrays, dataframes, etc without explicitly importing these
             module = getattr(type(obj), "__module__", "")
             if not module.startswith(("modin", "numpy", "pandas")):
                 return cls.NULL, None, -1

@@ -55,11 +55,13 @@ class Statement(SliceableMixin):
         frame: Optional[FrameType] = None,
         timestamp: Optional[Timestamp] = None,
         prev_stmt: Optional["Statement"] = None,
+        override: bool = False,
     ) -> None:
         self.stmt_node: ast.stmt = stmt_node
         self.frame: Optional[FrameType] = frame
         self._timestamp = timestamp or Timestamp.current()
         self._finished: bool = False
+        self.override: bool = override
         self.prev_stmt = prev_stmt
         self.class_scope: Optional[Namespace] = None
         self.lambda_call_point_deps_done_once = False
@@ -122,7 +124,13 @@ class Statement(SliceableMixin):
     ) -> "Statement":
         stmt_id = id(stmt_node)
         prev_stmt = cls.from_id(stmt_id) if cls.has_id(stmt_id) else None
-        stmt = cls(stmt_node, frame=frame, timestamp=timestamp, prev_stmt=prev_stmt)
+        stmt = cls(
+            stmt_node,
+            frame=frame,
+            timestamp=timestamp,
+            prev_stmt=prev_stmt,
+            override=override,
+        )
         if override and cls._stmts_by_ts.get(timestamp):
             prev = cls.at_timestamp(timestamp)
             all_with_prev_id = cls._stmts_by_id.pop(prev.id)
@@ -341,7 +349,9 @@ class Statement(SliceableMixin):
             if flow().is_dev_mode:
                 logger.warning(
                     "keyerror for %s",
-                    ast.dump(target) if isinstance(target, ast.AST) else target,
+                    astunparse.unparse(target)
+                    if isinstance(target, ast.AST)
+                    else target,
                 )
             # if flow().is_test:
             #     raise ke
@@ -615,7 +625,9 @@ class Statement(SliceableMixin):
                 if flow().is_dev_mode:
                     logger.warning(
                         "keyerror for %s",
-                        ast.dump(target) if isinstance(target, ast.AST) else target,
+                        astunparse.unparse(target)
+                        if isinstance(target, ast.AST)
+                        else target,
                     )
                 # TODO: put this back in and debug
                 # if flow().is_test:

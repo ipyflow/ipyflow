@@ -75,6 +75,7 @@ class IpyflowSessionState {
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
   lastCellMetadataMap: CellMetadataMap | null = null;
+  deferredCommand: { command: any; args: any[] } | null = null;
 
   gatherCellMetadataAndContent() {
     const cell_metadata_by_id: CellMetadataMap = {};
@@ -207,19 +208,6 @@ class IpyflowSessionState {
           true
         );
       }
-      // if (this.settings.flow_order === 'in_order') {
-      //   const minSeedPosition = Math.min(
-      //     ...cellIds.map((id) => this.orderIdxById[id])
-      //   );
-      //   for (const cellId of Array.from(closure)) {
-      //     const pos = this.orderIdxById[cellId];
-      //     if (pos === undefined) {
-      //       closure.delete(cellId);
-      //     } else if (pos < minSeedPosition) {
-      //       closure.delete(cellId);
-      //     }
-      //   }
-      // }
     }
     if (!inclusive) {
       for (const cellId of cellIds) {
@@ -455,16 +443,49 @@ const extension: JupyterFrontEndPlugin<void> = {
     };
 
     [
-      [runCellCommand, runCellCommandExecute],
-      [runCellAndSelectNextCommand, runCellAndSelectNextCommandExecute],
-      [runMenuRunCommand, runMenuRunCommandExecute],
-    ].forEach(([command, exec]) => {
+      [runCellCommand, runCellCommandExecute, 'notebook:run-cell'],
+      [
+        runCellAndSelectNextCommand,
+        runCellAndSelectNextCommandExecute,
+        'notebook:run-cell-and-select-next',
+      ],
+      [runMenuRunCommand, runMenuRunCommandExecute, 'runmenu:run'],
+    ].forEach(([command, exec, commandId]) => {
       command.execute = (...args: any[]) => {
         const state = getIpyflowState();
-        if (isBatchReactive() && state?.activeCell?.model?.type === 'code') {
+        const kernel =
+          notebooks.currentWidget.sessionContext.session.kernel.name;
+        if (kernel === 'ipyflow' && !(state?.isIpyflowCommConnected ?? false)) {
+          state.deferredCommand = { command, args };
+          for (const cell of state.notebook.widgets) {
+            if (state.notebook.isSelectedOrActive(cell)) {
+              cell.setPrompt('*');
+            }
+          }
+        } else if (
+          isBatchReactive() &&
+          state?.activeCell?.model?.type === 'code'
+        ) {
           app.commands.execute('notebook:enter-command-mode');
+          const lastCell =
+            state.notebook.widgets[state.notebook.widgets.length - 1];
+          const isExecutingLastCell =
+            state.activeCell.model.id === lastCell.model.id;
+          executeBatchReactive();
+          if (
+            ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(
+              commandId
+            )
+          ) {
+            if (isExecutingLastCell) {
+              app.commands.execute('notebook:insert-cell-below');
+            } else {
+              app.commands.execute('notebook:move-cursor-down');
+            }
+          }
         } else {
           exec.call(command, args);
+          state.requestComputeExecSchedule();
         }
       };
     });
@@ -490,37 +511,6 @@ const extension: JupyterFrontEndPlugin<void> = {
       }
     };
 
-    app.commands.commandExecuted.connect((_, args) => {
-      if (
-        [
-          'notebook:run-cell',
-          'notebook:run-cell-and-select-next',
-          'runmenu:run',
-        ].includes(args.id)
-      ) {
-        const state = getIpyflowState();
-        if (isBatchReactive()) {
-          const lastCell =
-            state.notebook.widgets[state.notebook.widgets.length - 1];
-          const isExecutingLastCell =
-            state.activeCell.model.id === lastCell.model.id;
-          executeBatchReactive();
-          if (
-            ['notebook:run-cell-and-select-next', 'runmenu:run'].includes(
-              args.id
-            )
-          ) {
-            if (isExecutingLastCell) {
-              app.commands.execute('notebook:insert-cell-below');
-            } else {
-              app.commands.execute('notebook:move-cursor-down');
-            }
-          }
-        } else if (state) {
-          state.requestComputeExecSchedule();
-        }
-      }
-    });
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;
       let commDisconnectHandler = () => resetSessionState(session.session.id);
@@ -1045,6 +1035,7 @@ const connectToComm = (
     }
     if (payload.type === 'establish') {
       state.isIpyflowCommConnected = true;
+      refreshNodeMapping(notebook);
       notebook.activeCellChanged.connect(onActiveCellChange);
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
@@ -1111,6 +1102,12 @@ const connectToComm = (
       state.lastExecutionHighlights = payload.highlights as Highlights;
       const lastExecutedCellId = payload.last_executed_cell_id as string;
       state.executedReactiveReadyCells.add(lastExecutedCellId);
+      if (state.deferredCommand !== null) {
+        const { command, args } = state.deferredCommand;
+        state.deferredCommand = null;
+        command.execute.call(command, args);
+        return;
+      }
       const last_execution_was_error =
         payload.last_execution_was_error as boolean;
       let doneReactivelyExecuting = false;

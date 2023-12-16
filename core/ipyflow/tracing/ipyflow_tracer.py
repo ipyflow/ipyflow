@@ -1531,9 +1531,8 @@ class DataflowTracer(StackFrameManager):
     def _call_stack_length_for_reenabling_tracing(self, frame: FrameType) -> int:
         if flow().is_dev_mode:
             assert not self.is_tracing_enabled
-            assert self.call_depth > 0, (
-                "expected managed call depth > 0, got %d" % self.call_depth
-            )
+            if self.call_depth <= 0:
+                logger.error("expected managed call depth > 0, got %s", self.call_depth)
         call_depth = self.get_user_call_stack_depth(frame)
         if flow().is_dev_mode:
             assert call_depth >= 1, "expected call depth >= 1, got %d" % call_depth

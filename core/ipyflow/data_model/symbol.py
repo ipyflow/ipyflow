@@ -1003,7 +1003,9 @@ class Symbol:
             or not hasattr(self.obj, "value")
         ):
             return
-        self.namespaced().upsert_symbol_for_name("value", None, set(), self.stmt_node)
+        self.namespaced().upsert_symbol_for_name(
+            "value", getattr(self.obj, "value", None), set(), self.stmt_node
+        )
         self.obj.observe(self._observe_widget)
         self._num_widget_observers += 1
 
@@ -1345,13 +1347,20 @@ class Symbol:
         else:
             # hacks to check if they are arrays, dataframes, etc without explicitly importing these
             module = getattr(type(obj), "__module__", "")
-            if not module.startswith(("modin", "numpy", "pandas")):
-                return cls.NULL, None, -1
-            name = getattr(type(obj), "__name__", "")
-            if name.endswith(("DataFrame", "Series")):
-                return obj, cls._dataframe_equal, obj.size
-            elif name.endswith("ndarray"):
-                return obj, cls._array_equal, obj.size
+            if module.startswith(("modin", "numpy", "pandas")):
+                name = getattr(type(obj), "__name__", "")
+                if name.endswith(("DataFrame", "Series")):
+                    return obj, cls._dataframe_equal, obj.size
+                elif name.endswith("ndarray"):
+                    return obj, cls._array_equal, obj.size
+            elif module.startswith("ipywidgets"):
+                ipywidgets = sys.modules.get("ipywidgets")
+                if (
+                    ipywidgets is not None
+                    and isinstance(obj, ipywidgets.Widget)
+                    and hasattr(obj, "value")
+                ):
+                    return obj.value, cls._equal, 1
             return cls.NULL, None, -1
 
     def make_memoize_comparable(

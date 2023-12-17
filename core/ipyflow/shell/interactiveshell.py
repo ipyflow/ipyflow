@@ -443,19 +443,23 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             if content != cell.executed_content:
                 continue
             for sym, in_ts, mem_ts, obj_id, comparable in inputs:
-                if sym._override_timestamp is None:
-                    # the timestamp-based checks are only reliable if the symbol doesn't have an override timestamp
-                    if sym.timestamp.cell_num == in_ts.cell_num:
-                        continue
-                    elif sym.obj_id == obj_id and sym.memoize_timestamp in (
-                        in_ts,
-                        mem_ts or Timestamp.uninitialized(),
-                    ):
-                        continue
-                    elif comparable is Symbol.NULL:
+                if comparable is not Symbol.NULL:
+                    # prefer the comparable check if it is available
+                    current_comp, eq = sym.make_memoize_comparable()
+                    if current_comp is Symbol.NULL or eq is None:
                         break
-                current_comp, eq = sym.make_memoize_comparable()
-                if eq is None or not eq(current_comp, comparable):
+                    if eq(current_comp, comparable):
+                        continue
+                    else:
+                        break
+                if sym.timestamp.cell_num == in_ts.cell_num:
+                    continue
+                elif sym.obj_id == obj_id and sym.memoize_timestamp in (
+                    in_ts,
+                    mem_ts or Timestamp.uninitialized(),
+                ):
+                    continue
+                else:
                     break
             else:
                 identical_result_ctr = ctr

@@ -1347,12 +1347,18 @@ class Symbol:
         else:
             # hacks to check if they are arrays, dataframes, etc without explicitly importing these
             module = getattr(type(obj), "__module__", "")
-            if module.startswith(("modin", "numpy", "pandas")):
+            if module.startswith("numpy"):
+                name = getattr(type(obj), "__name__", "")
+                if name.endswith("ndarray"):
+                    return obj, cls._array_equal, obj.size
+                else:
+                    numpy = sys.modules.get("numpy")
+                    if numpy is not None and isinstance(obj, numpy.number):
+                        return obj, cls._equal, 1
+            elif module.startswith(("modin", "pandas")):
                 name = getattr(type(obj), "__name__", "")
                 if name.endswith(("DataFrame", "Series")):
                     return obj, cls._dataframe_equal, obj.size
-                elif name.endswith("ndarray"):
-                    return obj, cls._array_equal, obj.size
             elif module.startswith("ipywidgets"):
                 ipywidgets = sys.modules.get("ipywidgets")
                 if (

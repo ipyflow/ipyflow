@@ -297,6 +297,8 @@ class Cell(SliceableMixin):
                 for sym in edges:
                     if sym.timestamp.cell_num == self.cell_ctr:
                         continue
+                    elif not sym.is_user_accessible or not sym.containing_scope.is_global:
+                        continue
                     elif sym.timestamp.cell_num > self.cell_ctr:
                         return
                     if sym not in inputs:

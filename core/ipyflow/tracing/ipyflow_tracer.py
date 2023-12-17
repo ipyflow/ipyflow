@@ -267,6 +267,7 @@ class DataflowTracer(StackFrameManager):
             ast.With,
             ast.AsyncWith,
             ast.For,
+            ast.AsyncFor,
             ast.While,
         )
         while parent_stmt is not None and isinstance(
@@ -1242,7 +1243,7 @@ class DataflowTracer(StackFrameManager):
         **__,
     ):
         if not self.is_tracing_enabled and not self._try_reenable_tracing(
-            frame, empty_stack_call_depth=1, dry_run=True
+            frame, empty_stack_call_depth=1
         ):
             return
 
@@ -1256,9 +1257,6 @@ class DataflowTracer(StackFrameManager):
         if self.is_external_call_pending_return:
             self.is_external_call_pending_return = False
             self.external_calls[-1].process_return(retval)
-
-        if not self.is_tracing_enabled:
-            self._tracked_enable_tracing()
 
     # Note: we don't trace set literals
     @pyc.register_raw_handler(
@@ -1518,15 +1516,11 @@ class DataflowTracer(StackFrameManager):
             ):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         self.prev_trace_stmt_in_cur_frame = trace_stmt
-        if not self.is_tracing_enabled and (
-            self._try_reenable_tracing(
-                frame,
-                dry_run=True,
-                is_initial_frame_stmt=trace_stmt.is_initial_frame_stmt(),
-            )
+        if not self.is_tracing_enabled and self._try_reenable_tracing(
+            frame,
+            is_initial_frame_stmt=trace_stmt.is_initial_frame_stmt(),
         ):
             self.after_stmt_reset_hook()
-            self._tracked_enable_tracing()
 
     def _call_stack_length_for_reenabling_tracing(self, frame: FrameType) -> int:
         if flow().is_dev_mode:
@@ -1551,7 +1545,7 @@ class DataflowTracer(StackFrameManager):
             self.EVENT_LOGGER.warning("reenable tracing >>>")
         for tracer_call_stack_length in range(len(self.call_stack)):
             user_call_depth = self.call_stack.get_field(
-                "user_call_depth", depth=tracer_call_stack_length
+                "user_call_depth", depth=-tracer_call_stack_length
             )
             if user_call_depth >= call_depth:
                 return tracer_call_stack_length
@@ -1563,7 +1557,6 @@ class DataflowTracer(StackFrameManager):
         self,
         frame: FrameType,
         empty_stack_call_depth: Optional[int] = None,
-        dry_run: bool = False,
         is_initial_frame_stmt: bool = False,
     ) -> bool:
         tracing_reenabled_call_stack_length = (
@@ -1584,8 +1577,7 @@ class DataflowTracer(StackFrameManager):
         while len(self.lexical_call_stack) > 0:
             # pop instead of clear to leave the top-level literal stack intact
             self.lexical_call_stack.pop()
-        if not dry_run:
-            self._tracked_enable_tracing()
+        self._tracked_enable_tracing()
         return True
 
     def _get_or_make_trace_stmt(

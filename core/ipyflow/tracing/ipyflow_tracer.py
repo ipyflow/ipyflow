@@ -394,7 +394,7 @@ class DataflowTracer(StackFrameManager):
     def _check_prev_stmt_done_executing_hook(
         self, event: pyc.TraceEvent, trace_stmt: Statement
     ):
-        if event == pyc.after_stmt and trace_stmt.is_module_stmt():
+        if event == pyc.after_stmt and trace_stmt.is_initial_frame_stmt():
             while len(self.call_stack) > 0:
                 # potentially necessary if tracing was disabled
                 self.call_stack.pop()

@@ -357,9 +357,15 @@ class DataflowTracer(StackFrameManager):
         # mess with when an 'after_stmt' gets emitted, and anyway
         # these should be pushed / popped appropriately by ast events
 
+    def _deactivate_guards(self) -> None:
+        for guard in self.guards_pending_deactivation:
+            self.deactivate_guard(guard)
+        self.guards_pending_deactivation.clear()
+
     def finish_cell_hook(self) -> None:
         for stmt in self.traced_statements.values():
             stmt.mark_finished()
+        self._deactivate_guards()
 
     def _handle_call_transition(self, trace_stmt: Statement, frame: FrameType):
         if (
@@ -1498,9 +1504,7 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.before_stmt)
     def before_stmt(self, _ret: None, stmt_id: int, frame: FrameType, *_, **__) -> None:
-        for guard in self.guards_pending_deactivation:
-            self.deactivate_guard(guard)
-        self.guards_pending_deactivation.clear()
+        self._deactivate_guards()
         self.next_stmt_node_id = stmt_id
         trace_stmt = self._get_or_make_trace_stmt(
             cast(ast.stmt, self.ast_node_by_id[stmt_id]), frame=frame

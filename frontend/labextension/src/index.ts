@@ -75,7 +75,6 @@ class IpyflowSessionState {
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
   lastCellMetadataMap: CellMetadataMap | null = null;
-  deferredCommand: { command: any; args: any[] } | null = null;
 
   gatherCellMetadataAndContent() {
     const cell_metadata_by_id: CellMetadataMap = {};
@@ -227,6 +226,7 @@ type IpyflowState = {
 };
 
 const ipyflowState: IpyflowState = {};
+let deferredCommand: { command: any; args: any[] } | null = null;
 
 function initSessionState(session_id: string): void {
   ipyflowState[session_id] = new IpyflowSessionState();
@@ -453,12 +453,13 @@ const extension: JupyterFrontEndPlugin<void> = {
     ].forEach(([command, exec, commandId]) => {
       command.execute = (...args: any[]) => {
         const state = getIpyflowState();
-        const kernel =
-          notebooks.currentWidget.sessionContext.session.kernel.name;
+        const nbpanel = notebooks.currentWidget;
+        const notebook = nbpanel.content;
+        const kernel = nbpanel.sessionContext.session.kernel.name;
         if (kernel === 'ipyflow' && !(state?.isIpyflowCommConnected ?? false)) {
-          state.deferredCommand = { command, args };
-          for (const cell of state.notebook.widgets) {
-            if (state.notebook.isSelectedOrActive(cell)) {
+          deferredCommand = { command, args };
+          for (const cell of notebook.widgets) {
+            if (notebook.isSelectedOrActive(cell)) {
               cell.setPrompt('*');
             }
           }
@@ -1102,9 +1103,9 @@ const connectToComm = (
       state.lastExecutionHighlights = payload.highlights as Highlights;
       const lastExecutedCellId = payload.last_executed_cell_id as string;
       state.executedReactiveReadyCells.add(lastExecutedCellId);
-      if (state.deferredCommand !== null) {
-        const { command, args } = state.deferredCommand;
-        state.deferredCommand = null;
+      if (deferredCommand !== null) {
+        const { command, args } = deferredCommand;
+        deferredCommand = null;
         command.execute.call(command, args);
         return;
       }

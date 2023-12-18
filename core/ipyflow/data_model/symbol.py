@@ -790,7 +790,7 @@ class Symbol:
         logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
             seen_def_args.add(def_arg.arg)
-            sym = self.call_scope.upsert_symbol_for_name(
+            self.call_scope.upsert_symbol_for_name(
                 def_arg.arg,
                 call_frame.f_locals.get(def_arg.arg),
                 deps,
@@ -964,9 +964,8 @@ class Symbol:
                 # rationale: if this is a mutation for which we have more precise information,
                 # then we don't need to update the ns descendents as this will already have happened.
                 # also don't update ns descendents for things like `a = b`
-                refresh_descendent_namespaces=not (
-                    mutated and not propagate_to_namespace_descendents
-                )
+                refresh_descendent_namespaces=propagate
+                and not (mutated and not propagate_to_namespace_descendents)
                 and not self._is_underscore_or_simple_assign(new_deps),
                 refresh_namespace_waiting=not mutated,
             )

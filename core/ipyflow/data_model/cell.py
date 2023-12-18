@@ -295,18 +295,19 @@ class Cell(SliceableMixin):
         for _ in SlicingContext.iter_slicing_contexts():
             for edges in self.parents.values():
                 for sym in edges:
-                    if sym.timestamp.cell_num == self.cell_ctr:
+                    sym_ts = sym.timestamp
+                    if sym_ts.cell_num == self.cell_ctr:
                         continue
                     elif (
                         not sym.is_user_accessible or not sym.containing_scope.is_global
                     ):
                         continue
-                    elif sym.timestamp.cell_num > self.cell_ctr:
+                    elif sym_ts.cell_num > self.cell_ctr:
                         return
                     if sym not in inputs:
                         inputs[sym] = MemoizedInput(
                             sym,
-                            sym.timestamp,
+                            sym_ts,
                             sym.memoize_timestamp,
                             sym.obj_id,
                             sym.make_memoize_comparable()[0],

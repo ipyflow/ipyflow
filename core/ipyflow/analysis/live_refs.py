@@ -396,7 +396,10 @@ def get_live_symbols_and_cells_for_references(
         live_cells,
         unresolved_from_calls,
     ) = _compute_call_chain_live_symbols_and_cells(
-        called_syms, cell_ctr, update_liveness_time_versions
+        live_with_stmt_ctr=called_syms,
+        cell_ctr=cell_ctr,
+        update_liveness_time_versions=update_liveness_time_versions,
+        add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
     )
     live_symbols |= live_from_calls
     unresolved_live_refs |= unresolved_from_calls
@@ -407,6 +410,7 @@ def _compute_call_chain_live_symbols_and_cells(
     live_with_stmt_ctr: Set[Tuple[ResolvedSymbol, int]],
     cell_ctr: int,
     update_liveness_time_versions: bool,
+    add_data_dep_only_if_parent_new: bool,
 ) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
     seen: Set[Tuple[ResolvedSymbol, int]] = set()
     worklist: List[Tuple[ResolvedSymbol, int]] = list(live_with_stmt_ctr)
@@ -457,12 +461,12 @@ def _compute_call_chain_live_symbols_and_cells(
                 if not resolved.is_unsafe:
                     live.add(resolved)
                 if update_liveness_time_versions:
-                    ts_to_use = (
-                        resolved.dsym.timestamp
-                        if resolved.is_last
-                        else resolved.dsym.timestamp_excluding_ns_descendents
+                    resolved.update_usage_info(
+                        used_time=used_time,
+                        exclude_ns=not resolved.is_last,
+                        is_static=True,
+                        add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
                     )
-                    resolved.dsym.timestamp_by_liveness_time[used_time] = ts_to_use
             if not did_resolve:
                 unresolved.add(symbol_ref)
     return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}, unresolved

@@ -671,9 +671,10 @@ class NotebookFlow(singletons.NotebookFlow):
         is_reactively_executing = request.get("is_reactively_executing", False)
         if self.active_cell_id is None:
             self.set_active_cell(request.get("executed_cell_id"))
-            prev_cell = cells().current_cell()
-            if prev_cell.is_placeholder_id:
-                prev_cell.update_id(self.active_cell_id)
+            if self.active_cell_id is not None:
+                prev_cell = cells().current_cell()
+                if prev_cell.is_placeholder_id:
+                    prev_cell.update_id(self.active_cell_id)
         if notify_content_changed and request.get("notify_content_changed", True):
             self.handle_notify_content_changed(
                 request, is_reactively_executing=is_reactively_executing

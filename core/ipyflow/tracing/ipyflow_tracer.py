@@ -108,11 +108,10 @@ class StackFrameManager(SingletonBaseTracer):
         self.external_call_depth = 0
 
     def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
-        # TODO: the thread check should be its own pyccolo hook, and we
-        #  should also provide a way to prevent threads from running on instrumented ASTs
         return threading.current_thread().ident == _main_thread_id
 
     def multiple_threads_allowed(self) -> bool:
+        # TODO: we should also provide a way to prevent threads from running on instrumented ASTs
         return False
 
     @pyc.register_raw_handler((pyc.call, pyc.return_))
@@ -264,29 +263,6 @@ class DataflowTracer(StackFrameManager):
             )
         except Exception:
             pass
-
-    @classmethod
-    def is_initial_frame_stmt(cls, node_or_id):
-        # TODO: this should be exposed in pyccolo
-        node_id = node_or_id if isinstance(node_or_id, int) else id(node_or_id)
-        containing_stmt = cls.containing_stmt_by_id.get(node_id, None)
-        parent_stmt = cls.parent_stmt_by_id.get(
-            node_id if containing_stmt is None else id(containing_stmt), None
-        )
-        outer_stmts_to_consider = (
-            ast.If,
-            ast.Try,
-            ast.With,
-            ast.AsyncWith,
-            ast.For,
-            ast.AsyncFor,
-            ast.While,
-        )
-        while parent_stmt is not None and isinstance(
-            parent_stmt, outer_stmts_to_consider
-        ):
-            parent_stmt = cls.parent_stmt_by_id.get(id(parent_stmt), None)
-        return parent_stmt is None or isinstance(parent_stmt, ast.Module)
 
     @contextmanager
     def dataflow_tracing_disabled(self) -> Generator[None, None, None]:

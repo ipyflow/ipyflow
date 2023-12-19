@@ -58,7 +58,10 @@ def resolve_external_call(
     if isinstance(caller_self, ModuleType):
         caller_self = None
 
-    external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method)
+    try:
+        external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method)
+    except TypeError:
+        return None
     if (
         external_call_type is None
         and caller_self is not None

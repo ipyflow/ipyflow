@@ -122,7 +122,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             if not isinstance(tracer, (ModuleIniter, StackFrameManager)) or isinstance(
                 tracer, DataflowTracer
             ):
-                tracer.__class__.file_passes_filter_for_event = (
+                tracer.__class__.file_passes_filter_for_event = (  # type: ignore
                     lambda *args: tracer.__class__ in self.registered_tracers
                     and orig_passes_filter(*args)
                 )

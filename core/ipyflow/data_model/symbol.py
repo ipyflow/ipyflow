@@ -1306,9 +1306,10 @@ class Symbol:
     ) -> Tuple[Any, Optional[Callable[[Any, Any], bool]], int]:
         if isinstance(obj, (bool, bytes, bytearray, int, float, str)):
             return obj, cls._equal, 1
-        if id(obj) in seen_ids:
-            return cls.NULL, None, -1
-        seen_ids.add(id(obj))
+        if not isinstance(obj, tuple):
+            if id(obj) in seen_ids:
+                return cls.NULL, None, -1
+            seen_ids.add(id(obj))
         if isinstance(obj, (dict, frozenset, list, set, tuple)):
             size = 0
             comp = []

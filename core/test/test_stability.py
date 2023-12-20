@@ -202,6 +202,22 @@ def test_reactive_modifiers_dont_happen_inside_strings():
     run_cell("assert len(x) == 11")
 
 
+def test_threading():
+    run_cell(
+        """
+        from threading import Thread
+        x = 0
+        def foo():
+            global x
+            x = 42
+        t = Thread(target=foo)
+        t.start()
+        t.join()
+        """
+    )
+    run_cell("assert x == 42")
+
+
 if sys.version_info >= (3, 8):
 
     def test_reactive_variable_does_not_break():

@@ -5,7 +5,6 @@ import logging
 import re
 import symtable
 import sys
-import threading
 from collections import defaultdict
 from contextlib import contextmanager
 from types import FrameType, ModuleType
@@ -98,17 +97,11 @@ class ModuleIniter(pyc.BaseTracer):
         return False
 
 
-_main_thread_id = threading.main_thread().ident
-
-
 class StackFrameManager(SingletonBaseTracer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.call_depth = 0
         self.external_call_depth = 0
-
-    def file_passes_filter_for_event(self, evt: str, filename: str) -> bool:
-        return threading.current_thread().ident == _main_thread_id
 
     def multiple_threads_allowed(self) -> bool:
         # TODO: we should also provide a way to prevent threads from running on instrumented ASTs

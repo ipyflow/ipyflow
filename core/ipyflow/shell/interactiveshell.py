@@ -17,7 +17,6 @@ from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
-from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
     DataflowTracer,

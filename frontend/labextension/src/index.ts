@@ -178,7 +178,8 @@ class IpyflowSessionState {
       (closure.size > prevClosureSize ||
         !this.executedCells.has(cellId) ||
         this.readyCells.has(cellId) ||
-        this.waitingCells.has(cellId))
+        this.waitingCells.has(cellId) ||
+        this.dirtyCells.has(cellId))
     ) {
       closure.add(cellId);
     }

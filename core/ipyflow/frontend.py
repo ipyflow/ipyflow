@@ -243,7 +243,10 @@ class FrontendCheckerResult(NamedTuple):
                             sym.timestamp.cell_num for sym in syms
                         }:
                             is_ready = True
-                            if par.cell_ctr >= flow_.min_new_ready_cell_counter():
+                            if (
+                                par.cell_ctr >= flow_.min_new_ready_cell_counter()
+                                and cell.cell_ctr > 0
+                            ):
                                 is_new_ready = True
                                 break
         if not is_new_ready and (
@@ -259,7 +262,10 @@ class FrontendCheckerResult(NamedTuple):
             )
             if max_used_live_sym_ctr > max(cell.cell_ctr, flow_.min_timestamp):
                 is_ready = True
-                if max_used_live_sym_ctr >= flow_.min_new_ready_cell_counter():
+                if (
+                    cell.cell_ctr > 0
+                    and max_used_live_sym_ctr >= flow_.min_new_ready_cell_counter()
+                ):
                     is_new_ready = True
         return is_ready, is_new_ready
 
@@ -317,7 +323,7 @@ class FrontendCheckerResult(NamedTuple):
         is_ready, is_new_ready = self._compute_readiness(cell, checker_result)
         if is_ready:
             self.ready_cells.add(cell_id)
-        was_ready = cells().from_id(cell_id).set_ready(is_ready)
+        was_ready = cell.set_ready(is_ready)
         if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
             if (
                 last_executed_cell_pos is not None
@@ -327,7 +333,8 @@ class FrontendCheckerResult(NamedTuple):
                 # it is not reactively executed
                 return checker_result
         if is_new_ready or (
-            not was_ready
+            cell.cell_ctr > 0
+            and not was_ready
             and is_ready
             and flow_.cell_counter() >= flow_.min_new_ready_cell_counter()
         ):

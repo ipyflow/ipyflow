@@ -415,11 +415,16 @@ class SymbolRef(CommonEqualityMixin):
 
 class LiveSymbolRef(CommonEqualityMixin):
     def __init__(
-        self, ref: SymbolRef, timestamp: int, is_lhs_ref: bool = False
+        self,
+        ref: SymbolRef,
+        timestamp: int,
+        is_lhs_ref: bool = False,
+        is_killed: bool = False,
     ) -> None:
         self.ref = ref
         self.timestamp = timestamp
         self.is_lhs_ref = is_lhs_ref
+        self.is_killed = is_killed
 
     @classmethod
     def from_string(cls, symbol_str: str, **kwargs) -> "LiveSymbolRef":
@@ -458,6 +463,7 @@ class LiveSymbolRef(CommonEqualityMixin):
             yield_all_intermediate_symbols=yield_all_intermediate_symbols,
         ):
             resolved_sym.is_lhs_ref = self.is_lhs_ref
+            resolved_sym.is_killed = self.is_killed
             resolved_sym.liveness_timestamp = Timestamp(cell_ctr, self.timestamp)
             blocking_seen = blocking_seen or resolved_sym.is_blocking
             if blocking_seen and not resolved_sym.is_blocking:

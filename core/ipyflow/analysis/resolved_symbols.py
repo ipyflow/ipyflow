@@ -25,12 +25,14 @@ class ResolvedSymbol(CommonEqualityMixin):
         next_atom: Optional["Atom"],
         liveness_timestamp: Optional[Timestamp] = None,
         is_lhs_ref: bool = False,
+        is_killed: bool = False,
     ) -> None:
         self.dsym = dsym
         self.atom = atom
         self.next_atom = next_atom
         self.liveness_timestamp = liveness_timestamp
         self.is_lhs_ref = is_lhs_ref
+        self.is_killed = is_killed
 
     def update_usage_info(self, *args, **kwargs) -> None:
         kwargs["is_blocking"] = kwargs.get("is_blocking", self.is_blocking)
@@ -49,6 +51,7 @@ class ResolvedSymbol(CommonEqualityMixin):
                 self.next_atom,
                 self.liveness_timestamp,
                 self.is_lhs_ref,
+                self.is_killed,
             )
         )
 
@@ -100,7 +103,7 @@ class ResolvedSymbol(CommonEqualityMixin):
 
     @property
     def is_dead(self) -> bool:
-        return self.liveness_timestamp is None
+        return self.liveness_timestamp is None or self.is_killed
 
     @property
     def is_live(self) -> bool:

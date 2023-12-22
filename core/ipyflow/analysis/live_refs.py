@@ -33,21 +33,22 @@ class ComputeLiveSymbolRefs(
     SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
 ):
     def __init__(
-        self, scope: Optional["Scope"] = None, init_killed: Optional[Set[str]] = None
+        self,
+        scope: Optional["Scope"] = None,
+        init_killed: Optional[Set[str]] = None,
+        include_killed_live: bool = False,
     ) -> None:
         self._scope = scope
         self._module_stmt_counter = 0
         # live symbols also include the stmt counter of when they were live, for slicing purposes later
         self.live: Set[LiveSymbolRef] = set()
-        if init_killed is None:
-            self.dead: Set[SymbolRef] = set()
-        else:
-            self.dead = {SymbolRef.from_string(killed) for killed in init_killed}
+        self.dead = {SymbolRef.from_string(killed) for killed in init_killed or set()}
         # TODO: use the ast context instead of hacking our own (e.g. ast.Load(), ast.Store(), etc.)
         self._in_kill_context = False
         self._inside_attrsub = False
         self._skip_simple_names = False
         self._is_lhs = False
+        self._include_killed_live = include_killed_live
 
     def __call__(self, node: ast.AST) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
         """
@@ -83,20 +84,27 @@ class ComputeLiveSymbolRefs(
         return self.push_attributes(_inside_attrsub=inside, _skip_simple_names=inside)
 
     def _add_attrsub_to_live_if_eligible(self, ref: SymbolRef) -> None:
-        if ref.nonreactive() in self.dead:
+        is_killed = ref.nonreactive() in self.dead
+        if is_killed and not self._include_killed_live:
             return
         if len(ref.chain) == 0:
             # can happen if user made syntax error like [1, 2, 3][4, 5, 6] (e.g. forgot comma)
             return
         leading_atom = ref.chain[0]
         if isinstance(leading_atom.value, str):
-            if (
+            is_killed = is_killed or (
                 SymbolRef(leading_atom.nonreactive()) in self.dead
                 or SymbolRef(Atom(leading_atom.value, is_callpoint=False)) in self.dead
-            ):
+            )
+            if is_killed and not self._include_killed_live:
                 return
             self.live.add(
-                LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)
+                LiveSymbolRef(
+                    ref,
+                    self._module_stmt_counter,
+                    is_lhs_ref=self._is_lhs,
+                    is_killed=is_killed,
+                )
             )
 
     # the idea behind this one is that we don't treat a symbol as dead
@@ -225,11 +233,19 @@ class ComputeLiveSymbolRefs(
         ref = SymbolRef(node)
         if self._in_kill_context:
             self.dead.add(ref.nonreactive())
-        elif not self._skip_simple_names and ref not in self.dead:
+        elif not self._skip_simple_names:
+            is_killed = ref in self.dead
+            if is_killed and not self._include_killed_live:
+                return
             if id(node) in tracer().reactive_node_ids:
                 ref.chain[0].is_reactive = True
             self.live.add(
-                LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)
+                LiveSymbolRef(
+                    ref,
+                    self._module_stmt_counter,
+                    is_lhs_ref=self._is_lhs,
+                    is_killed=is_killed,
+                )
             )
 
     def visit_Tuple_or_List(self, node: Union[ast.List, ast.Tuple]) -> None:
@@ -320,9 +336,17 @@ class ComputeLiveSymbolRefs(
         ref = SymbolRef(node.arg)
         if self._in_kill_context:
             self.dead.add(ref.nonreactive())
-        elif not self._skip_simple_names and ref not in self.dead:
+        elif not self._skip_simple_names:
+            is_killed = ref in self.dead
+            if is_killed and not self._include_killed_live:
+                return
             self.live.add(
-                LiveSymbolRef(ref, self._module_stmt_counter, is_lhs_ref=self._is_lhs)
+                LiveSymbolRef(
+                    ref,
+                    self._module_stmt_counter,
+                    is_lhs_ref=self._is_lhs,
+                    is_killed=is_killed,
+                )
             )
 
     def visit_Module(self, node: ast.Module) -> None:
@@ -376,8 +400,14 @@ def get_live_symbols_and_cells_for_references(
             yield_all_intermediate_symbols=True,
             cell_ctr=cell_ctr,
         ):
+            if (
+                live_symbol_ref.is_killed
+                and resolved.dsym.timestamp_excluding_ns_descendents.cell_num
+                != cell_ctr
+            ):
+                continue
             did_resolve = True
-            if update_liveness_time_versions:
+            if update_liveness_time_versions and not live_symbol_ref.is_killed:
                 liveness_time = resolved.liveness_timestamp
                 resolved.update_usage_info(
                     used_time=liveness_time,
@@ -387,9 +417,9 @@ def get_live_symbols_and_cells_for_references(
                 )
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))
-            if not resolved.is_unsafe:
+            if resolved.is_live and not resolved.is_unsafe:
                 live_symbols.add(resolved)
-        if not did_resolve:
+        if not did_resolve and not live_symbol_ref.is_killed:
             unresolved_live_refs.add(live_symbol_ref)
     (
         live_from_calls,
@@ -429,11 +459,12 @@ def _compute_call_chain_live_symbols_and_cells(
         live_refs, _ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_sym.dsym.func_def_stmt).body,
             init_killed=init_killed,
+            include_killed_live=cell_ctr > 0,
         )
         used_time = Timestamp(cell_ctr, stmt_ctr)
         for symbol_ref in live_refs:
             chain = symbol_ref.ref.chain
-            if len(chain) >= 1:
+            if len(chain) >= 1 and not symbol_ref.is_killed:
                 atom = chain[0].value
                 did_resolve = isinstance(atom, str) and (
                     atom in init_killed
@@ -445,6 +476,12 @@ def _compute_call_chain_live_symbols_and_cells(
             for resolved in symbol_ref.gen_resolved_symbols(
                 called_sym.dsym.call_scope, only_yield_final_symbol=False
             ):
+                if (
+                    symbol_ref.is_killed
+                    and resolved.dsym.timestamp_excluding_ns_descendents.cell_num
+                    != cell_ctr
+                ):
+                    continue
                 # FIXME: kind of hacky
                 resolved.atom.is_cascading_reactive = (
                     resolved.atom.is_cascading_reactive
@@ -458,24 +495,29 @@ def _compute_call_chain_live_symbols_and_cells(
                     worklist.append((resolved, stmt_ctr))
                 if resolved.dsym.is_anonymous:
                     continue
-                if not resolved.is_unsafe:
+                if resolved.is_live and not resolved.is_unsafe:
                     live.add(resolved)
-                if update_liveness_time_versions:
+                if update_liveness_time_versions and not symbol_ref.is_killed:
                     resolved.update_usage_info(
                         used_time=used_time,
                         exclude_ns=not resolved.is_last,
                         is_static=True,
                         add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
                     )
-            if not did_resolve:
+            if not did_resolve and not symbol_ref.is_killed:
                 unresolved.add(symbol_ref)
-    return live, {called_dsym.timestamp.cell_num for called_dsym, _ in seen}, unresolved
+    return (
+        live,
+        {called.timestamp.cell_num for called, _ in seen if called.is_live},
+        unresolved,
+    )
 
 
 def compute_live_dead_symbol_refs(
     code: Union[ast.AST, List[ast.stmt], str],
     scope: "Scope" = None,
     init_killed: Optional[Set[str]] = None,
+    include_killed_live: bool = False,
 ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
     if init_killed is None:
         init_killed = set()
@@ -483,13 +525,17 @@ def compute_live_dead_symbol_refs(
         code = ast.parse(code)
     elif isinstance(code, list):
         code = ast.Module(code)
-    return ComputeLiveSymbolRefs(scope=scope, init_killed=init_killed)(code)
+    return ComputeLiveSymbolRefs(
+        scope=scope, init_killed=init_killed, include_killed_live=include_killed_live
+    )(code)
 
 
 def static_resolve_rvals(
     code: Union[ast.AST, str], cell_ctr: int = -1, scope: Optional["Scope"] = None
 ) -> Set[ResolvedSymbol]:
-    live_refs, *_ = compute_live_dead_symbol_refs(code)
+    live_refs, *_ = compute_live_dead_symbol_refs(
+        code, include_killed_live=cell_ctr > 0
+    )
     resolved_live_syms, *_ = get_live_symbols_and_cells_for_references(
         live_refs, scope or flow().global_scope, cell_ctr=cell_ctr
     )

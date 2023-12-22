@@ -592,7 +592,7 @@ class Statement(SliceableMixin):
                     is_subscript,
                     excluded_deps,
                 ) = tracer().resolve_store_data_for_target(target, self.frame)
-                scope.upsert_symbol_for_name(
+                sym = scope.upsert_symbol_for_name(
                     name,
                     obj,
                     rval_deps - excluded_deps,

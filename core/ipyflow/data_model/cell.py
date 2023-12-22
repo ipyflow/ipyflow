@@ -645,7 +645,9 @@ class Cell(SliceableMixin):
         dead_symbol_refs: Set[SymbolRef] = set()
         if self.override_live_refs is None and self.override_dead_refs is None:
             live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(
-                self.to_ast(), scope=flow().global_scope
+                self.to_ast(),
+                scope=flow().global_scope,
+                include_killed_live=self.cell_ctr > 0,
             )
         else:
             if self.override_live_refs is not None:

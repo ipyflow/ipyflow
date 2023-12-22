@@ -95,6 +95,9 @@ class Timestamp(NamedTuple):
             )
         return tuple(self._asdict().values()) == tuple(other._asdict().values())
 
+    def __ne__(self, other) -> bool:
+        return not self == other
+
     @classmethod
     def update_usage_info(
         cls,

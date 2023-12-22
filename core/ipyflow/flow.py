@@ -519,6 +519,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 continue
             prev_content = cell.current_content
             is_same_content = prev_content == content
+            is_same_counter = cell.cell_ctr == cell.last_check_cell_ctr
             try:
                 cell.current_content = content
                 cell.to_ast()
@@ -527,15 +528,20 @@ class NotebookFlow(singletons.NotebookFlow):
                     pid: set(sym_edges)
                     for pid, sym_edges in cell.static_parents.items()
                 }
-                if not is_same_content:
+                if not is_same_content or (
+                    cell.last_check_cell_ctr is not None and not is_same_counter
+                ):
                     with static_slicing_context():
                         for pid, sym_edges in prev_static_parents.items():
                             cell.remove_parent_edges(pid, sym_edges)
                 cell.check_and_resolve_symbols(
                     update_liveness_time_versions=True,
-                    add_data_dep_only_if_parent_new=is_same_content,
+                    add_data_dep_only_if_parent_new=is_same_content and is_same_counter,
                 )
-                if not is_same_content:
+                cell.last_check_cell_ctr = cell.cell_ctr
+                if not is_same_content or (
+                    cell.last_check_cell_ctr is not None and not is_same_counter
+                ):
                     with dynamic_slicing_context():
                         for pid, sym_edges in prev_static_parents.items():
                             cell.remove_parent_edges(

@@ -87,6 +87,7 @@ class Cell(SliceableMixin):
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
+        self.last_check_cell_ctr: Optional[int] = None
         self.error_in_exec: Optional[BaseException] = None
         self.history: List[int] = [cell_ctr] if cell_ctr > -1 else []
         self.executed_content: Optional[str] = None

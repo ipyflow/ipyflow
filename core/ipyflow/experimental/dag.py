@@ -68,15 +68,15 @@ def create_dag_metadata() -> (
     )
     for cell_num in all_relevant_cells:
         cell_imports = [
-            dsym.get_import_string() for dsym in cell_num_to_used_imports[cell_num]
+            sym.get_import_string() for sym in cell_num_to_used_imports[cell_num]
         ]
         input_symbols = {
-            str(dsym): {"type": dsym.get_type_annotation_string()}
-            for dsym in cell_num_to_inputs[cell_num]
+            str(sym): {"type": sym.get_type_annotation_string()}
+            for sym in cell_num_to_inputs[cell_num]
         }
         output_symbols = {
-            str(dsym): {"type": dsym.get_type_annotation_string()}
-            for dsym in cell_num_to_outputs[cell_num]
+            str(sym): {"type": sym.get_type_annotation_string()}
+            for sym in cell_num_to_outputs[cell_num]
         }
         parent_cells = list(cell_num_to_cell_parents[cell_num])
         child_cells = list(cell_num_to_cell_children[cell_num])

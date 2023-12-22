@@ -297,7 +297,7 @@ class FrontendCheckerResult(NamedTuple):
                     self.unsafe_order_cells[cell_id].add(updated_cell)
         if flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED:
             waiting_symbols = {
-                sym.dsym
+                sym.sym
                 for sym in checker_result.live
                 if sym.is_waiting_at_position(cell.position)
             }

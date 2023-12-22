@@ -46,7 +46,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
     function_or_method: Any = None
     args: List["ExternalCallArgument"] = None
     kwargs: Dict[str, "ExternalCallArgument"] = None
-    _arg_dsyms: Optional[Set["Symbol"]] = None
+    _arg_syms: Optional[Set["Symbol"]] = None
     return_value: Any = not_yet_defined
     stmt_node: ast.stmt = None
 
@@ -92,7 +92,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.function_or_method = function_or_method
         self.args: List["ExternalCallArgument"] = []
         self.kwargs: Dict[str, "ExternalCallArgument"] = {}
-        self._arg_dsyms: Optional[Set["Symbol"]] = None
+        self._arg_syms: Optional[Set["Symbol"]] = None
         self.return_value: Any = self.not_yet_defined
         self.call_node = call_node
         self.stmt_node = tracer().prev_trace_stmt_in_cur_frame.stmt_node
@@ -105,12 +105,12 @@ class ExternalCallHandler(metaclass=HasGetitem):
         return None if self.caller_self is None else id(self.caller_self)
 
     @property
-    def arg_dsyms(self) -> Set["Symbol"]:
-        if self._arg_dsyms is None:
-            self._arg_dsyms = set().union(
+    def arg_syms(self) -> Set["Symbol"]:
+        if self._arg_syms is None:
+            self._arg_syms = set().union(
                 *(arg[1] for arg in self.args + list(self.kwargs.values()))
             )
-        return self._arg_dsyms
+        return self._arg_syms
 
     def process_arg(self, arg: Any) -> None:
         pass
@@ -138,7 +138,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.return_value = return_value
 
     def _handle_impl(self) -> None:
-        Timestamp.update_usage_info(self.arg_dsyms)
+        Timestamp.update_usage_info(self.arg_syms)
         result = self.handle()
         if result is None or self.call_node is None:
             return
@@ -166,7 +166,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         Timestamp.update_usage_info(mutated_syms)
         for mutated_sym in mutated_syms:
             mutated_sym.update_deps(
-                self.arg_dsyms,
+                self.arg_syms,
                 overwrite=False,
                 mutated=True,
                 propagate_to_namespace_descendents=should_propagate,
@@ -225,16 +225,16 @@ class StandardMutation(ExternalCallHandler):
             if isinstance(first_arg_obj, (list, set, dict) + IMMUTABLE_PRIMITIVE_TYPES):
                 return
             depending_on_first_arg = []
-            for obj, dsyms in self.args[1:]:
-                filtered_dsyms = {
-                    dsym
-                    for dsym in dsyms
-                    if any(first_sym in dsym.parents for first_sym in first_arg_syms)
+            for obj, syms in self.args[1:]:
+                filtered_syms = {
+                    sym
+                    for sym in syms
+                    if any(first_sym in sym.parents for first_sym in first_arg_syms)
                 }
-                if len(filtered_dsyms) > 0:
-                    depending_on_first_arg.append((obj, filtered_dsyms))
+                if len(filtered_syms) > 0:
+                    depending_on_first_arg.append((obj, filtered_syms))
             self.args = [self.args[0]] + depending_on_first_arg
-            self._arg_dsyms = None
+            self._arg_syms = None
             ArgMutate.handle(self)  # type: ignore
 
 
@@ -247,7 +247,7 @@ class CallerUpsert(ExternalCallHandler):
     def handle(self) -> None:
         for module_sym in flow().aliases.get(id(self.caller_self), []):
             module_sym.update_deps(
-                self.arg_dsyms,
+                self.arg_syms,
                 overwrite=True,
                 propagate_to_namespace_descendents=True,
                 refresh=True,
@@ -264,7 +264,7 @@ class ModuleUpsert(ExternalCallHandler):
     def handle(self) -> None:
         for module_sym in flow().aliases.get(id(self.module), []):
             module_sym.update_deps(
-                self.arg_dsyms,
+                self.arg_syms,
                 overwrite=True,
                 propagate_to_namespace_descendents=True,
                 refresh=True,
@@ -283,8 +283,8 @@ class NamespaceClear(StandardMutation):
             return
         for name in sorted(
             (
-                dsym.name
-                for dsym in namespace.all_symbols_this_indentation(
+                sym.name
+                for sym in namespace.all_symbols_this_indentation(
                     exclude_class=True, is_subscript=True
                 )
             ),
@@ -299,7 +299,7 @@ class MutatingMethodEventNotYetImplemented(ExternalCallHandler):
 
 class ArgMutate(ExternalCallHandler):
     def handle(self) -> None:
-        for mutated_sym in self.arg_dsyms:
+        for mutated_sym in self.arg_syms:
             if mutated_sym is None or mutated_sym.is_anonymous:
                 continue
             # TODO: happens when module mutates args

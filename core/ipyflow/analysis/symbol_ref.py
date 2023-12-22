@@ -337,7 +337,7 @@ class SymbolRef(CommonEqualityMixin):
             yield_all_intermediate_symbols=True,
             yield_in_reverse=True,
         ):
-            return resolved.dsym
+            return resolved.sym
         return None
 
     @classmethod
@@ -366,13 +366,13 @@ class SymbolRef(CommonEqualityMixin):
     ) -> Generator[ResolvedSymbol, None, None]:
         assert not (only_yield_final_symbol and yield_all_intermediate_symbols)
         assert not (yield_in_reverse and not yield_all_intermediate_symbols)
-        dsym, atom, next_atom = None, None, None
+        sym, atom, next_atom = None, None, None
         reactive_seen = False
         cascading_reactive_seen = False
         blocking_seen = False
         if yield_in_reverse:
             gen: Iterable[Tuple["Symbol", Atom, Atom]] = [
-                (resolved.dsym, resolved.atom, resolved.next_atom)
+                (resolved.sym, resolved.atom, resolved.next_atom)
                 for resolved in self.gen_resolved_symbols(
                     scope,
                     only_yield_final_symbol=only_yield_final_symbol,
@@ -384,7 +384,7 @@ class SymbolRef(CommonEqualityMixin):
             cast(list, gen).reverse()
         else:
             gen = scope.gen_data_symbols_for_attrsub_chain(self)
-        for dsym, atom, next_atom in gen:
+        for sym, atom, next_atom in gen:
             reactive_seen = reactive_seen or atom.is_reactive
             cascading_reactive_seen = (
                 cascading_reactive_seen or atom.is_cascading_reactive
@@ -407,10 +407,10 @@ class SymbolRef(CommonEqualityMixin):
                 # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
                 #  Right now, yielding the intermediate elts of the chain will yield false positives in the
                 #  event of namespace stale children.
-                yield ResolvedSymbol(dsym, atom, next_atom)
-        if not yield_all_intermediate_symbols and dsym is not None:
+                yield ResolvedSymbol(sym, atom, next_atom)
+        if not yield_all_intermediate_symbols and sym is not None:
             if next_atom is None or not only_yield_final_symbol:
-                yield ResolvedSymbol(dsym, atom, next_atom)
+                yield ResolvedSymbol(sym, atom, next_atom)
 
 
 class LiveSymbolRef(CommonEqualityMixin):

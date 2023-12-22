@@ -40,17 +40,17 @@ def _mutate_argument(
     class MutateArgument(ExternalCallHandler):
         def handle(self) -> None:
             if name is not None and name in self.kwargs:
-                dsyms = self.kwargs[name][1]
+                syms = self.kwargs[name][1]
             elif pos is not None:
-                dsyms = self.args[pos][1] if pos < len(self.args) else {None}
+                syms = self.args[pos][1] if pos < len(self.args) else {None}
             else:
                 return
-            if len(dsyms) == 0:
+            if len(syms) == 0:
                 return
-            dsym = next(iter(dsyms))
-            if dsym is None:
+            sym = next(iter(syms))
+            if sym is None:
                 return
-            dsym.update_deps(set(), overwrite=overwrite, mutated=not overwrite)
+            sym.update_deps(set(), overwrite=overwrite, mutated=not overwrite)
 
     return MutateArgument
 

@@ -580,29 +580,29 @@ class Cell(SliceableMixin):
             min_allowed_cell_position_by_symbol = {}
             for _ in SlicingContext.iter_slicing_contexts():
                 for pid, syms in self.directional_parents.items():
-                    for dsym in syms:
-                        min_allowed_cell_position_by_symbol[dsym] = max(
-                            min_allowed_cell_position_by_symbol.get(dsym, -1),
+                    for sym in syms:
+                        min_allowed_cell_position_by_symbol[sym] = max(
+                            min_allowed_cell_position_by_symbol.get(sym, -1),
                             self.from_id(pid).position,
                         )
         with self._override_position_index_for_current_flow_semantics():
             max_used_cell_ctr = -1
             this_cell_pos = self.position
-            for sym in live_symbols:
-                if sym.is_blocking:
+            for resolved in live_symbols:
+                if resolved.is_blocking:
                     continue
-                if filter_to_cascading_reactive and not sym.is_cascading_reactive:
+                if filter_to_cascading_reactive and not resolved.is_cascading_reactive:
                     continue
                 if (
                     filter_to_reactive
-                    and not sym.is_reactive
-                    and not flow().is_updated_reactive(sym.dsym)
+                    and not resolved.is_reactive
+                    and not flow().is_updated_reactive(resolved.sym)
                 ):
                     continue
-                live_sym_updated_cell_ctr = sym.timestamp.cell_num
+                live_sym_updated_cell_ctr = resolved.timestamp.cell_num
                 if (
                     live_sym_updated_cell_ctr
-                    in self._used_cell_counters_by_live_symbol.get(sym.dsym, set())
+                    in self._used_cell_counters_by_live_symbol.get(resolved.sym, set())
                 ):
                     used_cell_position = self.at_timestamp(
                         live_sym_updated_cell_ctr
@@ -612,21 +612,21 @@ class Cell(SliceableMixin):
                             min_allowed_cell_position_by_symbol is None
                             or used_cell_position
                             >= min_allowed_cell_position_by_symbol.get(
-                                sym.dsym, cast(int, float("inf"))
+                                resolved.sym, cast(int, float("inf"))
                             )
                         ):
                             max_used_cell_ctr = max(
                                 max_used_cell_ctr,
                                 live_sym_updated_cell_ctr,
-                                sym.dsym._override_ready_liveness_cell_num,
+                                resolved.sym._override_ready_liveness_cell_num,
                             )
-            for symbol in dead_symbols or []:
-                if not symbol.is_import:
+            for sym in dead_symbols or []:
+                if not sym.is_import:
                     continue
                 try:
                     module_symbol = (
                         flow_.global_scope.lookup_data_symbol_by_qualified_name(
-                            symbol.imported_module
+                            sym.imported_module
                         )
                     )
                 except (ValueError, TypeError):
@@ -689,10 +689,10 @@ class Cell(SliceableMixin):
         )
         for resolved in live_resolved_symbols:
             if resolved.is_deep:
-                resolved.dsym.cells_where_deep_live.add(self)
+                resolved.sym.cells_where_deep_live.add(self)
             else:
-                resolved.dsym.cells_where_shallow_live.add(self)
-            self.add_used_cell_counter(resolved.dsym, resolved.timestamp.cell_num)
+                resolved.sym.cells_where_shallow_live.add(self)
+            self.add_used_cell_counter(resolved.sym, resolved.timestamp.cell_num)
         used_cells = {resolved.timestamp.cell_num for resolved in live_resolved_symbols}
         return CheckerResult(
             live=live_resolved_symbols,
@@ -725,7 +725,7 @@ class Cell(SliceableMixin):
             if self.at_timestamp(live_cell_num).is_current_for_id:
                 live_cell_counters.add(live_cell_num)
         live_cells = [self.at_timestamp(ctr) for ctr in sorted(live_cell_counters)]
-        top_level_symbols = {sym.dsym.get_top_level() for sym in live_symbols}
+        top_level_symbols = {sym.sym.get_top_level() for sym in live_symbols}
         top_level_symbols.discard(None)
         return "{type_declarations}\n\n{content}".format(
             type_declarations="\n".join(

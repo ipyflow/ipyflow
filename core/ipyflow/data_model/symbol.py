@@ -151,7 +151,7 @@ class Symbol:
         # The necessary last-updated timestamp / cell counter for this symbol to not be waiting
         self.required_timestamp: Timestamp = self.timestamp
 
-        # for each usage of this dsym, the version that was used, if different from the timestamp of usage
+        # for each usage of this sym, the version that was used, if different from the timestamp of usage
         self.timestamp_by_used_time: Dict[Timestamp, Timestamp] = {}
         self.used_node_by_used_time: Dict[Timestamp, ast.AST] = {}
         # History of definitions at time of liveness
@@ -281,8 +281,8 @@ class Symbol:
         if self in seen:
             return timestamps
         seen.add(self)
-        for dsym in ns.all_symbols_this_indentation():
-            timestamps |= dsym._compute_namespace_timestamps(
+        for sym in ns.all_symbols_this_indentation():
+            timestamps |= sym._compute_namespace_timestamps(
                 seen=seen, version_ubound=version_ubound
             )
         return timestamps
@@ -954,8 +954,7 @@ class Symbol:
             flow_.updated_deep_reactive_symbols.discard(self)
         if is_cascading_reactive is not None:
             is_cascading_reactive = is_cascading_reactive or any(
-                dsym.is_cascading_reactive_at_counter(prev_cell_ctr)
-                for dsym in new_deps
+                sym.is_cascading_reactive_at_counter(prev_cell_ctr) for sym in new_deps
             )
         if is_cascading_reactive:
             self.bump_cascading_reactive_cell_num()
@@ -1201,7 +1200,7 @@ class Symbol:
             seen.add(self)
             ns = self.namespace
             if ns is not None:
-                for dsym in ns.all_symbols_this_indentation(exclude_class=True):
+                for sym in ns.all_symbols_this_indentation(exclude_class=True):
                     # this is to handle cases like `x = x.mutate(42)`, where
                     # we could have changed some member of x but returned the
                     # original object -- in this case, just assume that all
@@ -1209,15 +1208,15 @@ class Symbol:
                     # this is likely the user intention. For an example, see
                     # `test_external_object_update_propagates_to_stale_namespace_symbols()`
                     # in `test_frontend_checker.py`
-                    if not dsym.is_waiting or refresh_namespace_waiting:
+                    if not sym.is_waiting or refresh_namespace_waiting:
                         # logger.error(
                         #     "refresh %s due to %s (value %s) via namespace %s",
-                        #     dsym.full_path,
+                        #     sym.full_path,
                         #     self.full_path,
                         #     self.obj,
                         #     ns.full_path,
                         # )
-                        dsym.refresh(
+                        sym.refresh(
                             refresh_descendent_namespaces=True,
                             timestamp=self.timestamp_excluding_ns_descendents,
                             take_timestamp_snapshots=False,

@@ -148,19 +148,19 @@ class Namespace(Scope):
 
     @property
     def is_subscript(self) -> bool:
-        dsym = flow().get_first_full_symbol(self.obj_id)
-        if dsym is None:
+        sym = flow().get_first_full_symbol(self.obj_id)
+        if sym is None:
             return False
         else:
-            return dsym.is_subscript
+            return sym.is_subscript
 
     def max_cascading_reactive_cell_num(self, seen: Set[Symbol]) -> int:
         return max(
             (
-                dsym.cascading_reactive_cell_num(
+                sym.cascading_reactive_cell_num(
                     seen=seen, consider_containing_symbols=False
                 )
-                for dsym in self.all_symbols_this_indentation()
+                for sym in self.all_symbols_this_indentation()
             ),
             default=-1,
         )
@@ -193,11 +193,11 @@ class Namespace(Scope):
     def fresh_copy(self, obj: Any) -> "Namespace":
         return Namespace(obj, self.scope_name, self.parent_scope)
 
-    def make_namespace_qualified_name(self, dsym: Symbol) -> str:
+    def make_namespace_qualified_name(self, sym: Symbol) -> str:
         path = self.full_namespace_path
-        name = str(dsym.name)
+        name = str(sym.name)
         if path:
-            if dsym.is_subscript or name.isdecimal():
+            if sym.is_subscript or name.isdecimal():
                 return f"{path}[{name}]"
             else:
                 return f"{path}.{name}"
@@ -281,14 +281,14 @@ class Namespace(Scope):
         self, name: SupportedIndexType, is_subscript: bool = False
     ) -> None:
         if is_subscript:
-            dsym = self._subscript_data_symbol_by_name.pop(name, None)
-            if dsym is None and name == -1 and isinstance(self.obj, list):
+            sym = self._subscript_data_symbol_by_name.pop(name, None)
+            if sym is None and name == -1 and isinstance(self.obj, list):
                 name = len(
                     self.obj
                 )  # it will have already been deleted, so don't subtract 1
-                dsym = self._subscript_data_symbol_by_name.pop(name, None)
-            if dsym is not None:
-                dsym.update_deps(set(), deleted=True)
+                sym = self._subscript_data_symbol_by_name.pop(name, None)
+            if sym is not None:
+                sym.update_deps(set(), deleted=True)
             if isinstance(self.obj, list) and isinstance(name, int):
                 self._shuffle_symbols_downward_to(name)
         else:
@@ -298,19 +298,19 @@ class Namespace(Scope):
         self, exclude_class=False, is_subscript=None
     ) -> Iterable[Symbol]:
         if is_subscript is None:
-            dsym_collections_to_chain: List[Iterable] = [
+            sym_collections_to_chain: List[Iterable] = [
                 self._symbol_by_name.values(),
                 self._subscript_data_symbol_by_name.values(),
             ]
         elif is_subscript:
-            dsym_collections_to_chain = [self._subscript_data_symbol_by_name.values()]
+            sym_collections_to_chain = [self._subscript_data_symbol_by_name.values()]
         else:
-            dsym_collections_to_chain = [self._symbol_by_name.values()]
+            sym_collections_to_chain = [self._symbol_by_name.values()]
         if self.cloned_from is not None and not exclude_class:
-            dsym_collections_to_chain.append(
+            sym_collections_to_chain.append(
                 self.cloned_from.all_symbols_this_indentation()
             )
-        return itertools.chain(*dsym_collections_to_chain)
+        return itertools.chain(*sym_collections_to_chain)
 
     def put(self, name: SupportedIndexType, val: Symbol) -> None:
         if val.is_subscript:
@@ -336,8 +336,8 @@ class Namespace(Scope):
         if ret is not None:
             return ret
         if obj_id in (
-            dsym.obj_id
-            for dsym in self.all_symbols_this_indentation(is_subscript=is_subscript)
+            sym.obj_id
+            for sym in self.all_symbols_this_indentation(is_subscript=is_subscript)
         ):
             return self
         else:
@@ -356,38 +356,38 @@ class Namespace(Scope):
             containing_ns = containing_ns.parent_scope  # type: ignore
 
     def transfer_symbols_to(self, new_ns: "Namespace") -> None:
-        for dsym in list(
+        for sym in list(
             self.all_symbols_this_indentation(exclude_class=True, is_subscript=False)
         ):
             try:
                 inner_obj = flow().retrieve_namespace_attr_or_sub(
-                    new_ns.obj, dsym.name, is_subscript=False
+                    new_ns.obj, sym.name, is_subscript=False
                 )
             except AttributeError:
                 continue
             except TypeError:
                 break
-            dsym.update_obj_ref(inner_obj)
-            logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
-            self._symbol_by_name.pop(dsym.name, None)
-            new_ns._symbol_by_name[dsym.name] = dsym
-            dsym.containing_scope = new_ns
-        for dsym in list(
+            sym.update_obj_ref(inner_obj)
+            logger.info("shuffle %s from %s to %s", sym, self, new_ns)
+            self._symbol_by_name.pop(sym.name, None)
+            new_ns._symbol_by_name[sym.name] = sym
+            sym.containing_scope = new_ns
+        for sym in list(
             self.all_symbols_this_indentation(exclude_class=True, is_subscript=True)
         ):
             try:
                 inner_obj = flow().retrieve_namespace_attr_or_sub(
-                    new_ns.obj, dsym.name, is_subscript=True
+                    new_ns.obj, sym.name, is_subscript=True
                 )
             except (IndexError, KeyError):
                 continue
             except TypeError:
                 break
-            dsym.update_obj_ref(inner_obj)
-            logger.info("shuffle %s from %s to %s", dsym, self, new_ns)
-            self._subscript_data_symbol_by_name.pop(dsym.name, None)
-            new_ns._subscript_data_symbol_by_name[dsym.name] = dsym
-            dsym.containing_scope = new_ns
+            sym.update_obj_ref(inner_obj)
+            logger.info("shuffle %s from %s to %s", sym, self, new_ns)
+            self._subscript_data_symbol_by_name.pop(sym.name, None)
+            new_ns._subscript_data_symbol_by_name[sym.name] = sym
+            sym.containing_scope = new_ns
 
 
 if len(_NamespaceContainer) == 0:

@@ -208,8 +208,8 @@ def test_list_insert():
     assert name == "lst[2]", "got %s" % name
     name = lookup_symbol(4).readable_name
     assert name == "lst[3]", "got %s" % name
-    dsym = lookup_symbol(3)
-    assert dsym is None
+    sym = lookup_symbol(3)
+    assert sym is None
     run_cell("lst.insert(3, 3)")
     sym_2 = lookup_symbol(2)
     assert sym_2.readable_name == "lst[2]", "got %s" % sym_2.readable_name

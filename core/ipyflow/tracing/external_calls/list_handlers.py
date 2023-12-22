@@ -33,7 +33,7 @@ class ListExtend(ListMethod):
             namespace.upsert_symbol_for_name(
                 upsert_pos,
                 namespace.obj[upsert_pos],
-                self.arg_dsyms,
+                self.arg_syms,
                 overwrite=False,
                 is_subscript=True,
                 propagate=False,
@@ -50,9 +50,9 @@ class ListInsert(ListMethod):
     def handle_namespace(self, namespace: "Namespace") -> None:
         if self.insert_pos is None or len(self.args) < 2:
             return
-        inserted_arg_obj, inserted_arg_dsyms = self.args[1]
+        inserted_arg_obj, inserted_arg_syms = self.args[1]
         inserted_syms = {
-            sym for sym in inserted_arg_dsyms if sym.obj is inserted_arg_obj
+            sym for sym in inserted_arg_syms if sym.obj is inserted_arg_obj
         }
         if len(inserted_syms) > 1:
             return

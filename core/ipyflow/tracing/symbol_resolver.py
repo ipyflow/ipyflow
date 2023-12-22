@@ -142,11 +142,11 @@ class ResolveRvalSymbols(
             ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
-            dsym = ns.lookup_data_symbol_by_name_this_indentation(
+            sym = ns.lookup_data_symbol_by_name_this_indentation(
                 node.attr, is_subscript=False
             )
-            if dsym is not None:
-                self._add_to_resolved([dsym], node)
+            if sym is not None:
+                self._add_to_resolved([sym], node)
         except Exception:
             logger.exception(
                 "Exception occurred while resolving node %s", ast.dump(node)
@@ -173,18 +173,18 @@ class ResolveRvalSymbols(
             ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
-            dsym = ns.lookup_data_symbol_by_name_this_indentation(
+            sym = ns.lookup_data_symbol_by_name_this_indentation(
                 slice, is_subscript=True
             )
-            if dsym is None and isinstance(slice, int) and slice < 0:
+            if sym is None and isinstance(slice, int) and slice < 0:
                 try:
-                    dsym = ns.lookup_data_symbol_by_name_this_indentation(
+                    sym = ns.lookup_data_symbol_by_name_this_indentation(
                         len(ns) + slice, is_subscript=True
                     )
                 except TypeError:
-                    dsym = None
-            if dsym is not None:
-                self._add_to_resolved([dsym], node)
+                    sym = None
+            if sym is not None:
+                self._add_to_resolved([sym], node)
         except Exception:
             logger.exception(
                 "Exception occurred while resolving node %s", ast.dump(node)
@@ -287,5 +287,5 @@ def resolve_rval_symbols(
         )
         if should_update_usage_info:
             Timestamp.update_usage_info(static_rval_symbols, used_node=node)
-        rval_symbols = {sym.dsym for sym in static_rval_symbols}
+        rval_symbols = {sym.sym for sym in static_rval_symbols}
     return rval_symbols

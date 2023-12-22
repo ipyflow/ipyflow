@@ -55,8 +55,8 @@ def deps(sym: Any) -> List[Symbol]:
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
-    dsym = _validate(sym)
-    return [dep for dep in dsym.parents.keys() if not dep.is_anonymous]
+    sym = _validate(sym)
+    return [dep for dep in sym.parents.keys() if not dep.is_anonymous]
 
 
 def users(sym: Any) -> List[Symbol]:
@@ -67,8 +67,8 @@ def users(sym: Any) -> List[Symbol]:
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
-    dsym = _validate(sym)
-    return [child for child in dsym.children.keys() if not child.is_anonymous]
+    sym = _validate(sym)
+    return [child for child in sym.children.keys() if not child.is_anonymous]
 
 
 def _traverse(sym: Symbol, seen: Set[Symbol], attr: str) -> None:
@@ -87,10 +87,10 @@ def rdeps(sym: Any) -> List[Symbol]:
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
-    dsym = _validate(sym)
+    sym = _validate(sym)
     seen: Set[Symbol] = set()
-    _traverse(dsym, seen, "parents")
-    return [v for v in (seen - {dsym}) if not v.is_anonymous]
+    _traverse(sym, seen, "parents")
+    return [v for v in (seen - {sym}) if not v.is_anonymous]
 
 
 def rusers(sym: Any) -> List[Symbol]:
@@ -101,10 +101,10 @@ def rusers(sym: Any) -> List[Symbol]:
     # See the `argument` handler in ipyflow_tracer for the
     # actual implementation; this is just a stub that ensures
     # that handler was able to find something.
-    dsym = _validate(sym)
+    sym = _validate(sym)
     seen: Set[Symbol] = set()
-    _traverse(dsym, seen, "children")
-    ret = [v for v in (seen - {dsym}) if not v.is_anonymous]
+    _traverse(sym, seen, "children")
+    ret = [v for v in (seen - {sym}) if not v.is_anonymous]
     return ret
 
 

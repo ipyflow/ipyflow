@@ -775,9 +775,9 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def handle_refresh_symbols(self, request) -> None:
         for symbol_str in request.get("symbols", []):
-            dsym = SymbolRef.resolve(symbol_str)
-            if dsym is not None:
-                dsym.refresh(take_timestamp_snapshots=False)
+            sym = SymbolRef.resolve(symbol_str)
+            if sym is not None:
+                sym.refresh(take_timestamp_snapshots=False)
         return None
 
     def handle_upsert_symbol(self, request) -> Optional[Dict[str, Any]]:

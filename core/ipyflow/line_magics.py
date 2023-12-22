@@ -217,20 +217,20 @@ def show_deps(symbol_str: str) -> Optional[str]:
     if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
         warn(usage)
         return None
-    dsym = SymbolRef.resolve(symbol_str)
-    if dsym is None:
+    sym = SymbolRef.resolve(symbol_str)
+    if sym is None:
         warn(
             f"Could not find symbol metadata for {symbol_str.strip()}",
         )
         return None
-    parents = {par for par in dsym.parents if par.is_user_accessible}
-    children = {child for child in dsym.children if child.is_user_accessible}
-    dsym_extra_info = f"defined cell: {dsym.defined_cell_num}; last updated cell: {dsym.timestamp.cell_num}"
-    if dsym.required_timestamp.is_initialized:
-        dsym_extra_info += f"; required: {dsym.required_timestamp.cell_num}"
+    parents = {par for par in sym.parents if par.is_user_accessible}
+    children = {child for child in sym.children if child.is_user_accessible}
+    sym_extra_info = f"defined cell: {sym.defined_cell_num}; last updated cell: {sym.timestamp.cell_num}"
+    if sym.required_timestamp.is_initialized:
+        sym_extra_info += f"; required: {sym.required_timestamp.cell_num}"
     return "Symbol {} ({}) is dependent on {} and is a parent of {}".format(
-        dsym.full_namespace_path,
-        dsym_extra_info,
+        sym.full_namespace_path,
+        sym_extra_info,
         parents or "nothing",
         children or "nothing",
     )
@@ -249,30 +249,30 @@ def get_code(symbol_str: str) -> Optional[str]:
     if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
         warn(usage)
         return None
-    dsym = SymbolRef.resolve(symbol_str)
-    if dsym is None:
+    sym = SymbolRef.resolve(symbol_str)
+    if sym is None:
         warn(
             f"Could not find unique symbol metadata for {symbol_str.strip()}",
         )
         return None
-    return str(dsym.code())
+    return str(sym.code())
 
 
 def show_waiting(line_: str) -> Optional[str]:
     usage = "Usage: %flow show_waiting [global|all]"
     line = line_.split()
     if len(line) == 0 or line[0] == "global":
-        dsym_sets: Iterable[Iterable[Symbol]] = [
+        sym_sets: Iterable[Iterable[Symbol]] = [
             flow().global_scope.all_symbols_this_indentation()
         ]
     elif line[0] == "all":
-        dsym_sets = flow().aliases.values()
+        sym_sets = flow().aliases.values()
     else:
         warn(usage)
         return None
     waiter_set = set()
-    for dsym_set in dsym_sets:
-        for data_sym in dsym_set:
+    for sym_set in sym_sets:
+        for data_sym in sym_set:
             if data_sym.is_waiting and not data_sym.is_anonymous:
                 waiter_set.add(data_sym)
     if not waiter_set:
@@ -475,9 +475,9 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
         tracer_cls = get_ipython().ns_table["user_global"].get(name, None)
         if tracer_cls is not None:
             return tracer_cls
-        dsyms = resolve_rval_symbols(name, should_update_usage_info=False)
-        if len(dsyms) == 1:
-            return next(iter(dsyms)).obj
+        syms = resolve_rval_symbols(name, should_update_usage_info=False)
+        if len(syms) == 1:
+            return next(iter(syms)).obj
         else:
             return None
 

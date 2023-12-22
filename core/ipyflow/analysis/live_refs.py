@@ -360,17 +360,17 @@ def get_symbols_for_references(
     symbol_refs: Iterable[SymbolRef],
     scope: "Scope",
 ) -> Tuple[Set["Symbol"], Set["Symbol"]]:
-    dsyms: Set[Symbol] = set()
-    called_dsyms: Set["Symbol"] = set()
+    syms: Set[Symbol] = set()
+    called_syms: Set["Symbol"] = set()
     for symbol_ref in symbol_refs:
         for resolved in symbol_ref.gen_resolved_symbols(
             scope, only_yield_final_symbol=True
         ):
             if resolved.is_called:
-                called_dsyms.add(resolved.dsym)
+                called_syms.add(resolved.sym)
             else:
-                dsyms.add(resolved.dsym)
-    return dsyms, called_dsyms
+                syms.add(resolved.sym)
+    return syms, called_syms
 
 
 def get_live_symbols_and_cells_for_references(
@@ -402,8 +402,7 @@ def get_live_symbols_and_cells_for_references(
         ):
             if (
                 live_symbol_ref.is_killed
-                and resolved.dsym.timestamp_excluding_ns_descendents.cell_num
-                != cell_ctr
+                and resolved.sym.timestamp_excluding_ns_descendents.cell_num != cell_ctr
             ):
                 continue
             did_resolve = True
@@ -452,12 +451,12 @@ def _compute_call_chain_live_symbols_and_cells(
             continue
         called_sym, stmt_ctr = workitem
         # TODO: handle callable classes
-        if called_sym.dsym.func_def_stmt is None:
+        if called_sym.sym.func_def_stmt is None:
             continue
         seen.add(workitem)
-        init_killed = {arg.arg for arg in called_sym.dsym.get_definition_args()}
+        init_killed = {arg.arg for arg in called_sym.sym.get_definition_args()}
         live_refs, _ = compute_live_dead_symbol_refs(
-            cast(ast.FunctionDef, called_sym.dsym.func_def_stmt).body,
+            cast(ast.FunctionDef, called_sym.sym.func_def_stmt).body,
             init_killed=init_killed,
             include_killed_live=cell_ctr > 0,
         )
@@ -474,11 +473,11 @@ def _compute_call_chain_live_symbols_and_cells(
             else:
                 did_resolve = False
             for resolved in symbol_ref.gen_resolved_symbols(
-                called_sym.dsym.call_scope, only_yield_final_symbol=False
+                called_sym.sym.call_scope, only_yield_final_symbol=False
             ):
                 if (
                     symbol_ref.is_killed
-                    and resolved.dsym.timestamp_excluding_ns_descendents.cell_num
+                    and resolved.sym.timestamp_excluding_ns_descendents.cell_num
                     != cell_ctr
                 ):
                     continue
@@ -493,7 +492,7 @@ def _compute_call_chain_live_symbols_and_cells(
                 did_resolve = True
                 if resolved.is_called:
                     worklist.append((resolved, stmt_ctr))
-                if resolved.dsym.is_anonymous:
+                if resolved.sym.is_anonymous:
                     continue
                 if resolved.is_live and not resolved.is_unsafe:
                     live.add(resolved)

@@ -147,16 +147,16 @@ class Scope:
         for i, atom in enumerate(symbol_ref.chain):
             is_last = i == len(symbol_ref.chain) - 1
             if atom.is_callpoint:
-                next_dsym = cur_scope.lookup_data_symbol_by_name(atom.value)
-                if next_dsym is not None:
-                    yield next_dsym, atom, None if is_last else symbol_ref.chain[i + 1]
+                next_sym = cur_scope.lookup_data_symbol_by_name(atom.value)
+                if next_sym is not None:
+                    yield next_sym, atom, None if is_last else symbol_ref.chain[i + 1]
                 break
-            next_dsym = cur_scope.lookup_data_symbol_by_name(atom.value)
-            if next_dsym is None:
+            next_sym = cur_scope.lookup_data_symbol_by_name(atom.value)
+            if next_sym is None:
                 break
             else:
-                yield next_dsym, atom, None if is_last else symbol_ref.chain[i + 1]
-            cur_scope = next_dsym.namespace
+                yield next_sym, atom, None if is_last else symbol_ref.chain[i + 1]
+            cur_scope = next_sym.namespace
             if cur_scope is None:
                 break
 
@@ -167,8 +167,8 @@ class Scope:
         Get most specific Symbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
         ret = None
-        for dsym, atom, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
-            ret = dsym, atom, next_atom
+        for sym, atom, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
+            ret = sym, atom, next_atom
         return ret
 
     @staticmethod
@@ -236,7 +236,7 @@ class Scope:
         deps = set(
             [] if deps is None else deps
         )  # make a copy since we mutate it (see below fixme)
-        dsym, prev_dsym, prev_obj = self._upsert_data_symbol_for_name_inner(
+        sym, prev_sym, prev_obj = self._upsert_data_symbol_for_name_inner(
             name,
             obj,
             deps,  # FIXME: this updates deps, which is super super hacky
@@ -245,7 +245,7 @@ class Scope:
             symbol_node=symbol_node,
             implicit=implicit,
         )
-        dsym.update_deps(
+        sym.update_deps(
             deps,
             prev_obj=prev_obj,
             overwrite=overwrite,
@@ -254,8 +254,8 @@ class Scope:
             is_cascading_reactive=is_cascading_reactive,
         )
         if tracer_initialized():
-            tracer().this_stmt_updated_symbols.add(dsym)
-        return dsym
+            tracer().this_stmt_updated_symbols.add(sym)
+        return sym
 
     def _upsert_data_symbol_for_name_inner(
         self,
@@ -268,32 +268,32 @@ class Scope:
         implicit: bool = False,
     ) -> Tuple[Symbol, Optional[Symbol], Optional[Any]]:
         prev_obj = None
-        prev_dsym = self.lookup_data_symbol_by_name_this_indentation(
+        prev_sym = self.lookup_data_symbol_by_name_this_indentation(
             name,
             is_subscript=symbol_type == SymbolType.SUBSCRIPT,
             skip_cloned_lookup=True,
         )
-        if prev_dsym is not None:
-            prev_obj = Symbol.NULL if prev_dsym.obj is None else prev_dsym.obj
-            # TODO: handle case where new dsym is of different type
+        if prev_sym is not None:
+            prev_obj = Symbol.NULL if prev_sym.obj is None else prev_sym.obj
+            # TODO: handle case where new sym is of different type
             if (
-                name in self.data_symbol_by_name(prev_dsym.is_subscript)
-                and prev_dsym.symbol_type == symbol_type
+                name in self.data_symbol_by_name(prev_sym.is_subscript)
+                and prev_sym.symbol_type == symbol_type
             ):
-                prev_dsym.update_obj_ref(obj, refresh_cached=False)
-                # old_dsym.update_type(symbol_type)
-                prev_dsym.update_stmt_node(stmt_node)
-                return prev_dsym, prev_dsym, prev_obj
+                prev_sym.update_obj_ref(obj, refresh_cached=False)
+                # old_sym.update_type(symbol_type)
+                prev_sym.update_stmt_node(stmt_node)
+                return prev_sym, prev_sym, prev_obj
             else:
-                # In this case, we are copying from a class and we need the dsym from which we are copying
-                # as able to propagate to the new dsym.
+                # In this case, we are copying from a class and we need the sym from which we are copying
+                # as able to propagate to the new sym.
                 # Example:
                 # class Foo:
                 #     shared = 99
                 # foo = Foo()
-                # foo.shared = 42  # old_dsym refers to Foo.shared here
+                # foo.shared = 42  # old_sym refers to Foo.shared here
                 # Earlier, we were explicitly adding Foo.shared as a dependency of foo.shared as follows:
-                # deps.add(old_dsym)
+                # deps.add(old_sym)
                 # But it turns out not to be necessary because foo depends on Foo, and changing Foo.shared will
                 # propagate up the namespace hierarchy to Foo, which propagates to foo, which then propagates to
                 # all of foo's namespace children (e.g. foo.shared).
@@ -303,7 +303,7 @@ class Scope:
                 # If we do this, then we should go back to explicitly adding the dep as follows:
                 # EDIT: added check to avoid propagating along class -> instance edge when class not redefined, so now
                 # it is important to explicitly add this dep.
-                deps.add(prev_dsym)
+                deps.add(prev_sym)
         ns_self = self.namespace
         if (
             ns_self is not None
@@ -316,7 +316,7 @@ class Scope:
             )
             if new_dep is not None:
                 deps.add(new_dep)
-        dsym = Symbol(
+        sym = Symbol(
             name,
             symbol_type,
             obj,
@@ -326,17 +326,17 @@ class Scope:
             refresh_cached_obj=False,
             implicit=implicit,
         )
-        self.put(name, dsym)
-        return dsym, prev_dsym, prev_obj
+        self.put(name, sym)
+        return sym, prev_sym, prev_obj
 
     def delete_data_symbol_for_name(
         self, name: SupportedIndexType, is_subscript: bool = False
     ):
         assert not is_subscript
-        dsym = self._symbol_by_name.pop(name, None)
-        if dsym is not None:
-            dsym.update_deps(set(), deleted=True)
-            dsym.mark_garbage()
+        sym = self._symbol_by_name.pop(name, None)
+        if sym is not None:
+            sym.update_deps(set(), deleted=True)
+            sym.mark_garbage()
 
     @property
     def is_global(self):
@@ -393,8 +393,8 @@ class Scope:
         else:
             return self.scope_name
 
-    def make_namespace_qualified_name(self, dsym: Symbol) -> str:
-        return str(dsym.name)
+    def make_namespace_qualified_name(self, sym: Symbol) -> str:
+        return str(sym.name)
 
 
 if len(_ScopeContainer) == 0:

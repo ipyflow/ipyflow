@@ -306,24 +306,22 @@ class Statement(SliceableMixin):
                     blocking_seen = True
                 if resolved.is_reactive and not blocking_seen:
                     if resolved.is_cascading_reactive:
-                        flow().updated_deep_reactive_symbols.add(resolved.dsym)
+                        flow().updated_deep_reactive_symbols.add(resolved.sym)
                     else:
-                        flow().updated_deep_reactive_symbols_last_cell.add(
-                            resolved.dsym
-                        )
+                        flow().updated_deep_reactive_symbols_last_cell.add(resolved.sym)
                     reactive_seen = True
                     if not resolved.is_live and resolved.atom.is_cascading_reactive:
-                        resolved.dsym.bump_cascading_reactive_cell_num()
+                        resolved.sym.bump_cascading_reactive_cell_num()
                     if resolved.is_last:
-                        resolved.dsym.refresh()
+                        resolved.sym.refresh()
                 if reactive_seen and not blocking_seen:
                     if resolved.is_cascading_reactive:
-                        flow().updated_reactive_symbols.add(resolved.dsym)
+                        flow().updated_reactive_symbols.add(resolved.sym)
                     else:
-                        flow().updated_reactive_symbols_last_cell.add(resolved.dsym)
-                if blocking_seen and resolved.dsym not in flow().updated_symbols:
+                        flow().updated_reactive_symbols_last_cell.add(resolved.sym)
+                if blocking_seen and resolved.sym not in flow().updated_symbols:
                     flow().blocked_reactive_timestamps_by_symbol[
-                        resolved.dsym
+                        resolved.sym
                     ] = flow().cell_counter()
         except TypeError:
             return

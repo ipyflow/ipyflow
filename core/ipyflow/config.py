@@ -19,8 +19,8 @@ class ExecutionMode(EnumWithDefault):
 
 class ExecutionSchedule(EnumWithDefault):
     LIVENESS_BASED = "liveness_based"
-    DAG_BASED = "dag_based"
-    HYBRID_DAG_LIVENESS_BASED = __default__ = "hybrid_dag_liveness_based"  # type: ignore
+    DAG_BASED = __default__ = "dag_based"  # type: ignore
+    HYBRID_DAG_LIVENESS_BASED = "hybrid_dag_liveness_based"
 
 
 class FlowDirection(EnumWithDefault):

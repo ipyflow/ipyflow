@@ -113,6 +113,7 @@ class IpyflowSessionState {
         }
         if (++numFinished === cells.length) {
           // wait a tick first to allow the disk changes to propagate up
+          this.isReactivelyExecuting = false;
           setTimeout(() => this.requestComputeExecSchedule(), 0);
         }
       });
@@ -185,6 +186,14 @@ class IpyflowSessionState {
     }
   }
 
+  cellIdsToCells(cellIds: string[]) {
+    return cellIds
+      .filter((id) => this.cellsById[id] !== undefined)
+      .filter((id) => this.orderIdxById[id] !== undefined)
+      .sort((a, b) => this.orderIdxById[a] - this.orderIdxById[b])
+      .map((id) => this.cellsById[id]);
+  }
+
   computeTransitiveClosure(
     cellIds: string[],
     inclusive = true,
@@ -214,11 +223,7 @@ class IpyflowSessionState {
         closure.delete(cellId);
       }
     }
-    return Array.from(closure)
-      .filter((id) => this.cellsById[id] !== undefined)
-      .filter((id) => this.orderIdxById[id] !== undefined)
-      .sort((a, b) => this.orderIdxById[a] - this.orderIdxById[b])
-      .map((id) => this.cellsById[id]);
+    return this.cellIdsToCells(Array.from(closure));
   }
 }
 
@@ -263,6 +268,33 @@ const extension: JupyterFrontEndPlugin<void> = {
     notebooks: INotebookTracker,
     palette: ICommandPalette
   ) => {
+    app.commands.addCommand('execute-stale', {
+      label: 'Execute Ready Cells',
+      isEnabled: () => true,
+      isVisible: () => true,
+      isToggled: () => false,
+      execute: () => {
+        const session = notebooks.currentWidget.sessionContext;
+        if (!session.isReady) {
+          return;
+        }
+        const state: IpyflowSessionState = (ipyflowState[session.session.id] ??
+          {}) as IpyflowSessionState;
+        if (!(state.isIpyflowCommConnected ?? false)) {
+          return;
+        }
+        const cellIdsToExecute = Array.from(
+          new Set([...state.dirtyCells, ...state.readyCells])
+        );
+        let cellsToExecute;
+        if (state.settings.reactivity_mode === 'batch') {
+          cellsToExecute = state.computeTransitiveClosure(cellIdsToExecute);
+        } else {
+          cellsToExecute = state.cellIdsToCells(cellIdsToExecute);
+        }
+        state.executeCells(cellsToExecute);
+      },
+    });
     app.commands.addCommand('alt-mode-execute', {
       label: 'Alt Mode Execute',
       isEnabled: () => true,
@@ -336,6 +368,11 @@ const extension: JupyterFrontEndPlugin<void> = {
       command: 'alt-mode-execute',
       keys: ['Ctrl Shift Enter'],
       selector: '.jp-Notebook',
+    });
+    app.commands.addKeyBinding({
+      command: 'execute-stale',
+      keys: ['Space'],
+      selector: '.jp-Notebook.jp-mod-commandMode',
     });
     palette.addItem({
       command: 'alt-mode-execute',

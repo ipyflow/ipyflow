@@ -396,18 +396,11 @@ class NotebookFlow(singletons.NotebookFlow):
         child: Timestamp,
         parent: Timestamp,
         sym: Symbol,
-        add_only_if_parent_new: bool = True,
     ) -> None:
         child_cell = cells().at_timestamp(child)
         child_cell.used_symbols.add(sym)
         parent_cell = cells().at_timestamp(parent)
         # if it has already run, don't add the edge
-        if (
-            add_only_if_parent_new
-            and parent_cell.prev_cell is not None
-            and parent_cell.prev_cell.cell_ctr > 0
-        ):
-            return
         if child_cell.is_current and parent_cell.is_current:
             child_cell.add_parent_edge(parent_cell, sym)
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
@@ -520,6 +513,9 @@ class NotebookFlow(singletons.NotebookFlow):
             prev_content = cell.current_content
             is_same_content = prev_content == content
             is_same_counter = cell.cell_ctr == cell.last_check_cell_ctr
+            edges_need_update = not is_same_content or (
+                not is_same_counter and cell.last_check_cell_ctr is not None
+            )
             try:
                 cell.current_content = content
                 cell.to_ast()
@@ -528,25 +524,20 @@ class NotebookFlow(singletons.NotebookFlow):
                     pid: set(sym_edges)
                     for pid, sym_edges in cell.static_parents.items()
                 }
-                if not is_same_content or (
-                    cell.last_check_cell_ctr is not None and not is_same_counter
-                ):
+                if edges_need_update:
                     with static_slicing_context():
                         for pid, sym_edges in prev_static_parents.items():
                             cell.remove_parent_edges(pid, sym_edges)
                 cell.check_and_resolve_symbols(
                     update_liveness_time_versions=True,
-                    add_data_dep_only_if_parent_new=is_same_content and is_same_counter,
                 )
-                cell.last_check_cell_ctr = cell.cell_ctr
-                if not is_same_content or (
-                    cell.last_check_cell_ctr is not None and not is_same_counter
-                ):
+                if edges_need_update:
                     with dynamic_slicing_context():
                         for pid, sym_edges in prev_static_parents.items():
                             cell.remove_parent_edges(
                                 pid, sym_edges - cell.static_parents.get(pid, set())
                             )
+                cell.last_check_cell_ctr = cell.cell_ctr
                 should_recompute_exec_schedule = True
             except SyntaxError:
                 cell.current_content = prev_content
@@ -639,12 +630,10 @@ class NotebookFlow(singletons.NotebookFlow):
         cells().set_override_refs(
             override_live_refs_by_cell_id, override_dead_refs_by_cell_id
         )
-        if is_reactively_executing:
-            should_recompute_exec_schedule = False
-        else:
-            should_recompute_exec_schedule = self._recompute_ast_for_cells(
-                content_by_cell_id
-            )
+        should_recompute_exec_schedule = (
+            not is_reactively_executing
+            and self._recompute_ast_for_cells(content_by_cell_id)
+        )
         placeholder_cells = cells().with_placeholder_ids()
         if len(placeholder_cells) > 0:
             for _, cell_id in sorted(
@@ -706,14 +695,20 @@ class NotebookFlow(singletons.NotebookFlow):
             )
             if cell is not None
         )
+        exec_schedule = self.mut_settings.exec_schedule
         response = self.check_and_link_multiple_cells(
             cells_to_check=cells_to_check,
             last_executed_cell_id=last_cell_id,
-            allow_new_ready=request.get("allow_new_ready", allow_new_ready),
+            allow_new_ready=request.get("allow_new_ready", allow_new_ready)
+            and exec_schedule
+            in (
+                ExecutionSchedule.LIVENESS_BASED,
+                ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+            ),
         ).to_json()
         response["type"] = "compute_exec_schedule"
         response["exec_mode"] = self.mut_settings.exec_mode.value
-        response["exec_schedule"] = self.mut_settings.exec_schedule.value
+        response["exec_schedule"] = exec_schedule.value
         response["flow_order"] = self.mut_settings.flow_order.value
         response["last_executed_cell_id"] = last_cell_id
         response["highlights"] = self.mut_settings.highlights.value

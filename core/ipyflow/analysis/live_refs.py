@@ -378,7 +378,6 @@ def get_live_symbols_and_cells_for_references(
     scope: "Scope",
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
-    add_data_dep_only_if_parent_new: bool = False,
 ) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
     if cell_ctr < 0:
         update_liveness_time_versions = False
@@ -412,7 +411,6 @@ def get_live_symbols_and_cells_for_references(
                     used_time=liveness_time,
                     exclude_ns=not resolved.is_last,
                     is_static=True,
-                    add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
                 )
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))
@@ -428,7 +426,6 @@ def get_live_symbols_and_cells_for_references(
         live_with_stmt_ctr=called_syms,
         cell_ctr=cell_ctr,
         update_liveness_time_versions=update_liveness_time_versions,
-        add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
     )
     live_symbols |= live_from_calls
     unresolved_live_refs |= unresolved_from_calls
@@ -439,7 +436,6 @@ def _compute_call_chain_live_symbols_and_cells(
     live_with_stmt_ctr: Set[Tuple[ResolvedSymbol, int]],
     cell_ctr: int,
     update_liveness_time_versions: bool,
-    add_data_dep_only_if_parent_new: bool,
 ) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
     seen: Set[Tuple[ResolvedSymbol, int]] = set()
     worklist: List[Tuple[ResolvedSymbol, int]] = list(live_with_stmt_ctr)
@@ -501,7 +497,6 @@ def _compute_call_chain_live_symbols_and_cells(
                         used_time=used_time,
                         exclude_ns=not resolved.is_last,
                         is_static=True,
-                        add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
                     )
             if not did_resolve and not symbol_ref.is_killed:
                 unresolved.add(symbol_ref)

@@ -1034,13 +1034,11 @@ class Symbol:
                 sym._timestamp,
                 sym._override_timestamp,
                 sym,
-                add_only_if_parent_new=False,
             )
             flow().add_data_dep(
                 sym._override_timestamp,
                 sym._timestamp,
                 sym,
-                add_only_if_parent_new=False,
             )
         self.debounced_exec_schedule(reactive=True)
 
@@ -1061,7 +1059,6 @@ class Symbol:
         used_time: Timestamp,
         updated_time: Timestamp,
         is_static: bool,
-        add_data_dep_only_if_parent_new: bool,
     ) -> bool:
         flow_ = flow()
         is_usage = False
@@ -1076,7 +1073,6 @@ class Symbol:
                         used_time,
                         updated_time,
                         self,
-                        add_only_if_parent_new=add_data_dep_only_if_parent_new,
                     )
         elif not is_static and updated_time < used_time:
             is_usage = True
@@ -1085,7 +1081,6 @@ class Symbol:
                     used_time,
                     updated_time,
                     self,
-                    add_only_if_parent_new=add_data_dep_only_if_parent_new,
                 )
         return is_usage
 
@@ -1097,7 +1092,6 @@ class Symbol:
         seen: Optional[Set["Symbol"]] = None,
         is_static: bool = False,
         is_blocking: bool = False,
-        add_data_dep_only_if_parent_new: bool = False,
     ) -> "Symbol":
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
@@ -1126,7 +1120,6 @@ class Symbol:
                     used_time,
                     updated_ts,
                     is_static=is_static,
-                    add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
                 )
                 break
             if is_usage:

@@ -665,7 +665,6 @@ class Cell(SliceableMixin):
     def check_and_resolve_symbols(
         self,
         update_liveness_time_versions: bool = False,
-        add_data_dep_only_if_parent_new: bool = False,
     ) -> CheckerResult:
         (
             live_symbol_refs,
@@ -681,7 +680,6 @@ class Cell(SliceableMixin):
             flow().global_scope,
             self.cell_ctr,
             update_liveness_time_versions=update_liveness_time_versions,
-            add_data_dep_only_if_parent_new=add_data_dep_only_if_parent_new,
         )
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(

@@ -213,11 +213,12 @@ class FrontendCheckerResult(NamedTuple):
             return False, False
         is_ready = False
         is_new_ready = False
+        exec_schedule = flow_.mut_settings.exec_schedule
+        flow_order = flow_.mut_settings.flow_order
         if flow_.mut_settings.exec_schedule in (
             ExecutionSchedule.DAG_BASED,
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
         ):
-            flow_order = flow_.mut_settings.flow_order
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 if is_new_ready:
                     break
@@ -250,11 +251,10 @@ class FrontendCheckerResult(NamedTuple):
                                 is_new_ready = True
                                 break
         if not is_new_ready and (
-            flow_.mut_settings.exec_schedule == ExecutionSchedule.LIVENESS_BASED
+            exec_schedule == ExecutionSchedule.LIVENESS_BASED
             or (
-                flow_.mut_settings.exec_schedule
-                == ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
-                and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
+                exec_schedule == ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
+                and flow_order == FlowDirection.IN_ORDER
             )
         ):
             max_used_live_sym_ctr = cell.get_max_used_live_symbol_cell_counter(

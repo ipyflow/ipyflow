@@ -510,6 +510,18 @@ class NotebookFlow(singletons.NotebookFlow):
             cell = cells().from_id_nullable(cell_id)
             if cell is None:
                 continue
+            is_same_content = cell.current_content == content
+            is_same_counter = cell.cell_ctr == (cell.last_check_cell_ctr or 0)
+            if not is_same_content or not is_same_counter:
+                should_recompute_exec_schedule = True
+                break
+        if not should_recompute_exec_schedule:
+            return False
+        should_recompute_exec_schedule = False
+        for cell_id, content in content_by_cell_id.items():
+            cell = cells().from_id_nullable(cell_id)
+            if cell is None:
+                continue
             prev_content = cell.current_content
             is_same_content = prev_content == content
             is_same_counter = cell.cell_ctr == cell.last_check_cell_ctr

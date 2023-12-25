@@ -186,11 +186,43 @@ class IpyflowSessionState {
     }
   }
 
+  #computeTopoOrderIdxHelper(
+    cellId: string,
+    orderedCellIds: string[],
+    seen: Set<string>
+  ): void {
+    if (seen.has(cellId) || this.cellsById[cellId]?.model?.type !== 'code') {
+      return;
+    }
+    seen.add(cellId);
+    for (const child of this.cellChildren[cellId] ?? []) {
+      this.#computeTopoOrderIdxHelper(child, orderedCellIds, seen);
+    }
+    orderedCellIds.unshift(cellId);
+  }
+
+  #computeTopoOrderIdx(): { [cellId: string]: number } {
+    const orderedCellIds: string[] = [];
+    const seen = new Set<string>();
+    for (const cellId of Object.keys(this.cellsById)) {
+      this.#computeTopoOrderIdxHelper(cellId, orderedCellIds, seen);
+    }
+    const topoOrderIdx: { [cellId: string]: number } = {};
+    orderedCellIds.forEach((cellId, idx) => {
+      topoOrderIdx[cellId] = idx;
+    });
+    return topoOrderIdx;
+  }
+
   cellIdsToCells(cellIds: string[]) {
+    const orderIdxById =
+      this.settings.flow_order === 'any_order'
+        ? this.#computeTopoOrderIdx()
+        : this.orderIdxById;
     return cellIds
       .filter((id) => this.cellsById[id] !== undefined)
       .filter((id) => this.orderIdxById[id] !== undefined)
-      .sort((a, b) => this.orderIdxById[a] - this.orderIdxById[b])
+      .sort((a, b) => orderIdxById[a] - orderIdxById[b])
       .map((id) => this.cellsById[id]);
   }
 

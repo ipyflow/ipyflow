@@ -753,6 +753,7 @@ const clearCellState = (notebook: Notebook) => {
     cell.node.classList.remove(readyClass);
     cell.node.classList.remove(readyMakingInputClass);
     cell.node.classList.remove(sliceClass);
+    cell.node.classList.remove(executeSliceClass);
 
     // clear any old event listeners
     const inputCollapser = getJpInputCollapser(cell.node);

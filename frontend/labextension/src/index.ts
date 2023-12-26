@@ -97,6 +97,14 @@ class IpyflowSessionState {
     });
   }
 
+  isBatchReactive() {
+    return (
+      (this.isIpyflowCommConnected ?? false) &&
+      this.settings?.exec_mode === 'reactive' &&
+      this.settings?.reactivity_mode === 'batch'
+    );
+  }
+
   executeCells(cells: Cell<ICellModel>[]) {
     if (cells.length === 0) {
       return;
@@ -118,6 +126,15 @@ class IpyflowSessionState {
         }
       });
     }
+  }
+
+  executeClosure(cells: Cell<ICellModel>[]) {
+    if (cells.length === 0) {
+      return;
+    }
+    const cellIds = cells.map((cell) => cell.model.id);
+    const closureCells = this.computeTransitiveClosure(cellIds);
+    this.executeCells(closureCells);
   }
 
   toggleReactivity(): IShellFuture<
@@ -264,7 +281,7 @@ type IpyflowState = {
 };
 
 const ipyflowState: IpyflowState = {};
-let deferredCommand: { command: any; args: any[] } | null = null;
+const deferredCells: Cell<ICellModel>[] = [];
 
 function initSessionState(session_id: string): void {
   ipyflowState[session_id] = new IpyflowSessionState();
@@ -504,12 +521,7 @@ const extension: JupyterFrontEndPlugin<void> = {
 
     const isBatchReactive = () => {
       const state = getIpyflowState();
-      const settings = state.settings;
-      return (
-        (state.isIpyflowCommConnected ?? false) &&
-        settings?.exec_mode === 'reactive' &&
-        settings?.reactivity_mode === 'batch'
-      );
+      return state.isBatchReactive();
     };
 
     [
@@ -527,10 +539,10 @@ const extension: JupyterFrontEndPlugin<void> = {
         const notebook = nbpanel.content;
         const kernel = nbpanel.sessionContext.session.kernel.name;
         if (kernel === 'ipyflow' && !(state?.isIpyflowCommConnected ?? false)) {
-          deferredCommand = { command, args };
           for (const cell of notebook.widgets) {
             if (notebook.isSelectedOrActive(cell)) {
               cell.setPrompt('*');
+              deferredCells.push(cell);
             }
           }
         } else if (
@@ -815,6 +827,7 @@ const connectToComm = (
   const onContentChanged = _.debounce(() => {
     if (disconnected) {
       notebook.model.contentChanged.disconnect(onContentChanged);
+      notebook.model.cells.changed.disconnect(onContentChanged);
       return;
     }
     const cell_metadata_by_id = state.gatherCellMetadataAndContent();
@@ -1111,6 +1124,7 @@ const connectToComm = (
       notebook.activeCell.model.stateChanged.connect(onExecution);
       notifyActiveCell(notebook.activeCell.model);
       notebook.model.contentChanged.connect(onContentChanged);
+      notebook.model.cells.changed.connect(onContentChanged);
       state.requestComputeExecSchedule();
     } else if (payload.type === 'set_exec_mode') {
       state.numAltModeExecutes = 0;
@@ -1173,10 +1187,13 @@ const connectToComm = (
       state.lastExecutionHighlights = payload.highlights as Highlights;
       const lastExecutedCellId = payload.last_executed_cell_id as string;
       state.executedReactiveReadyCells.add(lastExecutedCellId);
-      if (deferredCommand !== null) {
-        const { command, args } = deferredCommand;
-        deferredCommand = null;
-        command.execute.call(command, args);
+      if (deferredCells.length > 0) {
+        const cells = deferredCells.splice(0, deferredCells.length);
+        if (state.isBatchReactive()) {
+          state.executeClosure(cells);
+        } else {
+          state.executeCells(cells);
+        }
         return;
       }
       const last_execution_was_error =

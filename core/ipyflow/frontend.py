@@ -228,11 +228,6 @@ class FrontendCheckerResult(NamedTuple):
                     for pid, syms in cell.directional_parents.items():
                         par = cells().from_id(pid)
                         if (
-                            flow_order == flow_order.IN_ORDER
-                            and par.position >= cell.position
-                        ):
-                            continue
-                        if (
                             flow_.fake_edge_sym in syms
                             and cell.cell_ctr < 0 < par.cell_ctr
                         ):

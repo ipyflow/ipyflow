@@ -612,6 +612,9 @@ class NotebookFlow(singletons.NotebookFlow):
         if cell_metadata_by_id is None:
             # bail if we don't have this
             return {"success": False, "error": "null value for cell metadata"}
+        is_cell_structure_change = self._prev_cell_metadata_by_id is None or len(
+            self._prev_cell_metadata_by_id
+        ) != len(cell_metadata_by_id)
         self._prev_cell_metadata_by_id = cell_metadata_by_id
         cell_metadata_by_id = {
             cell_id: metadata
@@ -645,7 +648,7 @@ class NotebookFlow(singletons.NotebookFlow):
         should_recompute_exec_schedule = (
             not is_reactively_executing
             and self._recompute_ast_for_cells(content_by_cell_id)
-        )
+        ) or is_cell_structure_change
         placeholder_cells = cells().with_placeholder_ids()
         if len(placeholder_cells) > 0:
             for _, cell_id in sorted(

@@ -37,7 +37,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.memoization import MemoizedCellExecution, MemoizedInput, MemoizedOutput
 from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, shell
-from ipyflow.slicing.context import SlicingContext
+from ipyflow.slicing.context import SlicingContext, static_slicing_context
 from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
 from ipyflow.types import IdType, TimestampOrCounter
 from ipyflow.utils.ipython_utils import _IPY, CapturedIO
@@ -83,7 +83,6 @@ class Cell(SliceableMixin):
         prev_cell: Optional["Cell"] = None,
         placeholder_id: bool = False,
         is_memoized: bool = False,
-        force_tracking: bool = False,
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
@@ -121,7 +120,6 @@ class Cell(SliceableMixin):
         self.is_memoized = is_memoized
         self.skipped_due_to_memoization_ctr = -1
         self.memoized_executions: List[MemoizedCellExecution] = []
-        self._force_tracking = force_tracking
 
     @property
     def id(self) -> IdType:
@@ -187,20 +185,11 @@ class Cell(SliceableMixin):
             }
         return cast("Mapping[IdType, FrozenSet[Symbol]]", children)
 
-    @property
-    def is_tracked(self) -> bool:
-        if self.cell_ctr > 0:
-            return True
-        return self._force_tracking
-
     def statements(self) -> List["Statement"]:
         stmts: List["Statement"] = []
         for stmt_num in range(len(self.to_ast().body)):
             stmts.append(statements().from_timestamp(self.cell_ctr, stmt_num))  # type: ignore
         return stmts
-
-    def force_tracking(self) -> None:
-        self._force_tracking = True
 
     @classmethod
     def clear(cls):
@@ -681,6 +670,10 @@ class Cell(SliceableMixin):
             self.cell_ctr,
             update_liveness_time_versions=update_liveness_time_versions,
         )
+        if update_liveness_time_versions and self.cell_ctr == -1:
+            with static_slicing_context():
+                for resolved in live_resolved_symbols:
+                    self.add_parent_edge(resolved.timestamp, resolved.sym)
         # only mark dead attrsubs as killed if we can traverse the entire chain
         dead_symbols, _ = get_symbols_for_references(
             dead_symbol_refs, flow().global_scope

@@ -254,13 +254,11 @@ class NotebookFlow(singletons.NotebookFlow):
                     child_cell = cells().from_id(child)
                 except KeyError:
                     continue
-                child_cell.force_tracking()
                 for parent in parents:
                     try:
                         parent_cell = cells().from_id(parent)
                     except KeyError:
                         continue
-                    parent_cell.force_tracking()
                     child_cell.add_parent_edge(parent_cell, self.fake_edge_sym)
 
     def initialize(
@@ -742,8 +740,6 @@ class NotebookFlow(singletons.NotebookFlow):
         cell_parents = {}
         cell_children = {}
         for cell in cells_to_check:
-            if not cell.is_tracked:
-                continue
             this_cell_parents: Set[IdType] = set()
             this_cell_children: Set[IdType] = set()
             for _ in self.mut_settings.iter_slicing_contexts():

@@ -400,8 +400,6 @@ class FrontendCheckerResult(NamedTuple):
         )
         if cells_to_check is None:
             cells_to_check = cells().current_cells_for_each_id()
-        if flow_.mut_settings.highlights == Highlights.EXECUTED:
-            cells_to_check = (cell for cell in cells_to_check if cell.is_tracked)
         cells_to_check = sorted(cells_to_check, key=lambda c: c.position)
         for cell in cells_to_check:
             checker_result = self._check_one_cell(

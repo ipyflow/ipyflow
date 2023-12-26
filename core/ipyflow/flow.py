@@ -224,6 +224,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.fake_edge_sym: Symbol = None
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
+        self._prev_order_idx_by_id: Optional[Dict[IdType, int]] = None
         self._min_new_ready_cell_counter = -1
         self._min_forced_reactive_cell_counter = -1
 
@@ -627,6 +628,10 @@ class NotebookFlow(singletons.NotebookFlow):
             cell_id: metadata["index"]
             for cell_id, metadata in cell_metadata_by_id.items()
         }
+        is_cell_structure_change = (
+            is_cell_structure_change or self._prev_order_idx_by_id != order_index_by_id
+        )
+        self._prev_order_idx_by_id = order_index_by_id
         content_by_cell_id = {
             cell_id: metadata["content"]
             for cell_id, metadata in cell_metadata_by_id.items()

@@ -34,7 +34,13 @@ from ipyflow.analysis.live_refs import (
 from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.config import ExecutionSchedule, FlowDirection, Interface
 from ipyflow.data_model.timestamp import Timestamp
-from ipyflow.memoization import MemoizedCellExecution, MemoizedInput, MemoizedOutput
+from ipyflow.memoization import (
+    MemoizedCellExecution,
+    MemoizedInput,
+    MemoizedOutput,
+    MemoizedOutputLevel,
+    parse_verbosity,
+)
 from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.context import SlicingContext, static_slicing_context
@@ -82,7 +88,7 @@ class Cell(SliceableMixin):
         tags: Tuple[str, ...],
         prev_cell: Optional["Cell"] = None,
         placeholder_id: bool = False,
-        is_memoized: bool = False,
+        memoized_output_level: Optional[MemoizedOutputLevel] = None,
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
@@ -117,7 +123,7 @@ class Cell(SliceableMixin):
         self._ready: bool = False
         self._extra_stmt: Optional[ast.stmt] = None
         self._placeholder_id = placeholder_id
-        self.is_memoized = is_memoized
+        self.memoized_output_level = memoized_output_level
         self.skipped_due_to_memoization_ctr = -1
         self.memoized_executions: List[MemoizedCellExecution] = []
 
@@ -132,6 +138,10 @@ class Cell(SliceableMixin):
     @property
     def is_dirty(self) -> bool:
         return self.current_content != self.executed_content
+
+    @property
+    def is_memoized(self) -> bool:
+        return self.memoized_output_level is not None
 
     @property
     def timestamp(self) -> Timestamp:
@@ -310,11 +320,13 @@ class Cell(SliceableMixin):
             outputs[sym] = MemoizedOutput(
                 sym, sym.timestamp_excluding_ns_descendents, sym.obj
             )
+        assert self.captured_output is not None
         self.memoized_executions.append(
             MemoizedCellExecution(
                 self.executed_content,
                 list(inputs.values()),
                 list(outputs.values()),
+                self.captured_output,
                 self.cell_ctr,
             )
         )
@@ -328,7 +340,7 @@ class Cell(SliceableMixin):
         bump_cell_counter: bool = True,
         validate_ipython_counter: bool = True,
         placeholder_id: bool = False,
-        is_memoized: bool = False,
+        memoized_output_level: Optional[MemoizedOutputLevel] = None,
     ) -> "Cell":
         if bump_cell_counter:
             cls._cell_counter += 1
@@ -357,7 +369,7 @@ class Cell(SliceableMixin):
             tags,
             prev_cell=prev_cell,
             placeholder_id=placeholder_id,
-            is_memoized=is_memoized,
+            memoized_output_level=memoized_output_level,
         )
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
@@ -478,13 +490,26 @@ class Cell(SliceableMixin):
         return cls._cells_by_tag.get(tag, set())
 
     @staticmethod
-    def get_memoized_content(content: str) -> Optional[str]:
+    def get_memoized_content_and_output_level(
+        content: str,
+    ) -> Tuple[Optional[str], Optional[MemoizedOutputLevel]]:
         cell_lines = content.strip().splitlines(keepends=True)
-        is_memoized = len(cell_lines) > 0 and cell_lines[0].strip() == "%%memoize"
+        first_line = cell_lines[0].lstrip()
+        is_memoized = len(cell_lines) > 0 and first_line.startswith(r"%%memoize")
         if is_memoized:
-            return "".join(cell_lines[1:])
+            return "".join(cell_lines[1:]), parse_verbosity(
+                first_line[len(r"%%memoize") :].strip()
+            )
         else:
-            return None
+            return None, None
+
+    @classmethod
+    def get_memoized_content(cls, content: str) -> Optional[str]:
+        return cls.get_memoized_content_and_output_level(content)[0]
+
+    @classmethod
+    def get_memoized_output_level(cls, content: str) -> Optional[MemoizedOutputLevel]:
+        return cls.get_memoized_content_and_output_level(content)[1]
 
     def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
         # we transform magics, but for %time, we would ideally like to trace the statement being timed

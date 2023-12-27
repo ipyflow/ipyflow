@@ -17,6 +17,7 @@ from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
+from ipyflow.memoization import MemoizedOutputLevel
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.ipyflow_tracer import (
     DataflowTracer,
@@ -24,6 +25,7 @@ from ipyflow.tracing.ipyflow_tracer import (
     StackFrameManager,
 )
 from ipyflow.utils.ipython_utils import (
+    CapturedIO,
     ast_transformer_context,
     capture_output_tee,
     input_transformer_context,
@@ -436,9 +438,16 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             return None
 
         identical_result_ctr: Optional[int] = None
+        memoized_display_output: Optional[CapturedIO] = None
         memoized_outputs = []
 
-        for content, inputs, outputs, ctr in prev_cell.memoized_executions:
+        for (
+            content,
+            inputs,
+            outputs,
+            displayed_output,
+            ctr,
+        ) in prev_cell.memoized_executions:
             if content != cell.executed_content:
                 continue
             for sym, in_ts, mem_ts, obj_id, comparable in inputs:
@@ -463,10 +472,13 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             else:
                 identical_result_ctr = ctr
                 memoized_outputs = outputs
+                memoized_display_output = displayed_output
                 break
 
         if identical_result_ctr is None:
             return None
+
+        # TODO: split this method up here
 
         for idx, stmt_node in enumerate(cell.to_ast().body):
             Statement.create_and_track(
@@ -483,7 +495,13 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 sym.update_obj_ref(value)
             new_updated_ts = Timestamp(self.cell_counter(), out_ts.stmt_num)
             sym.refresh(timestamp=new_updated_ts)
-        return f"Out.get({identical_result_ctr})"
+        if cell.memoized_output_level == MemoizedOutputLevel.VERBOSE:
+            cell.captured_output = memoized_display_output
+            memoized_display_output.show()
+        if cell.memoized_output_level == MemoizedOutputLevel.QUIET:
+            return "pass"
+        else:
+            return f"Out.get({identical_result_ctr})"
 
     def before_run_cell(
         self,
@@ -493,8 +511,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         **_kwargs,
     ) -> Optional[str]:
         original_content = cell_content
-        cell_content = Cell.get_memoized_content(cell_content)
-        is_memoized = cell_content is not None
+        (
+            cell_content,
+            memoized_output_level,
+        ) = Cell.get_memoized_content_and_output_level(cell_content)
         if cell_content is None:
             cell_content = original_content
         flow_ = singletons.flow()
@@ -525,7 +545,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             flow_._tags,
             validate_ipython_counter=store_history,
             placeholder_id=placeholder_id,
-            is_memoized=is_memoized,
+            memoized_output_level=memoized_output_level,
         )
         cell.executed_content = cell_content
 
@@ -591,7 +611,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                         stmt.remove_parent_edges(parent, syms)
                     for parent, syms in prev_stmt.parents.items():
                         stmt.add_parent_edges(parent, syms)
-            cell.captured_output = prev_cell.captured_output
         elif cell.is_memoized:
             cell._maybe_memoize_params()
 
@@ -621,7 +640,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             ):
                 # don't save potentially large outputs for previous versions
                 prev_cell.captured_output = None
-        cell.captured_output = self.tee_output_tracer.capture_output
+        if cell.captured_output is None:
+            cell.captured_output = self.tee_output_tracer.capture_output
 
     def after_run_cell(self, _cell_content: str) -> None:
         self._handle_output()

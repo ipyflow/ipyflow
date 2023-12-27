@@ -373,8 +373,10 @@ class Cell(SliceableMixin):
         )
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
-            cell.dynamic_children = prev_cell.dynamic_children
             cell.static_children = prev_cell.static_children
+            cell.dynamic_children = prev_cell.dynamic_children
+            cell.dangling_static_children = prev_cell.dangling_static_children
+            cell.dangling_dynamic_children = prev_cell.dangling_dynamic_children
             for tag in prev_cell.tags:
                 cls._cells_by_tag[tag].discard(prev_cell)
             for tag in prev_cell.reactive_tags:
@@ -494,14 +496,15 @@ class Cell(SliceableMixin):
         content: str,
     ) -> Tuple[Optional[str], Optional[MemoizedOutputLevel]]:
         cell_lines = content.strip().splitlines(keepends=True)
-        first_line = cell_lines[0].lstrip()
-        is_memoized = len(cell_lines) > 0 and first_line.startswith(r"%%memoize")
-        if is_memoized:
-            return "".join(cell_lines[1:]), parse_verbosity(
-                first_line[len(r"%%memoize") :].strip()
-            )
-        else:
+        if len(cell_lines) == 0:
             return None, None
+        first_line = cell_lines[0].lstrip()
+        memoize_magic = r"%%memoize"
+        if not first_line.startswith(memoize_magic):
+            return None, None
+        return "".join(cell_lines[1:]), parse_verbosity(
+            first_line[len(memoize_magic) :].strip()
+        )
 
     @classmethod
     def get_memoized_content(cls, content: str) -> Optional[str]:

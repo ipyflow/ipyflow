@@ -117,7 +117,6 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
         self._has_cell_id: bool = (
             "cell_id" in inspect.signature(super().do_execute).parameters
         )
-        self._last_exec_mode: Optional[ExecutionMode] = None
 
     async def do_debug_request(self, msg):
         flow_ = flow()
@@ -131,11 +130,8 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
                 }
             )
             settings.dataflow_enabled = False
-            self._last_exec_mode = settings.exec_mode
-            settings.exec_mode = ExecutionMode.NORMAL
         elif msg.get("command") == "disconnect":
             settings.dataflow_enabled = True
-            settings.exec_mode = self._last_exec_mode
             flow_.handle({"type": "compute_exec_schedule"})
         return await super().do_debug_request(msg)
 

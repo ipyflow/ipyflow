@@ -387,6 +387,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             # Stage 3:  Run post-execute hook
             if should_trace:
                 self.after_run_cell(raw_cell)
+            elif cell.prev_cell is not None:
+                cell.static_parents = cell.prev_cell.static_parents
+                cell.dynamic_parents = cell.prev_cell.dynamic_parents
+                cell.dangling_static_parents = cell.prev_cell.dangling_static_parents
+                cell.dangling_dynamic_parents = cell.prev_cell.dangling_dynamic_parents
             if should_capture_output:
                 self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
                 output_captured = True

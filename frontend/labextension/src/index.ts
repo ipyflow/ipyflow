@@ -284,7 +284,9 @@ const ipyflowState: IpyflowState = {};
 const deferredCells: Cell<ICellModel>[] = [];
 
 function initSessionState(session_id: string): void {
-  ipyflowState[session_id] = new IpyflowSessionState();
+  const ipyflowSessionState = new IpyflowSessionState();
+  ipyflowState[session_id] = ipyflowSessionState;
+  (window as any).ipyflow = ipyflowSessionState;
 }
 
 function resetSessionState(session_id: string): void {
@@ -593,6 +595,11 @@ const extension: JupyterFrontEndPlugin<void> = {
         }
       }
     };
+
+    notebooks.currentChanged.connect((_, nbPanel) => {
+      const session = nbPanel.sessionContext;
+      (window as any).ipyflow = ipyflowState[session.session.id];
+    });
 
     notebooks.widgetAdded.connect((sender, nbPanel) => {
       const session = nbPanel.sessionContext;

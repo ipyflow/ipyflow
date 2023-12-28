@@ -3,12 +3,14 @@ from typing import TYPE_CHECKING
 
 import ipyflow.api
 from ipyflow import singletons
-from ipyflow.api import *
-from ipyflow.flow import NotebookFlow
+from ipyflow.api import *  # noqa: F403
 from ipyflow.kernel.kernel import IPyflowKernel, UsesIPyflowKernel
 from ipyflow.shell import load_ipython_extension as load_ipyflow_extension, unload_ipython_extension as unload_ipyflow_extension
 from ipyflow.models import cell_above, cell_below, cell_at_offset, cells, last_run_cell, namespaces, scopes, statements, symbols, timestamps
 from ipyflow.singletons import flow, kernel, shell, tracer
+
+from . import _version
+__version__ = _version.get_versions()['version']
 
 if TYPE_CHECKING:
     from IPython import InteractiveShell
@@ -80,9 +82,6 @@ def unload_ipython_extension(ipy: "InteractiveShell") -> None:
     if IPyflowKernel.client_comm is not None:  # type: ignore
         IPyflowKernel.client_comm.send({"type": "unestablish", "success": True})  # type: ignore
 
-from . import _version
-__version__ = _version.get_versions()['version']
-
 
 __all__ = ipyflow.api.__all__ + [
     "__version__",
@@ -90,12 +89,16 @@ __all__ = ipyflow.api.__all__ + [
     "cell_below",
     "cell_at_offset",
     "cells",
+    "flow",
+    "kernel",
     "last_run_cell",
     "namespaces",
     "scopes",
+    "shell",
     "statements",
     "symbols",
     "timestamps",
+    "tracer",
 ]
 
 

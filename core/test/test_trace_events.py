@@ -13,7 +13,7 @@ from ipyflow.flow import NotebookFlow
 from ipyflow.singletons import tracer
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 
-from .utils import make_flow_fixture, skipif_known_failing
+from .utils import make_flow_fixture
 
 logging.basicConfig(level=logging.INFO)
 
@@ -21,10 +21,6 @@ logging.basicConfig(level=logging.INFO)
 NotebookFlow.instance()
 _ALL_EVENTS_WITH_HANDLERS = DataflowTracer.instance().events_with_registered_handlers
 _RECORDED_EVENTS = []
-
-
-def subsets(draw, elements):
-    return {e for e in elements if draw(st.booleans())}
 
 
 def patched_emit_event_fixture():

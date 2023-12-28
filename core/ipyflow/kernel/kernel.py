@@ -10,7 +10,6 @@ from IPython import get_ipython
 from traitlets import Type
 
 from ipyflow import singletons
-from ipyflow.config import ExecutionMode
 from ipyflow.flow import NotebookFlow
 from ipyflow.shell.zmqshell import IPyflowZMQInteractiveShell
 from ipyflow.singletons import flow
@@ -99,7 +98,7 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             from superduperreload import ModuleReloader
 
             ModuleReloader.instance(shell=ret.shell, flow=flow_, enabled=False)
-        except:
+        except:  # noqa: E722
             pass
         return ret
 

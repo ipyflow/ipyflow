@@ -56,7 +56,6 @@ from ipyflow.slicing.context import (
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer
 from ipyflow.tracing.watchpoint import Watchpoint
 from ipyflow.types import IdType, SupportedIndexType
-from ipyflow.utils.misc_utils import cleanup_discard
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)

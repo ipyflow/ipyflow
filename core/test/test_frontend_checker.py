@@ -2,7 +2,7 @@
 import logging
 from contextlib import contextmanager
 from dataclasses import asdict
-from test.utils import make_flow_fixture, skipif_known_failing
+from test.utils import make_flow_fixture
 from typing import Dict
 
 from ipyflow.config import ExecutionSchedule, FlowDirection

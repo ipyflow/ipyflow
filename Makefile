@@ -26,6 +26,9 @@ blackcheck:
 	isort ./core --check-only
 	./scripts/blacken.sh --check
 
+lint:
+	ruff ./core
+
 imports:
 	pycln ./core
 	isort ./core
@@ -51,7 +54,7 @@ xmlcov: coverage
 eslint:
 	./scripts/eslint.sh
 
-check: eslint blackcheck typecheck check_no_typing
+check: eslint blackcheck lint typecheck check_no_typing
 
 test: check
 tests: check

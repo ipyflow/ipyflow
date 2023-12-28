@@ -5,8 +5,8 @@ from types import ModuleType
 from typing import Any, Optional
 
 # force handler registration by exec()ing the handler modules here
-import ipyflow.tracing.external_calls.base_handlers
-import ipyflow.tracing.external_calls.list_handlers
+import ipyflow.tracing.external_calls.base_handlers  # noqa: F401
+import ipyflow.tracing.external_calls.list_handlers  # noqa: F401
 from ipyflow.singletons import flow
 from ipyflow.tracing.external_calls.base_handlers import (
     REGISTERED_HANDLER_BY_FUNCTION,

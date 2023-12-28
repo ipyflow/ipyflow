@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
-from test.utils import make_flow_fixture, skipif_known_failing
+from test.utils import make_flow_fixture
 from typing import Set
 
 from ipyflow.data_model.cell import cells

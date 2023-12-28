@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import sys
-from test.utils import make_flow_fixture, skipif_known_failing
+from test.utils import make_flow_fixture
 from typing import Optional, Set, Tuple
 
 from ipyflow.config import ExecutionMode

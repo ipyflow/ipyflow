@@ -3,7 +3,7 @@ import logging
 
 from ipyflow import cells, flow, shell
 
-from .utils import make_flow_fixture, skipif_known_failing
+from .utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 

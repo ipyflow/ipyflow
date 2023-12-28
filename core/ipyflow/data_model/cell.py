@@ -168,7 +168,7 @@ class Cell(SliceableMixin):
                 settings.flow_order == FlowDirection.IN_ORDER
                 and settings.interface == Interface.IPYTHON
             ):
-                assert type(self.cell_id) is int
+                assert isinstance(self.cell_id, int)
                 pos = self.cell_id
         return pos
 

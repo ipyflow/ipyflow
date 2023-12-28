@@ -19,7 +19,7 @@ from typing import (
     cast,
 )
 
-from ipyflow.config import ExecutionMode, FlowDirection
+from ipyflow.config import FlowDirection
 from ipyflow.data_model.cell import Cell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.annotation_utils import (
@@ -37,7 +37,7 @@ from ipyflow.utils.misc_utils import cleanup_discard, debounce
 
 try:
     from importlib.util import _LazyModule  # type: ignore
-except:
+except:  # noqa
     _LazyModule = None
 
 if TYPE_CHECKING:
@@ -483,7 +483,7 @@ class Symbol:
         try:
             if not self.is_obj_lazy_module and hasattr(self.obj, "__len__"):
                 return len(self.obj)
-        except:  # noqa
+        except:  # noqa: E722
             pass
         return None
 

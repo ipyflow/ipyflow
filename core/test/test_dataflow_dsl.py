@@ -6,7 +6,6 @@ from test.utils import (
     clear_registered_annotations,
     lookup_symbol_by_name,
     make_flow_fixture,
-    skipif_known_failing,
 )
 
 from ipyflow.annotations import register_annotations_directory

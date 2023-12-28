@@ -590,7 +590,7 @@ class Statement(SliceableMixin):
                     is_subscript,
                     excluded_deps,
                 ) = tracer().resolve_store_data_for_target(target, self.frame)
-                sym = scope.upsert_symbol_for_name(
+                scope.upsert_symbol_for_name(
                     name,
                     obj,
                     rval_deps - excluded_deps,
@@ -617,7 +617,7 @@ class Statement(SliceableMixin):
                     self._handle_reactive_store(self.stmt_node)
                 elif isinstance(target, ast.AST):
                     self._handle_reactive_store(target)
-            except KeyError as ke:
+            except KeyError:
                 # e.g., slices aren't implemented yet
                 # put logging behind flag to avoid noise to user
                 if flow().is_dev_mode:
@@ -627,9 +627,6 @@ class Statement(SliceableMixin):
                         if isinstance(target, ast.AST)
                         else target,
                     )
-                # TODO: put this back in and debug
-                # if flow().is_test:
-                #     raise ke
             except ImportError:
                 raise
             except Exception as e:

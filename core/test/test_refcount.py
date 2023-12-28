@@ -2,9 +2,6 @@
 import logging
 from test.utils import lookup_symbol_by_name, make_flow_fixture
 
-from ipyflow.data_model.symbol import Symbol
-from ipyflow.singletons import flow
-
 logging.basicConfig(level=logging.ERROR)
 
 # Reset dependency graph before each test

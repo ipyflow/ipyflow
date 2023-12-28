@@ -29,7 +29,7 @@ from ipyflow.data_model.cell import cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, shell
-from ipyflow.slicing.mixin import Slice, SliceableMixin, format_slice
+from ipyflow.slicing.mixin import SliceableMixin, format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 
 if TYPE_CHECKING:
@@ -322,7 +322,7 @@ _SLICE_PARSER.add_argument("--tag", nargs="?", type=str, default=None)
 def make_slice(line: str) -> Optional[str]:
     try:
         args = _SLICE_PARSER.parse_args(shlex.split(line))
-    except:
+    except:  # noqa: E722
         return None
     tag = args.tag
     slice_cells = None
@@ -358,17 +358,18 @@ def make_slice(line: str) -> Optional[str]:
     return None
 
 
-_TAG_PARSER = argparse.ArgumentParser("tag")
+_TAG_PARSER = argparse.ArgumentParser(
+    "tag", usage="Usage: %flow tag <tag_name> [--remove] [--cell cell_num]"
+)
 _TAG_PARSER.add_argument("tag_name", type=str)
 _TAG_PARSER.add_argument("--remove", action="store_true")
 _TAG_PARSER.add_argument("--cell", type=int, default=None)
 
 
 def tag(line: str) -> None:
-    usage = f"Usage: %flow tag <tag_name> [--remove] [--cell cell_num]"
     try:
         args = _TAG_PARSER.parse_args(shlex.split(line))
-    except:
+    except:  # noqa: E722
         return None
     tag = args.tag_name
     if args.cell is None:
@@ -384,16 +385,16 @@ def tag(line: str) -> None:
     return None
 
 
-_SHOW_TAGS_PARSER = argparse.ArgumentParser("show_tags")
+_SHOW_TAGS_PARSER = argparse.ArgumentParser(
+    "show_tags", usage="Usage: %flow show_tags [--cell cell_num]"
+)
 _SHOW_TAGS_PARSER.add_argument("--cell", type=int, default=None)
 
 
 def show_tags(line: str) -> None:
-    usage = f"Usage: %flow show_tags [--cell cell_num]"
     try:
         args = _SHOW_TAGS_PARSER.parse_args(shlex.split(line))
-    except:
-        warn(usage)
+    except:  # noqa: E722
         return None
     if args.cell is None:
         cell = cells().current_cell()
@@ -505,7 +506,7 @@ def _deregister_tracers_for(tracer_cls):
 
 def register_tracer(line_: str) -> None:
     line_ = line_.strip()
-    usage = f"Usage: %flow register_tracer <module.path.to.tracer_class>"
+    usage = "Usage: %flow register_tracer <module.path.to.tracer_class>"
     tracer_cls = _resolve_tracer_class(line_)
     if tracer_cls is None:
         warn(usage)
@@ -517,7 +518,7 @@ def register_tracer(line_: str) -> None:
 
 def deregister_tracer(line_: str) -> None:
     line_ = line_.strip()
-    usage = f"Usage: %flow deregister_tracer [<module.path.to.tracer_class>|all]"
+    usage = "Usage: %flow deregister_tracer [<module.path.to.tracer_class>|all]"
     if line_.lower() == "all":
         _deregister_tracers(list(shell().registered_tracers))
     else:
@@ -530,7 +531,7 @@ def deregister_tracer(line_: str) -> None:
 
 def register_annotations(line_: str) -> None:
     line_ = line_.strip()
-    usage = f"Usage: %flow register_annotations <directory_or_file>"
+    usage = "Usage: %flow register_annotations <directory_or_file>"
     if os.path.isdir(line_):
         modules = register_annotations_directory(line_)
     elif os.path.isfile(line_):

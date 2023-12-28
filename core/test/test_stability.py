@@ -2,7 +2,7 @@
 import logging
 import sys
 
-from .utils import make_flow_fixture, skipif_known_failing
+from .utils import make_flow_fixture
 
 logging.basicConfig(level=logging.ERROR)
 

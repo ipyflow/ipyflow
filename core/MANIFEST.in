@@ -1,3 +1,4 @@
+include README.md HISTORY.rst
+recursive-exclude test *
 include versioneer.py
 include ipyflow/_version.py
-recursive-exclude test *

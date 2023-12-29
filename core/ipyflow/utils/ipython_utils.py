@@ -151,7 +151,13 @@ class TeeDisplayPublisher:
 
 
 class capture_output_tee:
-    """context manager for capturing and replicating stdout/err"""
+    """
+    Context manager for capturing and replicating stdout/err and rich display publishers.
+    NB: This is a modified version of IPython.utils.capture.capture_output that doesn't capture
+      the displayhook as well (the thing that renders the final expression in a cell). Trying
+      to capture both it and the display publisher seems like it can confuse ipywidgets, and
+      this we can always rerender it anyway if necessary using the Out dictionary.
+    """
 
     def __init__(self, stdout=True, stderr=True, display=True) -> None:
         self.stdout = stdout
@@ -171,8 +177,7 @@ class capture_output_tee:
                 self.save_display_pub = None
                 self.display = False
 
-        stdout = stderr = None
-        capture_display_pub = None
+        stdout = stderr = outputs = None
         if self.stdout:
             stdout = StringIO()
             sys.stdout = Tee(sys.stdout, stdout)  # type: ignore
@@ -182,23 +187,11 @@ class capture_output_tee:
         if self.display and self.shell is not None:
             self.save_display_pub = self.shell.display_pub
             capture_display_pub = CapturingDisplayPublisher()
+            outputs = capture_display_pub.outputs
             self.shell.display_pub = TeeDisplayPublisher(
                 self.save_display_pub, capture_display_pub
             )
-            # TODO: keeping this causes duped outputs for ipywidgets; figure out why
-            # self.save_display_hook = sys.displayhook
-            # capture_display_hook = CapturingDisplayHook(
-            #     shell=self.shell, outputs=capture_display_pub.outputs
-            # )
-            # sys.displayhook = TeeDisplayHook(
-            #     self.save_display_hook,
-            #     capture_display_hook,
-            # )
 
-        if capture_display_pub is None:
-            outputs = None
-        else:
-            outputs = capture_display_pub.outputs
         return CapturedIO(stdout, stderr, outputs)
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
@@ -206,7 +199,6 @@ class capture_output_tee:
         sys.stderr = self.sys_stderr
         if self.display and self.shell:
             self.shell.display_pub = self.save_display_pub
-            # sys.displayhook = self.save_display_hook
 
 
 _PURPLE = "\033[95m"

@@ -76,6 +76,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self._has_cell_id: bool = (
             "cell_id" in inspect.signature(super()._run_cell).parameters
         )
+        self._should_capture_output = False
 
     @classmethod
     def instance(cls, *args, **kwargs) -> "IPyflowInteractiveShell":
@@ -233,16 +234,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             sys.meta_path.insert(0, self._saved_meta_path_entries.pop())
 
     @contextmanager
-    def _tracing_context(
-        self, syntax_transforms_enabled: bool, should_capture_output: bool
-    ):
+    def _tracing_context(self, syntax_transforms_enabled: bool):
         self.before_enter_tracing_context()
 
         try:
             all_tracers = [
                 tracer.instance()
                 for tracer in self.registered_tracers
-                if tracer is not OutputRecorder or should_capture_output
+                if tracer is not OutputRecorder or self._should_capture_output
             ]
             if self.syntax_transforms_only:
                 with self._syntax_transform_only_tracing_context(
@@ -305,6 +304,37 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def _is_code_empty(self, code: str) -> bool:
         return self.input_transformer_manager.transform_cell(code).strip() == ""
 
+    def _reset_should_capturing_output(self) -> bool:
+        ret = self._should_capture_output
+        self._should_capture_output = False
+        return ret
+
+    def run_cell(
+        self,
+        raw_cell,
+        store_history=False,
+        silent=False,
+        shell_futures=True,
+        cell_id=None,
+        **kwargs,
+    ):
+        if self._has_cell_id:
+            kwargs["cell_id"] = cell_id
+        try:
+            return super().run_cell(
+                raw_cell,
+                store_history=store_history,
+                silent=silent,
+                shell_futures=shell_futures,
+                **kwargs,
+            )
+        finally:
+            if self._reset_should_capturing_output():
+                # Kind of weird -- we enter the context using the tracer to ensure it only picks up
+                # user output, but we don't exit it until here to ensure we also pick up output from
+                # ipython post execute hooks (e.g. where matplotlib flushes buffers).
+                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
+
     async def run_cell_async(
         self,
         raw_cell: str,
@@ -351,16 +381,15 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if maybe_new_content is not None:
             raw_cell = maybe_new_content
         # Stage 2: Trace / run the cell, updating dependencies as they are encountered.
-        should_trace = singletons.flow().mut_settings.dataflow_enabled
+        settings = singletons.flow().mut_settings
+        should_trace = settings.dataflow_enabled
         is_already_recording_output = raw_cell.strip().startswith("%%capture")
-        should_capture_output = should_trace and not is_already_recording_output
-        output_captured = False
+        self._should_capture_output = should_trace and not is_already_recording_output
         try:
             with self._tracing_context(
                 self.syntax_transforms_enabled
                 # disable syntax transforms for cell magics
                 and not raw_cell.strip().startswith("%%"),
-                should_capture_output,
             ) if should_trace else suppress():
                 has_transformed_cell = kwargs.pop("transformed_cell", None) is not None
                 transformed_cell = self.transform_cell(raw_cell)
@@ -392,13 +421,9 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 cell.dynamic_parents = cell.prev_cell.dynamic_parents
                 cell.dangling_static_parents = cell.prev_cell.dangling_static_parents
                 cell.dangling_dynamic_parents = cell.prev_cell.dangling_dynamic_parents
-            if should_capture_output:
-                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
-                output_captured = True
         except Exception as e:
-            if should_capture_output and not output_captured:
-                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
-            logger.exception("exception occurred")
+            if settings.is_dev_mode:
+                logger.exception("exception occurred")
             self.on_exception(e)
         else:
             self.on_exception(None)

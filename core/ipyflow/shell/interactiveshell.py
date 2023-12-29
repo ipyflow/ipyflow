@@ -26,8 +26,8 @@ from ipyflow.tracing.ipyflow_tracer import (
 )
 from ipyflow.utils.ipython_utils import (
     CapturedIO,
+    CaptureOutputTee,
     ast_transformer_context,
-    capture_output_tee,
     input_transformer_context,
     make_mro_inserter_metaclass,
     print_purple,
@@ -42,7 +42,7 @@ class OutputRecorder(pyc.BaseTracer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
-            self.capture_output_tee = capture_output_tee()
+            self.capture_output_tee = CaptureOutputTee()
         self.capture_output = None
 
     @pyc.register_raw_handler(pyc.init_module)

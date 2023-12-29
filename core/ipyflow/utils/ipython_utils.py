@@ -150,13 +150,13 @@ class TeeDisplayPublisher:
             self.pub2.set_parent(*args, **kwargs)
 
 
-class capture_output_tee:
+class CaptureOutputTee:
     """
     Context manager for capturing and replicating stdout/err and rich display publishers.
     NB: This is a modified version of IPython.utils.capture.capture_output that doesn't capture
       the displayhook as well (the thing that renders the final expression in a cell). Trying
       to capture both it and the display publisher seems like it can confuse ipywidgets, and
-      this we can always rerender it anyway if necessary using the Out dictionary.
+      for this we can always rerender it anyway if necessary using the Out dictionary.
     """
 
     def __init__(self, stdout=True, stderr=True, display=True) -> None:

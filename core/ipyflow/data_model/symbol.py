@@ -19,7 +19,7 @@ from typing import (
     cast,
 )
 
-from ipyflow.config import FlowDirection
+from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.cell import Cell, cells
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.data_model.utils.annotation_utils import (
@@ -63,7 +63,11 @@ _override_unused_warning_symbols = symbols
 @debounce(0.1)
 def _debounced_exec_schedule(executed_cell_id: IdType, reactive: bool) -> None:
     flow_ = flow()
+    settings = flow_.mut_settings
+    exec_schedule = settings.exec_schedule
     try:
+        if exec_schedule == ExecutionSchedule.DAG_BASED:
+            settings.exec_schedule = ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
         flow_.get_and_set_exception_raised_during_execution(None)
         flow_.handle(
             {
@@ -74,6 +78,7 @@ def _debounced_exec_schedule(executed_cell_id: IdType, reactive: bool) -> None:
             }
         )
     finally:
+        settings.exec_schedule = exec_schedule
         flow_.debounced_exec_schedule_pending = False
 
 

@@ -716,11 +716,14 @@ class NotebookFlow(singletons.NotebookFlow):
         response = self.check_and_link_multiple_cells(
             cells_to_check=cells_to_check,
             last_executed_cell_id=last_cell_id,
-            allow_new_ready=request.get("allow_new_ready", allow_new_ready)
-            and exec_schedule
-            in (
-                ExecutionSchedule.LIVENESS_BASED,
-                ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+            allow_new_ready=request.get(
+                "allow_new_ready",
+                allow_new_ready
+                and exec_schedule
+                in (
+                    ExecutionSchedule.LIVENESS_BASED,
+                    ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+                ),
             ),
         ).to_json()
         response["type"] = "compute_exec_schedule"

@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
+_CAPTURE_OUTPUT_SAVE_LIMIT = 2 * 1024 * 1024
+
+
 class OutputRecorder(pyc.BaseTracer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -666,7 +669,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 )
                 + len(captured.stdout)
                 + len(captured.stderr)
-                > 256
+                > _CAPTURE_OUTPUT_SAVE_LIMIT
             ):
                 # don't save potentially large outputs for previous versions
                 prev_cell.captured_output = None

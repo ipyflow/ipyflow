@@ -7,6 +7,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from typing import (
     TYPE_CHECKING,
+    Any,
     Dict,
     FrozenSet,
     Generator,
@@ -824,6 +825,13 @@ class Cell(SliceableMixin):
 
     def to_function(self, *args, **kwargs):
         return self.code().to_function(*args, **kwargs)
+
+    def reproduce(self, lookback: int = 0) -> Any:
+        cell_to_repro = self
+        for _ in range(lookback):
+            cell_to_repro = cell_to_repro.prev_cell
+        cell_to_repro.captured_output.show()
+        return shell().user_ns["Out"].get(cell_to_repro.cell_ctr)
 
 
 if len(_CodeCellContainer) == 0:

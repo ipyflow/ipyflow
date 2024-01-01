@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from ipyflow.api.cells import stderr, stdout
+from ipyflow.api.cells import reproduce_cell, stderr, stdout
 from ipyflow.api.lift import (
     code,
     deps,
@@ -20,6 +20,7 @@ __all__ = [
     "has_tag",
     "lift",
     "rdeps",
+    "reproduce_cell",
     "rusers",
     "set_tag",
     "stderr",

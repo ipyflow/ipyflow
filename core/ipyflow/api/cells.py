@@ -31,3 +31,7 @@ def stderr(ts_or_cell_num: Union[int, Timestamp]) -> Optional[str]:
         return None if captured is None else str(captured.stderr)
     except KeyError:
         raise ValueError("cell with counter %d has not yet executed" % cell_num)
+
+
+def reproduce_cell(ctr: int, lookback: int = 0):
+    return cells().at_counter(ctr).reproduce(lookback=lookback)

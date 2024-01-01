@@ -826,11 +826,21 @@ class Cell(SliceableMixin):
     def to_function(self, *args, **kwargs):
         return self.code().to_function(*args, **kwargs)
 
-    def reproduce(self, lookback: int = 0) -> Any:
+    def reproduce(
+        self, show_input: bool = True, show_output: bool = True, lookback: int = 0
+    ) -> Any:
         cell_to_repro = self
         for _ in range(lookback):
             cell_to_repro = cell_to_repro.prev_cell
-        cell_to_repro.captured_output.show()
+        if show_input:
+            print_ = print
+            print_(cell_to_repro.executed_content)
+            max_len = max(
+                len(line) for line in cell_to_repro.executed_content.splitlines()
+            )
+            print_("-" * max_len)
+        if show_output:
+            cell_to_repro.captured_output.show()
         return shell().user_ns["Out"].get(cell_to_repro.cell_ctr)
 
 

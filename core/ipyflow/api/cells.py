@@ -33,5 +33,11 @@ def stderr(ts_or_cell_num: Union[int, Timestamp]) -> Optional[str]:
         raise ValueError("cell with counter %d has not yet executed" % cell_num)
 
 
-def reproduce_cell(ctr: int, lookback: int = 0):
-    return cells().at_counter(ctr).reproduce(lookback=lookback)
+def reproduce_cell(
+    ctr: int, show_input: bool = True, show_output: bool = True, lookback: int = 0
+):
+    return (
+        cells()
+        .at_counter(ctr)
+        .reproduce(show_input=show_input, show_output=show_output, lookback=lookback)
+    )

@@ -170,7 +170,7 @@ class Slice:
             pass
         text = "".join(code_lines)
         self.__class__._func_counter += 1
-        live_refs, _ = compute_live_dead_symbol_refs(text, scope=flow().global_scope)
+        live_refs, *_ = compute_live_dead_symbol_refs(text, scope=flow().global_scope)
         arg_set_raw = {ref.ref.chain[0].value for ref in live_refs}
         arg_set = {arg for arg in arg_set_raw if isinstance(arg, str)}
         for arg in list(arg_set):

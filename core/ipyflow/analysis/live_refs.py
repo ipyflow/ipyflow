@@ -43,6 +43,7 @@ class ComputeLiveSymbolRefs(
         # live symbols also include the stmt counter of when they were live, for slicing purposes later
         self.live: Set[LiveSymbolRef] = set()
         self.dead = {SymbolRef.from_string(killed) for killed in init_killed or set()}
+        self.modified: Set[SymbolRef] = set()
         # TODO: use the ast context instead of hacking our own (e.g. ast.Load(), ast.Store(), etc.)
         self._in_kill_context = False
         self._inside_attrsub = False
@@ -50,7 +51,9 @@ class ComputeLiveSymbolRefs(
         self._is_lhs = False
         self._include_killed_live = include_killed_live
 
-    def __call__(self, node: ast.AST) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
+    def __call__(
+        self, node: ast.AST
+    ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], Set[SymbolRef]]:
         """
         This function should be called when we want to do a liveness check on a
         cell's corresponding ast.Module.
@@ -59,7 +62,8 @@ class ComputeLiveSymbolRefs(
         #   same loop, since we will add everything on the LHS of an assignment to the killed
         #   set before checking the loop body for live variables
         self.visit(node)
-        return self.live, self.dead
+        self.modified |= self.dead
+        return self.live, self.dead, self.modified
 
     def kill_context(self):
         return self.push_attributes(_in_kill_context=True)
@@ -113,10 +117,11 @@ class ComputeLiveSymbolRefs(
         this_assign_live: Set[LiveSymbolRef] = set()
         # we won't mutate overall dead for visiting simple targets, and we need it to avoid adding false positive lives
         with self.push_attributes(live=this_assign_live):
-            if value is not None:
-                self.visit(value)
             if aug_assign_target is not None:
                 self.visit(aug_assign_target)
+                self.modified |= {ref.ref for ref in this_assign_live}
+            if value is not None:
+                self.visit(value)
             with self.push_attributes(_is_lhs=True):
                 for target in targets:
                     if isinstance(target, (ast.Attribute, ast.Subscript)):
@@ -451,7 +456,7 @@ def _compute_call_chain_live_symbols_and_cells(
             continue
         seen.add(workitem)
         init_killed = {arg.arg for arg in called_sym.sym.get_definition_args()}
-        live_refs, _ = compute_live_dead_symbol_refs(
+        live_refs, *_ = compute_live_dead_symbol_refs(
             cast(ast.FunctionDef, called_sym.sym.func_def_stmt).body,
             init_killed=init_killed,
             include_killed_live=cell_ctr > 0,
@@ -512,7 +517,7 @@ def compute_live_dead_symbol_refs(
     scope: "Scope" = None,
     init_killed: Optional[Set[str]] = None,
     include_killed_live: bool = False,
-) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef]]:
+) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], Set[SymbolRef]]:
     if init_killed is None:
         init_killed = set()
     if isinstance(code, str):

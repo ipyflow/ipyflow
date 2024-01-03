@@ -538,7 +538,7 @@ class NotebookFlow(singletons.NotebookFlow):
                     with static_slicing_context():
                         for pid, sym_edges in prev_static_parents.items():
                             cell.remove_parent_edges(pid, sym_edges)
-                cell.check_and_resolve_symbols(
+                result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=True,
                 )
                 if edges_need_update:
@@ -547,6 +547,7 @@ class NotebookFlow(singletons.NotebookFlow):
                             cell.remove_parent_edges(
                                 pid, sym_edges - cell.static_parents.get(pid, set())
                             )
+                cell.last_check_result = result
                 cell.last_check_cell_ctr = cell.cell_ctr
                 should_recompute_exec_schedule = True
             except SyntaxError:
@@ -746,8 +747,21 @@ class NotebookFlow(singletons.NotebookFlow):
             this_cell_children: Set[IdType] = set()
             for _ in self.mut_settings.iter_slicing_contexts():
                 for par_id, syms in cell.directional_parents.items():
+                    parent = cells().from_id(par_id)
+                    if (
+                        parent.last_check_result is not None
+                        and syms <= parent.static_writes
+                        and len(parent.last_check_result.modified & syms) == 0
+                    ):
+                        continue
                     this_cell_parents.add(par_id)
                 for child_id, syms in cell.directional_children.items():
+                    if (
+                        cell.last_check_result is not None
+                        and syms <= cell.static_writes
+                        and len(cell.last_check_result.modified & syms) == 0
+                    ):
+                        continue
                     this_cell_children.add(child_id)
             cell_parents[cell.id] = list(this_cell_parents)
             cell_children[cell.id] = list(this_cell_children)

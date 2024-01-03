@@ -15,9 +15,10 @@ from typing import (
     cast,
 )
 
+from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.symbol import Symbol, SymbolType
-from ipyflow.models import _ScopeContainer, scopes
+from ipyflow.models import _ScopeContainer, cells, scopes
 from ipyflow.singletons import tracer, tracer_initialized
 from ipyflow.types import SupportedIndexType
 
@@ -255,6 +256,26 @@ class Scope:
         )
         if tracer_initialized():
             tracer().this_stmt_updated_symbols.add(sym)
+        if cells().exec_counter() <= 0:
+            return sym
+        current_cell = cells().current_cell()
+        try:
+            is_static_write = (
+                self.is_global
+                and stmt_node is not None
+                and isinstance(stmt_node, ast.Assign)
+                and isinstance(symbol_node, ast.Name)
+                and isinstance(sym.name, str)
+                and SymbolRef.from_string(sym.name)
+                in compute_live_dead_symbol_refs(stmt_node, self)[1]
+            ) and sym not in current_cell.dynamic_writes
+        except SyntaxError:
+            is_static_write = False
+        if is_static_write:
+            current_cell.static_writes.add(sym)
+        else:
+            current_cell.static_writes.discard(sym)
+            current_cell.dynamic_writes.add(sym)
         return sym
 
     def _upsert_data_symbol_for_name_inner(

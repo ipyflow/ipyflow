@@ -880,7 +880,7 @@ class DataflowTracer(StackFrameManager):
         if node is None:
             return
         slice_node = cast(ast.Subscript, node).slice
-        live, _ = compute_live_dead_symbol_refs(
+        live, *_ = compute_live_dead_symbol_refs(
             slice_node, scope=self.cur_frame_original_scope
         )
         subscript_live_refs = []
@@ -1435,7 +1435,7 @@ class DataflowTracer(StackFrameManager):
             self.tracing_disabled_since_last_stmt = False
 
     def _handle_skipped_sub_statements(self, stmt: ast.stmt) -> None:
-        live, dead = compute_live_dead_symbol_refs(stmt)
+        live, dead, *_ = compute_live_dead_symbol_refs(stmt)
         for sym in {ref.to_symbol() for ref in {r.ref for r in live} | dead} - {None}:
             if sym in self.this_stmt_updated_symbols:
                 continue

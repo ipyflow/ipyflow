@@ -69,6 +69,7 @@ class CheckerResult(NamedTuple):
     used_cells: Set[int]  # last updated timestamps of the live symbols
     live_cells: Set[int]  # cells that define a symbol that was called in the cell
     dead: Set["Symbol"]  # symbols that are definitely assigned to
+    modified: Set["Symbol"]  # symbols that are dead or modified
     typechecks: bool  # whether the cell typechecks successfully
 
 
@@ -94,6 +95,7 @@ class Cell(SliceableMixin):
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
         self.last_check_cell_ctr: Optional[int] = None
+        self.last_check_result: Optional[CheckerResult] = None
         self.error_in_exec: Optional[BaseException] = None
         self.history: List[int] = [cell_ctr] if cell_ctr > -1 else []
         self.executed_content: Optional[str] = None
@@ -114,6 +116,8 @@ class Cell(SliceableMixin):
         self.dangling_static_parents: Dict[IdType, Set["Symbol"]] = {}
         self.dangling_static_children: Dict[IdType, Set["Symbol"]] = {}
         self.used_symbols: Set["Symbol"] = set()
+        self.static_writes: Set["Symbol"] = set()
+        self.dynamic_writes: Set["Symbol"] = set()
         self._used_cell_counters_by_live_symbol: Dict["Symbol", Set[int]] = defaultdict(
             set
         )
@@ -657,13 +661,18 @@ class Cell(SliceableMixin):
                 )
             return max_used_cell_ctr
 
-    def _get_live_dead_symbol_refs(
+    def _get_live_dead_modified_symbol_refs(
         self, update_liveness_time_versions: bool
-    ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], bool]:
+    ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], Set[SymbolRef], bool]:
         live_symbol_refs: Set[LiveSymbolRef] = set()
         dead_symbol_refs: Set[SymbolRef] = set()
+        modified_symbol_refs: Set[SymbolRef] = set()
         if self.override_live_refs is None and self.override_dead_refs is None:
-            live_symbol_refs, dead_symbol_refs = compute_live_dead_symbol_refs(
+            (
+                live_symbol_refs,
+                dead_symbol_refs,
+                modified_symbol_refs,
+            ) = compute_live_dead_symbol_refs(
                 self.to_ast(),
                 scope=flow().global_scope,
                 include_killed_live=self.cell_ctr > 0,
@@ -678,7 +687,12 @@ class Cell(SliceableMixin):
                     SymbolRef.from_string(ref) for ref in self.override_dead_refs
                 }
             update_liveness_time_versions = False
-        return live_symbol_refs, dead_symbol_refs, update_liveness_time_versions
+        return (
+            live_symbol_refs,
+            dead_symbol_refs,
+            modified_symbol_refs,
+            update_liveness_time_versions,
+        )
 
     def check_and_resolve_symbols(
         self,
@@ -687,8 +701,9 @@ class Cell(SliceableMixin):
         (
             live_symbol_refs,
             dead_symbol_refs,
+            modified_symbol_refs,
             update_liveness_time_versions,
-        ) = self._get_live_dead_symbol_refs(update_liveness_time_versions)
+        ) = self._get_live_dead_modified_symbol_refs(update_liveness_time_versions)
         (
             live_resolved_symbols,
             live_cells,
@@ -704,8 +719,10 @@ class Cell(SliceableMixin):
                 for resolved in live_resolved_symbols:
                     self.add_parent_edge(resolved.timestamp, resolved.sym)
         # only mark dead attrsubs as killed if we can traverse the entire chain
-        dead_symbols, _ = get_symbols_for_references(
-            dead_symbol_refs, flow().global_scope
+        global_scope = flow().global_scope
+        dead_symbols, _ = get_symbols_for_references(dead_symbol_refs, global_scope)
+        modified_symbols, _ = get_symbols_for_references(
+            modified_symbol_refs, global_scope
         )
         for resolved in live_resolved_symbols:
             if resolved.is_deep:
@@ -720,6 +737,7 @@ class Cell(SliceableMixin):
             used_cells=used_cells,
             live_cells=live_cells,
             dead=dead_symbols,
+            modified=modified_symbols,
             typechecks=self._typechecks(live_cells, live_resolved_symbols),
         )
 

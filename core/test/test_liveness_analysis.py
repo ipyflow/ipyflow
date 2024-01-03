@@ -29,7 +29,7 @@ def compute_live_dead_symbol_refs(
 ) -> Tuple[Set[str], Set[str]]:
     if isinstance(code, str):
         code = textwrap.dedent(code)
-    live, dead = compute_live_dead_symbol_refs_with_stmts(code)
+    live, dead, *_ = compute_live_dead_symbol_refs_with_stmts(code)
     live = {ref.ref for ref in live}
     live, dead = _simplify_symbol_refs(live), _simplify_symbol_refs(dead)
     return live, dead

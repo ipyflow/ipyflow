@@ -7,121 +7,218 @@
 [![License: BSD3](https://img.shields.io/badge/License-BSD3-maroon.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![](https://img.shields.io/pypi/v/ipyflow.svg)](https://pypi.org/project/ipyflow)
 ![](https://img.shields.io/pypi/pyversions/ipyflow.svg)
-[![Binder](https://img.shields.io/badge/launch-binder-E66581.svg?logo=data:image/png;base64,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
-)](https://mybinder.org/v2/gh/ipyflow/ipyflow/binder?urlpath=lab/tree/notebooks/demo.ipynb)
 
 TL;DR
 -----
-Reactive Python notebooks for Jupyter[Lab]:
+Precise reactive Python notebooks for Jupyter[Lab]:
 
 1. `pip install ipyflow`
-2. Pick `Python 3 (ipyflow)` from the kernel dropdown.
-3. Use `ctrl+shift+enter` (or `cmd+shift+enter` on Mac) to execute a cell and
-   everything that (recursively) depends on it:
+2. Pick `Python 3 (ipyflow)` from the launcher or kernel selector.
+3. For each cell execution, the (minimal) set of out-of-sync upstream and
+   downstream cells also re-execute, so that executed cells appear as they
+   would when running the notebook from top-to-bottom.
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-tldr.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-tldr.gif" />
 </p>
 
 About
 -----
-IPyflow is a next-generation Python kernel for Jupyter and other notebook
-interfaces that tracks dataflow relationships between symbols and cells during
-a given interactive session, thereby making it easier to reason about notebook
-state. Here is a
+IPyflow is a next-generation Python kernel for JupyterLab and Notebook 7 that
+tracks dataflow relationships between symbols and cells during a given
+interactive session, thereby making it easier to reason about notebook state.
+Here is a
 [video](https://www.youtube.com/watch?v=mZZnDlyKk7g&t=8s)
 of the JupyterCon talk introducing it (and corresponding
 [slides](https://docs.google.com/presentation/d/1D9MSiIkwv7gjRr7jfNYZXki9TfkoUr4Yr-a06i0w_QU)).
 
 If you'd like to skip the elevator pitch and skip straight to installation /
 activation instructions jump to [quick start](#quick-start) below; otherwise,
-keep reading to learn about IPyflow's features.
+keep reading to learn about IPyflow's philosophy and feature set.
+
+Goals
+-----
+IPyflow provides bolt-on reactivity to Jupyter's default Python kernel, ipykernel.
+It was was designed with the following goals in mind:
+- **Full backwards-compatibility with ipykernel:** IPyflow aims to be a
+  *drop-in replacement* for ipykernel, providing a strict superset of its
+  features.
+- **Precise dependency inference:** IPyflow understands dependencies between
+  cells beyond just simple variables. For example, IPyflow understands when
+  cell `B` depends on cell `A` because of a subscript reference `x[0]`, and is
+  smart enough not to reactively execute cell `B` when some other part of `x`,
+  e.g. `x[1]`, changes. As a result, it limits unnecessary re-execution to a
+  bare minimum.
+- **Fearless execution:** IPyflow attempts to enforce the following invariant:
+  whenever you execute a cell, the resulting output appears as it would if you
+  had performed a "restart + run all" operation. The implication is that you
+  can execute basically any cell in the notebook and trust that It Just
+  Works<sup>TM</sup>.
+
+
+Quick Start
+-----------
+To install, run:
+```bash
+pip install ipyflow
+```
+
+To run an IPyflow kernel, select "Python 3 (ipyflow)" from the list of
+available kernels in the Launcher tab. Similarly, you can switch to / from
+IPyflow from an existing notebook by navigating to the "Change kernel" file
+menu item:
+
+Entrypoint                       |  Kernel Switcher
+:-------------------------------:|:-------------------------------:
+![](https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-launcher.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/change-kernel-lab.png)
+
 
 Features
 --------
-IPyflow ships with classic Jupyter + JupyterLab extensions that provide the
-following user-facing features.
 
-### Execution Suggestions
 
-IPyflow understands exactly what data changed in your notebook, when it
-changed, and when it got referenced. This allows it to provide *execution
-suggestions* whenever running some upstream cell changes data that downstream
-cells depend on. To keep the execution state consistent with the code in cells,
-rerun the turquoise-highlighted cells, and avoid the red-highlighted cells:
+### Reactive execution model
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/suggestions.gif" />
-</p>
+IPyflow ships with extensions that bring reactivity to JupyterLab and Notebook
+7 by default, similar to execution behavior offered in other notebooks such as
+[Observable](https://observablehq.com/),
+[Pluto.jl](https://github.com/fonsp/Pluto.jl), and
+[Marimo](https://github.com/marimo-team/marimo).
 
-A turquoise-highlighted input with red-highlighted output just means that the
-output may be out-of-sync.
-
-### Reactivity
-
-IPyflow enables opt-in reactive execution for both Jupyter and JupyterLab
-(similar to [Observable](https://observablehq.com/) or
-[Pluto.jl](https://github.com/fonsp/Pluto.jl), wherein execution of cell `C`
-results in automatic re-execution of all of `C`'s dependents). Use
-ctrl+shift+enter (on Mac, cmd+shift+enter also works) to execute a cell and all of the cells that
-(recursively) depend on it reactively:
+IPyflow's reactivity behaves a little bit differently from the above, however,
+as it was designed to meet the needs of Jupyter users in particular. When you
+execute cell `C` with IPyflow, `C`'s output, the output of the cells `C`
+depends on, and the output of the cells that depend on `C` all appear as they
+would if the notebook were executed from top to bottom (e.g. via "restart and
+run-all"). When you select some cell `C`, all the cells that would re-execute
+when `C` is executed have an orange dot next to them, and cells that `C`
+depends on but that are up-to-date and will not re-execute have purple dots:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactive-hotkey.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-dots.gif" width="400" />
 </p>
 
-You can also run the magic command `%flow mode reactive` in any cell to enable
-reactivity as the default execution mode:
+The cell dependency information is persisted to the notebook metadata, so that
+you can jump to any cell after starting a fresh kernel session, run it, and be
+confident that the output is what was intended by the notebook author:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-restart.gif" width="400" />
 </p>
 
-Disable by running `%flow mode normal`.
 
-If you'd like to make reactivity the default behavior (not recommended, unless
-you do not mind being surprised occasionally), you can add this to your IPython
-profile (default location typically at
-`~/.ipython/profile_default/ipython_config.py`):
+### Autosave and recovering prior executions
+
+Because IPyflow peeks at runtime state in order to infer dependencies, it needs
+to keep content of the notebook in sync with the kernel's memory state, even
+across browser refreshes. As such, IPyflow enables autosave-on-write by
+default, so that the kernel state, the notebook UI's in-memory state, and the
+notebook file on disk are all in sync. If you accidentally overwrite a cell's
+output that you wanted to keep, e.g. during a reactive execution, and autosave
+overwrites the previous result on disk, fear not! IPyflow provides a library
+utility called `reproduce_cell` to recover the input and output of previous
+cell executions (within a given kernel session):
+
+```python
+from ipyflow import reproduce_cell
+reproduce_cell(4, lookback=1)  # to reproduce the previous execution of cell 4
+```
+
+Example:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/reproduce-cell.gif" width="400" />
+</p>
+
+
+### Opting out of reactivity
+
+If you'd like to temporarily opt out of reactive execution, you can use
+ctrl+shift+enter (on Mac, cmd+shift+enter also works) to only execute the cell in question:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/alt-mode-execute.gif" />
+</p>
+
+You can also run the magic command `%flow mode normal` in opt out of the
+default reactive execution mode (in which case, ctr+shift+enter /
+cmd+shift+enter will switch from being nonreactive to reactive). To reenable
+reactive execution as the default, you can run `%flow mode reactive`:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/reactivity-opt-out.gif" />
+</p>
+
+If you'd like to prevent the default reactive behavior for every new kernel
+session, you can add this to your IPython profile (default location typically
+at `~/.ipython/profile_default/ipython_config.py`):
 
 ```python
 c = get_config()
-c.ipyflow.exec_mode = "reactive"
+c.ipyflow.exec_mode = "normal"  # defaults to "reactive"
 ```
 
-### Syntax Extensions
 
-Prefixing a symbol with `$` in a load context will cause the referencing cell
-to re-execute itself, whenever the aforementioned symbol is updated (regardless
-of execution mode):
+### Execution suggestions and shortcut for resolving inconsistencies
+
+Whenever a cell references updated data, the collapser next to it is given an
+orange color (similar to the color for dirty cells), and cells that
+(recursively) depend on it are given a purple collapser color. (An orange input
+with a purple output just means that the output may be out-of-sync.) When using
+reactive execution, you usually won't see these, since out-of-sync dependent
+cells will be rerun automatically, though you may see them if using
+ctrl+shift+enter to temporarily opt out of reactivity, or if you change which
+data the cell updates (thereby overwriting previous edges between cells).
+
+If you'd like to let IPyflow fix these up for you, you can press "Space" when
+in command mode to automatically resolve all stale or dirty cells. This
+operation may introduce more stale cells, in which case you can continue
+pressing "Space" until all inconsistencies are resolved, if desired:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-load.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/resolve-inconsistencies.gif" width="450" />
 </p>
 
-You can also use the `$` syntax in store contexts, which triggers cells that
-reference the corresponding symbol to re-execute, regardless of whether the
-reference is similarly `$`-prefixed:
+
+### Memoization
+
+Cells that reference Python functions and classes, primitives like integers,
+floats, strings, as well as numpy arrays, pandas dataframes, and containers
+(lists, dicts, sets, tuples, etc.) thereof can be memoized by IPyflow using the
+special `%%memoize` pseudomagic. There's no need to specify the "inputs" to the
+cell, as IPyflow will infer these automatically. Memoized cells cache their
+results in-memory (though disk-backed caches are planned for the future), and
+will retrieve these cached results (rather than re-running the cell) whenever
+IPyflow detects inputs and cell content identical to that of a previous run:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-store.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-memoization.gif" />
 </p>
 
-Finally, you can also prefix with `$$` to trigger a cascading reactive update
-to all dependencies in the chain, recursively:
+By default, `%%memoize` skips all output except potential displayhook output
+from the last expression in the cell (when applicable). To skip this too, pass
+`--quiet`, and to include stdout, stderr, and other rich output, pass
+`--verbose`:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/syntax-extensions-cascading-store.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/memoize-quiet-verbose.gif" />
 </p>
 
-### Integration with ipywidgets
 
-IPyflow's reactive execution engine, as well as its APIs (see "State API" below)
-are fully compatible with `ipywidgets`, allowing cells to respond to slider changes,
-button clicks, and other events:
+### IPyWidgets integration
+
+IPyflow's reactive execution engine has built-in support for `ipywidgets`,
+allowing widget changes to be propagated across cell boundaries:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipywidgets-integration.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipywidgets-integration.gif" width="500" />
+</p>
+
+This functionality can be combined with the `%%memoize` magic to provide near
+real-time rendering of interactive plots across cells:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipywidgets-memoization.gif" width="500" />
 </p>
 
 This functionality can be paired with other extensions like
@@ -146,7 +243,7 @@ x = 0
 y = x + 1
 
 # Cell 4
-code(y)
+print(code(y))
 
 # Output:
 """
@@ -190,54 +287,6 @@ y_sym = lift(y)
 y_sym.timestamp
 # Timestamp(cell_num=3, stmt_num=0)
 ```
-
-Finally, IPyflow also comes with some rudimentary support for watchpoints:
-
-```python
-# Cell 1
-from ipyflow import watchpoints
-
-def watchpoint(obj, position, symbol_name):
-    if obj <= 42:
-        return
-    cell, line = position
-    print(f"{symbol_name} = {obj} exceeds 42 at {cell=}, {line=}")
-
-# Cell 2
-y = 14
-watchpoints(y).add(watchpoint)
-
-# Cell 3
-y += 10
-
-# Cell 4
-y += 20
-# y = 44 exceeds 42 at cell=4, line=1
-```
-
-Quick Start
------------
-To install, run:
-```bash
-pip install ipyflow
-```
-
-To run an IPyflow kernel in JupyterLab, select "Python 3 (ipyflow)" from the
-list of available kernels in the Launcher tab. For classic Jupyter, similarly
-select "Python 3 (ipyflow)" from the list of notebook types in the "New"
-dropdown dialogue.
-
-JupyterLab  Entrypoint:          |  Classic Jupyter Entrypoint:
-:-------------------------------:|:---------------------------:
-![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-notebook.png)
-
-Similarly, you can switch to / from IPyflow from an existing notebook by
-navigating to the "Change kernel" file menu item in either JupyterLab or
-classic Jupyter:
-
-JupyterLab Kernel Switcher:      |  Classic Jupyter Kernel Switcher:
-:-------------------------------:|:--------------------------------:
-![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-lab.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-notebook.png)
 
 Colab, VSCode, and other Interfaces
 -----------------------------------
@@ -283,9 +332,7 @@ reactivity and for the `code` function, for example):
 }
 ```
 
-We don't have a paper written yet for the syntax extensions that implement the
-reactive algebra, but in the mean time, you can cite the IPyflow repo
-directly for that and anything else not covered by the previous publications:
+For anything not covered in the above papers, you can cite the IPyflow repo:
 ```bibtex
 @misc{ipyflow,
   title = {{IPyflow: A Next-Generation, Dataflow-Aware IPython Kernel}},
@@ -300,12 +347,19 @@ IPyflow would not have been possible without the amazing academic collaborators
 listed on the above papers. Its reactive execution features are inspired by
 those of other excellent tools like [Hex](https://hex.tech/) notebooks,
 [Pluto.jl](https://github.com/fonsp/Pluto.jl), and
-[Observable](https://observablehq.com/). This work has benefited from the
-support of folks from a number of companies -- both in the form of direct
-financial contributions ([Databricks](https://www.databricks.com/),
-[Hex](https://hex.tech/)) as well as indirect moral support and encouragement
-([Ponder](https://ponder.io/), [Meta](https://www.meta.com/)). And of course,
-IPyflow rests on the foundations built by the incredible Jupyter community.
+[Observable](https://observablehq.com/). IPyflow also enjoys cross-pollination
+of ideas with other reactive Python notebooks like
+[Marimo](https://github.com/marimo-team/marimo),
+[Jolin.io](https://cloud.jolin.io/), and
+[Datalore](https://blog.jetbrains.com/datalore/2021/10/11/revamped-reactive-mode-and-how-it-makes-your-notebooks-reproducible/)
+--- definitely check them out as well if you like IPyflow.
+
+Work on IPyflow has benefited from the support of folks from a number of
+companies -- both in the form of direct financial contributions
+([Databricks](https://www.databricks.com/), [Hex](https://hex.tech/)) as well
+as indirect moral support and encouragement ([Ponder](https://ponder.io/),
+[Meta](https://www.meta.com/)). And of course, IPyflow rests on the foundations
+built by the incredible Jupyter community.
 
 License
 -------

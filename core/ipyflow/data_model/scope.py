@@ -269,6 +269,21 @@ class Scope:
                 and SymbolRef.from_string(sym.name)
                 in compute_live_dead_symbol_refs(stmt_node, self)[1]
             ) and sym not in current_cell.dynamic_writes
+            if (
+                not is_static_write
+                and self.is_global
+                and isinstance(stmt_node, (ast.Import, ast.ImportFrom))
+            ):
+                is_static_write = True
+                dead = compute_live_dead_symbol_refs(stmt_node, self)[1]
+                for import_name in stmt_node.names:
+                    if (
+                        import_name.name == "*"
+                        or SymbolRef.from_string(import_name.asname or import_name.name)
+                        not in dead
+                    ):
+                        is_static_write = False
+                        break
         except SyntaxError:
             is_static_write = False
         if is_static_write:

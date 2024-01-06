@@ -754,12 +754,23 @@ class NotebookFlow(singletons.NotebookFlow):
                         and len(parent.last_check_result.modified & syms) == 0
                     ):
                         continue
+                    if parent.cell_ctr >= 0 and not any(
+                        parent.cell_ctr
+                        in {ts.cell_num for ts in sym.updated_timestamps}
+                        for sym in syms
+                    ):
+                        continue
                     this_cell_parents.add(par_id)
                 for child_id, syms in cell.directional_children.items():
                     if (
                         cell.last_check_result is not None
                         and syms <= cell.static_writes
                         and len(cell.last_check_result.modified & syms) == 0
+                    ):
+                        continue
+                    if cell.cell_ctr >= 0 and not any(
+                        cell.cell_ctr in {ts.cell_num for ts in sym.updated_timestamps}
+                        for sym in syms
                     ):
                         continue
                     this_cell_children.add(child_id)

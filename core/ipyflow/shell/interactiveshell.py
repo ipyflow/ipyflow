@@ -493,7 +493,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                         continue
                     else:
                         break
-                if sym.timestamp.cell_num == in_ts.cell_num:
+                if sym.is_import or sym.timestamp.cell_num == in_ts.cell_num:
                     continue
                 elif sym.obj_id == obj_id and sym.memoize_timestamp in (
                     in_ts,

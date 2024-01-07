@@ -130,7 +130,7 @@ class Cell(SliceableMixin):
         self._placeholder_id = placeholder_id
         self.memoized_output_level = memoized_output_level
         self.skipped_due_to_memoization_ctr = -1
-        self.memoized_executions: List[MemoizedCellExecution] = []
+        self.memoized_executions: Dict[str, List[MemoizedCellExecution]] = {}
 
     @property
     def id(self) -> IdType:
@@ -326,9 +326,8 @@ class Cell(SliceableMixin):
                 sym, sym.timestamp_excluding_ns_descendents, sym.obj
             )
         assert self.captured_output is not None
-        self.memoized_executions.append(
+        self.memoized_executions.setdefault(self.executed_content, []).append(
             MemoizedCellExecution(
-                self.executed_content,
                 list(inputs.values()),
                 list(outputs.values()),
                 self.captured_output,

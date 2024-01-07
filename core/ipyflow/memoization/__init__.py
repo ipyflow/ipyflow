@@ -41,7 +41,6 @@ class MemoizedOutput(NamedTuple):
 
 
 class MemoizedCellExecution(NamedTuple):
-    content_at_execution: str
     inputs: List[MemoizedInput]
     outputs: List[MemoizedOutput]
     displayed_output: CapturedIO

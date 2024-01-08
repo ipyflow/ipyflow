@@ -183,7 +183,7 @@ semantics the default behavior for new kernel sessions:
 
 ```python
 c = get_config()
-c.ipyflow.direction = "any_order"  # defaults to "in_order"
+c.ipyflow.flow_direction = "any_order"  # defaults to "in_order"
 ```
 
 

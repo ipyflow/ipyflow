@@ -19,7 +19,7 @@ Precise reactive Python notebooks for Jupyter[Lab]:
    would when running the notebook from top-to-bottom.
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-tldr.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-tldr.gif" />
 </p>
 
 About
@@ -70,7 +70,7 @@ menu item:
 
 Entrypoint                       |  Kernel Switcher
 :-------------------------------:|:-------------------------------:
-![](https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-launcher.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/change-kernel-lab.png)
+![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-launcher.png) | ![](https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/change-kernel-lab.png)
 
 
 Features
@@ -95,7 +95,7 @@ when `C` is executed have an orange dot next to them, and cells that `C`
 depends on but that are up-to-date and will not re-execute have purple dots:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-dots.gif" width="400" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-dots.gif" width="400" />
 </p>
 
 The cell dependency information is persisted to the notebook metadata, so that
@@ -103,7 +103,7 @@ you can jump to any cell after starting a fresh kernel session, run it, and be
 confident that the output is what was intended by the notebook author:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-restart.gif" width="400" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-restart.gif" width="400" />
 </p>
 
 
@@ -127,7 +127,7 @@ reproduce_cell(4, lookback=1)  # to reproduce the previous execution of cell 4
 Example:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/reproduce-cell.gif" width="400" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reproduce-cell.gif" width="400" />
 </p>
 
 
@@ -137,7 +137,7 @@ If you'd like to temporarily opt out of reactive execution, you can use
 ctrl+shift+enter (on Mac, cmd+shift+enter also works) to only execute the cell in question:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/alt-mode-execute.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/alt-mode-execute.gif" />
 </p>
 
 You can also run the magic command `%flow mode normal` in opt out of the
@@ -146,7 +146,7 @@ cmd+shift+enter will switch from being nonreactive to reactive). To reenable
 reactive execution as the default, you can run `%flow mode reactive`:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/reactivity-opt-out.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/reactivity-opt-out.gif" />
 </p>
 
 If you'd like to prevent the default reactive behavior for every new kernel
@@ -175,7 +175,7 @@ direction any_order`, and reenable the default in-order semantics using `%flow
 direction in_order`:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-direction.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-direction.gif" />
 </p>
 
 You can also update your IPython profile if you'd like to make any-order
@@ -204,7 +204,7 @@ operation may introduce more stale cells, in which case you can continue
 pressing "Space" until all inconsistencies are resolved, if desired:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/resolve-inconsistencies.gif" width="450" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/resolve-inconsistencies.gif" width="450" />
 </p>
 
 
@@ -220,7 +220,7 @@ will retrieve these cached results (rather than re-running the cell) whenever
 IPyflow detects inputs and cell content identical to that of a previous run:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-memoization.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-memoization.gif" />
 </p>
 
 By default, `%%memoize` skips all output except potential displayhook output
@@ -229,7 +229,7 @@ from the last expression in the cell (when applicable). To skip this too, pass
 `--verbose`:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/memoize-quiet-verbose.gif" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/memoize-quiet-verbose.gif" />
 </p>
 
 
@@ -239,14 +239,14 @@ IPyflow's reactive execution engine has built-in support for `ipywidgets`,
 allowing widget changes to be propagated across cell boundaries:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipywidgets-integration.gif" width="500" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipywidgets-integration.gif" width="500" />
 </p>
 
 This functionality can be combined with the `%%memoize` magic to provide near
 real-time rendering of interactive plots across cells:
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipywidgets-memoization.gif" width="500" />
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipywidgets-memoization.gif" width="500" />
 </p>
 
 This functionality can be paired with other extensions like

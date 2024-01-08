@@ -1,6 +1,21 @@
 History
 =======
 
+0.0.193 (2024-01-07)
+--------------------
+* [lab] Reactivity by default (!!!)
+* [lab] Improvements to reactive execution engine: update stale / dirty dependencies as well;
+* [lab] Initialization improvements after kernel is started / restarted;
+* [lab] Use a more a11y-friendly color scheme by default;
+* [lab] Support any-order execution semantics in batch reactive mode;
+* [kernel] Add a `reproduce_cell` API helper function;
+* [kernel] Better static edge detection / removal;
+* [kernel] Improvements to `%%memoize` magic (--verbose and --quiet specifiers);
+* [kernel] Improvements to resync logic if tracing disabled;
+* [kernel] Fix multithreading bug;
+* [kernel] Support `NoneType` as a subscript type;
+* [kernel] Misc stability improvements and bugfixes;
+
 0.0.192 (2023-12-07)
 --------------------
 * [kernel] Add experimental `%%memoize` magic;

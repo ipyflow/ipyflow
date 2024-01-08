@@ -81,6 +81,7 @@ class Cell(SliceableMixin):
     _cells_by_tag: Dict[str, Set["Cell"]] = defaultdict(set)
     _reactive_cells_by_tag: Dict[str, Set[IdType]] = defaultdict(set)
     _override_current_cell: Optional["Cell"] = None
+    _memoized_executions: Dict[str, List[MemoizedCellExecution]] = {}
 
     def __init__(
         self,
@@ -130,7 +131,6 @@ class Cell(SliceableMixin):
         self._placeholder_id = placeholder_id
         self.memoized_output_level = memoized_output_level
         self.skipped_due_to_memoization_ctr = -1
-        self.memoized_executions: Dict[str, List[MemoizedCellExecution]] = {}
 
     @property
     def id(self) -> IdType:
@@ -326,7 +326,7 @@ class Cell(SliceableMixin):
                 sym, sym.timestamp_excluding_ns_descendents, sym.obj
             )
         assert self.captured_output is not None
-        self.memoized_executions.setdefault(self.executed_content, []).append(
+        self._memoized_executions.setdefault(self.executed_content, []).append(
             MemoizedCellExecution(
                 list(inputs.values()),
                 list(outputs.values()),

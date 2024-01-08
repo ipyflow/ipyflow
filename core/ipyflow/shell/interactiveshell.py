@@ -479,7 +479,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             outputs,
             displayed_output,
             ctr,
-        ) in prev_cell.memoized_executions.get(cell.executed_content, []):
+        ) in prev_cell._memoized_executions.get(cell.executed_content, []):
             for sym, in_ts, mem_ts, obj_id, comparable in inputs:
                 if comparable is not Symbol.NULL:
                     # prefer the comparable check if it is available
@@ -623,10 +623,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def _handle_memoization(self) -> None:
         cell = Cell.current_cell()
         prev_cell = cell.prev_cell
-        if prev_cell is not None:
-            if cell.is_memoized:
-                cell.memoized_executions = prev_cell.memoized_executions
-            prev_cell.memoized_executions = {}
         if cell.skipped_due_to_memoization_ctr > 0:
             cell.to_ast(override=prev_cell.to_ast())
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)

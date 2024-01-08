@@ -159,6 +159,34 @@ c.ipyflow.exec_mode = "normal"  # defaults to "reactive"
 ```
 
 
+### In-order and any-order semantics
+
+IPyflow defaults to *in-order* semantics, meaning that, if cell `B` depends on
+cell `A`, then `A` must appear before `B` in the spatial order of the notebook.
+IPyflow doesn't prevent previous cells from referencing data created or updated
+by later cells, but it omits these edges when performing reactive execution.
+
+In-order semantics, though less flexible, have some desirable properties when
+compared with any-order semantics, as they encourage cleaner and more
+reproducible notebooks that can more easily be converted to Python scripts
+later. Now that I may or may not have sold you on in-order semantics, you can
+enable any-order semantics in IPyflow by running the magic command `%flow
+direction any_order`, and reenable the default in-order semantics using `%flow
+direction in_order`:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/new-readme/img/ipyflow-direction.gif" />
+</p>
+
+You can also update your IPython profile if you'd like to make any-order
+semantics the default behavior for new kernel sessions:
+
+```python
+c = get_config()
+c.ipyflow.direction = "any_order"  # defaults to "in_order"
+```
+
+
 ### Execution suggestions and shortcut for resolving inconsistencies
 
 Whenever a cell references updated data, the collapser next to it is given an

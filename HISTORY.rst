@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.193 (2024-01-07)
+0.0.194 (2024-01-08)
 --------------------
 * [lab] Reactivity by default (!!!)
 * [lab] Improvements to reactive execution engine: update stale / dirty dependencies as well;

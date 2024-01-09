@@ -206,6 +206,43 @@ class Scope:
         else:
             return SymbolType.DEFAULT
 
+    def _compute_is_static_write_for_assign(self, sym: Symbol) -> bool:
+        return (
+            isinstance(sym.symbol_node, ast.Name)
+            and isinstance(sym.name, str)
+            and SymbolRef.from_string(sym.name)
+            in compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
+        )
+
+    def _compute_is_static_write_for_def(self, sym: Symbol) -> bool:
+        dead = compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
+        return SymbolRef.from_string(sym.name) in dead
+
+    def _compute_is_static_write_for_import(self, sym: Symbol) -> bool:
+        dead = compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
+        for import_name in sym.stmt_node.names:
+            if (
+                import_name.name == "*"
+                or SymbolRef.from_string(import_name.asname or import_name.name)
+                not in dead
+            ):
+                return False
+        return True
+
+    def _compute_is_static_write(self, sym: Symbol) -> bool:
+        if not self.is_global or sym.stmt_node is None:
+            return False
+        elif isinstance(sym.stmt_node, ast.Assign):
+            return self._compute_is_static_write_for_assign(sym)
+        elif isinstance(
+            sym.stmt_node, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef)
+        ):
+            return self._compute_is_static_write_for_def(sym)
+        elif isinstance(sym.stmt_node, (ast.Import, ast.ImportFrom)):
+            return self._compute_is_static_write_for_import(sym)
+        else:
+            return False
+
     def upsert_symbol_for_name(
         self,
         name: SupportedIndexType,
@@ -258,35 +295,12 @@ class Scope:
             tracer().this_stmt_updated_symbols.add(sym)
         if cells().exec_counter() <= 0:
             return sym
-        current_cell = cells().current_cell()
         try:
-            is_static_write = (
-                self.is_global
-                and stmt_node is not None
-                and isinstance(stmt_node, ast.Assign)
-                and isinstance(symbol_node, ast.Name)
-                and isinstance(sym.name, str)
-                and SymbolRef.from_string(sym.name)
-                in compute_live_dead_symbol_refs(stmt_node, self)[1]
-            ) and sym not in current_cell.dynamic_writes
-            if (
-                not is_static_write
-                and self.is_global
-                and isinstance(stmt_node, (ast.Import, ast.ImportFrom))
-            ):
-                is_static_write = True
-                dead = compute_live_dead_symbol_refs(stmt_node, self)[1]
-                for import_name in stmt_node.names:
-                    if (
-                        import_name.name == "*"
-                        or SymbolRef.from_string(import_name.asname or import_name.name)
-                        not in dead
-                    ):
-                        is_static_write = False
-                        break
+            is_static_write = self._compute_is_static_write(sym)
         except SyntaxError:
             is_static_write = False
-        if is_static_write:
+        current_cell = cells().current_cell()
+        if is_static_write and sym not in current_cell.dynamic_writes:
             current_cell.static_writes.add(sym)
         else:
             current_cell.static_writes.discard(sym)
@@ -319,6 +333,7 @@ class Scope:
                 prev_sym.update_obj_ref(obj, refresh_cached=False)
                 # old_sym.update_type(symbol_type)
                 prev_sym.update_stmt_node(stmt_node)
+                prev_sym.symbol_node = symbol_node
                 return prev_sym, prev_sym, prev_obj
             else:
                 # In this case, we are copying from a class and we need the sym from which we are copying

@@ -216,9 +216,10 @@ class Scope:
 
     def _compute_is_static_write_for_def(self, sym: Symbol) -> bool:
         dead = compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
-        return SymbolRef.from_string(sym.name) in dead
+        return isinstance(sym.name, str) and SymbolRef.from_string(sym.name) in dead
 
     def _compute_is_static_write_for_import(self, sym: Symbol) -> bool:
+        assert isinstance(sym.stmt_node, (ast.Import, ast.ImportFrom))
         dead = compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
         for import_name in sym.stmt_node.names:
             if (

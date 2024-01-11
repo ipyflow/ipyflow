@@ -183,7 +183,8 @@ class Symbol:
         self.disable_warnings = False
         self._temp_disable_warnings = False
 
-        self._num_widget_observers = 0
+        self._num_ipywidget_observers = 0
+        self._num_mercury_widget_observers = 0
 
         flow().aliases.setdefault(id(obj), set()).add(self)
         if (
@@ -604,12 +605,20 @@ class Symbol:
     #         self.call_scope = None
 
     def update_obj_ref(self, obj: Any, refresh_cached: bool = True) -> None:
-        if self._num_widget_observers > 0:
+        if self._num_ipywidget_observers > 0:
             try:
                 self.obj.unobserve_all()
             except:  # noqa
                 pass
-            self._num_widget_observers = 0
+            self._num_ipywidget_observers = 0
+        if self._num_mercury_widget_observers > 0:
+            try:
+                self._mercury_widgets_manager.get_widget(
+                    self.obj.code_uid
+                ).unobserve_all()
+            except:  # noqa
+                pass
+            self._num_mercury_widget_observers = 0
         self._tombstone = False
         self._cached_out_of_sync = True
         if (
@@ -993,6 +1002,18 @@ class Symbol:
             ns.scope_name = self.name
         if overwrite and len(flow().aliases[self.obj_id]) == 1:
             self._handle_possible_widget_creation()
+            self._handle_possible_mercury_widget_creation()
+
+    @property
+    def _mercury_widgets_manager(self):
+        if self.obj is None:
+            return None
+        if self.is_obj_lazy_module or not hasattr(self.obj, "code_uid"):
+            return None
+        try:
+            return sys.modules.get(self.obj.__class__.__module__).WidgetsManager
+        except:  # noqa
+            return None
 
     def _handle_possible_widget_creation(self) -> None:
         if self.obj is None:
@@ -1010,7 +1031,18 @@ class Symbol:
             "value", getattr(self.obj, "value", None), set(), self.stmt_node
         )
         self.obj.observe(self._observe_widget)
-        self._num_widget_observers += 1
+        self._num_ipywidget_observers += 1
+
+    def _handle_possible_mercury_widget_creation(self) -> None:
+        WidgetsManager = self._mercury_widgets_manager
+        if WidgetsManager is None:
+            return
+        widget = WidgetsManager.get_widget(self.obj.code_uid)
+        self.namespaced().upsert_symbol_for_name(
+            "value", getattr(widget, "value", None), set(), self.stmt_node
+        )
+        widget.observe(self._observe_widget)
+        self._num_mercury_widget_observers += 1
 
     def _observe_widget(self, msg: Dict[str, Any]) -> None:
         if msg.get("name") != "value" or "new" not in msg:

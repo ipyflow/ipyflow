@@ -330,15 +330,20 @@ class SymbolRef(CommonEqualityMixin):
     def from_string(cls, symbol_str: str) -> "SymbolRef":
         return cls(ast.parse(symbol_str, mode="eval").body)
 
-    def to_symbol(self) -> Optional["Symbol"]:
+    def to_symbol(self, scope: Optional["Scope"] = None) -> Optional["Symbol"]:
         for resolved in self.gen_resolved_symbols(
-            flow().global_scope,
+            scope or flow().global_scope,
             only_yield_final_symbol=False,
             yield_all_intermediate_symbols=True,
             yield_in_reverse=True,
         ):
             return resolved.sym
         return None
+
+    def to_fully_resolved_symbol(
+        self, scope: Optional["Scope"] = None
+    ) -> Optional["Symbol"]:
+        return (scope or flow().global_scope).try_fully_resolve_attrsub_chain(self)
 
     @classmethod
     def resolve(cls, symbol_str: str) -> Optional["Symbol"]:

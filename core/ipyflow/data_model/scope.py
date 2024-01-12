@@ -161,7 +161,7 @@ class Scope:
             if cur_scope is None:
                 break
 
-    def get_most_specific_data_symbol_for_attrsub_chain(
+    def get_most_specific_symbol_for_attrsub_chain(
         self, chain: SymbolRef
     ) -> Optional[Tuple[Symbol, Atom, Optional[Atom]]]:
         """
@@ -171,6 +171,12 @@ class Scope:
         for sym, atom, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
             ret = sym, atom, next_atom
         return ret
+
+    def try_fully_resolve_attrsub_chain(self, chain: SymbolRef) -> Optional[Symbol]:
+        sym, next_atom = None, None
+        for sym, _, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
+            pass
+        return sym if next_atom is None else None
 
     @staticmethod
     def _resolve_symbol_type(

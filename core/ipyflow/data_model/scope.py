@@ -207,12 +207,15 @@ class Scope:
             return SymbolType.DEFAULT
 
     def _compute_is_static_write_for_assign(self, sym: Symbol) -> bool:
-        return (
-            isinstance(sym.symbol_node, ast.Name)
-            and isinstance(sym.name, str)
-            and SymbolRef.from_string(sym.name)
-            in compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
-        )
+        if sym.symbol_node is None:
+            return False
+        try:
+            return (
+                SymbolRef(sym.symbol_node).nonreactive()
+                in compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
+            )
+        except TypeError:
+            return False
 
     def _compute_is_static_write_for_def(self, sym: Symbol) -> bool:
         dead = compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
@@ -231,16 +234,19 @@ class Scope:
         return True
 
     def _compute_is_static_write(self, sym: Symbol) -> bool:
-        if not self.is_global or sym.stmt_node is None:
+        scope = self
+        while scope.is_namespace_scope:
+            scope = scope.parent_scope
+        if not scope.is_global or sym.stmt_node is None:
             return False
         elif isinstance(sym.stmt_node, ast.Assign):
-            return self._compute_is_static_write_for_assign(sym)
+            return scope._compute_is_static_write_for_assign(sym)
         elif isinstance(
             sym.stmt_node, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef)
         ):
-            return self._compute_is_static_write_for_def(sym)
+            return scope._compute_is_static_write_for_def(sym)
         elif isinstance(sym.stmt_node, (ast.Import, ast.ImportFrom)):
-            return self._compute_is_static_write_for_import(sym)
+            return scope._compute_is_static_write_for_import(sym)
         else:
             return False
 

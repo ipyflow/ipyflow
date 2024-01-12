@@ -282,6 +282,24 @@ y = x + 1
 """
 ```
 
+You can also do this at the cell-level as well using the `slice()` method:
+```python
+from ipyflow import cells
+print(cells(4).slice())
+
+# Output:
+"""
+# Cell 2
+x = 0
+
+# Cell 3
+y = x + 1
+
+# Cell 4
+print(code(y))
+"""
+```
+
 You can also see the cell (1-indexed) and statement (0-indexed) of when a
 symbol was last updated with the `timestamp` function:
 

@@ -1,5 +1,4 @@
-# IPyflow
-
+<h1> <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-logo.png" width="25"> IPyflow </h1>
 
 [![](https://github.com/ipyflow/ipyflow/workflows/ipyflow/badge.svg)](https://github.com/ipyflow/ipyflow/actions)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)

@@ -424,7 +424,7 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def reset_cell_counter(self):
         # only called in test context
-        for sym in self.all_data_symbols():
+        for sym in self.all_symbols():
             sym.updated_timestamps.clear()
             sym._timestamp = (
                 sym._max_inner_timestamp
@@ -973,7 +973,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def line_magic_name(self):
         return self._line_magic.__name__
 
-    def all_data_symbols(self) -> Iterable[Symbol]:
+    def all_symbols(self) -> Iterable[Symbol]:
         for alias_set in self.aliases.values():
             yield from alias_set
 
@@ -992,12 +992,12 @@ class NotebookFlow(singletons.NotebookFlow):
         prev_cell = cells().at_counter(self.cell_counter()).prev_cell
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
         if prev_cell_ctr > 0:
-            for sym in self.all_data_symbols():
+            for sym in self.all_symbols():
                 if sym.defined_cell_num != prev_cell_ctr:
                     continue
                 if sym.is_anonymous or sym.is_new_garbage():
                     sym.mark_garbage()
-        garbage_syms = [sym for sym in self.all_data_symbols() if sym.is_garbage]
+        garbage_syms = [sym for sym in self.all_symbols() if sym.is_garbage]
         for sym in garbage_syms:
             sym.collect_self_garbage()
         garbage_namespaces = [ns for ns in self.namespaces.values() if ns.is_garbage]

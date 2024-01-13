@@ -525,19 +525,19 @@ class Statement(SliceableMixin):
                 scope, obj, name, is_subscript = tracer().resolve_del_data_for_target(
                     target
                 )
-                scope.delete_data_symbol_for_name(name, is_subscript=is_subscript)
+                scope.delete_symbol_for_name(name, is_subscript=is_subscript)
             except KeyError as e:
                 # this will happen if, e.g., a __delitem__ triggered a call
                 # logger.info("got key error while trying to handle %s: %s", ast.dump(self.stmt_node), e)
                 logger.info("got key error: %s", e)
 
-    def _make_lval_data_symbols(self) -> None:
+    def _make_lval_symbols(self) -> None:
         if isinstance(self.stmt_node, (ast.Assign, ast.For)):
             self._handle_store(self.stmt_node)
         else:
-            self._make_lval_data_symbols_old()
+            self._make_lval_symbols_old()
 
-    def _make_lval_data_symbols_old(self) -> None:
+    def _make_lval_symbols_old(self) -> None:
         symbol_edges = get_symbol_edges(self.stmt_node)
         should_overwrite = not isinstance(self.stmt_node, ast.AugAssign)
         is_function_def = isinstance(
@@ -639,7 +639,7 @@ class Statement(SliceableMixin):
             logger.info("external call: %s", external_call)
             external_call._handle_impl()
         if self._contains_lval():
-            self._make_lval_data_symbols()
+            self._make_lval_symbols()
         elif isinstance(self.stmt_node, ast.Delete):
             self._handle_delete()
         else:

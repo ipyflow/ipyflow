@@ -354,7 +354,7 @@ class FrontendCheckerResult(NamedTuple):
         # FIXME: this will be slow for large notebooks; speed it up
         #  or make it optional
         cell_by_ctr: Dict[int, Cell] = {cell.cell_ctr: cell for cell in cells_to_check}
-        for sym in flow().all_data_symbols():
+        for sym in flow().all_symbols():
             if sym.is_anonymous:
                 continue
             for used_ts, ts_when_used in sym.timestamp_by_used_time.items():

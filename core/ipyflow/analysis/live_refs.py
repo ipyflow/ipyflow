@@ -42,7 +42,10 @@ class ComputeLiveSymbolRefs(
         self._module_stmt_counter = 0
         # live symbols also include the stmt counter of when they were live, for slicing purposes later
         self.live: Set[LiveSymbolRef] = set()
-        self.dead = {SymbolRef.from_string(killed) for killed in init_killed or set()}
+        self.dead = {
+            SymbolRef.from_string(killed, scope=scope)
+            for killed in init_killed or set()
+        }
         self.modified: Set[SymbolRef] = set()
         # TODO: use the ast context instead of hacking our own (e.g. ast.Load(), ast.Store(), etc.)
         self._in_kill_context = False
@@ -97,8 +100,11 @@ class ComputeLiveSymbolRefs(
         leading_atom = ref.chain[0]
         if isinstance(leading_atom.value, str):
             is_killed = is_killed or (
-                SymbolRef(leading_atom.nonreactive()) in self.dead
-                or SymbolRef(Atom(leading_atom.value, is_callpoint=False)) in self.dead
+                SymbolRef(leading_atom.nonreactive(), scope=self._scope) in self.dead
+                or SymbolRef(
+                    Atom(leading_atom.value, is_callpoint=False), scope=self._scope
+                )
+                in self.dead
             )
             if is_killed and not self._include_killed_live:
                 return
@@ -211,7 +217,7 @@ class ComputeLiveSymbolRefs(
         ],
     ) -> None:
         if isinstance(target_node, (ast.Name, ast.Attribute, ast.Subscript)):
-            self.dead.add(SymbolRef(target_node).nonreactive())
+            self.dead.add(SymbolRef(target_node, scope=self._scope).nonreactive())
             if isinstance(target_node, ast.Subscript):
                 with self.live_context():
                     self.visit(target_node.slice)
@@ -235,7 +241,7 @@ class ComputeLiveSymbolRefs(
                 self.visit(node.optional_vars)
 
     def visit_Name(self, node: ast.Name) -> None:
-        ref = SymbolRef(node)
+        ref = SymbolRef(node, scope=self._scope)
         if self._in_kill_context:
             self.dead.add(ref.nonreactive())
         elif not self._skip_simple_names:
@@ -338,7 +344,7 @@ class ComputeLiveSymbolRefs(
             self.visit(node.args)
 
     def visit_arg(self, node) -> None:
-        ref = SymbolRef(node.arg)
+        ref = SymbolRef(node.arg, scope=self._scope)
         if self._in_kill_context:
             self.dead.add(ref.nonreactive())
         elif not self._skip_simple_names:

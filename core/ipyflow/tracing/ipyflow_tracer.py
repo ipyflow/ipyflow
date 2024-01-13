@@ -655,7 +655,7 @@ class DataflowTracer(StackFrameManager):
         if isinstance(symbol_ref, int):
             return self.node_id_to_loaded_symbols.get(symbol_ref, [])
         elif isinstance(symbol_ref, str):
-            ret = self.cur_frame_original_scope.lookup_data_symbol_by_name(symbol_ref)
+            ret = self.cur_frame_original_scope.lookup_symbol_by_name(symbol_ref)
             if ret is None:
                 return []
             else:
@@ -664,10 +664,10 @@ class DataflowTracer(StackFrameManager):
             return []
 
     def resolve_symbols(self, symbol_refs: Set[Union[str, int, Symbol]]) -> Set[Symbol]:
-        data_symbols = set()
+        symbols = set()
         for ref in symbol_refs:
-            data_symbols.update(self.resolve_loaded_symbols(ref))
-        return data_symbols
+            symbols.update(self.resolve_loaded_symbols(ref))
+        return symbols
 
     def _get_namespace_for_obj(
         self, obj: Any, obj_name: Optional[str] = None
@@ -680,7 +680,7 @@ class DataflowTracer(StackFrameManager):
         if class_scope is not None:
             # logger.warning(
             #     'found class scope %s containing %s',
-            #     class_scope, list(class_scope.all_data_symbols_this_indentation())
+            #     class_scope, list(class_scope.all_symbols_this_indentation())
             # )
             ns = class_scope.clone(obj)
             if obj_name is not None:
@@ -787,21 +787,21 @@ class DataflowTracer(StackFrameManager):
             *_,
         ) = self.saved_complex_symbol_load_data
         self.saved_complex_symbol_load_data = None
-        data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+        sym = scope.lookup_symbol_by_name_this_indentation(
             attr_or_subscript,
             is_subscript=is_subscript,
             skip_cloned_lookup=True,
         )
-        logger.warning("found sym %s in scope %s", data_sym, scope)
-        if data_sym is None:
-            parent = scope.lookup_data_symbol_by_name_this_indentation(
+        logger.warning("found sym %s in scope %s", sym, scope)
+        if sym is None:
+            parent = scope.lookup_symbol_by_name_this_indentation(
                 attr_or_subscript,
                 is_subscript=is_subscript,
                 skip_cloned_lookup=False,
             )
             parents = set() if parent is None else {parent}
             is_default_dict = isinstance(obj, defaultdict)
-            data_sym = scope.upsert_symbol_for_name(
+            sym = scope.upsert_symbol_for_name(
                 attr_or_subscript,
                 obj_attr_or_sub,
                 parents,
@@ -811,10 +811,10 @@ class DataflowTracer(StackFrameManager):
                 implicit=not is_default_dict,
                 symbol_node=node,
             )
-        elif data_sym.obj_id != id(obj_attr_or_sub):
-            data_sym.update_obj_ref(obj_attr_or_sub)
+        elif sym.obj_id != id(obj_attr_or_sub):
+            sym.update_obj_ref(obj_attr_or_sub)
         self.create_if_not_exists_module_symbol(obj_attr_or_sub, node, is_load=False)
-        return data_sym
+        return sym
 
     @pyc.register_raw_handler(pyc.after_import)
     def after_import(self, *_, module: ModuleType, **__):
@@ -891,7 +891,7 @@ class DataflowTracer(StackFrameManager):
             set(subscript_live_refs)
         )
         Timestamp.update_usage_info(
-            self.cur_frame_original_scope.lookup_data_symbol_by_name(ref)
+            self.cur_frame_original_scope.lookup_symbol_by_name(ref)
             for ref in subscript_live_refs
         )
 
@@ -938,23 +938,23 @@ class DataflowTracer(StackFrameManager):
         is_subscript = "subscript" in event.value
         if sym_for_obj is not None and sym_for_obj.obj is obj:
             try:
-                data_sym = scope.lookup_data_symbol_by_name_this_indentation(
+                sym = scope.lookup_symbol_by_name_this_indentation(
                     attr_or_subscript,
                     is_subscript=is_subscript,
                     skip_cloned_lookup=True,
                 )
             except TypeError:
-                data_sym = None
+                sym = None
             self.pending_usage_updates_by_sym[
                 sym_for_obj
             ] = self.pending_usage_updates_by_sym.get(sym_for_obj, True) and (
-                data_sym is not None
+                sym is not None
             )
-            if data_sym is not None and event in (
+            if sym is not None and event in (
                 pyc.before_attribute_load,
                 pyc.before_subscript_load,
             ):
-                self.pending_usage_updates_by_sym.setdefault(data_sym, True)
+                self.pending_usage_updates_by_sym.setdefault(sym, True)
 
         obj_id = id(obj)
         if self.top_level_node_id_for_chain is None:
@@ -1015,7 +1015,7 @@ class DataflowTracer(StackFrameManager):
                         and not self.active_scope.is_namespace_scope
                         and obj_name is not None
                     ):
-                        sym_for_obj = self.active_scope.lookup_data_symbol_by_name(
+                        sym_for_obj = self.active_scope.lookup_symbol_by_name(
                             obj_name, is_subscript=False
                         )
                     if (
@@ -1121,7 +1121,7 @@ class DataflowTracer(StackFrameManager):
         arg_node = self.ast_node_by_id.get(arg_node_id, None)
         if isinstance(arg_node, ast.Name):
             assert self.active_scope is self.cur_frame_original_scope
-            arg_sym = self.active_scope.lookup_data_symbol_by_name(arg_node.id)
+            arg_sym = self.active_scope.lookup_symbol_by_name(arg_node.id)
             if arg_sym is None:
                 self.active_scope.upsert_symbol_for_name(
                     arg_node.id,
@@ -1172,9 +1172,7 @@ class DataflowTracer(StackFrameManager):
             obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None
             if isinstance(node.func, ast.Name):
                 self.calling_symbol = (
-                    self.cur_frame_original_scope.lookup_data_symbol_by_name(
-                        node.func.id
-                    )
+                    self.cur_frame_original_scope.lookup_symbol_by_name(node.func.id)
                 )
         else:
             # TODO: this will cause errors if we add more fields
@@ -1187,7 +1185,7 @@ class DataflowTracer(StackFrameManager):
                 *_ignored,
                 obj_name,
             ) = self.saved_complex_symbol_load_data
-            self.calling_symbol = namespace.lookup_data_symbol_by_name(
+            self.calling_symbol = namespace.lookup_symbol_by_name(
                 attr_or_subscript, is_subscript=is_subscript
             )
         # TODO: check if `function_or_method` has been registered as requiring a custom side effect
@@ -1296,8 +1294,10 @@ class DataflowTracer(StackFrameManager):
                             else None
                         )
                     if starred_namespace is not None:
-                        starred_dep = starred_namespace.lookup_data_symbol_by_name_this_indentation(
-                            starred_idx, is_subscript=True
+                        starred_dep = (
+                            starred_namespace.lookup_symbol_by_name_this_indentation(
+                                starred_idx, is_subscript=True
+                            )
                         )
                         inner_symbols.add(starred_dep)
                 else:

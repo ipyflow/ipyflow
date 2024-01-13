@@ -272,9 +272,9 @@ def show_waiting(line_: str) -> Optional[str]:
         return None
     waiter_set = set()
     for sym_set in sym_sets:
-        for data_sym in sym_set:
-            if data_sym.is_waiting and not data_sym.is_anonymous:
-                waiter_set.add(data_sym)
+        for sym in sym_set:
+            if sym.is_waiting and not sym.is_anonymous:
+                waiter_set.add(sym)
     if not waiter_set:
         return "No symbol waiting on dependencies for now!"
     else:

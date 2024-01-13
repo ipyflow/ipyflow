@@ -82,9 +82,7 @@ class UpdateProtocol:
             return cast(
                 Set["Symbol"],
                 {
-                    ns.lookup_data_symbol_by_name_this_indentation(
-                        name, is_subscript=is_sub
-                    )
+                    ns.lookup_symbol_by_name_this_indentation(name, is_subscript=is_sub)
                     for is_sub in (True, False)
                 }
                 - {None},

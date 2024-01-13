@@ -645,10 +645,8 @@ class Cell(SliceableMixin):
                 if not sym.is_import:
                     continue
                 try:
-                    module_symbol = (
-                        flow_.global_scope.lookup_data_symbol_by_qualified_name(
-                            sym.imported_module
-                        )
+                    module_symbol = flow_.global_scope.lookup_symbol_by_qualified_name(
+                        sym.imported_module
                     )
                 except (ValueError, TypeError):
                     module_symbol = None

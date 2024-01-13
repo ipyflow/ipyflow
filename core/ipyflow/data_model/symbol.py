@@ -586,7 +586,7 @@ class Symbol:
             child.parents.pop(self, None)
         containing_ns = self.containing_namespace
         if self.is_subscript and containing_ns is not None:
-            containing_ns._subscript_data_symbol_by_name.pop(self.name, None)
+            containing_ns._subscript_symbol_by_name.pop(self.name, None)
         elif not self.is_subscript:
             self.containing_scope._symbol_by_name.pop(self.name, None)
         else:
@@ -1048,7 +1048,7 @@ class Symbol:
         if msg.get("name") != "value" or "new" not in msg:
             return
         ns = self.namespace
-        sym = ns.lookup_data_symbol_by_name_this_indentation("value")
+        sym = ns.lookup_symbol_by_name_this_indentation("value")
         if sym is None:
             return
         newval = msg["new"]
@@ -1276,14 +1276,10 @@ class Symbol:
                     continue
                 # TODO: handle dict case too
                 if isinstance(containing_obj, list) and containing_obj[-1] is obj:
-                    containing_namespace._subscript_data_symbol_by_name.pop(
-                        alias.name, None
-                    )
+                    containing_namespace._subscript_symbol_by_name.pop(alias.name, None)
                     alias.name = len(containing_obj) - 1
                     alias.update_obj_ref(obj)
-                    containing_namespace._subscript_data_symbol_by_name[
-                        alias.name
-                    ] = alias
+                    containing_namespace._subscript_symbol_by_name[alias.name] = alias
             cleanup_discard(flow_.aliases, self.cached_obj_id, self)
             cleanup_discard(flow_.aliases, self.obj_id, self)
             flow_.aliases.setdefault(id(obj), set()).add(self)

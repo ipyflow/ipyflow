@@ -290,7 +290,7 @@ class NamespaceClear(StandardMutation):
             ),
             reverse=True,
         ):
-            namespace.delete_data_symbol_for_name(name, is_subscript=True)
+            namespace.delete_symbol_for_name(name, is_subscript=True)
 
 
 class MutatingMethodEventNotYetImplemented(ExternalCallHandler):

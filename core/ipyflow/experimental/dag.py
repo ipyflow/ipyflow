@@ -17,7 +17,7 @@ def create_dag_metadata() -> (
     cell_num_to_cell_parents: Dict[int, Set[int]] = defaultdict(set)
     cell_num_to_cell_children: Dict[int, Set[int]] = defaultdict(set)
 
-    for sym in flow_.all_data_symbols():
+    for sym in flow_.all_symbols():
         top_level_sym = sym.get_top_level()
         if (
             top_level_sym is None

@@ -78,7 +78,7 @@ class ListRemove(ListMethod):
     def handle_namespace(self, namespace: "Namespace") -> None:
         if self.remove_pos is None:
             return
-        namespace.delete_data_symbol_for_name(self.remove_pos, is_subscript=True)
+        namespace.delete_symbol_for_name(self.remove_pos, is_subscript=True)
 
     def process_arg(self, remove_val: Any) -> None:
         try:

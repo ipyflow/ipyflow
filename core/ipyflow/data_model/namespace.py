@@ -61,7 +61,7 @@ class Namespace(Scope):
         self._tombstone = False
         # this timestamp needs to be bumped in Symbol refresh()
         self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()
-        self._subscript_data_symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
+        self._subscript_symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
         self.namespace_waiting_symbols: Set[Symbol] = set()
 
     @property
@@ -81,11 +81,11 @@ class Namespace(Scope):
 
     @property
     def size(self) -> int:
-        return len(self._subscript_data_symbol_by_name) + len(self._symbol_by_name)
+        return len(self._subscript_symbol_by_name) + len(self._symbol_by_name)
 
     def _iter_inner(self) -> Generator[Optional[Symbol], None, None]:
         for i in range(len(self.obj)):
-            yield self.lookup_data_symbol_by_name_this_indentation(i, is_subscript=True)
+            yield self.lookup_symbol_by_name_this_indentation(i, is_subscript=True)
 
     def __iter__(self) -> Iterator[Optional[Symbol]]:
         if not isinstance(self.obj, (list, tuple)):  # pragma: no cover
@@ -97,7 +97,7 @@ class Namespace(Scope):
 
     def _items_inner(self) -> Generator[Tuple[Any, Optional[Symbol]], None, None]:
         for key in self.obj.keys():
-            yield key, self.lookup_data_symbol_by_name_this_indentation(
+            yield key, self.lookup_symbol_by_name_this_indentation(
                 key, is_subscript=True
             )
 
@@ -172,11 +172,9 @@ class Namespace(Scope):
         self.cached_obj_id = id(obj)
         flow().namespaces[self.cached_obj_id] = self
 
-    def data_symbol_by_name(
-        self, is_subscript=False
-    ) -> Dict[SupportedIndexType, Symbol]:
+    def symbol_by_name(self, is_subscript=False) -> Dict[SupportedIndexType, Symbol]:
         if is_subscript:
-            return self._subscript_data_symbol_by_name
+            return self._subscript_symbol_by_name
         else:
             return self._symbol_by_name
 
@@ -205,7 +203,7 @@ class Namespace(Scope):
             return name
 
     def _lookup_subscript(self, name: SupportedIndexType) -> Optional[Symbol]:
-        ret = self._subscript_data_symbol_by_name.get(name, None)
+        ret = self._subscript_symbol_by_name.get(name, None)
         if (
             isinstance(self.obj, Sequence)
             and isinstance(name, int)
@@ -213,10 +211,10 @@ class Namespace(Scope):
         ):
             if name < 0 and ret is None:
                 name = len(self.obj) + name
-                ret = self._subscript_data_symbol_by_name.get(name, None)
+                ret = self._subscript_symbol_by_name.get(name, None)
         return ret
 
-    def lookup_data_symbol_by_name_this_indentation(
+    def lookup_symbol_by_name_this_indentation(
         self,
         name: SupportedIndexType,
         *_,
@@ -241,18 +239,18 @@ class Namespace(Scope):
         ):
             if name not in getattr(self.obj, "__dict__", {}):
                 # only fall back to the class sym if it's not present in the corresponding obj for this scope
-                ret = self.cloned_from.lookup_data_symbol_by_name_this_indentation(
+                ret = self.cloned_from.lookup_symbol_by_name_this_indentation(
                     name, is_subscript=is_subscript, **kwargs
                 )
         return ret
 
-    def lookup_data_symbol_by_name(
+    def lookup_symbol_by_name(
         self, name: SupportedIndexType, *args: Any, **kwargs: Any
     ) -> Optional[Symbol]:
-        return self.lookup_data_symbol_by_name_this_indentation(name, *args, **kwargs)
+        return self.lookup_symbol_by_name_this_indentation(name, *args, **kwargs)
 
     def _remap_sym(self, from_idx: int, to_idx: int, prev_obj: Optional[Any]) -> None:
-        subsym = self._subscript_data_symbol_by_name.pop(from_idx, None)
+        subsym = self._subscript_symbol_by_name.pop(from_idx, None)
         if subsym is None:
             return
         subsym.update_usage_info()
@@ -265,7 +263,7 @@ class Namespace(Scope):
             propagate=True,
             refresh=True,
         )
-        self._subscript_data_symbol_by_name[to_idx] = subsym
+        self._subscript_symbol_by_name[to_idx] = subsym
 
     def shuffle_symbols_upward_from(self, pos: int) -> None:
         for idx in range(len(self.obj) - 1, pos, -1):
@@ -277,22 +275,22 @@ class Namespace(Scope):
             prev_obj = self.obj[idx - 2] if idx > pos + 1 else None
             self._remap_sym(idx, idx - 1, prev_obj)
 
-    def delete_data_symbol_for_name(
+    def delete_symbol_for_name(
         self, name: SupportedIndexType, is_subscript: bool = False
     ) -> None:
         if is_subscript:
-            sym = self._subscript_data_symbol_by_name.pop(name, None)
+            sym = self._subscript_symbol_by_name.pop(name, None)
             if sym is None and name == -1 and isinstance(self.obj, list):
                 name = len(
                     self.obj
                 )  # it will have already been deleted, so don't subtract 1
-                sym = self._subscript_data_symbol_by_name.pop(name, None)
+                sym = self._subscript_symbol_by_name.pop(name, None)
             if sym is not None:
                 sym.update_deps(set(), deleted=True)
             if isinstance(self.obj, list) and isinstance(name, int):
                 self._shuffle_symbols_downward_to(name)
         else:
-            super().delete_data_symbol_for_name(name)
+            super().delete_symbol_for_name(name)
 
     def all_symbols_this_indentation(
         self, exclude_class=False, is_subscript=None
@@ -300,10 +298,10 @@ class Namespace(Scope):
         if is_subscript is None:
             sym_collections_to_chain: List[Iterable] = [
                 self._symbol_by_name.values(),
-                self._subscript_data_symbol_by_name.values(),
+                self._subscript_symbol_by_name.values(),
             ]
         elif is_subscript:
-            sym_collections_to_chain = [self._subscript_data_symbol_by_name.values()]
+            sym_collections_to_chain = [self._subscript_symbol_by_name.values()]
         else:
             sym_collections_to_chain = [self._symbol_by_name.values()]
         if self.cloned_from is not None and not exclude_class:
@@ -314,7 +312,7 @@ class Namespace(Scope):
 
     def put(self, name: SupportedIndexType, val: Symbol) -> None:
         if val.is_subscript:
-            self._subscript_data_symbol_by_name[name] = val
+            self._subscript_symbol_by_name[name] = val
         elif not isinstance(name, str):  # pragma: no cover
             raise TypeError("%s should be a string" % name)
         else:
@@ -385,8 +383,8 @@ class Namespace(Scope):
                 break
             sym.update_obj_ref(inner_obj)
             logger.info("shuffle %s from %s to %s", sym, self, new_ns)
-            self._subscript_data_symbol_by_name.pop(sym.name, None)
-            new_ns._subscript_data_symbol_by_name[sym.name] = sym
+            self._subscript_symbol_by_name.pop(sym.name, None)
+            new_ns._subscript_symbol_by_name[sym.name] = sym
             sym.containing_scope = new_ns
 
 

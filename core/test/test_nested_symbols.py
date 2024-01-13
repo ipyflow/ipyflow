@@ -221,7 +221,7 @@ def test_list_insert():
     assert sym_4.readable_name == "lst[4]", "got %s" % sym_4.readable_name
     assert sym_4.obj == 4
     assert (
-        sym_4.containing_namespace.lookup_data_symbol_by_name_this_indentation(
+        sym_4.containing_namespace.lookup_symbol_by_name_this_indentation(
             4, is_subscript=True
         )
         is sym_4
@@ -242,7 +242,7 @@ def test_list_delete():
     sym_4 = lookup_symbol(4)
     assert sym_4.readable_name == "lst[4]", "got %s" % sym_4.readable_name
     assert (
-        sym_4.containing_namespace.lookup_data_symbol_by_name_this_indentation(
+        sym_4.containing_namespace.lookup_symbol_by_name_this_indentation(
             4, is_subscript=True
         )
         is sym_4

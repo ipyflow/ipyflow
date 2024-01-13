@@ -67,9 +67,9 @@ class Scope:
         return self.get(item) is not None
 
     def get(self, item: SupportedIndexType) -> Optional[Symbol]:
-        return self.lookup_data_symbol_by_name_this_indentation(item)
+        return self.lookup_symbol_by_name_this_indentation(item)
 
-    def data_symbol_by_name(self, is_subscript=False):
+    def symbol_by_name(self, is_subscript=False):
         if is_subscript:
             raise ValueError("Only namespace scopes carry subscripts")
         return self._symbol_by_name
@@ -102,7 +102,7 @@ class Scope:
         self._symbol_by_name[name] = val
         val.containing_scope = self
 
-    def lookup_data_symbol_by_name_this_indentation(
+    def lookup_symbol_by_name_this_indentation(
         self, name: SupportedIndexType, **_: Any
     ) -> Optional[Symbol]:
         return self._symbol_by_name.get(name)
@@ -110,33 +110,29 @@ class Scope:
     def all_symbols_this_indentation(self):
         return self._symbol_by_name.values()
 
-    def lookup_data_symbol_by_name(
+    def lookup_symbol_by_name(
         self, name: SupportedIndexType, **kwargs: Any
     ) -> Optional[Symbol]:
-        ret = self.lookup_data_symbol_by_name_this_indentation(name, **kwargs)
+        ret = self.lookup_symbol_by_name_this_indentation(name, **kwargs)
         if ret is None and self.non_namespace_parent_scope is not None:
-            ret = self.non_namespace_parent_scope.lookup_data_symbol_by_name(
-                name, **kwargs
-            )
+            ret = self.non_namespace_parent_scope.lookup_symbol_by_name(name, **kwargs)
         return ret
 
-    def lookup_data_symbol_by_qualified_name(
-        self, qualified_name: str
-    ) -> Optional[Symbol]:
+    def lookup_symbol_by_qualified_name(self, qualified_name: str) -> Optional[Symbol]:
         scope_or_sym: Union["Scope", Symbol] = self
         for part in qualified_name.split("."):
             if isinstance(scope_or_sym, Symbol):
                 scope_or_sym = scope_or_sym.namespace
             if not isinstance(scope_or_sym, Scope):
                 return None
-            scope_or_sym = scope_or_sym.lookup_data_symbol_by_name_this_indentation(
+            scope_or_sym = scope_or_sym.lookup_symbol_by_name_this_indentation(
                 part, is_subscript=False
             )
             if not isinstance(scope_or_sym, Symbol):
                 return None
         return scope_or_sym if isinstance(scope_or_sym, Symbol) else None
 
-    def gen_data_symbols_for_attrsub_chain(
+    def gen_symbols_for_attrsub_chain(
         self, symbol_ref: SymbolRef
     ) -> Generator[Tuple[Symbol, Atom, Optional[Atom]], None, None]:
         """
@@ -148,11 +144,11 @@ class Scope:
         for i, atom in enumerate(symbol_ref.chain):
             is_last = i == len(symbol_ref.chain) - 1
             if atom.is_callpoint:
-                next_sym = cur_scope.lookup_data_symbol_by_name(atom.value)
+                next_sym = cur_scope.lookup_symbol_by_name(atom.value)
                 if next_sym is not None:
                     yield next_sym, atom, None if is_last else symbol_ref.chain[i + 1]
                 break
-            next_sym = cur_scope.lookup_data_symbol_by_name(atom.value)
+            next_sym = cur_scope.lookup_symbol_by_name(atom.value)
             if next_sym is None:
                 break
             else:
@@ -168,13 +164,13 @@ class Scope:
         Get most specific Symbol for the whole chain (stops at first point it cannot find nested, e.g. a CallPoint).
         """
         ret = None
-        for sym, atom, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
+        for sym, atom, next_atom in self.gen_symbols_for_attrsub_chain(chain):
             ret = sym, atom, next_atom
         return ret
 
     def try_fully_resolve_attrsub_chain(self, chain: SymbolRef) -> Optional[Symbol]:
         sym, next_atom = None, None
-        for sym, _, next_atom in self.gen_data_symbols_for_attrsub_chain(chain):
+        for sym, _, next_atom in self.gen_symbols_for_attrsub_chain(chain):
             pass
         return sym if next_atom is None else None
 
@@ -217,7 +213,7 @@ class Scope:
             return False
         try:
             return (
-                SymbolRef(sym.symbol_node).nonreactive()
+                SymbolRef(sym.symbol_node, scope=self).nonreactive()
                 in compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
             )
         except TypeError:
@@ -287,7 +283,7 @@ class Scope:
         deps = set(
             [] if deps is None else deps
         )  # make a copy since we mutate it (see below fixme)
-        sym, prev_sym, prev_obj = self._upsert_data_symbol_for_name_inner(
+        sym, prev_sym, prev_obj = self._upsert_symbol_for_name_inner(
             name,
             obj,
             deps,  # FIXME: this updates deps, which is super super hacky
@@ -320,7 +316,7 @@ class Scope:
             current_cell.dynamic_writes.add(sym)
         return sym
 
-    def _upsert_data_symbol_for_name_inner(
+    def _upsert_symbol_for_name_inner(
         self,
         name: SupportedIndexType,
         obj: Any,
@@ -331,7 +327,7 @@ class Scope:
         implicit: bool = False,
     ) -> Tuple[Symbol, Optional[Symbol], Optional[Any]]:
         prev_obj = None
-        prev_sym = self.lookup_data_symbol_by_name_this_indentation(
+        prev_sym = self.lookup_symbol_by_name_this_indentation(
             name,
             is_subscript=symbol_type == SymbolType.SUBSCRIPT,
             skip_cloned_lookup=True,
@@ -340,7 +336,7 @@ class Scope:
             prev_obj = Symbol.NULL if prev_sym.obj is None else prev_sym.obj
             # TODO: handle case where new sym is of different type
             if (
-                name in self.data_symbol_by_name(prev_sym.is_subscript)
+                name in self.symbol_by_name(prev_sym.is_subscript)
                 and prev_sym.symbol_type == symbol_type
             ):
                 prev_sym.update_obj_ref(obj, refresh_cached=False)
@@ -375,7 +371,7 @@ class Scope:
             and ns_self.cloned_from is not None
         ):
             # add the cloned symbol as a dependency of the symbol about to be created
-            new_dep = ns_self.cloned_from.lookup_data_symbol_by_name_this_indentation(
+            new_dep = ns_self.cloned_from.lookup_symbol_by_name_this_indentation(
                 name, is_subscript=False
             )
             if new_dep is not None:
@@ -393,7 +389,7 @@ class Scope:
         self.put(name, sym)
         return sym, prev_sym, prev_obj
 
-    def delete_data_symbol_for_name(
+    def delete_symbol_for_name(
         self, name: SupportedIndexType, is_subscript: bool = False
     ):
         assert not is_subscript

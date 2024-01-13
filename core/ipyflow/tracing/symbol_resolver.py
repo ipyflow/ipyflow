@@ -142,7 +142,7 @@ class ResolveRvalSymbols(
             ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
-            sym = ns.lookup_data_symbol_by_name_this_indentation(
+            sym = ns.lookup_symbol_by_name_this_indentation(
                 node.attr, is_subscript=False
             )
             if sym is not None:
@@ -173,12 +173,10 @@ class ResolveRvalSymbols(
             ns = self._get_attr_or_subscript_namespace(node)
             if ns is None:
                 return
-            sym = ns.lookup_data_symbol_by_name_this_indentation(
-                slice, is_subscript=True
-            )
+            sym = ns.lookup_symbol_by_name_this_indentation(slice, is_subscript=True)
             if sym is None and isinstance(slice, int) and slice < 0:
                 try:
-                    sym = ns.lookup_data_symbol_by_name_this_indentation(
+                    sym = ns.lookup_symbol_by_name_this_indentation(
                         len(ns) + slice, is_subscript=True
                     )
                 except TypeError:

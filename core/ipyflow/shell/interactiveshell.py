@@ -680,7 +680,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             [
                 # TODO: avoid bad performance by only iterating over symbols updated in this cell
                 sym
-                for sym in flow_.all_data_symbols()
+                for sym in flow_.all_symbols()
                 if sym.timestamp.cell_num == Cell.exec_counter()
             ]
         )

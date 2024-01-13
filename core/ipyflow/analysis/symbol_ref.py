@@ -17,7 +17,7 @@ from typing import (
 from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
-from ipyflow.types import SupportedIndexType
+from ipyflow.types import SubscriptIndices, SupportedIndexType
 from ipyflow.utils import CommonEqualityMixin
 from ipyflow.utils.ast_utils import subscript_to_slice
 
@@ -156,6 +156,7 @@ class Atom(CommonEqualityMixin):
 class SymbolRefVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
         self.symbol_chain: List[Atom] = []
+        self.scope: Optional["Scope"] = None
 
     def __call__(
         self,
@@ -170,14 +171,17 @@ class SymbolRefVisitor(ast.NodeVisitor):
             ast.Import,
             ast.ImportFrom,
         ],
+        scope: Optional["Scope"] = None,
     ) -> "SymbolRef":
+        self.scope = scope
         try:
             self.visit(node)
         except ValueError:
             self.symbol_chain.clear()
         self.symbol_chain.reverse()
-        ret = SymbolRef(self.symbol_chain)
+        ret = SymbolRef(self.symbol_chain, scope=scope)
         self.symbol_chain = []
+        self.scope = None
         return ret
 
     def _append_atom(
@@ -241,10 +245,19 @@ class SymbolRefVisitor(ast.NodeVisitor):
         resolved = resolve_slice_to_constant(node)
         if resolved is not None:
             if isinstance(resolved, ast.Name):
-                # FIXME: hack to make the static checker stop here
-                # In the future, it should try to attempt to resolve
-                # the value of the ast.Name node
-                pass
+                if self.scope is None:
+                    # FIXME: hack to make the static checker stop here
+                    # In the future, it should *always* try to attempt to resolve
+                    # the value of the ast.Name node
+                    pass
+                else:
+                    sym = self.scope.lookup_symbol_by_name(resolved.id)
+                    if (
+                        sym is not None
+                        and not sym.is_obj_lazy_module
+                        and isinstance(sym.obj, SubscriptIndices.types)
+                    ):
+                        self.symbol_chain.append(Atom(sym.obj, is_subscript=True))
             else:
                 self.symbol_chain.append(Atom(resolved, is_subscript=True))
         self.visit(node.value)
@@ -299,10 +312,14 @@ class SymbolRefVisitor(ast.NodeVisitor):
         return
 
 
-class SymbolRef(CommonEqualityMixin):
+class SymbolRef:
     _cached_symbol_ref_visitor = SymbolRefVisitor()
 
-    def __init__(self, symbols: Union[ast.AST, Atom, Sequence[Atom]]) -> None:
+    def __init__(
+        self,
+        symbols: Union[ast.AST, Atom, Sequence[Atom]],
+        scope: Optional["Scope"] = None,
+    ) -> None:
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
         if isinstance(
@@ -319,20 +336,23 @@ class SymbolRef(CommonEqualityMixin):
                 ast.ImportFrom,
             ),
         ):
-            symbols = self._cached_symbol_ref_visitor(symbols).chain
+            symbols = self._cached_symbol_ref_visitor(symbols, scope=scope).chain
         elif isinstance(symbols, ast.AST):  # pragma: no cover
             raise TypeError("unexpected type for %s" % symbols)
         elif isinstance(symbols, Atom):
             symbols = [symbols]
         self.chain: Tuple[Atom, ...] = tuple(symbols)
+        self.scope = scope
 
     @classmethod
-    def from_string(cls, symbol_str: str) -> "SymbolRef":
-        return cls(ast.parse(symbol_str, mode="eval").body)
+    def from_string(
+        cls, symbol_str: str, scope: Optional["Scope"] = None
+    ) -> "SymbolRef":
+        return cls(ast.parse(symbol_str, mode="eval").body, scope=scope)
 
     def to_symbol(self, scope: Optional["Scope"] = None) -> Optional["Symbol"]:
         for resolved in self.gen_resolved_symbols(
-            scope or flow().global_scope,
+            scope or self.scope or flow().global_scope,
             only_yield_final_symbol=False,
             yield_all_intermediate_symbols=True,
             yield_in_reverse=True,
@@ -352,6 +372,10 @@ class SymbolRef(CommonEqualityMixin):
     def __hash__(self) -> int:
         return hash(self.chain)
 
+    def __eq__(self, other) -> bool:
+        # intentionally omit self.scope
+        return isinstance(other, SymbolRef) and self.chain == other.chain
+
     def __repr__(self) -> str:
         return repr(self.chain)
 
@@ -359,7 +383,9 @@ class SymbolRef(CommonEqualityMixin):
         return repr(self)
 
     def nonreactive(self) -> "SymbolRef":
-        return self.__class__([atom.nonreactive() for atom in self.chain])
+        return self.__class__(
+            [atom.nonreactive() for atom in self.chain], scope=self.scope
+        )
 
     def gen_resolved_symbols(
         self,
@@ -388,7 +414,7 @@ class SymbolRef(CommonEqualityMixin):
             ]
             cast(list, gen).reverse()
         else:
-            gen = scope.gen_data_symbols_for_attrsub_chain(self)
+            gen = scope.gen_symbols_for_attrsub_chain(self)
         for sym, atom, next_atom in gen:
             reactive_seen = reactive_seen or atom.is_reactive
             cascading_reactive_seen = (

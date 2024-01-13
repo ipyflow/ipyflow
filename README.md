@@ -252,6 +252,12 @@ This functionality can be paired with other extensions like
 [stickyland](https://github.com/xiaohk/stickyland) to build fully reactive
 dashboards on top of JupyterLab + IPyflow.
 
+Finally, IPyflow also integrates with [mercury](https://github.com/mljar/mercury) widgets as well:
+
+<p align="center">
+<img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/ipyflow-mercury.gif" width="500" />
+</p>
+
 ## State API
 
 IPyflow must understand the underlying execution state at a deep level in

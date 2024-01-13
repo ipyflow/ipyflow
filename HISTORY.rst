@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.195 (2024-01-12)
+--------------------
+* [kernel] integration with mercury widgets;
+* [kernel] improve accuracy of static write detection;
+
 0.0.194 (2024-01-08)
 --------------------
 * [lab] Reactivity by default (!!!)

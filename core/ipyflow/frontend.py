@@ -8,7 +8,11 @@ from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.cell import Cell, CheckerResult, cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
-from ipyflow.slicing.context import iter_dangling_contexts
+from ipyflow.slicing.context import (
+    SlicingContext,
+    iter_dangling_contexts,
+    slicing_ctx_var,
+)
 from ipyflow.types import IdType
 
 logger = logging.getLogger(__name__)
@@ -238,6 +242,26 @@ class FrontendCheckerResult(NamedTuple):
                         ) < par.cell_ctr and par.cell_ctr in {
                             sym.timestamp.cell_num for sym in syms
                         }:
+                            should_skip = False
+                            if (
+                                flow_order == FlowDirection.IN_ORDER
+                                and slicing_ctx_var.get() == SlicingContext.STATIC
+                            ):
+                                for (
+                                    other_pid,
+                                    other_syms,
+                                ) in cell.directional_parents.items():
+                                    other_parent = cells().from_id(other_pid)
+                                    if other_parent.position <= par.position:
+                                        continue
+                                    if (
+                                        syms <= other_syms
+                                        or flow_.fake_edge_sym in other_syms
+                                    ):
+                                        should_skip = True
+                                        break
+                            if should_skip:
+                                continue
                             is_ready = True
                             if (
                                 par.cell_ctr >= flow_.min_new_ready_cell_counter()

@@ -247,7 +247,7 @@ class NotebookFlow(singletons.NotebookFlow):
     ) -> None:
         if cell_parents is None:
             return
-        for _ in self.mut_settings.iter_slicing_contexts():
+        with static_slicing_context():
             for child, parents in cell_parents.items():
                 try:
                     child_cell = cells().from_id(child)
@@ -760,6 +760,23 @@ class NotebookFlow(singletons.NotebookFlow):
                         for sym in syms
                     ):
                         continue
+                    should_skip = False
+                    if (
+                        self.mut_settings.flow_order == FlowDirection.IN_ORDER
+                        and slicing_ctx_var.get() == SlicingContext.STATIC
+                    ):
+                        for (
+                            other_par_id,
+                            other_syms,
+                        ) in cell.directional_parents.items():
+                            other_parent = cells().from_id(other_par_id)
+                            if other_parent.position <= parent.position:
+                                continue
+                            if syms <= other_syms:
+                                should_skip = True
+                                break
+                    if should_skip:
+                        continue
                     this_cell_parents.add(par_id)
                 for child_id, syms in cell.directional_children.items():
                     if (
@@ -772,6 +789,24 @@ class NotebookFlow(singletons.NotebookFlow):
                         cell.cell_ctr in {ts.cell_num for ts in sym.updated_timestamps}
                         for sym in syms
                     ):
+                        continue
+                    should_skip = False
+                    if (
+                        self.mut_settings.flow_order == FlowDirection.IN_ORDER
+                        and slicing_ctx_var.get() == SlicingContext.STATIC
+                    ):
+                        child = cells().from_id(child_id)
+                        for (
+                            other_par_id,
+                            other_syms,
+                        ) in child.directional_parents.items():
+                            other_parent = cells().from_id(other_par_id)
+                            if other_parent.position <= cell.position:
+                                continue
+                            if syms <= other_syms:
+                                should_skip = True
+                                break
+                    if should_skip:
                         continue
                     this_cell_children.add(child_id)
             cell_parents[cell.id] = list(this_cell_parents)

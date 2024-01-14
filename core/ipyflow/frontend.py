@@ -43,6 +43,7 @@ class FrontendCheckerResult(NamedTuple):
     unsafe_order_symbol_usage: Dict[IdType, List[Dict[str, Any]]]
     waiter_links: Dict[IdType, Set[IdType]]
     ready_maker_links: Dict[IdType, Set[IdType]]
+    stale_parents: Dict[IdType, Set[IdType]]
     phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]]
     allow_new_ready: bool
 
@@ -59,6 +60,7 @@ class FrontendCheckerResult(NamedTuple):
             unsafe_order_symbol_usage=defaultdict(list),
             waiter_links=defaultdict(set),
             ready_maker_links=defaultdict(set),
+            stale_parents=defaultdict(set),
             phantom_cell_info={},
             allow_new_ready=allow_new_ready,
         )
@@ -88,6 +90,10 @@ class FrontendCheckerResult(NamedTuple):
             "ready_maker_links": {
                 cell_id: list(linked_cell_ids)
                 for cell_id, linked_cell_ids in self.ready_maker_links.items()
+            },
+            "stale_parents": {
+                cell_id: list(linked_cell_ids)
+                for cell_id, linked_cell_ids in self.stale_parents.items()
             },
         }
 
@@ -208,6 +214,25 @@ class FrontendCheckerResult(NamedTuple):
         for cell_id in self.waiting_cells:
             cells().from_id(cell_id).set_ready(False)
 
+    def _compute_stale_parents(self, cell: Cell) -> None:
+        flow_ = flow()
+        if (
+            flow_.mut_settings.exec_schedule
+            not in (
+                ExecutionSchedule.DAG_BASED,
+                ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+            )
+            or flow_.mut_settings.flow_order != FlowDirection.IN_ORDER
+        ):
+            return
+        for _ in flow_.mut_settings.iter_slicing_contexts():
+            for pid, syms in cell.directional_parents.items():
+                parent = cells().from_id(pid)
+                for sym in syms:
+                    if sym.timestamp.cell_num > parent.cell_ctr:
+                        self.stale_parents[cell.cell_id].add(parent.cell_id)
+                        break
+
     def _compute_readiness(
         self, cell: Cell, checker_result: CheckerResult
     ) -> Tuple[bool, bool]:
@@ -229,8 +254,9 @@ class FrontendCheckerResult(NamedTuple):
                 for _ in iter_dangling_contexts():
                     if is_new_ready:
                         break
-                    for pid, syms in cell.directional_parents.items():
+                    for pid, raw_syms in cell.directional_parents.items():
                         par = cells().from_id(pid)
+                        syms = raw_syms - cell.static_removed_symbols
                         if (
                             flow_.fake_edge_sym in syms
                             and cell.cell_ctr < 0 < par.cell_ctr
@@ -339,6 +365,7 @@ class FrontendCheckerResult(NamedTuple):
             )
             if len(phantom_cell_info_for_cell) > 0:
                 phantom_cell_info[cell_id] = phantom_cell_info_for_cell
+        self._compute_stale_parents(cell)
         is_ready, is_new_ready = self._compute_readiness(cell, checker_result)
         if is_ready:
             self.ready_cells.add(cell_id)

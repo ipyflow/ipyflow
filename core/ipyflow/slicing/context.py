@@ -43,6 +43,14 @@ def static_slicing_context() -> Generator[None, None, None]:
         yield
 
 
+@contextmanager
+def slicing_context(is_static: bool) -> Generator[None, None, None]:
+    with set_slicing_context(
+        SlicingContext.STATIC if is_static else SlicingContext.DYNAMIC
+    ):
+        yield
+
+
 def iter_slicing_contexts(*dep_contexts: SlicingContext) -> Generator[None, None, None]:
     for _ in yield_in_loop(*[set_slicing_context(dep_ctx) for dep_ctx in dep_contexts]):
         yield

@@ -57,6 +57,7 @@ class IpyflowSessionState {
   readyCells: Set<string> = new Set();
   waiterLinks: { [id: string]: string[] } = {};
   readyMakerLinks: { [id: string]: string[] } = {};
+  staleParents: { [id: string]: string[] } = {};
   prevActiveCell: Cell<ICellModel> | null = null;
   activeCell: Cell<ICellModel> | null = null;
   cellsById: { [id: string]: Cell<ICellModel> } = {};
@@ -178,19 +179,19 @@ class IpyflowSessionState {
     if (!addCellsNeedingRefresh) {
       closure.add(cellId);
     }
-    const children = edges?.[cellId];
-    if (children === undefined) {
+    const relatives = edges?.[cellId];
+    if (relatives === undefined) {
       return;
     }
     const prevClosureSize = closure.size;
-    children.forEach((child) =>
+    relatives.forEach((related) => {
       this.computeTransitiveClosureHelper(
         closure,
-        child,
+        related,
         edges,
         addCellsNeedingRefresh
-      )
-    );
+      );
+    });
     if (
       addCellsNeedingRefresh &&
       (closure.size > prevClosureSize ||
@@ -200,6 +201,20 @@ class IpyflowSessionState {
         this.dirtyCells.has(cellId))
     ) {
       closure.add(cellId);
+    }
+    if (addCellsNeedingRefresh && closure.has(cellId)) {
+      relatives.forEach((related) => {
+        if (this.staleParents?.[cellId]?.includes(related)) {
+          closure.add(related);
+          this.computeTransitiveClosureHelper(
+              closure,
+              related,
+              edges,
+              addCellsNeedingRefresh,
+              true,
+          );
+        }
+      });
     }
   }
 
@@ -897,6 +912,9 @@ const connectToComm = (
   notebook.model.cells.changed.connect(onCellsAdded);
 
   const notifyActiveCell = (newActiveCell: ICellModel) => {
+    if (newActiveCell.id == null) {
+      return;
+    }
     let newActiveCellOrderIdx = -1;
     notebook.widgets.forEach((itercell, idx) => {
       if (itercell.model.id === newActiveCell.id) {
@@ -1174,6 +1192,9 @@ const connectToComm = (
       }
       state.waiterLinks = payload.waiter_links as { [id: string]: string[] };
       state.readyMakerLinks = payload.ready_maker_links as {
+        [id: string]: string[];
+      };
+      state.staleParents = payload.stale_parents as {
         [id: string]: string[];
       };
       state.cellPendingExecution = null;

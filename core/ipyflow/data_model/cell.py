@@ -117,6 +117,7 @@ class Cell(SliceableMixin):
         self.dangling_static_parents: Dict[IdType, Set["Symbol"]] = {}
         self.dangling_static_children: Dict[IdType, Set["Symbol"]] = {}
         self.used_symbols: Set["Symbol"] = set()
+        self.static_removed_symbols: Set["Symbol"] = set()
         self.static_writes: Set["Symbol"] = set()
         self.dynamic_writes: Set["Symbol"] = set()
         self._used_cell_counters_by_live_symbol: Dict["Symbol", Set[int]] = defaultdict(

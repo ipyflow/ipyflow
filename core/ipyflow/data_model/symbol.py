@@ -29,7 +29,7 @@ from ipyflow.data_model.utils.annotation_utils import (
 from ipyflow.data_model.utils.update_protocol import UpdateProtocol
 from ipyflow.models import _SymbolContainer, namespaces, statements, symbols
 from ipyflow.singletons import flow, shell, tracer
-from ipyflow.slicing.context import dynamic_slicing_context, static_slicing_context
+from ipyflow.slicing.context import dynamic_slicing_context, slicing_context
 from ipyflow.slicing.mixin import FormatType, Slice
 from ipyflow.tracing.watchpoint import Watchpoints
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES, IdType, SupportedIndexType
@@ -1098,22 +1098,9 @@ class Symbol:
         is_static: bool,
     ) -> bool:
         flow_ = flow()
-        is_usage = False
-        if is_static:
-            if flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
-                is_usage = updated_time.positional < used_time.positional
-            else:
-                is_usage = updated_time < used_time
-            if is_usage:
-                with static_slicing_context():
-                    flow_.add_data_dep(
-                        used_time,
-                        updated_time,
-                        self,
-                    )
-        elif not is_static and updated_time < used_time:
-            is_usage = True
-            with dynamic_slicing_context():
+        is_usage = is_static or updated_time < used_time
+        if is_usage:
+            with slicing_context(is_static=is_static):
                 flow_.add_data_dep(
                     used_time,
                     updated_time,

@@ -25,6 +25,7 @@ from ipykernel.ipkernel import IPythonKernel
 from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 
 from ipyflow import singletons
+from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.config import (
     ColorScheme,
@@ -49,7 +50,6 @@ from ipyflow.singletons import shell
 from ipyflow.slicing.context import (
     SlicingContext,
     dangling_context,
-    dynamic_slicing_context,
     slicing_ctx_var,
     static_slicing_context,
 )
@@ -501,8 +501,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 continue
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
-    @staticmethod
-    def _recompute_ast_for_cells(content_by_cell_id: Dict[IdType, str]) -> bool:
+    def _recompute_ast_for_cells(self, content_by_cell_id: Dict[IdType, str]) -> bool:
         should_recompute_exec_schedule = False
         for cell_id, content in content_by_cell_id.items():
             cell = cells().from_id_nullable(cell_id)
@@ -529,24 +528,26 @@ class NotebookFlow(singletons.NotebookFlow):
             try:
                 cell.current_content = content
                 cell.to_ast()
-                # to ensure that static data deps get refreshed
-                prev_static_parents = {
-                    pid: set(sym_edges)
-                    for pid, sym_edges in cell.static_parents.items()
-                }
-                if edges_need_update:
-                    with static_slicing_context():
-                        for pid, sym_edges in prev_static_parents.items():
-                            cell.remove_parent_edges(pid, sym_edges)
                 result = cell.check_and_resolve_symbols(
-                    update_liveness_time_versions=True,
+                    update_liveness_time_versions=False,
                 )
                 if edges_need_update:
-                    with dynamic_slicing_context():
-                        for pid, sym_edges in prev_static_parents.items():
-                            cell.remove_parent_edges(
-                                pid, sym_edges - cell.static_parents.get(pid, set())
-                            )
+                    if cell.last_check_result is None:
+                        prev_resolved_live_syms: Set[ResolvedSymbol] = set()
+                    else:
+                        prev_resolved_live_syms = cell.last_check_result.live
+                    prev_live_syms = {
+                        resolved.sym for resolved in prev_resolved_live_syms
+                    }
+                    live_syms: Set[Symbol] = {resolved.sym for resolved in result.live}
+                    cell.static_removed_symbols |= prev_live_syms - live_syms
+                    cell.static_removed_symbols -= live_syms
+                    for resolved in result.live - prev_resolved_live_syms:
+                        resolved.update_usage_info(
+                            used_time=resolved.liveness_timestamp,
+                            exclude_ns=not resolved.is_last,
+                            is_static=True,
+                        )
                 cell.last_check_result = result
                 cell.last_check_cell_ctr = cell.cell_ctr
                 should_recompute_exec_schedule = True
@@ -747,6 +748,8 @@ class NotebookFlow(singletons.NotebookFlow):
             this_cell_children: Set[IdType] = set()
             for _ in self.mut_settings.iter_slicing_contexts():
                 for par_id, syms in cell.directional_parents.items():
+                    if syms <= cell.static_removed_symbols:
+                        continue
                     parent = cells().from_id(par_id)
                     if (
                         parent.last_check_result is not None
@@ -769,16 +772,23 @@ class NotebookFlow(singletons.NotebookFlow):
                             other_par_id,
                             other_syms,
                         ) in cell.directional_parents.items():
+                            if syms == {self.fake_edge_sym} and other_syms == {
+                                self.fake_edge_sym
+                            }:
+                                continue
                             other_parent = cells().from_id(other_par_id)
                             if other_parent.position <= parent.position:
                                 continue
-                            if syms <= other_syms:
+                            if syms <= other_syms or self.fake_edge_sym in other_syms:
                                 should_skip = True
                                 break
                     if should_skip:
                         continue
                     this_cell_parents.add(par_id)
                 for child_id, syms in cell.directional_children.items():
+                    child = cells().from_id(child_id)
+                    if syms <= child.static_removed_symbols:
+                        continue
                     if (
                         cell.last_check_result is not None
                         and syms <= cell.static_writes
@@ -795,15 +805,18 @@ class NotebookFlow(singletons.NotebookFlow):
                         self.mut_settings.flow_order == FlowDirection.IN_ORDER
                         and slicing_ctx_var.get() == SlicingContext.STATIC
                     ):
-                        child = cells().from_id(child_id)
                         for (
                             other_par_id,
                             other_syms,
                         ) in child.directional_parents.items():
+                            if syms == {self.fake_edge_sym} and other_syms == {
+                                self.fake_edge_sym
+                            }:
+                                continue
                             other_parent = cells().from_id(other_par_id)
                             if other_parent.position <= cell.position:
                                 continue
-                            if syms <= other_syms:
+                            if syms <= other_syms or self.fake_edge_sym in other_syms:
                                 should_skip = True
                                 break
                     if should_skip:

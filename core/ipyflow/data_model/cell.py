@@ -78,6 +78,7 @@ class Cell(SliceableMixin):
     _cell_by_cell_ctr: Dict[int, "Cell"] = {}
     _cell_counter: int = 0
     _position_by_cell_id: Dict[IdType, int] = {}
+    _cell_id_by_position: Dict[int, IdType] = {}
     _cells_by_tag: Dict[str, Set["Cell"]] = defaultdict(set)
     _reactive_cells_by_tag: Dict[str, Set[IdType]] = defaultdict(set)
     _override_current_cell: Optional["Cell"] = None
@@ -396,10 +397,24 @@ class Cell(SliceableMixin):
             settings.flow_order == FlowDirection.IN_ORDER
             and settings.interface != Interface.IPYTHON
         ):
+            cls._cell_id_by_position.clear()
             for cell_id in cls._position_by_cell_id:
                 if cell_id not in order_index_by_cell_id:
                     order_index_by_cell_id[cell_id] = cast(int, float("inf"))
+                else:
+                    cls._cell_id_by_position[order_index_by_cell_id[cell_id]] = cell_id
         cls._position_by_cell_id = order_index_by_cell_id
+
+    @classmethod
+    def iterate_over_notebook_in_position_order(cls) -> Generator["Cell", None, None]:
+        for pos in sorted(cls._cell_id_by_position.keys()):
+            yield cls.from_id(cls._cell_id_by_position[pos])
+
+    @classmethod
+    def iterate_over_notebook_in_counter_order(cls) -> Generator["Cell", None, None]:
+        yield from sorted(
+            cls._current_cell_by_cell_id.values(), key=lambda cell: cell.cell_ctr
+        )
 
     @classmethod
     def set_override_refs(

@@ -422,8 +422,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             elif cell.prev_cell is not None:
                 cell.static_parents = cell.prev_cell.static_parents
                 cell.dynamic_parents = cell.prev_cell.dynamic_parents
-                cell.dangling_static_parents = cell.prev_cell.dangling_static_parents
-                cell.dangling_dynamic_parents = cell.prev_cell.dangling_dynamic_parents
         except Exception as e:
             if settings.is_dev_mode:
                 logger.exception("exception occurred")
@@ -685,7 +683,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             ]
         )
         self._handle_memoization()
-        flow_._add_applicable_prev_cell_parents_to_current()
+        flow_._remove_dangling_parent_edges()
         flow_.gc()
 
     def on_exception(self, e: Union[None, str, Exception]) -> None:

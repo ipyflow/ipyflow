@@ -49,7 +49,6 @@ from ipyflow.line_magics import make_line_magic
 from ipyflow.singletons import shell
 from ipyflow.slicing.context import (
     SlicingContext,
-    dangling_context,
     slicing_ctx_var,
     static_slicing_context,
 )
@@ -988,34 +987,17 @@ class NotebookFlow(singletons.NotebookFlow):
         for sym in symbols:
             sym.resync_if_necessary(refresh=False)
 
-    def _add_applicable_prev_cell_parents_to_current(self) -> None:
+    def _remove_dangling_parent_edges(self) -> None:
         cell = cells().at_counter(self.cell_counter())
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
         for _ in SlicingContext.iter_slicing_contexts():
-            new_parents = list(cell.parents.items())
-            to_remove_from_dangling = set()
-            for cell_id, sym_edges in prev_cell.parents.items():
-                prev_pos = cells().from_id(cell_id).position
-                seen_new_parent_edges = set()
-                for new_pid, new_edges in new_parents:
-                    seen_new_parent_edges |= new_edges
-                    new_parent = cells().from_id(new_pid)
-                    if (
-                        self.mut_settings.flow_order == FlowDirection.IN_ORDER
-                        and cell.position >= new_parent.position > prev_pos
-                    ):
-                        cell.remove_parent_edges(cell_id, sym_edges & new_edges)
-                        to_remove_from_dangling |= new_edges
-                    elif new_parent.position <= cell.position:
-                        cell.add_parent_edges(cell_id, sym_edges & new_edges)
-                cell.remove_parent_edges(cell_id, sym_edges - seen_new_parent_edges)
-                with dangling_context():
-                    cell.add_parent_edges(
-                        cell_id,
-                        sym_edges & (cell.used_symbols - to_remove_from_dangling),
-                    )
+            for prev_pid, sym_edges in prev_cell.parents.items():
+                # remove anything not in the current parent set
+                cell.remove_parent_edges(
+                    prev_pid, sym_edges - cell.parents.get(prev_pid, set())
+                )
 
     @property
     def line_magic_name(self):

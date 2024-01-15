@@ -207,11 +207,11 @@ class IpyflowSessionState {
         if (this.staleParents?.[cellId]?.includes(related)) {
           closure.add(related);
           this.computeTransitiveClosureHelper(
-              closure,
-              related,
-              edges,
-              addCellsNeedingRefresh,
-              true,
+            closure,
+            related,
+            edges,
+            addCellsNeedingRefresh,
+            true
           );
         }
       });

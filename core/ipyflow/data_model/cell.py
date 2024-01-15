@@ -112,10 +112,6 @@ class Cell(SliceableMixin):
         self.dynamic_children: Dict[IdType, Set["Symbol"]] = {}
         self.static_parents: Dict[IdType, Set["Symbol"]] = {}
         self.static_children: Dict[IdType, Set["Symbol"]] = {}
-        self.dangling_dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
-        self.dangling_dynamic_children: Dict[IdType, Set["Symbol"]] = {}
-        self.dangling_static_parents: Dict[IdType, Set["Symbol"]] = {}
-        self.dangling_static_children: Dict[IdType, Set["Symbol"]] = {}
         self.used_symbols: Set["Symbol"] = set()
         self.static_removed_symbols: Set["Symbol"] = set()
         self.static_writes: Set["Symbol"] = set()
@@ -380,8 +376,6 @@ class Cell(SliceableMixin):
             cell.history = prev_cell.history + cell.history
             cell.static_children = prev_cell.static_children
             cell.dynamic_children = prev_cell.dynamic_children
-            cell.dangling_static_children = prev_cell.dangling_static_children
-            cell.dangling_dynamic_children = prev_cell.dangling_dynamic_children
             for tag in prev_cell.tags:
                 cls._cells_by_tag[tag].discard(prev_cell)
             for tag in prev_cell.reactive_tags:

@@ -27,13 +27,7 @@ from ipyflow.config import Interface
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import cells
 from ipyflow.singletons import flow, shell, tracer
-from ipyflow.slicing.context import (
-    SlicingContext,
-    dangling_context,
-    dangling_ctx_var,
-    iter_dangling_contexts,
-    slicing_ctx_var,
-)
+from ipyflow.slicing.context import SlicingContext, slicing_ctx_var
 from ipyflow.types import IdType, TimestampOrCounter
 
 if sys.version_info >= (3, 8):
@@ -207,11 +201,6 @@ class SliceableMixin(Protocol):
     static_parents: Dict[IdType, Set["Symbol"]]
     static_children: Dict[IdType, Set["Symbol"]]
 
-    dangling_dynamic_parents: Dict[IdType, Set["Symbol"]]
-    dangling_dynamic_children: Dict[IdType, Set["Symbol"]]
-    dangling_static_parents: Dict[IdType, Set["Symbol"]]
-    dangling_static_children: Dict[IdType, Set["Symbol"]]
-
     @classmethod
     def current(cls) -> "SliceableMixin":
         ...
@@ -278,15 +267,13 @@ class SliceableMixin(Protocol):
         if pid == self.id:
             # in this case, inherit the previous parents, if any
             if self.prev is not None:
-                for _ in iter_dangling_contexts():
-                    for prev_pid, prev_syms in self.prev.parents.items():
-                        common = syms & prev_syms
-                        if common:
-                            self.parents.setdefault(prev_pid, set()).update(common)
+                for prev_pid, prev_syms in self.prev.parents.items():
+                    common = syms & prev_syms
+                    if common:
+                        self.parents.setdefault(prev_pid, set()).update(common)
             return
-        with dangling_context(not parent.is_current):
-            self.parents.setdefault(pid, set()).update(syms)
-            parent.children.setdefault(self.id, set()).update(syms)
+        self.parents.setdefault(pid, set()).update(syms)
+        parent.children.setdefault(self.id, set()).update(syms)
 
     def add_parent_edge(self, parent_ref: SliceRefType, sym: "Symbol") -> None:
         self.add_parent_edges(parent_ref, {sym})
@@ -298,14 +285,13 @@ class SliceableMixin(Protocol):
             return
         parent = self._from_ref(parent_ref)
         pid = parent.id
-        with dangling_context(not parent.is_current):
-            for edges, eid in ((self.parents, pid), (parent.children, self.id)):
-                sym_edges = edges.get(eid, set())
-                if not sym_edges:
-                    continue
-                sym_edges.difference_update(syms)
-                if not sym_edges:
-                    del edges[eid]
+        for edges, eid in ((self.parents, pid), (parent.children, self.id)):
+            sym_edges = edges.get(eid, set())
+            if not sym_edges:
+                continue
+            sym_edges.difference_update(syms)
+            if not sym_edges:
+                del edges[eid]
 
     def remove_parent_edge(self, parent_ref: SliceRefType, sym: "Symbol") -> None:
         self.remove_parent_edges(parent_ref, {sym})
@@ -315,35 +301,28 @@ class SliceableMixin(Protocol):
     ) -> None:
         prev_parent = self._from_ref(prev_parent_ref)
         new_parent = self._from_ref(new_parent_ref)
-        with dangling_context(not prev_parent.is_current):
-            syms = self.parents.pop(prev_parent.id)
-            prev_parent.children.pop(self.id)
-        with dangling_context(not new_parent.is_current):
-            self.parents.setdefault(new_parent.id, set()).update(syms)
-            new_parent.children.setdefault(self.id, set()).update(syms)
+        syms = self.parents.pop(prev_parent.id)
+        prev_parent.children.pop(self.id)
+        self.parents.setdefault(new_parent.id, set()).update(syms)
+        new_parent.children.setdefault(self.id, set()).update(syms)
 
     def replace_child_edges(
         self, prev_child_ref: SliceRefType, new_child_ref: SliceRefType
     ) -> None:
         prev_child = self._from_ref(prev_child_ref)
         new_child = self._from_ref(new_child_ref)
-        with dangling_context(not prev_child.is_current):
-            syms = self.children.pop(prev_child.id)
-            prev_child.parents.pop(self.id)
-        with dangling_context(not new_child.is_current):
-            self.children.setdefault(new_child.id, set()).update(syms)
-            new_child.parents.setdefault(self.id, set()).update(syms)
+        syms = self.children.pop(prev_child.id)
+        prev_child.parents.pop(self.id)
+        self.children.setdefault(new_child.id, set()).update(syms)
+        new_child.parents.setdefault(self.id, set()).update(syms)
 
     @property
     def parents(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
-        dangling_ctx = dangling_ctx_var.get()
         if ctx == SlicingContext.DYNAMIC:
-            return (
-                self.dangling_dynamic_parents if dangling_ctx else self.dynamic_parents
-            )
+            return self.dynamic_parents
         elif ctx == SlicingContext.STATIC:
-            return self.dangling_static_parents if dangling_ctx else self.static_parents
+            return self.static_parents
         flow_ = flow()
         # TODO: rather than asserting test context,
         #  assert that we're being called from the notebook
@@ -358,35 +337,21 @@ class SliceableMixin(Protocol):
     @parents.setter
     def parents(self, new_parents: Dict[IdType, Set["Symbol"]]) -> None:
         ctx = slicing_ctx_var.get()
-        dangling_ctx = dangling_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            if dangling_ctx:
-                self.dangling_dynamic_parents = new_parents
-            else:
-                self.dynamic_parents = new_parents
+            self.dynamic_parents = new_parents
         elif ctx == SlicingContext.STATIC:
-            if dangling_ctx:
-                self.dangling_static_parents = new_parents
-            else:
-                self.static_parents = new_parents
+            self.static_parents = new_parents
         else:
             assert False
 
     @property
     def children(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
-        dangling_ctx = dangling_ctx_var.get()
         if ctx == SlicingContext.DYNAMIC:
-            return (
-                self.dangling_dynamic_children
-                if dangling_ctx
-                else self.dynamic_children
-            )
+            return self.dynamic_children
         elif ctx == SlicingContext.STATIC:
-            return (
-                self.dangling_static_children if dangling_ctx else self.static_children
-            )
+            return self.static_children
         flow_ = flow()
         # TODO: rather than asserting test context,
         #  assert that we're being called from the notebook
@@ -401,18 +366,11 @@ class SliceableMixin(Protocol):
     @children.setter
     def children(self, new_children: Dict[IdType, Set["Symbol"]]) -> None:
         ctx = slicing_ctx_var.get()
-        dangling_ctx = dangling_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            if dangling_ctx:
-                self.dangling_dynamic_children = new_children
-            else:
-                self.dynamic_children = new_children
+            self.dynamic_children = new_children
         elif ctx == SlicingContext.STATIC:
-            if dangling_ctx:
-                self.dangling_static_children = new_children
-            else:
-                self.static_children = new_children
+            self.static_children = new_children
         else:
             assert False
 

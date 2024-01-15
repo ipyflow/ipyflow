@@ -8,11 +8,7 @@ from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.cell import Cell, CheckerResult, cells
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
-from ipyflow.slicing.context import (
-    SlicingContext,
-    iter_dangling_contexts,
-    slicing_ctx_var,
-)
+from ipyflow.slicing.context import SlicingContext, slicing_ctx_var
 from ipyflow.types import IdType
 
 logger = logging.getLogger(__name__)
@@ -229,7 +225,12 @@ class FrontendCheckerResult(NamedTuple):
             for pid, syms in cell.directional_parents.items():
                 parent = cells().from_id(pid)
                 for sym in syms:
-                    if sym.timestamp.cell_num > parent.cell_ctr:
+                    if (
+                        sym.timestamp.cell_num > parent.cell_ctr
+                        and not cell.position
+                        > cells().at_timestamp(sym.timestamp).position
+                        > parent.position
+                    ):
                         self.stale_parents[cell.cell_id].add(parent.cell_id)
                         break
 
@@ -251,50 +252,46 @@ class FrontendCheckerResult(NamedTuple):
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 if is_new_ready:
                     break
-                for _ in iter_dangling_contexts():
-                    if is_new_ready:
+                if is_new_ready:
+                    break
+                for pid, raw_syms in cell.directional_parents.items():
+                    par = cells().from_id(pid)
+                    syms = raw_syms - cell.static_removed_symbols
+                    if flow_.fake_edge_sym in syms and cell.cell_ctr < 0 < par.cell_ctr:
+                        is_ready = True
                         break
-                    for pid, raw_syms in cell.directional_parents.items():
-                        par = cells().from_id(pid)
-                        syms = raw_syms - cell.static_removed_symbols
+                    if max(
+                        cell.cell_ctr, flow_.min_timestamp
+                    ) < par.cell_ctr and par.cell_ctr in {
+                        sym.timestamp.cell_num for sym in syms
+                    }:
+                        should_skip = False
                         if (
-                            flow_.fake_edge_sym in syms
-                            and cell.cell_ctr < 0 < par.cell_ctr
+                            flow_order == FlowDirection.IN_ORDER
+                            and slicing_ctx_var.get() == SlicingContext.STATIC
                         ):
-                            is_ready = True
+                            for (
+                                other_pid,
+                                other_syms,
+                            ) in cell.directional_parents.items():
+                                other_parent = cells().from_id(other_pid)
+                                if other_parent.position <= par.position:
+                                    continue
+                                if (
+                                    syms <= other_syms
+                                    or flow_.fake_edge_sym in other_syms
+                                ):
+                                    should_skip = True
+                                    break
+                        if should_skip:
+                            continue
+                        is_ready = True
+                        if (
+                            par.cell_ctr >= flow_.min_new_ready_cell_counter()
+                            and cell.cell_ctr > 0
+                        ):
+                            is_new_ready = True
                             break
-                        if max(
-                            cell.cell_ctr, flow_.min_timestamp
-                        ) < par.cell_ctr and par.cell_ctr in {
-                            sym.timestamp.cell_num for sym in syms
-                        }:
-                            should_skip = False
-                            if (
-                                flow_order == FlowDirection.IN_ORDER
-                                and slicing_ctx_var.get() == SlicingContext.STATIC
-                            ):
-                                for (
-                                    other_pid,
-                                    other_syms,
-                                ) in cell.directional_parents.items():
-                                    other_parent = cells().from_id(other_pid)
-                                    if other_parent.position <= par.position:
-                                        continue
-                                    if (
-                                        syms <= other_syms
-                                        or flow_.fake_edge_sym in other_syms
-                                    ):
-                                        should_skip = True
-                                        break
-                            if should_skip:
-                                continue
-                            is_ready = True
-                            if (
-                                par.cell_ctr >= flow_.min_new_ready_cell_counter()
-                                and cell.cell_ctr > 0
-                            ):
-                                is_new_ready = True
-                                break
         if not is_new_ready and (
             exec_schedule == ExecutionSchedule.LIVENESS_BASED
             or (

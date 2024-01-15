@@ -40,6 +40,7 @@ class FrontendCheckerResult(NamedTuple):
     waiter_links: Dict[IdType, Set[IdType]]
     ready_maker_links: Dict[IdType, Set[IdType]]
     stale_parents: Dict[IdType, Set[IdType]]
+    stale_parents_by_executed_cell: Dict[IdType, Dict[IdType, Set[IdType]]]
     phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]]
     allow_new_ready: bool
 
@@ -57,6 +58,7 @@ class FrontendCheckerResult(NamedTuple):
             waiter_links=defaultdict(set),
             ready_maker_links=defaultdict(set),
             stale_parents=defaultdict(set),
+            stale_parents_by_executed_cell={},
             phantom_cell_info={},
             allow_new_ready=allow_new_ready,
         )
@@ -90,6 +92,13 @@ class FrontendCheckerResult(NamedTuple):
             "stale_parents": {
                 cell_id: list(linked_cell_ids)
                 for cell_id, linked_cell_ids in self.stale_parents.items()
+            },
+            "stale_parents_by_executed_cell": {
+                executed_cell_id: {
+                    cell_id: list(stale_parent_ids)
+                    for cell_id, stale_parent_ids in stale_parents.items()
+                }
+                for executed_cell_id, stale_parents in self.stale_parents_by_executed_cell.items()
             },
         }
 
@@ -234,6 +243,34 @@ class FrontendCheckerResult(NamedTuple):
                         self.stale_parents[cell.cell_id].add(parent.cell_id)
                         break
 
+    def _compute_stale_parent_makers(self) -> None:
+        flow_ = flow()
+        if (
+            flow_.mut_settings.exec_schedule
+            not in (
+                ExecutionSchedule.DAG_BASED,
+                ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+            )
+            or flow_.mut_settings.flow_order != FlowDirection.IN_ORDER
+        ):
+            return
+        cells_so_far_that_update_symbol: Dict[Symbol, Set[Cell]] = {}
+        for cell in cells().iterate_over_notebook_in_position_order():
+            for _ in flow_.mut_settings.iter_slicing_contexts():
+                for pid, syms in cell.parents.items():
+                    parent_pos = cells().from_id(pid).position
+                    for sym in syms:
+                        for executed_cell in cells_so_far_that_update_symbol.get(
+                            sym, []
+                        ):
+                            if cell.position > executed_cell.position > parent_pos:
+                                continue
+                            self.stale_parents_by_executed_cell.setdefault(
+                                executed_cell.cell_id, {}
+                            ).setdefault(cell.cell_id, set()).add(pid)
+            for sym in cell.static_writes | cell.dynamic_writes:
+                cells_so_far_that_update_symbol.setdefault(sym, set()).add(cell)
+
     def _compute_readiness(
         self, cell: Cell, checker_result: CheckerResult
     ) -> Tuple[bool, bool]:
@@ -363,6 +400,7 @@ class FrontendCheckerResult(NamedTuple):
             if len(phantom_cell_info_for_cell) > 0:
                 phantom_cell_info[cell_id] = phantom_cell_info_for_cell
         self._compute_stale_parents(cell)
+        self._compute_stale_parent_makers()
         is_ready, is_new_ready = self._compute_readiness(cell, checker_result)
         if is_ready:
             self.ready_cells.add(cell_id)

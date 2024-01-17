@@ -198,6 +198,27 @@ class Cell(SliceableMixin):
             }
         return cast("Mapping[IdType, FrozenSet[Symbol]]", children)
 
+    def get_latest_parent_by_ts_map(self) -> Optional[Dict[Timestamp, "Cell"]]:
+        flow_ = flow()
+        if flow_.mut_settings.flow_order != FlowDirection.IN_ORDER:
+            return None
+        latest_par_by_ts = {}
+        for _ in flow_.mut_settings.iter_slicing_contexts():
+            for par_id, raw_syms in self.directional_parents.items():
+                syms = raw_syms - self.static_removed_symbols - {flow_.fake_edge_sym}
+                parent = cells().from_id(par_id)
+                for sym in syms:
+                    if (
+                        parent.position
+                        >= latest_par_by_ts.get(
+                            sym.timestamp_excluding_ns_descendents, parent
+                        ).position
+                    ):
+                        latest_par_by_ts[
+                            sym.timestamp_excluding_ns_descendents
+                        ] = parent
+        return latest_par_by_ts
+
     def statements(self) -> List["Statement"]:
         stmts: List["Statement"] = []
         for stmt_num in range(len(self.to_ast().body)):

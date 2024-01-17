@@ -519,34 +519,26 @@ class NotebookFlow(singletons.NotebookFlow):
             if cell is None:
                 continue
             prev_content = cell.current_content
-            is_same_content = prev_content == content
-            is_same_counter = cell.cell_ctr == cell.last_check_cell_ctr
-            edges_need_update = not is_same_content or (
-                not is_same_counter and cell.last_check_cell_ctr is not None
-            )
             try:
                 cell.current_content = content
                 cell.to_ast()
                 result = cell.check_and_resolve_symbols(
                     update_liveness_time_versions=False,
                 )
-                if edges_need_update:
-                    if cell.last_check_result is None:
-                        prev_resolved_live_syms: Set[ResolvedSymbol] = set()
-                    else:
-                        prev_resolved_live_syms = cell.last_check_result.live
-                    prev_live_syms = {
-                        resolved.sym for resolved in prev_resolved_live_syms
-                    }
-                    live_syms: Set[Symbol] = {resolved.sym for resolved in result.live}
-                    cell.static_removed_symbols |= prev_live_syms - live_syms
-                    cell.static_removed_symbols -= live_syms
-                    for resolved in result.live - prev_resolved_live_syms:
-                        resolved.update_usage_info(
-                            used_time=resolved.liveness_timestamp,
-                            exclude_ns=not resolved.is_last,
-                            is_static=True,
-                        )
+                if cell.last_check_result is None:
+                    prev_resolved_live_syms: Set[ResolvedSymbol] = set()
+                else:
+                    prev_resolved_live_syms = cell.last_check_result.live
+                prev_live_syms = {resolved.sym for resolved in prev_resolved_live_syms}
+                live_syms: Set[Symbol] = {resolved.sym for resolved in result.live}
+                cell.static_removed_symbols |= prev_live_syms
+                cell.static_removed_symbols -= live_syms
+                for resolved in result.live:
+                    resolved.update_usage_info(
+                        used_time=resolved.liveness_timestamp,
+                        exclude_ns=not resolved.is_last,
+                        is_static=True,
+                    )
                 cell.last_check_result = result
                 cell.last_check_cell_ctr = cell.cell_ctr
                 should_recompute_exec_schedule = True
@@ -744,10 +736,23 @@ class NotebookFlow(singletons.NotebookFlow):
         cell_children = {}
         for cell in cells_to_check:
             this_cell_parents: Set[IdType] = set()
-            this_cell_children: Set[IdType] = set()
+            latest_par_by_ts = cell.get_latest_parent_by_ts_map()
             for _ in self.mut_settings.iter_slicing_contexts():
-                for par_id, syms in cell.directional_parents.items():
-                    if syms <= cell.static_removed_symbols:
+                for par_id, raw_syms in cell.directional_parents.items():
+                    syms = raw_syms - cell.static_removed_symbols
+                    if len(syms) == 0:
+                        continue
+                    if (
+                        latest_par_by_ts is not None
+                        and self.fake_edge_sym not in syms
+                        and par_id
+                        not in {
+                            latest_par_by_ts[
+                                sym.timestamp_excluding_ns_descendents
+                            ].cell_id
+                            for sym in syms
+                        }
+                    ):
                         continue
                     parent = cells().from_id(par_id)
                     if (
@@ -784,45 +789,14 @@ class NotebookFlow(singletons.NotebookFlow):
                     if should_skip:
                         continue
                     this_cell_parents.add(par_id)
-                for child_id, syms in cell.directional_children.items():
-                    child = cells().from_id(child_id)
-                    if syms <= child.static_removed_symbols:
-                        continue
-                    if (
-                        cell.last_check_result is not None
-                        and syms <= cell.static_writes
-                        and len(cell.last_check_result.modified & syms) == 0
-                    ):
-                        continue
-                    if cell.cell_ctr >= 0 and not any(
-                        cell.cell_ctr in {ts.cell_num for ts in sym.updated_timestamps}
-                        for sym in syms
-                    ):
-                        continue
-                    should_skip = False
-                    if (
-                        self.mut_settings.flow_order == FlowDirection.IN_ORDER
-                        and slicing_ctx_var.get() == SlicingContext.STATIC
-                    ):
-                        for (
-                            other_par_id,
-                            other_syms,
-                        ) in child.directional_parents.items():
-                            if syms == {self.fake_edge_sym} and other_syms == {
-                                self.fake_edge_sym
-                            }:
-                                continue
-                            other_parent = cells().from_id(other_par_id)
-                            if other_parent.position <= cell.position:
-                                continue
-                            if syms <= other_syms or self.fake_edge_sym in other_syms:
-                                should_skip = True
-                                break
-                    if should_skip:
-                        continue
-                    this_cell_children.add(child_id)
             cell_parents[cell.id] = list(this_cell_parents)
-            cell_children[cell.id] = list(this_cell_children)
+        for cell_id, parents in cell_parents.items():
+            for parent_id in parents:
+                cell_children.setdefault(parent_id, []).append(cell_id)
+        cell_children = {k: list(set(v)) for k, v in cell_children.items()}
+        for cell in cells_to_check:
+            if cell.cell_id not in cell_children:
+                cell_children[cell.cell_id] = []
         response["cell_parents"] = cell_parents
         response["cell_children"] = cell_children
         response["executed_cells"] = list(cells().all_executed_cell_ids())

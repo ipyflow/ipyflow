@@ -40,7 +40,8 @@ class FrontendCheckerResult(NamedTuple):
     waiter_links: Dict[IdType, Set[IdType]]
     ready_maker_links: Dict[IdType, Set[IdType]]
     stale_parents: Dict[IdType, Set[IdType]]
-    stale_parents_by_executed_cell: Dict[IdType, Dict[IdType, Set[IdType]]]
+    stale_parents_by_executed_cell_by_child: Dict[IdType, Dict[IdType, Set[IdType]]]
+    stale_parents_by_child_by_executed_cell: Dict[IdType, Dict[IdType, Set[IdType]]]
     phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]]
     allow_new_ready: bool
 
@@ -58,7 +59,8 @@ class FrontendCheckerResult(NamedTuple):
             waiter_links=defaultdict(set),
             ready_maker_links=defaultdict(set),
             stale_parents=defaultdict(set),
-            stale_parents_by_executed_cell={},
+            stale_parents_by_executed_cell_by_child={},
+            stale_parents_by_child_by_executed_cell={},
             phantom_cell_info={},
             allow_new_ready=allow_new_ready,
         )
@@ -93,12 +95,19 @@ class FrontendCheckerResult(NamedTuple):
                 cell_id: list(linked_cell_ids)
                 for cell_id, linked_cell_ids in self.stale_parents.items()
             },
-            "stale_parents_by_executed_cell": {
+            "stale_parents_by_executed_cell_by_child": {
+                cell_id: {
+                    executed_cell_id: list(stale_parent_ids)
+                    for executed_cell_id, stale_parent_ids in stale_parents.items()
+                }
+                for cell_id, stale_parents in self.stale_parents_by_executed_cell_by_child.items()
+            },
+            "stale_parents_by_child_by_executed_cell": {
                 executed_cell_id: {
                     cell_id: list(stale_parent_ids)
                     for cell_id, stale_parent_ids in stale_parents.items()
                 }
-                for executed_cell_id, stale_parents in self.stale_parents_by_executed_cell.items()
+                for executed_cell_id, stale_parents in self.stale_parents_by_child_by_executed_cell.items()
             },
         }
 
@@ -234,12 +243,7 @@ class FrontendCheckerResult(NamedTuple):
             for pid, syms in cell.directional_parents.items():
                 parent = cells().from_id(pid)
                 for sym in syms:
-                    if (
-                        sym.timestamp.cell_num > parent.cell_ctr
-                        and not cell.position
-                        > cells().at_timestamp(sym.timestamp).position
-                        > parent.position
-                    ):
+                    if sym.timestamp.cell_num > parent.cell_ctr:
                         self.stale_parents[cell.cell_id].add(parent.cell_id)
                         break
 
@@ -263,12 +267,18 @@ class FrontendCheckerResult(NamedTuple):
                         for executed_cell in cells_so_far_that_update_symbol.get(
                             sym, []
                         ):
-                            if cell.position > executed_cell.position > parent_pos:
-                                continue
-                            self.stale_parents_by_executed_cell.setdefault(
+                            # if cell.position > executed_cell.position > parent_pos:
+                            #     continue
+                            self.stale_parents_by_executed_cell_by_child.setdefault(
+                                cell.cell_id, {}
+                            ).setdefault(executed_cell.cell_id, set()).add(pid)
+                            self.stale_parents_by_child_by_executed_cell.setdefault(
                                 executed_cell.cell_id, {}
                             ).setdefault(cell.cell_id, set()).add(pid)
-            for sym in cell.static_writes | cell.dynamic_writes:
+            static_writes = set(cell.static_writes)
+            if cell.last_check_result is not None:
+                static_writes &= cell.last_check_result.modified
+            for sym in static_writes | cell.dynamic_writes:
                 cells_so_far_that_update_symbol.setdefault(sym, set()).add(cell)
 
     def _compute_readiness(
@@ -286,6 +296,7 @@ class FrontendCheckerResult(NamedTuple):
             ExecutionSchedule.DAG_BASED,
             ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
         ):
+            latest_par_by_ts = cell.get_latest_parent_by_ts_map()
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 if is_new_ready:
                     break
@@ -297,6 +308,18 @@ class FrontendCheckerResult(NamedTuple):
                     if flow_.fake_edge_sym in syms and cell.cell_ctr < 0 < par.cell_ctr:
                         is_ready = True
                         break
+                    if (
+                        latest_par_by_ts is not None
+                        and flow_.fake_edge_sym not in syms
+                        and pid
+                        not in {
+                            latest_par_by_ts[
+                                sym.timestamp_excluding_ns_descendents
+                            ].cell_id
+                            for sym in syms
+                        }
+                    ):
+                        continue
                     if max(
                         cell.cell_ctr, flow_.min_timestamp
                     ) < par.cell_ctr and par.cell_ctr in {

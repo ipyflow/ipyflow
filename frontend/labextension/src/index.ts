@@ -58,6 +58,12 @@ class IpyflowSessionState {
   waiterLinks: { [id: string]: string[] } = {};
   readyMakerLinks: { [id: string]: string[] } = {};
   staleParents: { [id: string]: string[] } = {};
+  staleParentsByExecutedCellByChild: {
+    [id: string]: { [id2: string]: string[] };
+  } = {};
+  staleParentsByChildByExecutedCell: {
+    [id: string]: { [id2: string]: string[] };
+  } = {};
   prevActiveCell: Cell<ICellModel> | null = null;
   activeCell: Cell<ICellModel> | null = null;
   cellsById: { [id: string]: Cell<ICellModel> } = {};
@@ -204,7 +210,25 @@ class IpyflowSessionState {
     }
     if (addCellsNeedingRefresh && closure.has(cellId)) {
       relatives.forEach((related) => {
-        if (this.staleParents?.[cellId]?.includes(related)) {
+        if (closure.has(related)) {
+          return;
+        }
+        let shouldIncludeRelated =
+          this.staleParents?.[cellId]?.includes(related);
+        if (!shouldIncludeRelated) {
+          for (const [executed, staleParents] of Object.entries(
+            this.staleParentsByExecutedCellByChild?.[cellId] ?? {}
+          )) {
+            if (!closure.has(executed)) {
+              continue;
+            }
+            shouldIncludeRelated = staleParents.includes(related);
+            if (shouldIncludeRelated) {
+              break;
+            }
+          }
+        }
+        if (shouldIncludeRelated) {
           closure.add(related);
           this.computeTransitiveClosureHelper(
             closure,
@@ -215,6 +239,26 @@ class IpyflowSessionState {
           );
         }
       });
+      for (const [child, staleParents] of Object.entries(
+        this.staleParentsByChildByExecutedCell?.[cellId] ?? {}
+      )) {
+        if (!closure.has(child)) {
+          continue;
+        }
+        for (const parent of staleParents) {
+          if (closure.has(parent) || !edges?.[child]?.includes(parent)) {
+            continue;
+          }
+          closure.add(parent);
+          this.computeTransitiveClosureHelper(
+            closure,
+            parent,
+            edges,
+            addCellsNeedingRefresh,
+            true
+          );
+        }
+      }
     }
   }
 
@@ -1197,6 +1241,14 @@ const connectToComm = (
       state.staleParents = payload.stale_parents as {
         [id: string]: string[];
       };
+      state.staleParentsByExecutedCellByChild =
+        payload.stale_parents_by_executed_cell_by_child as {
+          [id: string]: { [id2: string]: string[] };
+        };
+      state.staleParentsByChildByExecutedCell =
+        payload.stale_parents_by_child_by_executed_cell as {
+          [id: string]: { [id2: string]: string[] };
+        };
       state.cellPendingExecution = null;
       const exec_mode = payload.exec_mode as string;
       state.isReactivelyExecuting =

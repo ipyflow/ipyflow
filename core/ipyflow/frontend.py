@@ -262,13 +262,10 @@ class FrontendCheckerResult(NamedTuple):
         for cell in cells().iterate_over_notebook_in_position_order():
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 for pid, syms in cell.parents.items():
-                    parent_pos = cells().from_id(pid).position
                     for sym in syms:
                         for executed_cell in cells_so_far_that_update_symbol.get(
                             sym, []
                         ):
-                            # if cell.position > executed_cell.position > parent_pos:
-                            #     continue
                             self.stale_parents_by_executed_cell_by_child.setdefault(
                                 cell.cell_id, {}
                             ).setdefault(executed_cell.cell_id, set()).add(pid)

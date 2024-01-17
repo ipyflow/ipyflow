@@ -1430,6 +1430,9 @@ class DataflowTracer(StackFrameManager):
                 else:
                     breakpoint()
                 active_watchpoints.clear()
+            cell = cells().current_cell()
+            cell.dynamic_writes.update(cell._pending_dynamic_writes)
+            cell._pending_dynamic_writes.clear()
             return ret_expr
         finally:
             self.tracing_disabled_since_last_stmt = False

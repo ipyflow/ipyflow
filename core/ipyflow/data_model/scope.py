@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import itertools
 import logging
 import symtable
 from typing import (
@@ -309,11 +310,13 @@ class Scope:
         except SyntaxError:
             is_static_write = False
         current_cell = cells().current_cell()
-        if is_static_write and sym not in current_cell.dynamic_writes:
-            current_cell.static_writes.add(sym)
-        else:
-            current_cell.static_writes.discard(sym)
-            current_cell.dynamic_writes.add(sym)
+        for subsym in itertools.chain([sym], sym.get_namespace_symbols(recurse=True)):
+            if is_static_write and subsym not in current_cell.dynamic_writes:
+                current_cell._pending_dynamic_writes.discard(subsym)
+                current_cell.static_writes.add(subsym)
+            else:
+                current_cell.static_writes.discard(sym)
+                current_cell._pending_dynamic_writes.add(sym)
         return sym
 
     def _upsert_symbol_for_name_inner(

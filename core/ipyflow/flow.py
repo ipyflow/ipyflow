@@ -732,8 +732,8 @@ class NotebookFlow(singletons.NotebookFlow):
         response["settings"] = dict(
             self.mut_settings.to_json().items() | self.settings.to_json().items()
         )
-        cell_parents = {}
-        cell_children = {}
+        cell_parents: Dict[IdType, List[IdType]] = {}
+        cell_children: Dict[IdType, List[IdType]] = {}
         for cell in cells_to_check:
             this_cell_parents: Set[IdType] = set()
             latest_par_by_ts = cell.get_latest_parent_by_ts_map()

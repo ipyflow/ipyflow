@@ -1113,7 +1113,6 @@ class Symbol:
         used_time: Optional[Timestamp] = None,
         used_node: Optional[ast.AST] = None,
         exclude_ns: bool = False,
-        seen: Optional[Set["Symbol"]] = None,
         is_static: bool = False,
         is_blocking: bool = False,
     ) -> "Symbol":
@@ -1150,22 +1149,33 @@ class Symbol:
                 timestamp_by_used_time[used_time] = ts_to_use
                 if used_node is not None:
                     self.used_node_by_used_time[used_time] = used_node
-        ns = None if exclude_ns else self.namespace
-        if ns is not None and seen is None:
-            seen = set()
-        if ns is None or self in seen:
+        if exclude_ns:
             return self
-        seen.add(self)
-        for sym in ns.all_symbols_this_indentation():
+        for sym in self.get_namespace_symbols(recurse=True):
             sym.update_usage_info(
                 used_time=used_time,
                 used_node=None,
-                exclude_ns=False,
-                seen=seen,
+                exclude_ns=True,
                 is_static=is_static,
                 is_blocking=is_blocking,
             )
         return self
+
+    def get_namespace_symbols(
+        self, recurse: bool = False, seen: Optional[Set["Symbol"]] = None
+    ) -> Generator["Symbol", None, None]:
+        ns = self.namespace
+        if ns is None:
+            return
+        if seen is None:
+            seen = set()
+        if self in seen:
+            return
+        seen.add(self)
+        for sym in ns.all_symbols_this_indentation():
+            yield sym
+            if recurse:
+                yield from sym.get_namespace_symbols(recurse=recurse, seen=seen)
 
     def _take_timestamp_snapshots(
         self, ts_ubound: Timestamp, seen: Optional[Set["Symbol"]] = None

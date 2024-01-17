@@ -117,6 +117,8 @@ class Cell(SliceableMixin):
         self.static_removed_symbols: Set["Symbol"] = set()
         self.static_writes: Set["Symbol"] = set()
         self.dynamic_writes: Set["Symbol"] = set()
+        # pending dynamic writes are not finalized until the stmt is done executing
+        self._pending_dynamic_writes: Set["Symbol"] = set()
         self._used_cell_counters_by_live_symbol: Dict["Symbol", Set[int]] = defaultdict(
             set
         )
@@ -202,7 +204,7 @@ class Cell(SliceableMixin):
         flow_ = flow()
         if flow_.mut_settings.flow_order != FlowDirection.IN_ORDER:
             return None
-        latest_par_by_ts = {}
+        latest_par_by_ts: Dict[Timestamp, "Cell"] = {}
         for _ in flow_.mut_settings.iter_slicing_contexts():
             for par_id, raw_syms in self.directional_parents.items():
                 syms = raw_syms - self.static_removed_symbols - {flow_.fake_edge_sym}

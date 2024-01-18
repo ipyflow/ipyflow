@@ -747,9 +747,7 @@ class NotebookFlow(singletons.NotebookFlow):
                         and self.fake_edge_sym not in syms
                         and par_id
                         not in {
-                            latest_par_by_ts[
-                                sym.timestamp_excluding_ns_descendents
-                            ].cell_id
+                            latest_par_by_ts[sym.shallow_timestamp].cell_id
                             for sym in syms
                         }
                     ):

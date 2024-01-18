@@ -244,7 +244,7 @@ class Symbol:
         return set() if ns is None else ns.namespace_waiting_symbols
 
     @property
-    def timestamp_excluding_ns_descendents(self) -> Timestamp:
+    def shallow_timestamp(self) -> Timestamp:
         if self._override_timestamp is None:
             return self._timestamp
         else:
@@ -256,7 +256,7 @@ class Symbol:
 
     @property
     def timestamp(self) -> Timestamp:
-        ts = self.timestamp_excluding_ns_descendents
+        ts = self.shallow_timestamp
         if self.is_import or self.is_module:
             return ts
         ns = self.namespace
@@ -268,7 +268,7 @@ class Symbol:
         version_ubound: Optional[Timestamp] = None,
     ) -> Set[Timestamp]:
         if version_ubound is None:
-            timestamps = {self.timestamp_excluding_ns_descendents, self.timestamp}
+            timestamps = {self.shallow_timestamp, self.timestamp}
         else:
             max_leq_ubound = Timestamp.uninitialized()
             for ts in reversed(self._snapshot_timestamps):
@@ -1215,7 +1215,7 @@ class Symbol:
         ns = self.containing_namespace
         if ns is not None:
             # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
-            ns.max_descendent_timestamp = self.timestamp_excluding_ns_descendents
+            ns.max_descendent_timestamp = self.shallow_timestamp
             for alias in flow().aliases.get(ns.obj_id, []):
                 for cell in alias.cells_where_deep_live:
                     cell.add_used_cell_counter(alias, self._timestamp.cell_num)
@@ -1245,7 +1245,7 @@ class Symbol:
                         # )
                         sym.refresh(
                             refresh_descendent_namespaces=True,
-                            timestamp=self.timestamp_excluding_ns_descendents,
+                            timestamp=self.shallow_timestamp,
                             take_timestamp_snapshots=False,
                             seen=seen,
                         )

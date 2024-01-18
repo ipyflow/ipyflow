@@ -212,13 +212,9 @@ class Cell(SliceableMixin):
                 for sym in syms:
                     if (
                         parent.position
-                        >= latest_par_by_ts.get(
-                            sym.timestamp_excluding_ns_descendents, parent
-                        ).position
+                        >= latest_par_by_ts.get(sym.shallow_timestamp, parent).position
                     ):
-                        latest_par_by_ts[
-                            sym.timestamp_excluding_ns_descendents
-                        ] = parent
+                        latest_par_by_ts[sym.shallow_timestamp] = parent
         return latest_par_by_ts
 
     def statements(self) -> List["Statement"]:
@@ -343,9 +339,7 @@ class Cell(SliceableMixin):
             sym.last_updated_timestamp_by_obj_id[sym.obj_id] = sym.timestamp
             if not sym.is_user_accessible or not sym.containing_scope.is_global:
                 continue
-            outputs[sym] = MemoizedOutput(
-                sym, sym.timestamp_excluding_ns_descendents, sym.obj
-            )
+            outputs[sym] = MemoizedOutput(sym, sym.shallow_timestamp, sym.obj)
         assert self.captured_output is not None
         self._memoized_executions.setdefault(self.executed_content, []).append(
             MemoizedCellExecution(

@@ -243,7 +243,7 @@ class FrontendCheckerResult(NamedTuple):
             for pid, syms in cell.directional_parents.items():
                 parent = cells().from_id(pid)
                 for sym in syms:
-                    if sym.timestamp.cell_num > parent.cell_ctr:
+                    if sym.shallow_timestamp.cell_num > parent.cell_ctr:
                         self.stale_parents[cell.cell_id].add(parent.cell_id)
                         break
 
@@ -310,9 +310,7 @@ class FrontendCheckerResult(NamedTuple):
                         and flow_.fake_edge_sym not in syms
                         and pid
                         not in {
-                            latest_par_by_ts[
-                                sym.timestamp_excluding_ns_descendents
-                            ].cell_id
+                            latest_par_by_ts[sym.shallow_timestamp].cell_id
                             for sym in syms
                         }
                     ):
@@ -320,7 +318,7 @@ class FrontendCheckerResult(NamedTuple):
                     if max(
                         cell.cell_ctr, flow_.min_timestamp
                     ) < par.cell_ctr and par.cell_ctr in {
-                        sym.timestamp.cell_num for sym in syms
+                        sym.shallow_timestamp.cell_num for sym in syms
                     }:
                         should_skip = False
                         if (

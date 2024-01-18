@@ -162,7 +162,7 @@ class ComputeLiveSymbolRefs(
                 # or when it was detected that rhs symbol wasn't actually updated
                 if (
                     lhs_sym.obj is rhs_sym.obj
-                    or lhs_sym.timestamp_excluding_ns_descendents > rhs_sym.timestamp
+                    or lhs_sym.shallow_timestamp > rhs_sym.timestamp
                 ):
                     # either (a) it's a no-op (so treat it as such), or
                     #        (b) lhs is newer and it doesn't make sense to refresh
@@ -412,7 +412,7 @@ def get_live_symbols_and_cells_for_references(
         ):
             if (
                 live_symbol_ref.is_killed
-                and resolved.sym.timestamp_excluding_ns_descendents.cell_num != cell_ctr
+                and resolved.sym.shallow_timestamp.cell_num != cell_ctr
             ):
                 continue
             did_resolve = True
@@ -484,8 +484,7 @@ def _compute_call_chain_live_symbols_and_cells(
             ):
                 if (
                     symbol_ref.is_killed
-                    and resolved.sym.timestamp_excluding_ns_descendents.cell_num
-                    != cell_ctr
+                    and resolved.sym.shallow_timestamp.cell_num != cell_ctr
                 ):
                     continue
                 # FIXME: kind of hacky

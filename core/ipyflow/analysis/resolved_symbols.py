@@ -60,7 +60,7 @@ class ResolvedSymbol(CommonEqualityMixin):
         if self.is_deep:
             return self.sym.timestamp
         else:
-            return self.sym.timestamp_excluding_ns_descendents
+            return self.sym.shallow_timestamp
 
     @property
     def is_anonymous(self) -> bool:

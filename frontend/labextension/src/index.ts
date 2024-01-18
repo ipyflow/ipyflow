@@ -1003,8 +1003,6 @@ const connectToComm = (
       return;
     }
 
-    notifyActiveCell(state.activeCell.model);
-
     if (state.dirtyCells.has(state.activeCell.model.id)) {
       (state.activeCell.model as any)._setDirty?.(true);
     }
@@ -1192,7 +1190,7 @@ const connectToComm = (
       refreshNodeMapping(notebook);
       notebook.activeCellChanged.connect(onActiveCellChange);
       notebook.activeCell.model.stateChanged.connect(onExecution);
-      notifyActiveCell(notebook.activeCell.model);
+      onActiveCellChange(notebook, notebook.activeCell);
       notebook.model.contentChanged.connect(onContentChanged);
       notebook.model.cells.changed.connect(onContentChanged);
       state.requestComputeExecSchedule();

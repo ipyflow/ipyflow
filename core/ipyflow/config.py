@@ -94,6 +94,9 @@ class MutableDataflowSettings(JsonSerializableMixin):
     exec_schedule: ExecutionSchedule
     flow_order: FlowDirection
     reactivity_mode: ReactivityMode
+    push_reactive_updates: bool
+    push_reactive_updates_to_cousins: bool
+    pull_reactive_updates: bool
     color_scheme: ColorScheme
     warn_out_of_order_usages: bool
     lint_out_of_order_usages: bool

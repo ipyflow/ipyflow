@@ -176,13 +176,13 @@ class IpyflowSessionState {
     closure: Set<string>,
     cellId: string,
     edges: { [id: string]: string[] } | undefined | null,
-    addCellsNeedingRefresh = false,
+    pullReactiveUpdates = false,
     skipFirstCheck = false
   ): void {
     if (!skipFirstCheck && closure.has(cellId)) {
       return;
     }
-    if (!addCellsNeedingRefresh) {
+    if (!pullReactiveUpdates) {
       closure.add(cellId);
     }
     const relatives = edges?.[cellId];
@@ -195,11 +195,11 @@ class IpyflowSessionState {
         closure,
         related,
         edges,
-        addCellsNeedingRefresh
+        pullReactiveUpdates
       );
     });
     if (
-      addCellsNeedingRefresh &&
+      pullReactiveUpdates &&
       (closure.size > prevClosureSize ||
         !this.executedCells.has(cellId) ||
         this.readyCells.has(cellId) ||
@@ -208,7 +208,7 @@ class IpyflowSessionState {
     ) {
       closure.add(cellId);
     }
-    if (addCellsNeedingRefresh && closure.has(cellId)) {
+    if (pullReactiveUpdates && closure.has(cellId)) {
       relatives.forEach((related) => {
         if (closure.has(related)) {
           return;
@@ -234,7 +234,7 @@ class IpyflowSessionState {
             closure,
             related,
             edges,
-            addCellsNeedingRefresh,
+            pullReactiveUpdates,
             true
           );
         }
@@ -254,7 +254,7 @@ class IpyflowSessionState {
             closure,
             parent,
             edges,
-            addCellsNeedingRefresh,
+            pullReactiveUpdates,
             true
           );
         }
@@ -1130,14 +1130,16 @@ const connectToComm = (
       state.computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
     }
     const executeSlice = new Set(slice);
-    for (const cellId of slice) {
-      state.computeTransitiveClosureHelper(
-        executeSlice,
-        cellId,
-        state.cellParents,
-        true,
-        true
-      );
+    if (state.settings.pull_reactive_updates ?? false) {
+      for (const cellId of slice) {
+        state.computeTransitiveClosureHelper(
+          executeSlice,
+          cellId,
+          state.cellParents,
+          true,
+          true
+        );
+      }
     }
     for (const cellId of closureCellIds) {
       slice.delete(cellId);

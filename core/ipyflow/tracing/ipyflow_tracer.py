@@ -1270,6 +1270,9 @@ class DataflowTracer(StackFrameManager):
     def after_literal(
         self, literal: Union[dict, list, tuple], node_id: NodeId, *_, **__
     ):
+        if self.active_literal_scope is None:
+            # can happen if tracing was disabled since the literal was created
+            return
         try:
             self.active_literal_scope.update_obj_ref(literal)
             logger.warning("create literal scope %s", self.active_literal_scope)

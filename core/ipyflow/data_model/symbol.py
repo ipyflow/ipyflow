@@ -251,6 +251,13 @@ class Symbol:
             return max(self._timestamp, self._override_timestamp)
 
     @property
+    def visible_timestamp(self) -> Optional[Timestamp]:
+        for ts in sorted(self.updated_timestamps, reverse=True):
+            if cells().at_timestamp(ts).is_visible:
+                return ts
+        return None
+
+    @property
     def memoize_timestamp(self) -> Optional[Timestamp]:
         return self.last_updated_timestamp_by_obj_id.get(self.obj_id)
 
@@ -1106,6 +1113,8 @@ class Symbol:
                     updated_time,
                     self,
                 )
+        if is_static:
+            is_usage = cells().at_timestamp(updated_time).is_visible
         return is_usage
 
     def update_usage_info(
@@ -1144,7 +1153,8 @@ class Symbol:
                     updated_ts,
                     is_static=is_static,
                 )
-                break
+                if is_usage or not is_static:
+                    break
             if is_usage:
                 timestamp_by_used_time[used_time] = ts_to_use
                 if used_node is not None:

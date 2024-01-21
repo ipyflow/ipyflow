@@ -165,6 +165,10 @@ class Cell(SliceableMixin):
         return self._placeholder_id
 
     @property
+    def is_visible(self) -> bool:
+        return self._position_by_cell_id.get(self.cell_id, float("inf")) < float("inf")
+
+    @property
     def position(self) -> int:
         pos = self._position_by_cell_id.get(self.cell_id, -1)
         if pos == -1:

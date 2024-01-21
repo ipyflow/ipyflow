@@ -121,6 +121,18 @@ class NotebookFlow(singletons.NotebookFlow):
                     getattr(config, "reactivity_mode", ReactivityMode.BATCH),
                 )
             ),
+            push_reactive_updates=kwargs.pop(
+                "push_reactive_updates",
+                getattr(config, "push_reactive_updates", True),
+            ),
+            push_reactive_updates_to_cousins=kwargs.pop(
+                "push_reactive_updates_to_cousins",
+                getattr(config, "push_reactive_updates_to_cousins", False),
+            ),
+            pull_reactive_updates=kwargs.pop(
+                "pull_reactive_updates",
+                getattr(config, "pull_reactive_updates", False),
+            ),
             color_scheme=ColorScheme(
                 kwargs.pop(
                     "color_scheme",
@@ -316,6 +328,27 @@ class NotebookFlow(singletons.NotebookFlow):
                 kwargs.get("reactivity_mode"),
             )
         )
+        push_reactive_updates = getattr(
+            config,
+            "push_reactive_updates",
+            kwargs.get("push_reactive_updates"),
+        )
+        push_reactive_updates_to_cousins = getattr(
+            config,
+            "push_reactive_updates_to_cousins",
+            kwargs.get("push_reactive_updates_to_cousins"),
+        )
+        pull_reactive_updates = getattr(
+            config,
+            "pull_reactive_updates",
+            kwargs.get("pull_reactive_updates"),
+        )
+        if push_reactive_updates is not None:
+            self.mut_settings.push_reactive_updates = push_reactive_updates
+        if push_reactive_updates_to_cousins is not None:
+            self.mut_settings.push_reactive_updates = push_reactive_updates_to_cousins
+        if pull_reactive_updates is not None:
+            self.mut_settings.pull_reactive_updates = iface == Interface.JUPYTERLAB
         self.mut_settings.color_scheme = ColorScheme(
             getattr(
                 config,
@@ -500,9 +533,13 @@ class NotebookFlow(singletons.NotebookFlow):
                 continue
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
-    def _recompute_ast_for_cells(self, content_by_cell_id: Dict[IdType, str]) -> bool:
-        should_recompute_exec_schedule = False
+    def _recompute_ast_for_cells(
+        self, content_by_cell_id: Dict[IdType, str], force: bool = False
+    ) -> bool:
+        should_recompute_exec_schedule = force
         for cell_id, content in content_by_cell_id.items():
+            if should_recompute_exec_schedule:
+                break
             cell = cells().from_id_nullable(cell_id)
             if cell is None:
                 continue
@@ -510,7 +547,6 @@ class NotebookFlow(singletons.NotebookFlow):
             is_same_counter = cell.cell_ctr == (cell.last_check_cell_ctr or 0)
             if not is_same_content or not is_same_counter:
                 should_recompute_exec_schedule = True
-                break
         if not should_recompute_exec_schedule:
             return False
         should_recompute_exec_schedule = False
@@ -621,6 +657,7 @@ class NotebookFlow(singletons.NotebookFlow):
         is_cell_structure_change = (
             is_cell_structure_change or self._prev_order_idx_by_id != order_index_by_id
         )
+        prev_order_idx_by_id = self._prev_order_idx_by_id
         self._prev_order_idx_by_id = order_index_by_id
         content_by_cell_id = {
             cell_id: metadata["content"]
@@ -642,7 +679,9 @@ class NotebookFlow(singletons.NotebookFlow):
         )
         should_recompute_exec_schedule = (
             not is_reactively_executing
-            and self._recompute_ast_for_cells(content_by_cell_id)
+            and self._recompute_ast_for_cells(
+                content_by_cell_id, force=order_index_by_id != prev_order_idx_by_id
+            )
         ) or is_cell_structure_change
         placeholder_cells = cells().with_placeholder_ids()
         if len(placeholder_cells) > 0:

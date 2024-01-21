@@ -315,10 +315,19 @@ class FrontendCheckerResult(NamedTuple):
                         }
                     ):
                         continue
-                    if max(
-                        cell.cell_ctr, flow_.min_timestamp
-                    ) < par.cell_ctr and par.cell_ctr in {
-                        sym.shallow_timestamp.cell_num for sym in syms
+                    if (
+                        max(cell.cell_ctr, flow_.min_timestamp) < par.cell_ctr
+                        and (
+                            flow_.mut_settings.pull_reactive_updates
+                            or par.cell_ctr
+                            in {sym.shallow_timestamp.cell_num for sym in syms}
+                        )
+                    ) or par.cell_ctr in {
+                        sym.visible_timestamp.cell_num
+                        for sym in syms
+                        if sym.visible_timestamp is not None
+                        and sym.visible_timestamp.cell_num
+                        != sym.shallow_timestamp.cell_num
                     }:
                         should_skip = False
                         if (

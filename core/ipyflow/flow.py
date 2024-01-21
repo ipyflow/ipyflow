@@ -84,6 +84,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 getattr(config, "mark_phantom_cell_usages_unsafe", False),
             ),
         )
+        interface = kwargs.pop("interface", Interface.UNKNOWN)
         self.mut_settings: MutableDataflowSettings = MutableDataflowSettings(
             dataflow_enabled=kwargs.pop("dataflow_enabled", True),
             trace_messages_enabled=kwargs.pop("trace_messages_enabled", False),
@@ -131,7 +132,9 @@ class NotebookFlow(singletons.NotebookFlow):
             ),
             pull_reactive_updates=kwargs.pop(
                 "pull_reactive_updates",
-                getattr(config, "pull_reactive_updates", False),
+                getattr(
+                    config, "pull_reactive_updates", interface == Interface.JUPYTERLAB
+                ),
             ),
             color_scheme=ColorScheme(
                 kwargs.pop(
@@ -341,14 +344,14 @@ class NotebookFlow(singletons.NotebookFlow):
         pull_reactive_updates = getattr(
             config,
             "pull_reactive_updates",
-            kwargs.get("pull_reactive_updates"),
+            kwargs.get("pull_reactive_updates", iface == Interface.JUPYTERLAB),
         )
         if push_reactive_updates is not None:
             self.mut_settings.push_reactive_updates = push_reactive_updates
         if push_reactive_updates_to_cousins is not None:
             self.mut_settings.push_reactive_updates = push_reactive_updates_to_cousins
         if pull_reactive_updates is not None:
-            self.mut_settings.pull_reactive_updates = iface == Interface.JUPYTERLAB
+            self.mut_settings.pull_reactive_updates = pull_reactive_updates
         self.mut_settings.color_scheme = ColorScheme(
             getattr(
                 config,

@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.196 (2024-01-22)
+--------------------
+* [kernel][lab] improve accuracy of readiness;
+* [kernel][lab] improve accuracy of pull-based reactivity;
+
 0.0.195 (2024-01-12)
 --------------------
 * [kernel] integration with mercury widgets;

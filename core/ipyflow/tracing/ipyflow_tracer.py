@@ -1163,10 +1163,13 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.before_call
     @pyc.skip_when_tracing_disabled
-    def before_call(self, function_or_method, node: ast.Call, *_, **__):
+    def before_call(
+        self, function_or_method, node: ast.Call, frame: FrameType, *_, **__
+    ):
         if getattr(function_or_method, "__qualname__", "").startswith(
-            self.dataflow_tracing_disabled_patch.__qualname__
+            (self.dataflow_tracing_disabled_patch.__qualname__, "InteractiveShell.")
         ):
+            self._tracked_disable_tracing(frame)
             return
         if self.saved_complex_symbol_load_data is None:
             obj, attr_or_subscript, is_subscript, obj_name = None, None, None, None

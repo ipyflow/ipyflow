@@ -454,12 +454,12 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def inner_tracing_context(self) -> Generator[None, None, None]:
         singletons.flow().init_virtual_symbols()
         with singletons.tracer().dataflow_tracing_disabled_patch(
-            get_ipython(),
+            InteractiveShell,
             "run_line_magic",  # type: ignore
             kwarg_transforms={"_stack_depth": (1, lambda d: d + 1)},
         ):
             with singletons.tracer().dataflow_tracing_disabled_patch(
-                get_ipython(), "run_cell_magic"
+                InteractiveShell, "run_cell_magic"
             ):
                 yield
 

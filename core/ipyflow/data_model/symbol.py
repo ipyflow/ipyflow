@@ -148,6 +148,7 @@ class Symbol:
         self._snapshot_timestamps: List[Timestamp] = []
         self._snapshot_timestamp_ubounds: List[Timestamp] = []
         self._defined_cell_num = cells().exec_counter()
+        self._is_dangling_on_edges = False
         self._cascading_reactive_cell_num = -1
         self._override_ready_liveness_cell_num = -1
         self._override_timestamp: Optional[Timestamp] = None
@@ -1128,8 +1129,6 @@ class Symbol:
         is_blocking = is_blocking or id(used_node) in tracer().blocking_node_ids
         if used_time is None:
             used_time = Timestamp.current()
-        if not used_time.is_initialized:
-            return self
         if flow().is_dev_mode:
             logger.info(
                 "sym `%s` used in cell %d last updated in cell %d",
@@ -1155,7 +1154,7 @@ class Symbol:
                 )
                 if is_usage or not is_static:
                     break
-            if is_usage:
+            if is_usage and used_time.is_initialized:
                 timestamp_by_used_time[used_time] = ts_to_use
                 if used_node is not None:
                     self.used_node_by_used_time[used_time] = used_node

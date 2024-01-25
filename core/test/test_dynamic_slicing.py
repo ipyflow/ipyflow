@@ -614,7 +614,7 @@ def test_list_delete():
     run_cell("del lst[2]")
     run_cell("logging.info(lst[1])")
     deps = set(compute_unparsed_slice(5).keys())
-    assert deps == {1, 2, 3, 5}, "got %s" % deps
+    assert deps == {1, 3, 5}, "got %s" % deps
     slice_size = num_stmts_in_slice(5)
     assert slice_size == len(deps), "got %d" % slice_size
 

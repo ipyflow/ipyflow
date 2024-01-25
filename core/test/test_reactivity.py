@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
 import sys
-from test.utils import make_flow_fixture
+from test.utils import make_flow_fixture, skipif_known_failing
 from typing import Optional, Set, Tuple
 
 from ipyflow.config import ExecutionMode
@@ -55,6 +55,7 @@ def run_reactively(
     return run_cell(cell_content, cell_id=cell_id, ready_are_reactive=True)
 
 
+# this is working with DAG semantics; need to update tests for that
 def test_mutate_one_list_entry():
     assert run_reactively("lst = [1, 2, 3]")[1] == {1}
     assert run_reactively("logging.info(lst[0])")[1] == {2}

@@ -674,16 +674,20 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         flow_ = singletons.flow()
         if not flow_.mut_settings.dataflow_enabled:
             return
-        flow_._resync_symbols(
-            [
-                # TODO: avoid bad performance by only iterating over symbols updated in this cell
-                sym
-                for sym in flow_.all_symbols()
-                if sym.timestamp.cell_num == Cell.exec_counter()
-            ]
-        )
+        # TODO: avoid bad performance by keeping track of symbols updated in this cell
+        this_cell_symbols = [
+            sym
+            for sym in flow_.all_symbols()
+            if sym.timestamp.cell_num == Cell.exec_counter()
+        ]
+        this_cell_dangling_symbols = {
+            sym for sym in this_cell_symbols if sym._is_dangling_on_edges
+        }
+        for sym in this_cell_dangling_symbols:
+            sym._is_dangling_on_edges = False
+        flow_._resync_symbols(this_cell_symbols)
         self._handle_memoization()
-        flow_._remove_dangling_parent_edges()
+        flow_._remove_dangling_parent_edges(this_cell_dangling_symbols)
         flow_.gc()
 
     def on_exception(self, e: Union[None, str, Exception]) -> None:

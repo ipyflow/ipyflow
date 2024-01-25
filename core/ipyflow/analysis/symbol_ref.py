@@ -435,7 +435,7 @@ class SymbolRef:
                 if blocking_seen and not atom.is_blocking:
                     atom = atom.blocking()
             if yield_all_intermediate_symbols:
-                # TODO: only use this branch one staleness checker can be smarter about liveness timestamps.
+                # TODO: only use this branch once staleness checker can be smarter about liveness timestamps.
                 #  Right now, yielding the intermediate elts of the chain will yield false positives in the
                 #  event of namespace stale children.
                 yield ResolvedSymbol(sym, atom, next_atom)

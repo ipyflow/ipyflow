@@ -253,7 +253,6 @@ class Namespace(Scope):
         subsym = self._subscript_symbol_by_name.pop(from_idx, None)
         if subsym is None:
             return
-        subsym.update_usage_info()
         subsym.name = to_idx
         subsym.invalidate_cached()  # ensure we bypass equality check and bump timestamp
         subsym.update_deps(
@@ -264,6 +263,7 @@ class Namespace(Scope):
             refresh=True,
         )
         self._subscript_symbol_by_name[to_idx] = subsym
+        subsym._is_dangling_on_edges = True
 
     def shuffle_symbols_upward_from(self, pos: int) -> None:
         for idx in range(len(self.obj) - 1, pos, -1):

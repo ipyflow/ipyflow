@@ -135,9 +135,21 @@ class ComputeLiveSymbolRefs(
         # make a copy, then track the new dead
         this_assign_dead = set(self.dead)
         with self.push_attributes(dead=this_assign_dead):
+            # TODO: handle static dead nested symbols more generically
             with self.kill_context():
                 for target in targets:
                     self.visit_Assign_target(target)
+            if (
+                len(targets) == 1
+                and isinstance(targets[0], ast.Name)
+                and isinstance(value, (ast.List, ast.Tuple))
+            ):
+                for idx in range(len(value.elts)):
+                    this_assign_dead.add(
+                        SymbolRef.from_string(
+                            f"{targets[0].id}[{idx}]", scope=self._scope
+                        )
+                    )
         this_assign_dead -= self.dead
         # TODO: ideally under the current abstraction we should
         #  not be resolving static references to symbols here
@@ -390,8 +402,6 @@ def get_live_symbols_and_cells_for_references(
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
 ) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
-    if cell_ctr < 0:
-        update_liveness_time_versions = False
     live_symbols: Set[ResolvedSymbol] = set()
     unresolved_live_refs: Set[LiveSymbolRef] = set()
     called_syms: Set[Tuple[ResolvedSymbol, int]] = set()
@@ -404,6 +414,7 @@ def get_live_symbols_and_cells_for_references(
             )
         else:
             did_resolve = False
+        resolved = None
         for resolved in live_symbol_ref.gen_resolved_symbols(
             scope,
             only_yield_final_symbol=False,
@@ -416,17 +427,21 @@ def get_live_symbols_and_cells_for_references(
             ):
                 continue
             did_resolve = True
-            if update_liveness_time_versions and not live_symbol_ref.is_killed:
-                liveness_time = resolved.liveness_timestamp
-                resolved.update_usage_info(
-                    used_time=liveness_time,
-                    exclude_ns=not resolved.is_last,
-                    is_static=True,
-                )
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))
             if resolved.is_live and not resolved.is_unsafe:
                 live_symbols.add(resolved)
+        if (
+            resolved is not None
+            and update_liveness_time_versions
+            and not live_symbol_ref.is_killed
+        ):
+            liveness_time = resolved.liveness_timestamp
+            resolved.update_usage_info(
+                used_time=liveness_time,
+                exclude_ns=not resolved.is_last,
+                is_static=True,
+            )
         if not did_resolve and not live_symbol_ref.is_killed:
             unresolved_live_refs.add(live_symbol_ref)
     (
@@ -479,8 +494,11 @@ def _compute_call_chain_live_symbols_and_cells(
                 )
             else:
                 did_resolve = False
+            resolved = None
             for resolved in symbol_ref.gen_resolved_symbols(
-                called_sym.sym.call_scope, only_yield_final_symbol=False
+                called_sym.sym.call_scope,
+                only_yield_final_symbol=False,
+                yield_all_intermediate_symbols=True,
             ):
                 if (
                     symbol_ref.is_killed
@@ -502,12 +520,16 @@ def _compute_call_chain_live_symbols_and_cells(
                     continue
                 if resolved.is_live and not resolved.is_unsafe:
                     live.add(resolved)
-                if update_liveness_time_versions and not symbol_ref.is_killed:
-                    resolved.update_usage_info(
-                        used_time=used_time,
-                        exclude_ns=not resolved.is_last,
-                        is_static=True,
-                    )
+            if (
+                resolved is not None
+                and update_liveness_time_versions
+                and not symbol_ref.is_killed
+            ):
+                resolved.update_usage_info(
+                    used_time=used_time,
+                    exclude_ns=not resolved.is_last,
+                    is_static=True,
+                )
             if not did_resolve and not symbol_ref.is_killed:
                 unresolved.add(symbol_ref)
     return (

@@ -945,11 +945,15 @@ class DataflowTracer(StackFrameManager):
                 )
             except TypeError:
                 sym = None
-            self.pending_usage_updates_by_sym[
-                sym_for_obj
-            ] = self.pending_usage_updates_by_sym.get(sym_for_obj, True) and (
-                sym is not None
-            )
+            if call_context or event not in (
+                pyc.before_attribute_load,
+                pyc.before_subscript_load,
+            ):
+                self.pending_usage_updates_by_sym[sym_for_obj] = (
+                    self.pending_usage_updates_by_sym.get(sym_for_obj, True)
+                    and (sym is not None)
+                    and not call_context
+                )
             if sym is not None and event in (
                 pyc.before_attribute_load,
                 pyc.before_subscript_load,

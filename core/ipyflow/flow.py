@@ -5,11 +5,13 @@ import os
 import sys
 import textwrap
 from collections import defaultdict
+from contextlib import contextmanager
 from types import FrameType
 from typing import (
     Any,
     Callable,
     Dict,
+    Generator,
     Iterable,
     List,
     Optional,
@@ -235,6 +237,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self.fs: Namespace = None
         self.display_sym: Symbol = None
         self.fake_edge_sym: Symbol = None
+        self._override_child_cell: Optional[Cell] = None
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
         self._prev_order_idx_by_id: Optional[Dict[IdType, int]] = None
@@ -424,18 +427,30 @@ class NotebookFlow(singletons.NotebookFlow):
     def bump_min_forced_reactive_counter(self) -> None:
         self._min_forced_reactive_cell_counter = self.cell_counter()
 
+    @contextmanager
+    def override_child_cell(self, cell: Cell) -> Generator[None, None, None]:
+        orig_override = self._override_child_cell
+        try:
+            self._override_child_cell = cell
+            yield
+        finally:
+            self._override_child_cell = orig_override
+
     def add_data_dep(
         self,
         child: Timestamp,
         parent: Timestamp,
         sym: Symbol,
     ) -> None:
-        child_cell = cells().at_timestamp(child)
+        assert parent.is_initialized
+        child_cell = self._override_child_cell or cells().at_timestamp(child)
         child_cell.used_symbols.add(sym)
         parent_cell = cells().at_timestamp(parent)
         # if it has already run, don't add the edge
         if child_cell.is_current and parent_cell.is_current:
             child_cell.add_parent_edge(parent_cell, sym)
+        if not child.is_initialized:
+            return
         if slicing_ctx_var.get() == SlicingContext.DYNAMIC:
             statements().at_timestamp(child).add_parent_edge(
                 statements().at_timestamp(parent), sym
@@ -562,7 +577,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 cell.current_content = content
                 cell.to_ast()
                 result = cell.check_and_resolve_symbols(
-                    update_liveness_time_versions=False,
+                    update_liveness_time_versions=True,
                 )
                 if cell.last_check_result is None:
                     prev_resolved_live_syms: Set[ResolvedSymbol] = set()
@@ -572,12 +587,7 @@ class NotebookFlow(singletons.NotebookFlow):
                 live_syms: Set[Symbol] = {resolved.sym for resolved in result.live}
                 cell.static_removed_symbols |= prev_live_syms
                 cell.static_removed_symbols -= live_syms
-                for resolved in result.live:
-                    resolved.update_usage_info(
-                        used_time=resolved.liveness_timestamp,
-                        exclude_ns=not resolved.is_last,
-                        is_static=True,
-                    )
+                cell.last_check_content = cell.current_content
                 cell.last_check_result = result
                 cell.last_check_cell_ctr = cell.cell_ctr
                 should_recompute_exec_schedule = True
@@ -1001,13 +1011,17 @@ class NotebookFlow(singletons.NotebookFlow):
         for sym in symbols:
             sym.resync_if_necessary(refresh=False)
 
-    def _remove_dangling_parent_edges(self) -> None:
+    def _remove_dangling_parent_edges(self, dangling: Set[Symbol]) -> None:
+        for _ in SlicingContext.iter_slicing_contexts():
+            for cell in cells().iterate_over_notebook_in_counter_order():
+                for pid in list(cell.parents.keys()):
+                    cell.remove_parent_edges(pid, dangling)
         cell = cells().at_counter(self.cell_counter())
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
         for _ in SlicingContext.iter_slicing_contexts():
-            for prev_pid, sym_edges in prev_cell.parents.items():
+            for prev_pid, sym_edges in list(prev_cell.parents.items()):
                 # remove anything not in the current parent set
                 cell.remove_parent_edges(
                     prev_pid, sym_edges - cell.parents.get(prev_pid, set())

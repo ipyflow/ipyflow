@@ -44,7 +44,6 @@ from ipyflow.memoization import (
 )
 from ipyflow.models import _CodeCellContainer, cells, statements
 from ipyflow.singletons import flow, shell
-from ipyflow.slicing.context import SlicingContext, static_slicing_context
 from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
 from ipyflow.types import IdType, TimestampOrCounter
 from ipyflow.utils.ipython_utils import _IPY, CapturedIO
@@ -96,6 +95,7 @@ class Cell(SliceableMixin):
     ) -> None:
         self.cell_id: IdType = cell_id
         self.cell_ctr: int = cell_ctr
+        self.last_check_content: Optional[str] = None
         self.last_check_cell_ctr: Optional[int] = None
         self.last_check_result: Optional[CheckerResult] = None
         self.error_in_exec: Optional[BaseException] = None
@@ -275,7 +275,7 @@ class Cell(SliceableMixin):
             if old_id in reactive_cells:
                 reactive_cells.discard(old_id)
                 reactive_cells.add(new_id)
-        for _ in SlicingContext.iter_slicing_contexts():
+        for _ in flow().mut_settings.iter_slicing_contexts():
             for pid in self.parents.keys():
                 parent = self.from_id(pid)
                 parent.children = {
@@ -318,9 +318,11 @@ class Cell(SliceableMixin):
         if self.is_error:
             return
         inputs: Dict["Symbol", MemoizedInput] = {}
-        for _ in SlicingContext.iter_slicing_contexts():
+        for _ in flow().mut_settings.iter_slicing_contexts():
             for edges in self.parents.values():
                 for sym in edges:
+                    if sym in inputs:
+                        continue
                     sym_ts = sym.timestamp
                     if sym_ts.cell_num == self.cell_ctr:
                         continue
@@ -330,14 +332,13 @@ class Cell(SliceableMixin):
                         continue
                     elif sym_ts.cell_num > self.cell_ctr:
                         return
-                    if sym not in inputs:
-                        inputs[sym] = MemoizedInput(
-                            sym,
-                            sym_ts,
-                            sym.memoize_timestamp,
-                            sym.obj_id,
-                            sym.make_memoize_comparable()[0],
-                        )
+                    inputs[sym] = MemoizedInput(
+                        sym,
+                        sym_ts,
+                        sym.memoize_timestamp,
+                        sym.obj_id,
+                        sym.make_memoize_comparable()[0],
+                    )
         outputs: Dict["Symbol", MemoizedOutput] = {}
         for sym in flow().updated_symbols:
             sym.last_updated_timestamp_by_obj_id[sym.obj_id] = sym.timestamp
@@ -630,7 +631,7 @@ class Cell(SliceableMixin):
             and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
         ):
             min_allowed_cell_position_by_symbol = {}
-            for _ in SlicingContext.iter_slicing_contexts():
+            for _ in flow_.mut_settings.iter_slicing_contexts():
                 for pid, syms in self.directional_parents.items():
                     for sym in syms:
                         min_allowed_cell_position_by_symbol[sym] = max(
@@ -732,26 +733,26 @@ class Cell(SliceableMixin):
             modified_symbol_refs,
             update_liveness_time_versions,
         ) = self._get_live_dead_modified_symbol_refs(update_liveness_time_versions)
-        (
-            live_resolved_symbols,
-            live_cells,
-            unresolved_live_refs,
-        ) = get_live_symbols_and_cells_for_references(
-            live_symbol_refs,
-            flow().global_scope,
-            self.cell_ctr,
-            update_liveness_time_versions=update_liveness_time_versions,
-        )
-        if update_liveness_time_versions and self.cell_ctr == -1:
-            with static_slicing_context():
-                for resolved in live_resolved_symbols:
-                    self.add_parent_edge(resolved.timestamp, resolved.sym)
+        with flow().override_child_cell(self):
+            (
+                live_resolved_symbols,
+                live_cells,
+                unresolved_live_refs,
+            ) = get_live_symbols_and_cells_for_references(
+                live_symbol_refs,
+                flow().global_scope,
+                self.cell_ctr,
+                update_liveness_time_versions=update_liveness_time_versions,
+            )
         # only mark dead attrsubs as killed if we can traverse the entire chain
         global_scope = flow().global_scope
         dead_symbols, _ = get_symbols_for_references(dead_symbol_refs, global_scope)
         modified_symbols, _ = get_symbols_for_references(
             modified_symbol_refs, global_scope
         )
+        if self.last_check_content == self.current_content:
+            dead_symbols |= self.static_writes
+            modified_symbols |= self.static_writes
         for resolved in live_resolved_symbols:
             if resolved.is_deep:
                 resolved.sym.cells_where_deep_live.add(self)

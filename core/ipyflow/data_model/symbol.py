@@ -100,6 +100,8 @@ class Symbol:
 
     IMMUTABLE_TYPES = set(IMMUTABLE_PRIMITIVE_TYPES)
 
+    IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME = "__ipyflow_mutation"
+
     def __init__(
         self,
         name: SupportedIndexType,
@@ -506,6 +508,18 @@ class Symbol:
         return type(self.obj)
 
     @property
+    def is_immutable(self) -> bool:
+        return self.obj_type in self.IMMUTABLE_TYPES
+
+    @property
+    def is_mutation_virtual_symbol(self) -> bool:
+        return self.name == self.IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME
+
+    @property
+    def is_underscore(self) -> bool:
+        return self.name == "_" and self.containing_scope.is_global
+
+    @property
     def is_obj_lazy_module(self) -> bool:
         return self.obj_type is _LazyModule
 
@@ -905,7 +919,7 @@ class Symbol:
         return True
 
     def _is_underscore_or_simple_assign(self, new_deps: Set["Symbol"]) -> bool:
-        if self.name == "_":
+        if self.is_underscore:
             # FIXME: distinguish between explicit assignment to _ from user and implicit assignment from kernel
             return True
         if not isinstance(self.stmt_node, (ast.Assign, ast.AnnAssign)):
@@ -934,7 +948,7 @@ class Symbol:
             return
         if overwrite and not self.is_globally_accessible:
             self.watchpoints.clear()
-        if mutated and self.obj_type in self.IMMUTABLE_TYPES:
+        if mutated and self.is_immutable:
             return
         # if we get here, no longer implicit
         self._implicit = False
@@ -961,6 +975,22 @@ class Symbol:
         self.fresher_ancestor_timestamps.clear()
         if mutated or isinstance(self.stmt_node, ast.AugAssign):
             self.update_usage_info()
+        if (
+            (mutated or overwrite)
+            and Timestamp.current().is_initialized
+            and not self.is_immutable
+            and not self.is_mutation_virtual_symbol
+            and not self.is_anonymous
+            and self.containing_scope.is_global
+            and not self.is_underscore
+            and not self.is_implicit
+            and self.obj_type is not type
+            and not self.is_class
+            and self.namespace is not None
+        ):
+            self.namespace.upsert_symbol_for_name(
+                self.IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME, object(), propagate=False
+            )
         propagate = propagate and (
             mutated or deleted or not self._should_cancel_propagation(prev_obj)
         )

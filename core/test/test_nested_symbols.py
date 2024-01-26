@@ -128,7 +128,7 @@ def test_basic():
     assert_detected("`y` depends on changed `d.y`")
 
 
-def test_nested_readable_name():
+def test_nested_readable_name_attr():
     run_cell("d = DotDict()")
     run_cell("d.x = DotDict()")
     run_cell("d.x.a = 5")

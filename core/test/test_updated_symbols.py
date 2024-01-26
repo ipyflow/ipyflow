@@ -2,6 +2,7 @@
 import logging
 from test.utils import make_flow_fixture
 
+from ipyflow.data_model.symbol import Symbol
 from ipyflow.singletons import flow
 
 logging.basicConfig(level=logging.ERROR)
@@ -36,7 +37,12 @@ def test_simplest():
 def test_dict_hierarchy():
     run_cell("d = {}")
     updated_sym_names = updated_symbol_names()
-    assert updated_sym_names == ["d"], "got %s" % updated_sym_names
+    assert updated_sym_names == [
+        "d",
+        f"d.{Symbol.IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME}",
+    ], (
+        "got %s" % updated_sym_names
+    )
     run_cell('d["foo"] = {}')
     assert updated_symbol_names() == sorted(["d[foo]", "d"])
     run_cell('d["foo"]["bar"] = []')

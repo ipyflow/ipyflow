@@ -174,7 +174,7 @@ class UpdateProtocol:
         if not skip_seen_check and sym in self.seen:
             return
         self.seen.add(sym)
-        self_ns = flow().namespaces.get(sym.obj_id, None)
+        self_ns = flow().namespaces.get(sym.obj_id)
         if self_ns is None:
             return
         for ns_child in self_ns.all_symbols_this_indentation(exclude_class=True):

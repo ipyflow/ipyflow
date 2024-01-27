@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-.PHONY: clean black blackcheck eslint imports build deploy_only deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel nbext
+.PHONY: clean black blackcheck eslint imports build deploy_only deploy check check_no_typing test tests deps devdeps dev typecheck version bump extlink kernel
 
 clean:
-	rm -rf __pycache__ core/__pycache__ build/ core/build/ core/dist/ dist/ ipyflow.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/nbextension core/ipyflow/resources/labextension
+	rm -rf __pycache__ core/__pycache__ build/ core/build/ core/dist/ dist/ ipyflow.egg-info/ core/ipyflow_core.egg-info core/ipyflow/resources/labextension
 
 build: clean
 	./scripts/build.sh
@@ -72,7 +72,4 @@ extlink:
 kernel:
 	python -m ipyflow.install --sys-prefix
 
-nbext:
-	./scripts/nbext.sh --sys-prefix
-
-dev: devdeps build extlink kernel nbext
+dev: devdeps build extlink kernel

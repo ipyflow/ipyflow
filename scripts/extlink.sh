@@ -8,10 +8,4 @@ if [[ -d jupyterlab-ipyflow ]]; then
 fi
 ln -s -f "$(dirs -l -p | tail -1)"/core/ipyflow/resources/labextension jupyterlab-ipyflow
 popd
-mkdir -p "${PREFIX}"/share/jupyter/nbextensions
-pushd "${PREFIX}"/share/jupyter/nbextensions
-if [[ -d ipyflow ]]; then
-    rm -rf ipyflow
-fi
-ln -s -f "$(dirs -l -p | tail -1)"/core/ipyflow/resources/nbextension ipyflow
-popd
+

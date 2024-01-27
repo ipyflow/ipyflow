@@ -8,17 +8,11 @@ nvm use default
 set -euxo pipefail
 
 mkdir -p ./core/ipyflow/resources/labextension
-mkdir -p ./core/ipyflow/resources/nbextension
 pushd ./frontend/labextension
 # install will call prepare script, which also builds
 npm install
 popd
-pushd ./frontend/nbextension
-# install will call prepare script, which also builds
-npm install
-popd
 cp ./frontend/labextension/install.json ./core/ipyflow/resources/labextension
-cp ./frontend/nbextension/ipyflow.json ./core/ipyflow/resources/nbextension
 pushd ./core
 python -m build
 popd

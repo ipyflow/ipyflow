@@ -10,7 +10,3 @@ set -euxo pipefail
 pushd frontend/labextension
 npm run eslint:check
 popd
-
-pushd frontend/nbextension
-npm run eslint:check
-popd

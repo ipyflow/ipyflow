@@ -29,15 +29,6 @@ setup(
     packages=[],
     include_package_data=True,
     data_files=[
-        # like `jupyter nbextension install --sys-prefix`
-        ("share/jupyter/nbextensions/ipyflow", [
-            "core/ipyflow/resources/nbextension/index.js",
-            "core/ipyflow/resources/nbextension/index.js.map",
-        ]),
-        # like `jupyter nbextension enable --sys-prefix`
-        ("etc/jupyter/nbconfig/notebook.d", [
-            "core/ipyflow/resources/nbextension/ipyflow.json",
-        ]),
         ("share/jupyter/labextensions/jupyterlab-ipyflow",
             glob("core/ipyflow/resources/labextension/package.json")
         ),

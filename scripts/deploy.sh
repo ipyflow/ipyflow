@@ -17,11 +17,6 @@ if ! git describe --exact-match --tags HEAD > /dev/null; then
     exit 1
 fi
 
-if [ ! -f ./core/ipyflow/resources/nbextension/index.js ]; then
-    echo "resources/nbextension/index.js not present; please build the nbextension with `make build` and try again"
-    exit 1
-fi
-
 current="$(python -c 'import versioneer; print(versioneer.get_version())')"
 [[ $? -eq 1 ]] && exit 1
 

@@ -110,7 +110,7 @@ confident that the output is what was intended by the notebook author:
 
 Because IPyflow peeks at runtime state in order to infer dependencies, it needs
 to keep content of the notebook in sync with the kernel's memory state, even
-across browser refreshes. As such, IPyflow enables autosave-on-write by
+across browser refreshes. As such, IPyflow enables autosave-on-change by
 default, so that the kernel state, the notebook UI's in-memory state, and the
 notebook file on disk are all in sync. If you accidentally overwrite a cell's
 output that you wanted to keep, e.g. during a reactive execution, and autosave

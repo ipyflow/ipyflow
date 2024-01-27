@@ -261,7 +261,7 @@ class FrontendCheckerResult(NamedTuple):
         cells_so_far_that_update_symbol: Dict[Symbol, Set[Cell]] = {}
         for cell in cells().iterate_over_notebook_in_position_order():
             for _ in flow_.mut_settings.iter_slicing_contexts():
-                for pid, syms in cell.parents.items():
+                for pid, syms in cell.raw_parents.items():
                     for sym in syms:
                         for executed_cell in cells_so_far_that_update_symbol.get(
                             sym, []

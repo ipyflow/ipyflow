@@ -196,10 +196,42 @@ class SliceableMixin(Protocol):
     #############
     # subclasses must implement the following:
 
-    dynamic_parents: Dict[IdType, Set["Symbol"]]
-    dynamic_children: Dict[IdType, Set["Symbol"]]
-    static_parents: Dict[IdType, Set["Symbol"]]
-    static_children: Dict[IdType, Set["Symbol"]]
+    raw_dynamic_parents: Dict[IdType, Set["Symbol"]]
+    raw_dynamic_children: Dict[IdType, Set["Symbol"]]
+    raw_static_parents: Dict[IdType, Set["Symbol"]]
+    raw_static_children: Dict[IdType, Set["Symbol"]]
+
+    @property
+    def dynamic_parents(self) -> Dict["SliceableMixin", Set["Symbol"]]:
+        return {
+            self.from_id(pid): syms for pid, syms in self.raw_dynamic_parents.items()
+        }
+
+    @property
+    def dynamic_children(self) -> Dict["SliceableMixin", Set["Symbol"]]:
+        return {
+            self.from_id(cid): syms for cid, syms in self.raw_dynamic_children.items()
+        }
+
+    @property
+    def static_parents(self) -> Dict["SliceableMixin", Set["Symbol"]]:
+        return {
+            self.from_id(pid): syms for pid, syms in self.raw_static_parents.items()
+        }
+
+    @property
+    def static_children(self) -> Dict["SliceableMixin", Set["Symbol"]]:
+        return {
+            self.from_id(cid): syms for cid, syms in self.raw_static_children.items()
+        }
+
+    @property
+    def parents(self) -> Dict["SliceableMixin", Set["Symbol"]]:
+        return {self.from_id(pid): syms for pid, syms in self.raw_parents.items()}
+
+    @property
+    def children(self) -> Dict["SliceableMixin", Set["Symbol"]]:
+        return {self.from_id(cid): syms for cid, syms in self.raw_children.items()}
 
     @classmethod
     def current(cls) -> "SliceableMixin":
@@ -262,18 +294,18 @@ class SliceableMixin(Protocol):
             return
         parent = self._from_ref(parent_ref)
         pid = parent.id
-        if pid in self.children:
+        if pid in self.raw_children:
             return
         if pid == self.id:
             # in this case, inherit the previous parents, if any
             if self.prev is not None:
-                for prev_pid, prev_syms in self.prev.parents.items():
+                for prev_pid, prev_syms in self.prev.raw_parents.items():
                     common = syms & prev_syms
                     if common:
-                        self.parents.setdefault(prev_pid, set()).update(common)
+                        self.raw_parents.setdefault(prev_pid, set()).update(common)
             return
-        self.parents.setdefault(pid, set()).update(syms)
-        parent.children.setdefault(self.id, set()).update(syms)
+        self.raw_parents.setdefault(pid, set()).update(syms)
+        parent.raw_children.setdefault(self.id, set()).update(syms)
 
     def add_parent_edge(self, parent_ref: SliceRefType, sym: "Symbol") -> None:
         self.add_parent_edges(parent_ref, {sym})
@@ -285,7 +317,7 @@ class SliceableMixin(Protocol):
             return
         parent = self._from_ref(parent_ref)
         pid = parent.id
-        for edges, eid in ((self.parents, pid), (parent.children, self.id)):
+        for edges, eid in ((self.raw_parents, pid), (parent.raw_children, self.id)):
             sym_edges = edges.get(eid, set())
             if not sym_edges:
                 continue
@@ -301,28 +333,28 @@ class SliceableMixin(Protocol):
     ) -> None:
         prev_parent = self._from_ref(prev_parent_ref)
         new_parent = self._from_ref(new_parent_ref)
-        syms = self.parents.pop(prev_parent.id)
-        prev_parent.children.pop(self.id)
-        self.parents.setdefault(new_parent.id, set()).update(syms)
-        new_parent.children.setdefault(self.id, set()).update(syms)
+        syms = self.raw_parents.pop(prev_parent.id)
+        prev_parent.raw_children.pop(self.id)
+        self.raw_parents.setdefault(new_parent.id, set()).update(syms)
+        new_parent.raw_children.setdefault(self.id, set()).update(syms)
 
     def replace_child_edges(
         self, prev_child_ref: SliceRefType, new_child_ref: SliceRefType
     ) -> None:
         prev_child = self._from_ref(prev_child_ref)
         new_child = self._from_ref(new_child_ref)
-        syms = self.children.pop(prev_child.id)
-        prev_child.parents.pop(self.id)
-        self.children.setdefault(new_child.id, set()).update(syms)
-        new_child.parents.setdefault(self.id, set()).update(syms)
+        syms = self.raw_children.pop(prev_child.id)
+        prev_child.raw_parents.pop(self.id)
+        self.raw_children.setdefault(new_child.id, set()).update(syms)
+        new_child.raw_parents.setdefault(self.id, set()).update(syms)
 
     @property
-    def parents(self) -> Dict[IdType, Set["Symbol"]]:
+    def raw_parents(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
         if ctx == SlicingContext.DYNAMIC:
-            return self.dynamic_parents
+            return self.raw_dynamic_parents
         elif ctx == SlicingContext.STATIC:
-            return self.static_parents
+            return self.raw_static_parents
         flow_ = flow()
         # TODO: rather than asserting test context,
         #  assert that we're being called from the notebook
@@ -330,28 +362,28 @@ class SliceableMixin(Protocol):
         settings = flow_.mut_settings
         parents: Dict[IdType, Set["Symbol"]] = {}
         for _ in settings.iter_slicing_contexts():
-            for pid, syms in self.parents.items():
+            for pid, syms in self.raw_parents.items():
                 parents.setdefault(pid, set()).update(syms)
         return parents
 
-    @parents.setter
-    def parents(self, new_parents: Dict[IdType, Set["Symbol"]]) -> None:
+    @raw_parents.setter
+    def raw_parents(self, new_parents: Dict[IdType, Set["Symbol"]]) -> None:
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            self.dynamic_parents = new_parents
+            self.raw_dynamic_parents = new_parents
         elif ctx == SlicingContext.STATIC:
-            self.static_parents = new_parents
+            self.raw_static_parents = new_parents
         else:
             assert False
 
     @property
-    def children(self) -> Dict[IdType, Set["Symbol"]]:
+    def raw_children(self) -> Dict[IdType, Set["Symbol"]]:
         ctx = slicing_ctx_var.get()
         if ctx == SlicingContext.DYNAMIC:
-            return self.dynamic_children
+            return self.raw_dynamic_children
         elif ctx == SlicingContext.STATIC:
-            return self.static_children
+            return self.raw_static_children
         flow_ = flow()
         # TODO: rather than asserting test context,
         #  assert that we're being called from the notebook
@@ -359,18 +391,18 @@ class SliceableMixin(Protocol):
         settings = flow_.mut_settings
         children: Dict[IdType, Set["Symbol"]] = {}
         for _ in settings.iter_slicing_contexts():
-            for pid, syms in self.children.items():
+            for pid, syms in self.raw_children.items():
                 children.setdefault(pid, set()).update(syms)
         return children
 
-    @children.setter
-    def children(self, new_children: Dict[IdType, Set["Symbol"]]) -> None:
+    @raw_children.setter
+    def raw_children(self, new_children: Dict[IdType, Set["Symbol"]]) -> None:
         ctx = slicing_ctx_var.get()
         assert ctx is not None
         if ctx == SlicingContext.DYNAMIC:
-            self.dynamic_children = new_children
+            self.raw_dynamic_children = new_children
         elif ctx == SlicingContext.STATIC:
-            self.static_children = new_children
+            self.raw_static_children = new_children
         else:
             assert False
 
@@ -379,7 +411,7 @@ class SliceableMixin(Protocol):
             return
         closure.add(self)
         for _ in flow().mut_settings.iter_slicing_contexts():
-            for pid in self.parents.keys():
+            for pid in self.raw_parents.keys():
                 parent = self.from_id(pid)
                 while parent.timestamp > self.timestamp:
                     if getattr(parent, "override", False):

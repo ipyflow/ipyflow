@@ -1014,17 +1014,17 @@ class NotebookFlow(singletons.NotebookFlow):
     def _remove_dangling_parent_edges(self, dangling: Set[Symbol]) -> None:
         for _ in SlicingContext.iter_slicing_contexts():
             for cell in cells().iterate_over_notebook_in_counter_order():
-                for pid in list(cell.parents.keys()):
+                for pid in list(cell.raw_parents.keys()):
                     cell.remove_parent_edges(pid, dangling)
         cell = cells().at_counter(self.cell_counter())
         prev_cell = cell.prev_cell
         if prev_cell is None:
             return
         for _ in SlicingContext.iter_slicing_contexts():
-            for prev_pid, sym_edges in list(prev_cell.parents.items()):
+            for prev_pid, sym_edges in list(prev_cell.raw_parents.items()):
                 # remove anything not in the current parent set
                 cell.remove_parent_edges(
-                    prev_pid, sym_edges - cell.parents.get(prev_pid, set())
+                    prev_pid, sym_edges - cell.raw_parents.get(prev_pid, set())
                 )
 
     @property

@@ -109,10 +109,10 @@ class Cell(SliceableMixin):
         self.override_live_refs: Optional[List[str]] = None
         self.override_dead_refs: Optional[List[str]] = None
         self.reactive_tags: Set[str] = set()
-        self.dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
-        self.dynamic_children: Dict[IdType, Set["Symbol"]] = {}
-        self.static_parents: Dict[IdType, Set["Symbol"]] = {}
-        self.static_children: Dict[IdType, Set["Symbol"]] = {}
+        self.raw_dynamic_parents: Dict[IdType, Set["Symbol"]] = {}
+        self.raw_dynamic_children: Dict[IdType, Set["Symbol"]] = {}
+        self.raw_static_parents: Dict[IdType, Set["Symbol"]] = {}
+        self.raw_static_children: Dict[IdType, Set["Symbol"]] = {}
         self.used_symbols: Set["Symbol"] = set()
         self.static_removed_symbols: Set["Symbol"] = set()
         self.static_writes: Set["Symbol"] = set()
@@ -184,7 +184,7 @@ class Cell(SliceableMixin):
     @property
     def directional_parents(self) -> Mapping[IdType, FrozenSet["Symbol"]]:
         # trick to catch some mutations at typecheck time w/out runtime overhead
-        parents = self.parents
+        parents = self.raw_parents
         if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
             parents = {
                 sid: syms
@@ -195,7 +195,7 @@ class Cell(SliceableMixin):
 
     @property
     def directional_children(self) -> Mapping[IdType, FrozenSet["Symbol"]]:
-        children = self.children
+        children = self.raw_children
         if flow().mut_settings.flow_order == FlowDirection.IN_ORDER:
             children = {
                 cell_id: syms
@@ -251,7 +251,7 @@ class Cell(SliceableMixin):
         return self.executed_content
 
     def __repr__(self):
-        return f"<{self.__class__.__name__}[id={self.cell_id},ctr={self.cell_ctr}]>"
+        return f"<{self.__class__.__name__}[ctr={self.cell_ctr},id={self.cell_id}]>"
 
     def __hash__(self):
         return hash((self.cell_id, self.cell_ctr))
@@ -276,17 +276,17 @@ class Cell(SliceableMixin):
                 reactive_cells.discard(old_id)
                 reactive_cells.add(new_id)
         for _ in flow().mut_settings.iter_slicing_contexts():
-            for pid in self.parents.keys():
+            for pid in self.raw_parents.keys():
                 parent = self.from_id(pid)
-                parent.children = {
+                parent.raw_children = {
                     (new_id if cid == old_id else cid): syms
-                    for cid, syms in parent.children.items()
+                    for cid, syms in parent.raw_children.items()
                 }
-            for cid in self.children.keys():
+            for cid in self.raw_children.keys():
                 child = self.from_id(cid)
-                child.parents = {
+                child.raw_parents = {
                     (new_id if pid == old_id else pid): syms
-                    for pid, syms in child.parents.items()
+                    for pid, syms in child.raw_parents.items()
                 }
 
     def add_used_cell_counter(self, sym: "Symbol", ctr: int) -> None:
@@ -319,7 +319,7 @@ class Cell(SliceableMixin):
             return
         inputs: Dict["Symbol", MemoizedInput] = {}
         for _ in flow().mut_settings.iter_slicing_contexts():
-            for edges in self.parents.values():
+            for edges in self.raw_parents.values():
                 for sym in edges:
                     if sym in inputs:
                         continue
@@ -397,8 +397,8 @@ class Cell(SliceableMixin):
         )
         if prev_cell is not None:
             cell.history = prev_cell.history + cell.history
-            cell.static_children = prev_cell.static_children
-            cell.dynamic_children = prev_cell.dynamic_children
+            cell.raw_static_children = prev_cell.raw_static_children
+            cell.raw_dynamic_children = prev_cell.raw_dynamic_children
             for tag in prev_cell.tags:
                 cls._cells_by_tag[tag].discard(prev_cell)
             for tag in prev_cell.reactive_tags:

@@ -16,20 +16,20 @@ def test_simple():
     with dynamic_slicing_context():
         run_cell("x = 0")
         run_cell("y = x + 1")
-        assert cells().from_id(2).parents.keys() == {1}
-        assert cells().from_id(1).children.keys() == {2}, (
-            "got %s" % cells().from_id(1).dynamic_children
+        assert cells().from_id(2).raw_parents.keys() == {1}
+        assert cells().from_id(1).raw_children.keys() == {2}, (
+            "got %s" % cells().from_id(1).raw_dynamic_children
         )
         run_cell("z = x + y + 2")
-        assert cells().from_id(3).parents.keys() == {1, 2}
-        assert cells().from_id(1).children.keys() == {2, 3}
-        assert cells().from_id(2).children.keys() == {3}
+        assert cells().from_id(3).raw_parents.keys() == {1, 2}
+        assert cells().from_id(1).raw_children.keys() == {2, 3}
+        assert cells().from_id(2).raw_children.keys() == {3}
         run_cell("x = 42")
-        assert cells().from_id(3).parents.keys() == {1, 2}
-        assert cells().from_id(1).children.keys() == {2, 3}
-        assert cells().from_id(2).children.keys() == {3}
+        assert cells().from_id(3).raw_parents.keys() == {1, 2}
+        assert cells().from_id(1).raw_children.keys() == {2, 3}
+        assert cells().from_id(2).raw_children.keys() == {3}
         run_cell("y = x + 1")
-        assert cells().from_id(3).parents.keys() == {1, 2}
-        assert cells().from_id(1).children.keys() == {2, 3}
-        assert cells().from_id(2).children.keys() == {3}
-        assert cells().from_id(5).parents.keys() == {4}
+        assert cells().from_id(3).raw_parents.keys() == {1, 2}
+        assert cells().from_id(1).raw_children.keys() == {2, 3}
+        assert cells().from_id(2).raw_children.keys() == {3}
+        assert cells().from_id(5).raw_parents.keys() == {4}

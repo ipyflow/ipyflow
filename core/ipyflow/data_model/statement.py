@@ -67,10 +67,10 @@ class Statement(SliceableMixin):
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
         self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
-        self.dynamic_parents: Dict[IdType, Set[Symbol]] = {}
-        self.dynamic_children: Dict[IdType, Set[Symbol]] = {}
-        self.static_parents: Dict[IdType, Set[Symbol]] = {}
-        self.static_children: Dict[IdType, Set[Symbol]] = {}
+        self.raw_dynamic_parents: Dict[IdType, Set[Symbol]] = {}
+        self.raw_dynamic_children: Dict[IdType, Set[Symbol]] = {}
+        self.raw_static_parents: Dict[IdType, Set[Symbol]] = {}
+        self.raw_static_children: Dict[IdType, Set[Symbol]] = {}
 
     @classmethod
     def current(cls) -> "Statement":
@@ -139,9 +139,9 @@ class Statement(SliceableMixin):
             cls._stmts_by_ts[stmt.timestamp] = [stmt]
             cls._stmts_by_id[stmt.stmt_id] = [stmt]
             for _ in SlicingContext.iter_slicing_contexts():
-                for cid in list(prev.children.keys()):
+                for cid in list(prev.raw_children.keys()):
                     cls.from_id(cid).replace_parent_edges(prev, stmt)
-                for pid in list(prev.parents.keys()):
+                for pid in list(prev.raw_parents.keys()):
                     cls.from_id(pid).replace_child_edges(prev, stmt)
         else:
             cls._stmts_by_ts.setdefault(stmt.timestamp, []).append(stmt)
@@ -215,6 +215,9 @@ class Statement(SliceableMixin):
 
     def __repr__(self):
         return f"<{self.__class__.__name__}[ts={self.timestamp},text={repr(self.text[:self._TEXT_REPR_MAX_LENGTH])}]>"
+
+    def __hash__(self):
+        return hash(self.stmt_node)
 
     def slice(
         self,

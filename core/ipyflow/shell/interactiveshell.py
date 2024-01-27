@@ -420,8 +420,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             if should_trace:
                 self.after_run_cell(raw_cell)
             elif cell.prev_cell is not None:
-                cell.static_parents = cell.prev_cell.static_parents
-                cell.dynamic_parents = cell.prev_cell.dynamic_parents
+                cell.raw_static_parents = cell.prev_cell.raw_static_parents
+                cell.raw_dynamic_parents = cell.prev_cell.raw_dynamic_parents
         except Exception as e:
             if settings.is_dev_mode:
                 logger.exception("exception occurred")
@@ -626,14 +626,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None
             for _ in singletons.flow().mut_settings.iter_slicing_contexts():
-                for parent, syms in list(cell.parents.items()):
+                for parent, syms in list(cell.raw_parents.items()):
                     cell.remove_parent_edges(parent, syms)
-                for parent, syms in prev_cell.parents.items():
+                for parent, syms in prev_cell.raw_parents.items():
                     cell.add_parent_edges(parent, syms)
                 for stmt, prev_stmt in zip(cell.statements(), prev_cell.statements()):
-                    for parent, syms in list(stmt.parents.items()):
+                    for parent, syms in list(stmt.raw_parents.items()):
                         stmt.remove_parent_edges(parent, syms)
-                    for parent, syms in prev_stmt.parents.items():
+                    for parent, syms in prev_stmt.raw_parents.items():
                         stmt.add_parent_edges(parent, syms)
         elif cell.is_memoized:
             cell._maybe_memoize_params()

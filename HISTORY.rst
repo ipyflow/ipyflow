@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.197 (2024-01-27)
+--------------------
+* [kernel] turn off tracing for InteractiveShell API;
+* [kernel] improve edge precision around nested symbols;
+
 0.0.196 (2024-01-22)
 --------------------
 * [kernel][lab] improve accuracy of readiness;

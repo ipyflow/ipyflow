@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import argparse
 import ast
 import inspect
 import json
@@ -31,6 +30,7 @@ from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.mixin import SliceableMixin, format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
+from ipyflow.utils.magic_parser import MagicParser
 
 if TYPE_CHECKING:
     from ipyflow.flow import NotebookFlow
@@ -312,7 +312,7 @@ def set_highlights(cmd: str, rest: str) -> None:
         flow().mut_settings.highlights = Highlights.NONE
 
 
-_SLICE_PARSER = argparse.ArgumentParser("slice")
+_SLICE_PARSER = MagicParser("slice")
 _SLICE_PARSER.add_argument("cell_num", nargs="?", type=int, default=None)
 _SLICE_PARSER.add_argument("--stmt", "--stmts", action="store_true")
 _SLICE_PARSER.add_argument("--blacken", action="store_true")
@@ -320,9 +320,8 @@ _SLICE_PARSER.add_argument("--tag", nargs="?", type=str, default=None)
 
 
 def make_slice(line: str) -> Optional[str]:
-    try:
-        args = _SLICE_PARSER.parse_args(shlex.split(line))
-    except:  # noqa: E722
+    args = _SLICE_PARSER.parse_args(shlex.split(line))
+    if args.help:
         return None
     tag = args.tag
     slice_cells = None
@@ -358,7 +357,7 @@ def make_slice(line: str) -> Optional[str]:
     return None
 
 
-_TAG_PARSER = argparse.ArgumentParser(
+_TAG_PARSER = MagicParser(
     "tag", usage="Usage: %flow tag <tag_name> [--remove] [--cell cell_num]"
 )
 _TAG_PARSER.add_argument("tag_name", type=str)
@@ -367,10 +366,9 @@ _TAG_PARSER.add_argument("--cell", type=int, default=None)
 
 
 def tag(line: str) -> None:
-    try:
-        args = _TAG_PARSER.parse_args(shlex.split(line))
-    except:  # noqa: E722
-        return None
+    args = _TAG_PARSER.parse_args(shlex.split(line))
+    if args.help:
+        return
     tag = args.tag_name
     if args.cell is None:
         cell = cells().current_cell()
@@ -385,17 +383,16 @@ def tag(line: str) -> None:
     return None
 
 
-_SHOW_TAGS_PARSER = argparse.ArgumentParser(
+_SHOW_TAGS_PARSER = MagicParser(
     "show_tags", usage="Usage: %flow show_tags [--cell cell_num]"
 )
 _SHOW_TAGS_PARSER.add_argument("--cell", type=int, default=None)
 
 
 def show_tags(line: str) -> None:
-    try:
-        args = _SHOW_TAGS_PARSER.parse_args(shlex.split(line))
-    except:  # noqa: E722
-        return None
+    args = _SHOW_TAGS_PARSER.parse_args(shlex.split(line))
+    if args.help:
+        return
     if args.cell is None:
         cell = cells().current_cell()
     else:

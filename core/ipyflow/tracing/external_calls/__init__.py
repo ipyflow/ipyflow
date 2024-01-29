@@ -2,7 +2,7 @@
 import ast
 import logging
 from types import ModuleType
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 # force handler registration by exec()ing the handler modules here
 import ipyflow.tracing.external_calls.base_handlers  # noqa: F401
@@ -17,6 +17,9 @@ from ipyflow.tracing.external_calls.base_handlers import (
     StandardMutation,
 )
 
+if TYPE_CHECKING:
+    from ipyflow.data_model.symbol import Symbol
+
 
 def resolve_external_call(
     module: Optional[ModuleType],
@@ -25,6 +28,7 @@ def resolve_external_call(
     method: Optional[str],
     call_node: Optional[ast.Call] = None,
     use_standard_default: bool = True,
+    calling_symbol: Optional["Symbol"] = None,
 ) -> Optional[ExternalCallHandler]:
     if hasattr(function_or_method, "__self__") and hasattr(
         function_or_method, "__name__"
@@ -87,4 +91,5 @@ def resolve_external_call(
         caller_self=caller_self,
         function_or_method=function_or_method,
         call_node=call_node,
+        calling_symbol=calling_symbol,
     )

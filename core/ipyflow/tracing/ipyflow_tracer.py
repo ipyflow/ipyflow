@@ -1162,7 +1162,11 @@ class DataflowTracer(StackFrameManager):
         call_node: ast.Call,
     ) -> None:
         self.external_call_candidate = resolve_external_call(
-            module, obj, function_or_method, method_name, call_node
+            module,
+            obj,
+            function_or_method,
+            method_name,
+            call_node,
         )
 
     @pyc.before_call
@@ -1491,6 +1495,7 @@ class DataflowTracer(StackFrameManager):
                 ret,
                 resolve_rval_symbols(stmt, should_update_usage_info=False),
                 stmt,
+                propagate=False,
             )
         self._module_stmt_counter += 1
         self.tracing_disabled_since_last_module_stmt = False

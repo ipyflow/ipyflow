@@ -615,7 +615,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     used_out_of_order_counter,
                 )
                 cell.executed_content = None
-                return "pass"
+                if cell.prev_cell is None:
+                    return "pass"
+                else:
+                    return f"Out.get({cell.prev_cell.cell_ctr})"
         return cell_content
 
     def _handle_memoization(self) -> None:

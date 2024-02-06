@@ -214,7 +214,7 @@ class Scope:
             return False
         try:
             return (
-                SymbolRef(sym.symbol_node, scope=self).nonreactive()
+                SymbolRef(sym.symbol_node, scope=self).canonical()
                 in compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
             )
         except TypeError:

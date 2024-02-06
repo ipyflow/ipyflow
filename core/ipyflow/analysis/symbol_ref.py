@@ -19,7 +19,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 from ipyflow.types import SubscriptIndices, SupportedIndexType
 from ipyflow.utils import CommonEqualityMixin
-from ipyflow.utils.ast_utils import subscript_to_slice
+from ipyflow.utils.ast_utils import AstRange, subscript_to_slice
 
 if TYPE_CHECKING:
     from ipyflow.data_model.symbol import Scope, Symbol
@@ -312,6 +312,9 @@ class SymbolRefVisitor(ast.NodeVisitor):
         return
 
 
+visit_stack: List[ast.AST] = []
+
+
 class SymbolRef:
     _cached_symbol_ref_visitor = SymbolRefVisitor()
 
@@ -319,6 +322,7 @@ class SymbolRef:
         self,
         symbols: Union[ast.AST, Atom, Sequence[Atom]],
         scope: Optional["Scope"] = None,
+        ast_range: Optional[AstRange] = None,
     ) -> None:
         # FIXME: each symbol should distinguish between attribute and subscript
         # FIXME: bumped in priority 2021/09/07
@@ -336,19 +340,25 @@ class SymbolRef:
                 ast.ImportFrom,
             ),
         ):
+            ast_range = ast_range or AstRange.from_ast_node(
+                symbols if hasattr(symbols, "lineno") else visit_stack[-1]
+            )
             symbols = self._cached_symbol_ref_visitor(symbols, scope=scope).chain
         elif isinstance(symbols, ast.AST):  # pragma: no cover
             raise TypeError("unexpected type for %s" % symbols)
         elif isinstance(symbols, Atom):
             symbols = [symbols]
         self.chain: Tuple[Atom, ...] = tuple(symbols)
-        self.scope = scope
+        self.scope: Optional["Scope"] = scope
+        self.ast_range: Optional[AstRange] = ast_range
 
     @classmethod
     def from_string(
         cls, symbol_str: str, scope: Optional["Scope"] = None
     ) -> "SymbolRef":
-        return cls(ast.parse(symbol_str, mode="eval").body, scope=scope)
+        ret = cls(ast.parse(symbol_str, mode="eval").body, scope=scope)
+        ret.ast_range = None
+        return ret
 
     def to_symbol(self, scope: Optional["Scope"] = None) -> Optional["Symbol"]:
         for resolved in self.gen_resolved_symbols(
@@ -370,11 +380,30 @@ class SymbolRef:
         return cls.from_string(symbol_str).to_symbol()
 
     def __hash__(self) -> int:
+        # intentionally omit self.scope
         return hash(self.chain)
 
     def __eq__(self, other) -> bool:
         # intentionally omit self.scope
-        return isinstance(other, SymbolRef) and self.chain == other.chain
+        if not isinstance(other, SymbolRef):
+            return False
+        if (
+            self.ast_range is not None
+            and other.ast_range is not None
+            and self.ast_range != other.ast_range
+        ):
+            # goal: equality checks should compare against ast_range when it is set to ensure that
+            # different ranges get different SymbolRefs in sets and dicts, but containment checks
+            # that don't set the range (and therefore don't care about it) don't use it.
+            return False
+        if (
+            self.scope is not None
+            and other.scope is not None
+            and self.scope is not other.scope
+        ):
+            # same for scope
+            return False
+        return self.chain == other.chain
 
     def __repr__(self) -> str:
         return repr(self.chain)
@@ -382,9 +411,11 @@ class SymbolRef:
     def __str__(self) -> str:
         return repr(self)
 
-    def nonreactive(self) -> "SymbolRef":
+    def canonical(self) -> "SymbolRef":
         return self.__class__(
-            [atom.nonreactive() for atom in self.chain], scope=self.scope
+            [atom.nonreactive() for atom in self.chain],
+            scope=None,
+            ast_range=None,
         )
 
     def gen_resolved_symbols(

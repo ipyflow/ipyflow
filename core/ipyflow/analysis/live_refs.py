@@ -12,7 +12,7 @@ from ipyflow.analysis.mixins import (
     VisitListsMixin,
 )
 from ipyflow.analysis.resolved_symbols import ResolvedSymbol
-from ipyflow.analysis.symbol_ref import Atom, LiveSymbolRef, SymbolRef
+from ipyflow.analysis.symbol_ref import Atom, LiveSymbolRef, SymbolRef, visit_stack
 from ipyflow.config import FlowDirection
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
@@ -91,7 +91,7 @@ class ComputeLiveSymbolRefs(
         return self.push_attributes(_inside_attrsub=inside, _skip_simple_names=inside)
 
     def _add_attrsub_to_live_if_eligible(self, ref: SymbolRef) -> None:
-        is_killed = ref.nonreactive() in self.dead
+        is_killed = ref.canonical() in self.dead
         if is_killed and not self._include_killed_live:
             return
         if len(ref.chain) == 0:
@@ -229,7 +229,7 @@ class ComputeLiveSymbolRefs(
         ],
     ) -> None:
         if isinstance(target_node, (ast.Name, ast.Attribute, ast.Subscript)):
-            self.dead.add(SymbolRef(target_node, scope=self._scope).nonreactive())
+            self.dead.add(SymbolRef(target_node, scope=self._scope).canonical())
             if isinstance(target_node, ast.Subscript):
                 with self.live_context():
                     self.visit(target_node.slice)
@@ -244,7 +244,7 @@ class ComputeLiveSymbolRefs(
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         self.generic_visit(node.args.defaults)
         self.generic_visit(node.decorator_list)
-        self.dead.add(SymbolRef(node).nonreactive())
+        self.dead.add(SymbolRef(node).canonical())
 
     def visit_withitem(self, node: ast.withitem):
         self.visit(node.context_expr)
@@ -255,7 +255,7 @@ class ComputeLiveSymbolRefs(
     def visit_Name(self, node: ast.Name) -> None:
         ref = SymbolRef(node, scope=self._scope)
         if self._in_kill_context:
-            self.dead.add(ref.nonreactive())
+            self.dead.add(ref.canonical())
         elif not self._skip_simple_names:
             is_killed = ref in self.dead
             if is_killed and not self._include_killed_live:
@@ -299,7 +299,7 @@ class ComputeLiveSymbolRefs(
         self.generic_visit(node.bases)
         self.generic_visit(node.decorator_list)
         self.generic_visit(node.body)
-        self.dead.add(SymbolRef(node).nonreactive())
+        self.dead.add(SymbolRef(node).canonical())
 
     def visit_Call(self, node: ast.Call) -> None:
         with self.attrsub_context(False):
@@ -358,7 +358,7 @@ class ComputeLiveSymbolRefs(
     def visit_arg(self, node) -> None:
         ref = SymbolRef(node.arg, scope=self._scope)
         if self._in_kill_context:
-            self.dead.add(ref.nonreactive())
+            self.dead.add(ref.canonical())
         elif not self._skip_simple_names:
             is_killed = ref in self.dead
             if is_killed and not self._include_killed_live:
@@ -377,6 +377,13 @@ class ComputeLiveSymbolRefs(
             assert isinstance(child, ast.stmt)
             self.visit(child)
             self._module_stmt_counter += 1
+
+    def visit(self, node):
+        visit_stack.append(node)
+        try:
+            return super().visit(node)
+        finally:
+            visit_stack.pop()
 
 
 def get_symbols_for_references(

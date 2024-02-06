@@ -24,15 +24,21 @@ def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:
     return simplified
 
 
-def compute_live_dead_symbol_refs(
+def compute_live_dead_symbol_refs_raw(
     code: Union[str, ast.AST]
-) -> Tuple[Set[str], Set[str]]:
+) -> Tuple[Set[SymbolRef], Set[SymbolRef]]:
     if isinstance(code, str):
         code = textwrap.dedent(code)
     live, dead, *_ = compute_live_dead_symbol_refs_with_stmts(code)
     live = {ref.ref for ref in live}
-    live, dead = _simplify_symbol_refs(live), _simplify_symbol_refs(dead)
     return live, dead
+
+
+def compute_live_dead_symbol_refs(
+    code: Union[str, ast.AST]
+) -> Tuple[Set[str], Set[str]]:
+    live, dead = compute_live_dead_symbol_refs_raw(code)
+    return _simplify_symbol_refs(live), _simplify_symbol_refs(dead)
 
 
 def test_simple():
@@ -103,3 +109,12 @@ if sys.version_info >= (3, 8):
         )
         assert live == {"x"}
         assert dead == {"y", "z"}, "got %s" % dead
+
+    def test_positions_simple():
+        live, dead = compute_live_dead_symbol_refs_raw("foo")
+        assert len(live) == 1
+        foo = next(iter(live))
+        assert foo.ast_range.lineno == 1
+        assert foo.ast_range.end_lineno == 1
+        assert foo.ast_range.col_offset == 0
+        assert foo.ast_range.end_col_offset == 3

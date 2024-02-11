@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.198 (2024-02-11)
+--------------------
+* [kernel] improve precision of timestamp updates for mutation handlers;
+
 0.0.197 (2024-01-27)
 --------------------
 * [kernel] turn off tracing for InteractiveShell API;

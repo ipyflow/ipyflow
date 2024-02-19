@@ -65,6 +65,8 @@ logger.setLevel(logging.WARNING)
 class NotebookFlow(singletons.NotebookFlow):
     """Holds all the state necessary to capture dataflow in Jupyter notebooks."""
 
+    NO_RESPONSE = object()
+
     def __init__(self, **kwargs) -> None:
         super().__init__()
         cells().clear()
@@ -622,6 +624,8 @@ class NotebookFlow(singletons.NotebookFlow):
             }
             if self.is_dev_mode:
                 logger.exception("exception during comm handler execution")
+        if response is self.NO_RESPONSE:
+            return
         if comm is None:
             comm = self._comm
         if comm is None:

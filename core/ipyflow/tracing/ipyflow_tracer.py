@@ -49,6 +49,9 @@ from ipyflow.models import symbols as api_symbols
 from ipyflow.singletons import SingletonBaseTracer, flow, shell
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
+from ipyflow.tracing.external_calls.cloudpickle_patch import (
+    patch_cloudpickle_function_getstate,
+)
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
@@ -819,13 +822,20 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_raw_handler(pyc.after_import)
     def after_import(self, *_, module: ModuleType, **__):
         compile_and_register_handlers_for_module(module)
-        if getattr(module, "__name__", "") == "numpy":
+        modname = getattr(module, "__name__", "")
+        if modname == "numpy":
             if TYPE_CHECKING:
                 import numpy
             else:
                 numpy = module
             # TODO: convert these to Python ints when used on Python objects
             SubscriptIndices.types += (numpy.int32, numpy.int64)
+        elif modname == "cloudpickle.cloudpickle_fast":
+            if TYPE_CHECKING:
+                from cloudpickle import cloudpickle_fast
+            else:
+                cloudpickle_fast = module
+            patch_cloudpickle_function_getstate(cloudpickle_fast.CloudPickler)
 
     @pyc.register_raw_handler(
         (

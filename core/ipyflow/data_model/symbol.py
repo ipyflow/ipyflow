@@ -390,7 +390,9 @@ class Symbol:
     @property
     def is_lambda(self) -> bool:
         # TODO: this is terrible
-        return type(self.name) is str and self.name.startswith("<lambda_sym_")  # noqa: E721
+        return type(self.name) is str and self.name.startswith(  # noqa: E721
+            "<lambda_sym_"
+        )
 
     @property
     def is_import(self) -> bool:

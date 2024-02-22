@@ -25,17 +25,16 @@ def _patched_function_reduce(
             continue
         try:
             local_env: Dict[str, Any] = {}
-            exec(astunparse.unparse(alias.stmt_node), obj.__globals__, local_env)
-            if isinstance(alias.stmt_node, (ast.AsyncFunctionDef, ast.FunctionDef)):
-                new_obj = local_env[alias.stmt_node.name]
-            elif isinstance(alias.stmt_node, ast.Assign) and isinstance(
-                alias.stmt_node.targets[0], ast.Name
-            ):
-                new_obj = local_env[alias.stmt_node.targets[0].id]
-            elif isinstance(alias.name, str):
-                new_obj = local_env[alias.name]
+            func_defn = astunparse.unparse(alias.func_def_stmt)
+            if isinstance(alias.func_def_stmt, (ast.AsyncFunctionDef, ast.FunctionDef)):
+                func_name = alias.func_def_stmt.name
+            elif isinstance(alias.func_def_stmt, ast.Lambda):
+                func_name = "lambda_sym"
+                func_defn = f"{func_name} = {func_defn}"
             else:
                 continue
+            exec(func_defn, obj.__globals__, local_env)
+            new_obj = local_env[func_name]
         except:  # noqa
             continue
         if isinstance(new_obj, (FunctionType, LambdaType)):

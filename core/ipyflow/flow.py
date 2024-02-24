@@ -184,6 +184,9 @@ class NotebookFlow(singletons.NotebookFlow):
         # Note: explicitly adding the types helps PyCharm intellisense
         self.namespaces: Dict[int, Namespace] = {}
         self.aliases: Dict[int, Set[Symbol]] = {}
+        self.deco_metadata_by_obj_id: Dict[
+            int, Tuple[Union[ast.FunctionDef, ast.AsyncFunctionDef], int]
+        ] = {}
         self.starred_import_modules: Set[str] = set()
         self.stmt_deferred_static_parents: Dict[
             Timestamp, Dict[Timestamp, Set[Symbol]]

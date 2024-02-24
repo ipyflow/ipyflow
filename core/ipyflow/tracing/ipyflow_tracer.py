@@ -50,7 +50,7 @@ from ipyflow.singletons import SingletonBaseTracer, flow, shell
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.external_calls.cloudpickle_patch import (
-    patch_cloudpickle_function_getstate,
+    patch_cloudpickle_function_reduce,
 )
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
@@ -824,18 +824,10 @@ class DataflowTracer(StackFrameManager):
         compile_and_register_handlers_for_module(module)
         modname = getattr(module, "__name__", "")
         if modname == "numpy":
-            if TYPE_CHECKING:
-                import numpy
-            else:
-                numpy = module
             # TODO: convert these to Python ints when used on Python objects
-            SubscriptIndices.types += (numpy.int32, numpy.int64)
-        elif modname == "cloudpickle.cloudpickle_fast":
-            if TYPE_CHECKING:
-                from cloudpickle import cloudpickle_fast
-            else:
-                cloudpickle_fast = module
-            patch_cloudpickle_function_getstate(cloudpickle_fast.CloudPickler)
+            SubscriptIndices.types += (module.int32, module.int64)
+        elif modname.endswith("cloudpickle.cloudpickle_fast"):
+            patch_cloudpickle_function_reduce(module.CloudPickler)
 
     @pyc.register_raw_handler(
         (
@@ -1425,6 +1417,22 @@ class DataflowTracer(StackFrameManager):
         )
         sym.func_def_stmt = node
         self.node_id_to_loaded_symbols.setdefault(lambda_node_id, []).append(sym)
+
+    @pyc.register_raw_handler(pyc.decorator)
+    def decorator(self, deco: Any, *_, func_node_id: int, decorator_idx: int, **__):
+        def tracing_decorator(func):
+            flow_ = flow()
+            try:
+                flow_.deco_metadata_by_obj_id[id(func)] = (
+                    self.ast_node_by_id[func_node_id],
+                    decorator_idx,
+                )
+            except KeyError:
+                if flow_.is_dev_mode:
+                    logger.exception("failed to lookup node for func id %s", func)
+            return deco(func)
+
+        return tracing_decorator
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):

@@ -14,7 +14,8 @@ def _function_reduce(self_, obj) -> None:
 def _patched_function_reduce(
     self_: "CloudPickler", obj: Union[FunctionType, LambdaType]
 ) -> None:
-    return _function_reduce(self_, uninstrument(obj))
+    uninstrumented = uninstrument(obj)
+    return _function_reduce(self_, obj if uninstrumented is None else uninstrumented)
 
 
 def patch_cloudpickle_function_reduce(pickler_cls: Type["CloudPickler"]) -> None:

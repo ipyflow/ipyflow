@@ -6,7 +6,6 @@ from typing import Callable, Set, Tuple
 
 from ipyflow.patches.cloudpickle_patch import patch_cloudpickle_function_reduce
 from ipyflow.patches.pyspark_patch import patch_pyspark_udf
-from ipyflow.singletons import flow
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +25,13 @@ _patched_modules: Set[str] = set()
 def apply_patches(modname: str, module: ModuleType) -> None:
     if modname in _patched_modules:
         return
-    flow_ = flow()
     for predicate, patch in _predicate_patch_pairs:
         try:
             if predicate(modname):
                 patch(module)
                 _patched_modules.add(modname)
         except Exception:  # noqa
-            if flow_.is_dev_mode:
-                logger.exception("Failed to apply patch to module %s", modname)
+            logger.exception("Failed to apply patch to module %s", modname)
 
 
 def patch_all() -> None:

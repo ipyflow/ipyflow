@@ -46,12 +46,10 @@ from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.models import symbols as api_symbols
+from ipyflow.patches import apply_patches
 from ipyflow.singletons import SingletonBaseTracer, flow, shell
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
-from ipyflow.tracing.external_calls.cloudpickle_patch import (
-    patch_cloudpickle_function_reduce,
-)
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
@@ -823,11 +821,10 @@ class DataflowTracer(StackFrameManager):
     def after_import(self, *_, module: ModuleType, **__):
         compile_and_register_handlers_for_module(module)
         modname = getattr(module, "__name__", "")
+        apply_patches(modname, module)
         if modname == "numpy":
             # TODO: convert these to Python ints when used on Python objects
             SubscriptIndices.types += (module.int32, module.int64)
-        elif modname.endswith("cloudpickle.cloudpickle_fast"):
-            patch_cloudpickle_function_reduce(module.CloudPickler)
 
     @pyc.register_raw_handler(
         (

@@ -150,6 +150,11 @@ class TeeDisplayPublisher:
             self.pub2.set_parent(*args, **kwargs)
 
 
+class TeeCompatibleCapturingDisplayPublisher(CapturingDisplayPublisher):
+    def clear_output(self, wait=False):
+        self.outputs.clear()
+
+
 class CaptureOutputTee:
     """
     Context manager for capturing and replicating stdout/err and rich display publishers.
@@ -186,7 +191,7 @@ class CaptureOutputTee:
             sys.stderr = Tee(sys.stderr, stderr)  # type: ignore
         if self.display and self.shell is not None:
             self.save_display_pub = self.shell.display_pub
-            capture_display_pub = CapturingDisplayPublisher()
+            capture_display_pub = TeeCompatibleCapturingDisplayPublisher()
             outputs = capture_display_pub.outputs
             self.shell.display_pub = TeeDisplayPublisher(
                 self.save_display_pub, capture_display_pub

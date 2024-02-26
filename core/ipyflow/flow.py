@@ -29,6 +29,7 @@ from pyccolo.tracer import PYCCOLO_DEV_MODE_ENV_VAR
 from ipyflow import singletons
 from ipyflow.analysis.resolved_symbols import ResolvedSymbol
 from ipyflow.analysis.symbol_ref import SymbolRef
+from ipyflow.annotations.compiler import compile_handlers_for_already_imported_modules
 from ipyflow.config import (
     ColorScheme,
     DataflowSettings,
@@ -248,6 +249,7 @@ class NotebookFlow(singletons.NotebookFlow):
         self._prev_order_idx_by_id: Optional[Dict[IdType, int]] = None
         self._min_new_ready_cell_counter = -1
         self._min_forced_reactive_cell_counter = -1
+        compile_handlers_for_already_imported_modules({"ipyflow"})
 
     def register_comm_target(self, kernel: IPythonKernel) -> None:
         kernel.comm_manager.register_target(__package__, self._comm_target)

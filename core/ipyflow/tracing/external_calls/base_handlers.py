@@ -105,6 +105,18 @@ class ExternalCallHandler(metaclass=HasGetitem):
         external_call_handler_by_name[cls.__name__] = cls
 
     @property
+    def modname(self) -> Optional[str]:
+        if self.module is not None:
+            return self.module.__name__
+        function_or_method = self.function_or_method
+        if function_or_method is None:
+            return None
+        clazz = getattr(function_or_method, "__class__", None)
+        if clazz is None:
+            return None
+        return getattr(clazz, "__module__", None)
+
+    @property
     def caller_self_obj_id(self) -> Optional[int]:
         return None if self.caller_self is None else id(self.caller_self)
 

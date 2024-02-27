@@ -17,6 +17,7 @@ _predicate_patch_pairs: Tuple[
         patch_cloudpickle_function_reduce,
     ),
     (lambda modname: modname == "pyspark.sql.udf", patch_pyspark_udf),
+    (lambda modname: modname == "pyspark.sql.connect.udf", patch_pyspark_udf),
 )
 
 _patched_modules: Set[str] = set()

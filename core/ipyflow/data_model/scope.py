@@ -16,6 +16,8 @@ from typing import (
     cast,
 )
 
+import pyccolo as pyc
+
 from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.symbol import Symbol, SymbolType
@@ -242,7 +244,10 @@ class Scope:
             scope = scope.parent_scope
         if not scope.is_global or sym.stmt_node is None:
             return False
+        elif not pyc.is_outer_stmt(id(sym.stmt_node)):
+            return False
         elif isinstance(sym.stmt_node, ast.Assign):
+            # TODO: must be module level to be a static write
             return scope._compute_is_static_write_for_assign(sym)
         elif isinstance(
             sym.stmt_node, (ast.AsyncFunctionDef, ast.ClassDef, ast.FunctionDef)

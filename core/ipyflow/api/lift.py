@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
-from typing import Any, List, Set, Union, cast
-
-from ipywidgets import HTML
+from typing import TYPE_CHECKING, Any, List, Set, Union, cast
 
 from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.tracing.watchpoint import Watchpoints
+
+if TYPE_CHECKING:
+    from ipywidgets import HTML
 
 
 def _validate(sym: Any) -> Symbol:
@@ -25,7 +26,7 @@ def lift(sym: Any) -> Symbol:
     return _validate(sym)
 
 
-def code(sym: Any, **kwargs: Any) -> Union[HTML, str]:
+def code(sym: Any, **kwargs: Any) -> Union["HTML", str]:
     """
     Given the programmatic usage of some symbol,
     look up the corresponding code for that symbol.

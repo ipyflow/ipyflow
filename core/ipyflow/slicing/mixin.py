@@ -20,7 +20,6 @@ from typing import (
 
 import black
 import pyccolo as pyc
-from ipywidgets import HTML
 
 from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.config import Interface
@@ -29,6 +28,11 @@ from ipyflow.models import cells
 from ipyflow.singletons import flow, shell, tracer
 from ipyflow.slicing.context import SlicingContext, slicing_ctx_var
 from ipyflow.types import IdType, TimestampOrCounter
+
+try:
+    from ipywidgets import HTML
+except:  # noqa: E722
+    HTML = str
 
 if sys.version_info >= (3, 8):
     from typing import Protocol
@@ -76,6 +80,8 @@ class Slice:
         ).strip()
 
     def _make_slice_widget(self) -> HTML:
+        if HTML is str:
+            raise ValueError("ipywidgets not available")
         slice_text = self._get_slice_text_from_slice()
         slice_text_linked_cells = []
         if self.iface == Interface.JUPYTER:

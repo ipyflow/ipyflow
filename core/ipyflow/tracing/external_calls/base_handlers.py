@@ -154,7 +154,8 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.return_value = return_value
 
     def _handle_impl(self) -> None:
-        Timestamp.update_usage_info(self.arg_syms)
+        # TODO: why was this here
+        # Timestamp.update_usage_info(self.arg_syms)
         result = self.handle()
         if result is None or self.call_node is None:
             return

@@ -17,7 +17,6 @@ from typing import (
     cast,
 )
 
-from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.singletons import flow, tracer
 from ipyflow.types import IMMUTABLE_PRIMITIVE_TYPES
 

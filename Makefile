@@ -27,7 +27,7 @@ blackcheck:
 	./scripts/blacken.sh --check
 
 lint:
-	ruff ./core
+	ruff check ./core
 
 imports:
 	pycln ./core

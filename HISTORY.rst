@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.199 (2024-09-19)
+--------------------
+* [kernel] handle binary ops in liveness checker;
+
 0.0.198 (2024-02-11)
 --------------------
 * [kernel] improve precision of timestamp updates for mutation handlers;

@@ -39,6 +39,17 @@ logger.setLevel(logging.ERROR)
 _RESOLVER_EXCEPTIONS = ("get_ipython", "run_line_magic", "run_cell_magic")
 
 
+def _chain_root(node: ast.AST):
+    while True:
+        if isinstance(node, (ast.Attribute, ast.Subscript)):
+            node = node.value
+        elif isinstance(node, ast.Call):
+            node = node.func
+        else:
+            break
+    return node
+
+
 # TODO: have the logger warnings additionally raise exceptions for tests
 class ComputeLiveSymbolRefs(
     SaveOffAttributesMixin, SkipUnboundArgsMixin, VisitListsMixin, ast.NodeVisitor
@@ -329,7 +340,7 @@ class ComputeLiveSymbolRefs(
             self.generic_visit(node.args)
             for kwarg in node.keywords:
                 self.visit(kwarg.value)
-        if not self._inside_attrsub:
+        if not self._inside_attrsub and not isinstance(_chain_root(node), ast.BinOp):
             self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.func)
@@ -359,13 +370,18 @@ class ComputeLiveSymbolRefs(
             self.live |= call_live
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        if not self._inside_attrsub:
+        if not self._inside_attrsub and not isinstance(_chain_root(node), ast.BinOp):
             self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.value)
 
+    def visit_BinOp(self, node: ast.BinOp) -> None:
+        with self.attrsub_context(False):
+            self.visit(node.left)
+            self.visit(node.right)
+
     def visit_Subscript(self, node: ast.Subscript) -> None:
-        if not self._inside_attrsub:
+        if not self._inside_attrsub and not isinstance(_chain_root(node), ast.BinOp):
             self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.value)

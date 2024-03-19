@@ -93,6 +93,26 @@ def test_subscript_is_live():
     assert live == {"foo", "bar", "baz"}
 
 
+def test_attribute_access_on_binop():
+    live, dead = compute_live_dead_symbol_refs("(a + b).c")
+    assert live == {"a", "b"}
+
+
+def test_call_on_binop():
+    live, dead = compute_live_dead_symbol_refs("(a + b).c()")
+    assert live == {"a", "b"}
+
+
+def test_attribute_reference_on_call_on_binop():
+    live, dead = compute_live_dead_symbol_refs("(a + b).c(d, e).f")
+    assert live == {"a", "b", "d", "e"}
+
+
+def test_attribute_reference_on_attribute_reference_on_binop():
+    live, dead = compute_live_dead_symbol_refs("(a + b).c.d")
+    assert live == {"a", "b"}
+
+
 def test_dict_literal():
     live, dead = compute_live_dead_symbol_refs("{'foo': bar}")
     assert live == {"bar"}

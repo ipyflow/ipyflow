@@ -2763,3 +2763,14 @@ if sys.version_info >= (3, 8):
         )
         run_cell("logging.info(y)")
         assert_detected()
+
+    @skipif_known_failing
+    def test_attribute_access_on_binop():
+        run_cell("a = 1")
+        run_cell("b = 2")
+        run_cell("c = (a + b).bit_length()")
+        run_cell("logging.info(c)")
+        assert_not_detected()
+        run_cell("a = 42")
+        run_cell("logging.info(c)")
+        assert_detected()

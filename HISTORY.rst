@@ -1,7 +1,11 @@
 History
 =======
 
-0.0.199 (2024-09-19)
+0.0.200 (2024-03-21)
+--------------------
+* [lab] fix regression introduced when interacting with jupyter-collaboration autosave;
+
+0.0.199 (2024-03-19)
 --------------------
 * [kernel] handle binary ops in liveness checker;
 

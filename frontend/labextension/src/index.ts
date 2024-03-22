@@ -1179,7 +1179,12 @@ const connectToComm = (
   notebooks.selectionChanged.connect(onSelectionChanged);
 
   const debouncedSave = _.debounce(() => {
-    void notebooks.currentWidget.context.save();
+    const notebook = notebooks.currentWidget;
+    if ((notebook.model as any).collaborative ?? false) {
+      return;
+    } else {
+      notebook.context.save();
+    }
   }, 200);
 
   comm.onMsg = (msg) => {

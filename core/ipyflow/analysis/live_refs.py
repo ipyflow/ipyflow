@@ -234,6 +234,7 @@ class ComputeLiveSymbolRefs(
     def visit_import(self, node: Union[ast.Import, ast.ImportFrom]) -> None:
         targets = []
         for name in node.names:
+            # TODO: check __all__ if possible for this case
             if name.name == "*":
                 continue
             targets.append(ast.Name(id=name.asname or name.name, ctx=ast.Store()))
@@ -270,7 +271,7 @@ class ComputeLiveSymbolRefs(
 
     visit_FunctionDef = visit_AsyncFunctionDef = generic_visit_function_def
 
-    def visit_withitem(self, node: ast.withitem):
+    def visit_withitem(self, node: ast.withitem) -> None:
         self.visit(node.context_expr)
         if node.optional_vars is not None:
             with self.kill_context():
@@ -299,8 +300,7 @@ class ComputeLiveSymbolRefs(
         self, node: Union[ast.List, ast.Set, ast.Tuple]
     ) -> None:
         with self.attrsub_context(False):
-            for elt in node.elts:
-                self.visit(elt)
+            self.generic_visit(node.elts)
 
     visit_List = visit_Set = visit_Tuple = visit_container_literal
 
@@ -309,15 +309,34 @@ class ComputeLiveSymbolRefs(
             self.generic_visit(node.keys)
             self.generic_visit(node.values)
 
-    def generic_visit_for_loop(self, node: Union[ast.For, ast.AsyncFor]) -> None:
-        # Case "for a,b in something: "
-        self.visit(node.iter)
-        with self.kill_context():
-            self.visit(node.target)
-        for line in node.body:
-            self.visit(line)
+    def generic_visit_branch_or_loop(
+        self, node: Union[ast.For, ast.AsyncFor, ast.If, ast.While]
+    ) -> None:
+        if hasattr(node, "test"):
+            self.visit(node.test)
+        if hasattr(node, "iter"):
+            self.visit(node.iter)
+        body_live: Set[LiveSymbolRef] = set()
+        body_dead: Set[SymbolRef] = set()
+        if hasattr(node, "target"):
+            with self.push_attributes(dead=body_dead):
+                with self.kill_context():
+                    self.visit(node.target)
+        with self.push_attributes(live=body_live, dead=body_dead):
+            self.generic_visit(node.body)
+        orelse_live: Set[LiveSymbolRef] = set()
+        orelse_dead: Set[SymbolRef] = set()
+        with self.push_attributes(live=orelse_live, dead=orelse_dead):
+            self.generic_visit(node.orelse)
+        new_live = body_live | orelse_live
+        for ref in list(new_live):
+            if ref.ref in self.dead:
+                new_live.discard(ref)
+        self.live |= new_live
+        self.dead |= body_dead & orelse_dead
+        self.modified |= body_dead | orelse_dead
 
-    visit_For = visit_AsyncFor = generic_visit_for_loop
+    visit_For = visit_AsyncFor = visit_If = visit_While = generic_visit_branch_or_loop
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.generic_visit(node.bases)

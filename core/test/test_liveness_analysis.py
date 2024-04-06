@@ -128,7 +128,7 @@ if sys.version_info >= (3, 8):
             """
         )
         assert live == {"x"}
-        assert dead == {"y", "z"}, "got %s" % dead
+        assert dead == {"y"}, "got %s" % dead
 
     def test_positions_simple():
         live, dead = compute_live_dead_symbol_refs_raw("foo")

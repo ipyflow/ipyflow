@@ -48,7 +48,7 @@ def _Xix_make_closure({", ".join(kwargs.keys())}):
     try:
         exec(func_text, obj.__globals__, local_env)
         new_obj = local_env[func_name]
-    except:  # noqa
+    except Exception:
         return None
     if hasattr(obj, "__name__") and hasattr(new_obj, "__name__"):
         new_obj.__name__ = obj.__name__
@@ -78,7 +78,7 @@ def uninstrument(
     seen.add(id(obj))
     try:
         new_obj = _get_uninstrumented_decorator(obj, seen)
-    except:  # noqa
+    except Exception:
         new_obj = None
     if new_obj is not None:
         return new_obj

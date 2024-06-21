@@ -40,7 +40,7 @@ def patch_pydevd_file_filters() -> None:
             return orig_in_project_roots(self, received_filename)
 
         FilesFiltering.in_project_roots = in_project_roots
-    except:  # noqa: E722
+    except Exception:
         pass
 
 
@@ -60,9 +60,9 @@ def patched_taskrunner_run(_self, coro):
     future = asyncio.ensure_future(coro, loop=loop)
     try:
         return loop.run_until_complete(future)
-    except BaseException as e:
+    except BaseException:
         future.cancel()
-        raise e
+        raise
 
 
 def patch_jupyter_taskrunner_run():
@@ -72,7 +72,7 @@ def patch_jupyter_taskrunner_run():
         import jupyter_core.utils
 
         jupyter_core.utils._TaskRunner.run = patched_taskrunner_run
-    except:  # noqa: E722
+    except Exception:
         pass
 
 
@@ -98,7 +98,7 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             from superduperreload import ModuleReloader
 
             ModuleReloader.instance(shell=ret.shell, flow=flow_, enabled=False)
-        except:  # noqa: E722
+        except Exception:
             pass
         return ret
 

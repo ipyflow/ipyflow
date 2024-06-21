@@ -31,7 +31,7 @@ from ipyflow.types import IdType, TimestampOrCounter
 
 try:
     from ipywidgets import HTML
-except:  # noqa: E722
+except Exception:
     HTML = str
 
 if sys.version_info >= (3, 8):

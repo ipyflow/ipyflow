@@ -37,7 +37,7 @@ from ipyflow.utils.misc_utils import cleanup_discard, debounce
 
 try:
     from importlib.util import _LazyModule  # type: ignore
-except:  # noqa
+except Exception:
     _LazyModule = None
 
 if TYPE_CHECKING:
@@ -506,7 +506,7 @@ class Symbol:
         try:
             if not self.is_obj_lazy_module and hasattr(self.obj, "__len__"):
                 return len(self.obj)
-        except:  # noqa: E722
+        except Exception:
             pass
         return None
 
@@ -637,7 +637,7 @@ class Symbol:
         if self._num_ipywidget_observers > 0:
             try:
                 self.obj.unobserve_all()
-            except:  # noqa
+            except Exception:
                 pass
             self._num_ipywidget_observers = 0
         if self._num_mercury_widget_observers > 0:
@@ -645,7 +645,7 @@ class Symbol:
                 self._mercury_widgets_manager.get_widget(
                     self.obj.code_uid
                 ).unobserve_all()
-            except:  # noqa
+            except Exception:
                 pass
             self._num_mercury_widget_observers = 0
         self._tombstone = False
@@ -1057,7 +1057,7 @@ class Symbol:
             return None
         try:
             return sys.modules.get(self.obj.__class__.__module__).WidgetsManager
-        except:  # noqa
+        except Exception:
             return None
 
     def _handle_possible_widget_creation(self) -> None:
@@ -1303,7 +1303,7 @@ class Symbol:
             return
         try:
             obj = shell().user_ns[self.name]
-        except:  # noqa
+        except Exception:
             # cinder runtime can throw an exception here due to lazy imports that fail
             return
         if self.obj is not obj:
@@ -1346,14 +1346,14 @@ class Symbol:
 
         try:
             return np.alltrue(obj1 == obj2)  # type: ignore
-        except:  # noqa
+        except Exception:
             return False
 
     @staticmethod
     def _dataframe_equal(obj1: Any, obj2: Any) -> bool:
         try:
             return obj1.equals(obj2)  # type: ignore
-        except:  # noqa
+        except Exception:
             return False
 
     @staticmethod

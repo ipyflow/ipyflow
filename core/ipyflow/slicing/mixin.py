@@ -52,7 +52,7 @@ logger.setLevel(logging.WARNING)
 
 
 class Slice:
-    FUNC_PREFIX = "_X5ix_ipyflow_slice_func_"
+    FUNC_PREFIX = f"{pyc.PYCCOLO_BUILTIN_PREFIX}_ipyflow_slice_func_"
     _func_counter = 0
 
     def __init__(

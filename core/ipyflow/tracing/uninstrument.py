@@ -4,6 +4,8 @@ import textwrap
 from types import FunctionType, LambdaType
 from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Union
 
+from pyccolo.extra_builtins import PYCCOLO_BUILTIN_PREFIX
+
 from ipyflow.singletons import flow
 
 if TYPE_CHECKING:
@@ -40,10 +42,10 @@ def _make_uninstrumented_function(
             if uninstrumented is not None:
                 kwargs[name] = uninstrumented
     func_text = f"""
-def _Xix_make_closure({", ".join(kwargs.keys())}):
+def {PYCCOLO_BUILTIN_PREFIX}_make_closure({", ".join(kwargs.keys())}):
 {func_text}
     return {func_name}
-{func_name} = _Xix_make_closure(**kwargs)"""
+{func_name} = {PYCCOLO_BUILTIN_PREFIX}_make_closure(**kwargs)"""
     local_env["kwargs"] = kwargs
     try:
         exec(func_text, obj.__globals__, local_env)

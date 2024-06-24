@@ -954,7 +954,7 @@ class NotebookFlow(singletons.NotebookFlow):
             return None
         handler_str = handler_str.strip()
         handler_str = textwrap.indent(textwrap.dedent(handler_str).strip(), " " * 4)
-        handler_fun_name = f"_X5ix_{handler_msg_type}_handler"
+        handler_fun_name = f"{pyc.PYCCOLO_BUILTIN_PREFIX}_{handler_msg_type}_handler"
         handler_str = f"def {handler_fun_name}(self, request):\n{handler_str}"
         exec(handler_str, globals())
         handler = globals().pop(handler_fun_name, None)

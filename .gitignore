@@ -3,6 +3,7 @@
 **/__pycache__
 **/.mypy_cache
 **/.ipynb_checkpoints
+**/.jupyter_ystore.db
 *.bundle.*
 *.tsbuildinfo
 core/ipyflow/resources/labextension/

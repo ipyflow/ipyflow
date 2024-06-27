@@ -312,7 +312,7 @@ class Symbol:
         else:
             return self._compute_namespace_timestamps(
                 version_ubound=None if version == -1 else ts
-            )
+            ) - {Timestamp.uninitialized()}
 
     def code(
         self, format_type: Optional[Type[FormatType]] = None, version: int = -1

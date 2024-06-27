@@ -53,7 +53,7 @@ def get_type_annotation(obj):
     if obj_type in _PRIMITIVE_TYPES:
         return obj_type
     elif obj_type in _CONTAINER_TYPES:
-        if obj_type == dict:
+        if obj_type is dict:
             key_ann = _resolve_container_types(
                 typing.List, _get_contained_type_annotations(obj.keys())
             )
@@ -70,7 +70,7 @@ def get_type_annotation(obj):
                 if len(value_args) == 1:
                     value_args = value_args[0]
                 return typing.Dict[key_args, value_args]
-        elif obj_type == tuple:
+        elif obj_type is tuple:
             return _resolve_tuple_types(_get_contained_type_annotations(obj))
         else:
             return _resolve_container_types(

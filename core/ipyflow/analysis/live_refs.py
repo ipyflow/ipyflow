@@ -78,6 +78,7 @@ class ComputeLiveSymbolRefs(
         self._func_ast_by_name: Dict[
             str, Union[ast.FunctionDef, ast.AsyncFunctionDef]
         ] = {}
+        self._visiting_func_calls: Set[str] = set()
 
     def __call__(
         self, node: ast.AST
@@ -352,7 +353,11 @@ class ComputeLiveSymbolRefs(
             self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():
             self.visit(node.func)
-        if isinstance(node.func, ast.Name) and node.func.id in self._func_ast_by_name:
+        if (
+            isinstance(node.func, ast.Name)
+            and node.func.id in self._func_ast_by_name
+            and node.func.id not in self._visiting_func_calls
+        ):
             func_ast = self._func_ast_by_name[node.func.id]
             call_scope = None  # TODO: figure this out
             call_dead = {
@@ -376,6 +381,7 @@ class ComputeLiveSymbolRefs(
             ):
                 self.generic_visit(func_ast.body)
             self.live |= call_live
+            self._visiting_func_calls.discard(node.func.id)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
         if not self._inside_attrsub and not isinstance(_chain_root(node), ast.BinOp):
@@ -627,7 +633,9 @@ def compute_live_dead_symbol_refs(
 
 
 def static_resolve_rvals(
-    code: Union[ast.AST, str], cell_ctr: int = -1, scope: Optional["Scope"] = None
+    code: Union[ast.AST, str],
+    cell_ctr: int = -1,
+    scope: Optional["Scope"] = None,
 ) -> Set[ResolvedSymbol]:
     live_refs, *_ = compute_live_dead_symbol_refs(
         code, include_killed_live=cell_ctr > 0

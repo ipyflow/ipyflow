@@ -52,7 +52,6 @@ from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
-from ipyflow.tracing.uninstrument import uninstrument
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes
 from ipyflow.types import SubscriptIndices, SupportedIndexType
 from ipyflow.utils.misc_utils import is_project_file
@@ -1152,8 +1151,7 @@ class DataflowTracer(StackFrameManager):
             )
         if is_last:
             self._resolve_external_call()
-        if ext_call_cand.modname != "builtins":
-            return uninstrument(arg_obj)
+        return arg_obj
 
     def _save_external_call_candidate(
         self,

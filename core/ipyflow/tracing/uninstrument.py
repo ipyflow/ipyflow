@@ -31,24 +31,29 @@ def _make_uninstrumented_function(
         return None
     local_env: Dict[str, Any] = {}
     kwargs: Dict[str, Any] = {}
-    func_text = textwrap.indent(func_text, "    ")
     if obj.__closure__ is not None:
         for cell_name, cell in zip(obj.__code__.co_freevars, obj.__closure__):
             kwargs[cell_name] = cell.cell_contents
+    global_overrides = {}
     for name in obj.__code__.co_names:
         if name in obj.__globals__:
             referenced_global = obj.__globals__[name]
             uninstrumented = uninstrument(referenced_global, seen=seen)
             if uninstrumented is not None:
-                kwargs[name] = uninstrumented
-    func_text = f"""
+                global_overrides[name] = uninstrumented
+    if len(kwargs) > 0:
+        func_text = textwrap.indent(func_text, "    ")
+        func_text = f"""
 def {PYCCOLO_BUILTIN_PREFIX}_make_closure({", ".join(kwargs.keys())}):
 {func_text}
     return {func_name}
 {func_name} = {PYCCOLO_BUILTIN_PREFIX}_make_closure(**kwargs)"""
     local_env["kwargs"] = kwargs
     try:
-        exec(func_text, obj.__globals__, local_env)
+        if len(global_overrides) > 0:
+            exec(func_text, obj.__globals__ | global_overrides, local_env)
+        else:
+            exec(func_text, obj.__globals__, local_env)
         new_obj = local_env[func_name]
     except Exception:
         return None

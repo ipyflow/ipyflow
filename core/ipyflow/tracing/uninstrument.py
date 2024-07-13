@@ -34,7 +34,7 @@ def _make_uninstrumented_function(
     if obj.__closure__ is not None:
         for cell_name, cell in zip(obj.__code__.co_freevars, obj.__closure__):
             kwargs[cell_name] = cell.cell_contents
-    global_env = {}
+    global_env: Dict[str, Any] = {}
     for name in obj.__code__.co_names:
         if name in obj.__globals__:
             referenced_global = obj.__globals__[name]

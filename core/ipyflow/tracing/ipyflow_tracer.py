@@ -1152,7 +1152,10 @@ class DataflowTracer(StackFrameManager):
             )
         if is_last:
             self._resolve_external_call()
-        if ext_call_cand.modname != "builtins" and getattr(arg_obj, "__name__", None) == "<lambda>":
+        if (
+            ext_call_cand.modname != "builtins"
+            and getattr(arg_obj, "__name__", None) == "<lambda>"
+        ):
             return uninstrument(arg_obj)
 
     def _save_external_call_candidate(

@@ -171,6 +171,7 @@ class CaptureOutputTee:
         self.shell: Optional[InteractiveShell] = None
         self.sys_stdout: Optional[TextIO] = None
         self.sys_stderr: Optional[TextIO] = None
+        self._in_context = False
 
     def __enter__(self) -> CapturedIO:
         self.sys_stdout = sys.stdout
@@ -197,11 +198,17 @@ class CaptureOutputTee:
                 self.save_display_pub, capture_display_pub
             )
 
+        self._in_context = True
         return CapturedIO(stdout, stderr, outputs)
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        sys.stdout = self.sys_stdout
-        sys.stderr = self.sys_stderr
+        if not self._in_context:
+            return
+        self._in_context = False
+        if self.stdout:
+            sys.stdout = self.sys_stdout
+        if self.stderr:
+            sys.stderr = self.sys_stderr
         if self.display and self.shell:
             self.shell.display_pub = self.save_display_pub
 

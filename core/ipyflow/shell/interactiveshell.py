@@ -307,7 +307,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def _is_code_empty(self, code: str) -> bool:
         return self.input_transformer_manager.transform_cell(code).strip() == ""
 
-    def _reset_should_capturing_output(self) -> bool:
+    def _reset_should_capture_output(self) -> bool:
         ret = self._should_capture_output
         self._should_capture_output = False
         return ret
@@ -332,7 +332,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 **kwargs,
             )
         finally:
-            if self._reset_should_capturing_output():
+            if self._reset_should_capture_output():
                 # Kind of weird -- we enter the context using the tracer to ensure it only picks up
                 # user output, but we don't exit it until here to ensure we also pick up output from
                 # ipython post execute hooks (e.g. where matplotlib flushes buffers).

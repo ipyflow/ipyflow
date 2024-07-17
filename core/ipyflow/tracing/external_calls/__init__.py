@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import logging
-from types import ModuleType
+from types import FunctionType, ModuleType
 from typing import TYPE_CHECKING, Any, Optional
 
 # force handler registration by exec()ing the handler modules here
@@ -24,14 +24,16 @@ if TYPE_CHECKING:
 def resolve_external_call(
     module: Optional[ModuleType],
     caller_self: Optional[Any],
-    function_or_method: Optional[Any],
+    function_or_method: Optional[FunctionType],
     method: Optional[str],
     call_node: Optional[ast.Call] = None,
     use_standard_default: bool = True,
     calling_symbol: Optional["Symbol"] = None,
 ) -> Optional[ExternalCallHandler]:
-    if hasattr(function_or_method, "__self__") and hasattr(
-        function_or_method, "__name__"
+    if (
+        function_or_method is not None
+        and hasattr(function_or_method, "__self__")
+        and hasattr(function_or_method, "__name__")
     ):
         function_or_method = getattr(
             function_or_method.__self__.__class__,
@@ -63,12 +65,16 @@ def resolve_external_call(
         caller_self = None
 
     try:
-        external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method)
+        if function_or_method is None:
+            external_call_type = None
+        else:
+            external_call_type = REGISTERED_HANDLER_BY_FUNCTION.get(function_or_method)
     except TypeError:
         return None
     if (
         external_call_type is None
         and caller_self is not None
+        and method is not None
         and not isinstance(caller_self, type)
     ):
         for cls in caller_self.__class__.mro():

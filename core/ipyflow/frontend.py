@@ -379,7 +379,7 @@ class FrontendCheckerResult(NamedTuple):
         self,
         cell: Cell,
         update_liveness_time_versions: bool,
-        last_executed_cell_pos: int,
+        last_executed_cell_pos: Optional[int],
         waiting_symbols_by_cell_id: Dict[IdType, Set[Symbol]],
         killing_cell_ids_for_symbol: Dict[Symbol, Set[IdType]],
         phantom_cell_info: Dict[IdType, Dict[IdType, Set[int]]],
@@ -529,9 +529,10 @@ class FrontendCheckerResult(NamedTuple):
                 checker_results_by_cid[cell.cell_id] = checker_result
 
         self._compute_dag_based_waiters(cells_to_check)
-        self._compute_reactive_cells_for_reactive_symbols(
-            checker_results_by_cid, last_executed_cell_pos
-        )
+        if last_executed_cell_pos is not None:
+            self._compute_reactive_cells_for_reactive_symbols(
+                checker_results_by_cid, last_executed_cell_pos
+            )
         self._compute_ready_making_cells(
             waiting_symbols_by_cell_id,
             killing_cell_ids_for_symbol,

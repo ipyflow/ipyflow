@@ -346,6 +346,7 @@ class Cell(SliceableMixin):
                 continue
             outputs[sym] = MemoizedOutput(sym, sym.shallow_timestamp, sym.obj)
         assert self.captured_output is not None
+        assert self.executed_content is not None
         self._memoized_executions.setdefault(self.executed_content, []).append(
             MemoizedCellExecution(
                 list(inputs.values()),
@@ -793,11 +794,11 @@ class Cell(SliceableMixin):
                 live_cell_counters.add(live_cell_num)
         live_cells = [self.at_timestamp(ctr) for ctr in sorted(live_cell_counters)]
         top_level_symbols = {sym.sym.get_top_level() for sym in live_symbols}
-        top_level_symbols.discard(None)
         return "{type_declarations}\n\n{content}".format(
             type_declarations="\n".join(
                 f"{sym.name}: {sym.get_type_annotation_string()}"
                 for sym in top_level_symbols
+                if sym
             ),
             content="\n".join(
                 live_cell.sanitized_content() for live_cell in live_cells
@@ -878,15 +879,17 @@ class Cell(SliceableMixin):
     ) -> Any:
         cell_to_repro = self
         for _ in range(lookback):
+            assert cell_to_repro.prev_cell is not None
             cell_to_repro = cell_to_repro.prev_cell
         if show_input:
             print_ = print
-            print_(cell_to_repro.executed_content)
+            print_(cell_to_repro.executed_content or "")
             max_len = max(
-                len(line) for line in cell_to_repro.executed_content.splitlines()
+                len(line)
+                for line in (cell_to_repro.executed_content or "").splitlines()
             )
             print_("-" * max_len)
-        if show_output:
+        if show_output and cell_to_repro.captured_output is not None:
             cell_to_repro.captured_output.show()
         return shell().user_ns["Out"].get(cell_to_repro.cell_ctr)
 

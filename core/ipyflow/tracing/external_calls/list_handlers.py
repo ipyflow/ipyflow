@@ -13,8 +13,7 @@ class ListMethod(ExternalCallHandler):
         pass
 
     def handle(self) -> None:
-        caller_self_obj_id = self.caller_self_obj_id
-        mutated_sym = flow().get_first_full_symbol(caller_self_obj_id)
+        mutated_sym = flow().get_first_full_symbol(self.caller_self_obj_id or -1)
         if mutated_sym is not None:
             namespace = mutated_sym.namespace
             if namespace is not None:
@@ -23,7 +22,7 @@ class ListMethod(ExternalCallHandler):
 
 
 class ListExtend(ListMethod):
-    orig_len: int = None
+    orig_len: int
 
     def initialize(self, **kwargs) -> None:
         self.orig_len = len(self.caller_self)

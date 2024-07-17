@@ -171,6 +171,7 @@ class CaptureOutputTee:
         self.shell: Optional[InteractiveShell] = None
         self.sys_stdout: Optional[TextIO] = None
         self.sys_stderr: Optional[TextIO] = None
+        self.save_display_pub: Optional[DisplayPublisher] = None
         self._in_context = False
 
     def __enter__(self) -> CapturedIO:
@@ -195,7 +196,7 @@ class CaptureOutputTee:
             capture_display_pub = TeeCompatibleCapturingDisplayPublisher()
             outputs = capture_display_pub.outputs
             self.shell.display_pub = TeeDisplayPublisher(
-                self.save_display_pub, capture_display_pub
+                self.shell.display_pub, capture_display_pub
             )
 
         self._in_context = True
@@ -205,10 +206,12 @@ class CaptureOutputTee:
         if not self._in_context:
             return
         self._in_context = False
-        if self.stdout:
+        if self.sys_stdout is not None:
             sys.stdout = self.sys_stdout
-        if self.stderr:
+            self.sys_stdout = None
+        if self.sys_stderr is not None:
             sys.stderr = self.sys_stderr
+            self.sys_stderr = None
         if self.display and self.shell:
             self.shell.display_pub = self.save_display_pub
 

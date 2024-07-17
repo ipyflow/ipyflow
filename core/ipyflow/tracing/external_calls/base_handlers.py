@@ -43,11 +43,11 @@ class ExternalCallHandler(metaclass=HasGetitem):
     module: Optional[ModuleType] = None
     caller_self: Any = None
     function_or_method: Any = None
-    args: List["ExternalCallArgument"] = None
-    kwargs: Dict[str, "ExternalCallArgument"] = None
+    args: List["ExternalCallArgument"]
+    kwargs: Dict[str, "ExternalCallArgument"]
     _arg_syms: Optional[Set["Symbol"]] = None
     return_value: Any = not_yet_defined
-    stmt_node: ast.stmt = None
+    stmt_node: ast.stmt
 
     def __new__(cls, *args, **kwargs):
         if cls is ExternalCallHandler:
@@ -98,7 +98,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.return_value: Any = self.not_yet_defined
         self.call_node = call_node
         self.calling_symbol = calling_symbol
-        self.stmt_node = tracer().prev_trace_stmt_in_cur_frame.stmt_node
+        self.stmt_node = tracer().prev_trace_stmt_in_cur_frame.stmt_node  # type: ignore[union-attr]
 
     def __init_subclass__(cls):
         external_call_handler_by_name[cls.__name__] = cls
@@ -170,14 +170,18 @@ class ExternalCallHandler(metaclass=HasGetitem):
     def mutate_caller(self, should_propagate: bool) -> None:
         if self.caller_self is None:
             return
-        if self.calling_symbol is None:
+        if self.calling_symbol is not None:
+            self._mutate_calling_symbol(
+                self.calling_symbol, should_propagate=should_propagate
+            )
+        elif self.call_node is not None:
             syms_to_mutate = []
             if isinstance(self.call_node.func, ast.Attribute) and isinstance(
                 self.call_node.func.value, ast.Name
             ):
                 syms_to_mutate = [
                     sym
-                    for sym in flow().aliases.get(self.caller_self_obj_id, [])
+                    for sym in flow().aliases.get(self.caller_self_obj_id or -1, [])
                     if sym.name == self.call_node.func.value.id
                 ]
             for sym in syms_to_mutate:
@@ -186,10 +190,6 @@ class ExternalCallHandler(metaclass=HasGetitem):
                 self.mutate_aliases(
                     self.caller_self_obj_id, should_propagate=should_propagate
                 )
-        else:
-            self._mutate_calling_symbol(
-                self.calling_symbol, should_propagate=should_propagate
-            )
 
     def mutate_module(self, should_propagate: bool) -> None:
         if self.module is None:
@@ -197,7 +197,7 @@ class ExternalCallHandler(metaclass=HasGetitem):
         self.mutate_aliases(id(self.module), should_propagate=should_propagate)
 
     def mutate_aliases(self, obj_id: Optional[int], should_propagate: bool) -> None:
-        mutated_syms = flow().aliases.get(obj_id, set())
+        mutated_syms = flow().aliases.get(obj_id or -1, set())
         for sym in mutated_syms:
             self._mutate_calling_symbol(sym, should_propagate=should_propagate)
 
@@ -312,7 +312,7 @@ class ModuleUpsert(ExternalCallHandler):
 class NamespaceClear(StandardMutation):
     def handle(self) -> None:
         super().handle()
-        mutated_sym = flow().get_first_full_symbol(self.caller_self_obj_id)
+        mutated_sym = flow().get_first_full_symbol(self.caller_self_obj_id or -1)
         if mutated_sym is None:
             return
         namespace = mutated_sym.namespace
@@ -326,6 +326,7 @@ class NamespaceClear(StandardMutation):
                 )
             ),
             reverse=True,
+            key=lambda n: n or -1,
         ):
             namespace.delete_symbol_for_name(name, is_subscript=True)
 

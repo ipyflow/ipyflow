@@ -154,15 +154,16 @@ class StackFrameManager(SingletonBaseTracer):
     def get_user_call_stack_depth(cls, frame: FrameType) -> int:
         flow_ = flow()
         user_call_depth = 0
-        while frame is not None:
-            filename = frame.f_code.co_filename
+        bt_frame: Optional[FrameType] = frame
+        while bt_frame is not None:
+            filename = bt_frame.f_code.co_filename
             if flow_.is_cell_file(filename) or (
                 not is_project_file(filename)
                 and not cls._FILTERED_PATH_REGEX.search(filename)
                 and "scripts/test_runner.py" not in filename
             ):
                 user_call_depth += 1
-            frame = frame.f_back
+            bt_frame = bt_frame.f_back
         return user_call_depth
 
 
@@ -359,7 +360,7 @@ class DataflowTracer(StackFrameManager):
             return
         # ensures we only handle del's and not delitem's
         self.node_id_to_saved_del_data.clear()
-        new_scope = trace_stmt.get_post_call_scope(trace_stmt.frame)
+        new_scope = trace_stmt.get_post_call_scope(trace_stmt.frame or frame)
         with self.call_stack.push():
             # TODO: figure out a better way to determine if we're inside a lambda
             #  could this one lead to a false negative if a lambda is in the default of a function def kwarg?
@@ -547,6 +548,7 @@ class DataflowTracer(StackFrameManager):
     def _resolve_store_data_for_simple_target(self, target: str, frame: FrameType):
         scope = self.cur_frame_original_scope
         lut = frame.f_locals
+        flow_ = flow()
         if scope.symtab is not None:
             try:
                 target_sym = scope.symtab.lookup(target)
@@ -561,17 +563,18 @@ class DataflowTracer(StackFrameManager):
                     and target_sym.is_free(),
                 )()
                 if is_nonlocal:
-                    scope = scope.parent_scope
+                    par_scope = scope.parent_scope
+                    scope = flow_.global_scope if par_scope is None else par_scope
                 elif target_sym.is_global():
                     lut = frame.f_globals
-                    scope = flow().global_scope
+                    scope = flow_.global_scope
             except KeyError:
                 pass
         try:
             obj = lut[target]
         except KeyError:
             obj = frame.f_globals[target]
-            scope = flow().global_scope
+            scope = flow_.global_scope
         return scope, target, obj, False, set()
 
     def resolve_store_data_for_target(
@@ -599,9 +602,10 @@ class DataflowTracer(StackFrameManager):
             obj = frame.f_locals.get(target.value.id)
             if obj is None:
                 raise
-            scope = flow().namespaces.get(id(obj))
-            if scope is None:
+            ns = flow().namespaces.get(id(obj))
+            if ns is None:
                 raise
+            scope = ns
             sliceval = resolve_slice_to_constant(target)
             if isinstance(sliceval, ast.Name):
                 attr_or_sub = frame.f_locals.get(sliceval.id)
@@ -623,7 +627,7 @@ class DataflowTracer(StackFrameManager):
                 obj, attr_or_sub, is_subscript
             )
         if attr_or_sub_obj is None:
-            scope_to_use = scope
+            scope_to_use: Optional[Namespace] = scope
         else:
             scope_to_use = scope.get_earliest_ancestor_containing(
                 id(attr_or_sub_obj), is_subscript
@@ -689,17 +693,17 @@ class DataflowTracer(StackFrameManager):
                 ns.scope_name = obj_name
         else:
             # print('no scope for class', obj.__class__)
-            try:
-                scope_name = (
-                    flow().get_first_full_symbol(obj_id).name
-                    if obj_name is None
-                    else obj_name
-                )
-            except AttributeError:
-                scope_name = "<unknown namespace>"
+            if obj_name is None:
+                first_full_sym = flow().get_first_full_symbol(obj_id)
+                if first_full_sym is None or not isinstance(first_full_sym.name, str):
+                    scope_name = "<unknown namespace>"
+                else:
+                    scope_name = first_full_sym.name
+            else:
+                scope_name = obj_name
             ns = Namespace(obj, scope_name, parent_scope=None)
         # FIXME: brittle strategy for determining parent scope of obj
-        frame = self.prev_trace_stmt_in_cur_frame.frame
+        frame = self.prev_trace_stmt_in_cur_frame.frame  # type: ignore[union-attr]
         if ns.parent_scope is None and frame is not None:
             if obj_name is not None and obj_name not in frame.f_locals:
                 parent_scope = flow().global_scope
@@ -717,7 +721,7 @@ class DataflowTracer(StackFrameManager):
     ) -> Optional[Symbol]:
         # TODO: upsert modules / namespaces hierarchically
         if isinstance(module_or_function, ModuleType):
-            module = module_or_function
+            module: Optional[ModuleType] = module_or_function
         else:
             module = getattr(module_or_function, "__module__", None)
             if module is None:
@@ -757,7 +761,7 @@ class DataflowTracer(StackFrameManager):
                     sym_name,
                     module,
                     set(),
-                    self.prev_trace_stmt_in_cur_frame.stmt_node,
+                    self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                     is_subscript=False,
                     is_module=True,
                     propagate=False,
@@ -772,8 +776,10 @@ class DataflowTracer(StackFrameManager):
                 cur_scope = Namespace(module, component, parent_scope=cur_scope)
             else:
                 cur_scope = symbol_namespace
-        if is_load and not symbol.is_implicit:
-            self.node_id_to_loaded_symbols.setdefault(id(node), []).append(symbol)
+        if is_load:
+            assert symbol is not None
+            if not symbol.is_implicit:
+                self.node_id_to_loaded_symbols.setdefault(id(node), []).append(symbol)
         return symbol
 
     def _clear_info_and_maybe_lookup_or_create_complex_symbol(
@@ -807,7 +813,7 @@ class DataflowTracer(StackFrameManager):
                 attr_or_subscript,
                 obj_attr_or_sub,
                 parents,
-                self.prev_trace_stmt_in_cur_frame.stmt_node,
+                self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                 is_subscript=is_subscript,
                 propagate=is_default_dict,
                 implicit=not is_default_dict,
@@ -1131,7 +1137,7 @@ class DataflowTracer(StackFrameManager):
                     arg_node.id,
                     arg_obj,
                     set(),
-                    self.prev_trace_stmt_in_cur_frame.stmt_node,
+                    self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                     implicit=True,
                     symbol_node=arg_node,
                 )
@@ -1303,8 +1309,9 @@ class DataflowTracer(StackFrameManager):
             ):
                 # TODO: memoize symbol resolution; otherwise this will be quadratic for deeply nested literals
                 if isinstance(inner_val_node, ast.Starred):
-                    inner_symbols = set()
+                    inner_symbols: Set[Symbol] = set()
                     starred_idx += 1
+                    starred_dep: Optional[Symbol] = None
                     if starred_idx == 0:
                         starred_syms = self.resolve_loaded_symbols(inner_val_node)
                         starred_namespace = (
@@ -1318,19 +1325,19 @@ class DataflowTracer(StackFrameManager):
                                 starred_idx, is_subscript=True
                             )
                         )
+                    if starred_dep is not None:
                         inner_symbols.add(starred_dep)
                 else:
                     inner_symbols = resolve_rval_symbols(inner_val_node)
                     if inner_key_node is not None:
                         outer_deps.update(resolve_rval_symbols(inner_key_node))
                 self.node_id_to_loaded_symbols.pop(id(inner_val_node), None)
-                inner_symbols.discard(None)
                 if isinstance(i, SubscriptIndices.types):
                     self.active_literal_scope.upsert_symbol_for_name(
                         i,
                         inner_obj,
                         inner_symbols,
-                        self.prev_trace_stmt_in_cur_frame.stmt_node,
+                        self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                         is_subscript=True,
                         implicit=True,
                         # this is necessary in case some literal object got reused,
@@ -1339,15 +1346,15 @@ class DataflowTracer(StackFrameManager):
                         propagate=False,
                     )
             self.node_id_to_loaded_literal_scope[node_id] = self.active_literal_scope
-            parent_scope: Scope = self.active_literal_scope.parent_scope
+            parent_scope: Scope = self.active_literal_scope.parent_scope  # type: ignore[assignment]
             while parent_scope.is_namespace_scope:
-                parent_scope = parent_scope.parent_scope
+                parent_scope = parent_scope.parent_scope  # type: ignore[assignment]
             assert parent_scope is not None
             literal_sym = parent_scope.upsert_symbol_for_name(
                 "<literal_sym_%d>" % id(literal),
                 literal,
                 outer_deps,
-                self.prev_trace_stmt_in_cur_frame.stmt_node,
+                self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                 is_anonymous=True,
                 implicit=True,
                 propagate=False,
@@ -1407,13 +1414,13 @@ class DataflowTracer(StackFrameManager):
     def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
         sym_deps = []
         node = self.ast_node_by_id[lambda_node_id]
-        for kw_default in node.args.defaults:  # type: ignore
+        for kw_default in node.args.defaults:  # type: ignore[union-attr]
             sym_deps.extend(self.resolve_loaded_symbols(kw_default))
         sym = self.active_scope.upsert_symbol_for_name(
             "<lambda_sym_%d>" % id(obj),
             obj,
             sym_deps,
-            self.prev_trace_stmt_in_cur_frame.stmt_node,
+            self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
             is_function_def=True,
             propagate=False,
             symbol_node=node,
@@ -1477,8 +1484,8 @@ class DataflowTracer(StackFrameManager):
 
     def _handle_skipped_sub_statements(self, stmt: ast.stmt) -> None:
         live, dead, *_ = compute_live_dead_symbol_refs(stmt)
-        for sym in {ref.to_symbol() for ref in {r.ref for r in live} | dead} - {None}:
-            if sym in self.this_stmt_updated_symbols:
+        for sym in {ref.to_symbol() for ref in {r.ref for r in live} | dead}:
+            if sym is None or sym in self.this_stmt_updated_symbols:
                 continue
             sym.resync_if_necessary(refresh=True)
         user_ns = shell().user_ns
@@ -1566,7 +1573,7 @@ class DataflowTracer(StackFrameManager):
             stmt_in_top_level_frame = self.call_stack.get_field(
                 "prev_trace_stmt_in_cur_frame", depth=0
             )
-        if stmt_in_top_level_frame.finished:
+        if stmt_in_top_level_frame.finished:  # type: ignore[union-attr]
             return -1
         if flow().trace_messages_enabled:
             self.EVENT_LOGGER.warning("reenable tracing >>>")
@@ -1617,14 +1624,19 @@ class DataflowTracer(StackFrameManager):
         return trace_stmt
 
     def _maybe_log_event(
-        self, event: pyc.TraceEvent, stmt_node: ast.stmt, trace_stmt: Statement
+        self,
+        event: pyc.TraceEvent,
+        stmt_node: Optional[ast.stmt],
+        trace_stmt: Statement,
     ):
-        if flow().trace_messages_enabled:
-            codeline = astunparse.unparse(stmt_node).strip("\n").split("\n")[0]
-            codeline = " " * getattr(stmt_node, "col_offset", 0) + codeline
-            self.EVENT_LOGGER.warning(
-                " %3d: %10s >>> %s", trace_stmt.lineno, event, codeline
-            )
+        if not flow().trace_messages_enabled:
+            return
+        assert stmt_node is not None
+        codeline = astunparse.unparse(stmt_node).strip("\n").split("\n")[0]
+        codeline = " " * getattr(stmt_node, "col_offset", 0) + codeline
+        self.EVENT_LOGGER.warning(
+            " %3d: %10s >>> %s", trace_stmt.lineno, event, codeline
+        )
 
     def _get_stmt_node_for_sys_event(
         self, event: pyc.TraceEvent, cell_num: int, lineno: int
@@ -1679,6 +1691,7 @@ class DataflowTracer(StackFrameManager):
         if lineno == 0:
             return None
         stmt_node = self._get_stmt_node_for_sys_event(event, cell_num, lineno)
+        assert stmt_node is not None
         trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
         self._maybe_log_event(event, stmt_node, trace_stmt)
 
@@ -1717,10 +1730,9 @@ class DataflowTracer(StackFrameManager):
         cell_num, lineno = flow().get_position(frame)
         assert cell_num is not None
 
-        if event == pyc.after_stmt:
-            assert stmt_node is not None
-        else:
+        if event != pyc.after_stmt:
             stmt_node = self._get_stmt_node_for_sys_event(event, cell_num, lineno)
+        assert stmt_node is not None
 
         trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
         self._maybe_log_event(event, stmt_node, trace_stmt)

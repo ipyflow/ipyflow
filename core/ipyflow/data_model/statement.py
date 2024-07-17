@@ -131,7 +131,7 @@ class Statement(SliceableMixin):
             prev_stmt=prev_stmt,
             override=override,
         )
-        if override and cls._stmts_by_ts.get(timestamp):
+        if override and timestamp is not None and cls._stmts_by_ts.get(timestamp):
             prev = cls.at_timestamp(timestamp)
             all_with_prev_id = cls._stmts_by_id.pop(prev.id)
             assert len(all_with_prev_id) == 1
@@ -282,7 +282,7 @@ class Statement(SliceableMixin):
         if not self.finished:
             prev_call_scope = func_sym.call_scope
             # we need a new scope upon call to prevent picking up outer scope's overwritten nonlocals
-            new_call_scope = prev_call_scope.parent_scope.make_child_scope(
+            new_call_scope = prev_call_scope.parent_scope.make_child_scope(  # type: ignore[union-attr]
                 func_sym.name
             )
             if prev_call_scope.symtab is not None:
@@ -343,7 +343,9 @@ class Statement(SliceableMixin):
                 obj,
                 is_subscript,
                 excluded_deps,
-            ) = tracer().resolve_store_data_for_target(target, self.frame)
+            ) = tracer().resolve_store_data_for_target(
+                target, self.frame  # type: ignore[arg-type]
+            )
         except KeyError:
             # e.g., slices aren't implemented yet
             # use suppressed log level to avoid noise to user
@@ -411,7 +413,7 @@ class Statement(SliceableMixin):
     ) -> None:
         try:
             scope, name, obj, is_subscript, _ = tracer().resolve_store_data_for_target(
-                target, self.frame
+                target, self.frame  # type: ignore[arg-type]
             )
         except KeyError as e:
             # e.g., slices aren't implemented yet
@@ -422,11 +424,12 @@ class Statement(SliceableMixin):
         if ns is None:
             ns = Namespace(obj, str(name), parent_scope=scope)
         for i, inner_dep in enumerate(inner_deps):
-            deps = set() if inner_dep is None else {inner_dep}
+            if inner_dep is None:
+                continue
             ns.upsert_symbol_for_name(
                 i,
                 inner_dep.obj,
-                deps,
+                {inner_dep},
                 self.stmt_node,
                 is_subscript=True,
                 is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
@@ -557,10 +560,11 @@ class Statement(SliceableMixin):
             if is_import:
                 dep_node_as_alias = cast(ast.alias, dep_node)
                 if isinstance(self.stmt_node, ast.ImportFrom):
+                    modname = self.stmt_node.module or ""
                     module = sys.modules.get(
-                        f"{self.stmt_node.module}.{dep_node_as_alias.name}"
-                    ) or sys.modules.get(self.stmt_node.module)
-                    if self.frame.f_locals is shell().user_ns:
+                        f"{modname}.{dep_node_as_alias.name}"
+                    ) or sys.modules.get(modname)
+                    if module is not None and self.frame.f_locals is shell().user_ns:  # type: ignore[union-attr]
                         for alias in self.stmt_node.names:
                             if alias.name == "*":
                                 flow().starred_import_modules.add(module.__name__)
@@ -582,7 +586,7 @@ class Statement(SliceableMixin):
             logger.info("create edges from %s to %s", rval_deps, target)
             if is_class_def:
                 assert self.class_scope is not None
-                class_ref = self.frame.f_locals[cast(ast.ClassDef, self.stmt_node).name]
+                class_ref = self.frame.f_locals[cast(ast.ClassDef, self.stmt_node).name]  # type: ignore[union-attr]
                 self.class_scope.obj = class_ref
                 flow().namespaces[id(class_ref)] = self.class_scope
             try:
@@ -592,7 +596,9 @@ class Statement(SliceableMixin):
                     obj,
                     is_subscript,
                     excluded_deps,
-                ) = tracer().resolve_store_data_for_target(target, self.frame)
+                ) = tracer().resolve_store_data_for_target(
+                    target, self.frame  # type: ignore[arg-type]
+                )
                 scope.upsert_symbol_for_name(
                     name,
                     obj,
@@ -663,7 +669,7 @@ class Statement(SliceableMixin):
                 passing_watchpoints = sym.watchpoints(
                     sym.obj,
                     position=(
-                        flow().get_position(self.frame)[0],
+                        flow().get_position(self.frame)[0],  # type: ignore[arg-type]
                         self.lineno,
                     ),
                     symbol_name=sym.readable_name,

@@ -3,7 +3,9 @@ from typing import Any, Callable, Optional, Tuple
 
 
 class Watchpoint:
-    def __init__(self, name: str, pred: Optional[Callable[..., bool]]) -> None:
+    def __init__(
+        self, name: Optional[str], pred: Optional[Callable[..., bool]]
+    ) -> None:
         self.name = name
         self.pred = pred
 
@@ -35,13 +37,13 @@ class Watchpoints(list):
     def extend(self, *args, **kwargs) -> None:
         raise NotImplementedError("please use the `add` method instead")
 
-    def __add__(self, *args, **kwargs) -> None:
+    def __add__(self, *args, **kwargs) -> "Watchpoints":
         raise NotImplementedError("please use the `add` method instead")
 
-    def __iadd__(self, *args, **kwargs) -> None:
+    def __iadd__(self, *args, **kwargs) -> "Watchpoints":
         raise NotImplementedError("please use the `add` method instead")
 
-    def __radd__(self, *args, **kwargs) -> None:
+    def __radd__(self, *args, **kwargs) -> "Watchpoints":
         raise NotImplementedError("please use the `add` method instead")
 
     def add(

@@ -376,7 +376,6 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         shell_futures=True,
         **kwargs,
     ) -> ExecutionResult:
-        ret = None
         # Stage 1: Run pre-execute hook
         maybe_new_content = self.before_run_cell(
             raw_cell, store_history=store_history, **kwargs
@@ -477,7 +476,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             outputs,
             displayed_output,
             ctr,
-        ) in prev_cell._memoized_executions.get(cell.executed_content, []):
+        ) in prev_cell._memoized_executions.get(cell.executed_content or "", []):
             for sym, in_ts, mem_ts, obj_id, comparable in inputs:
                 if comparable is not Symbol.NULL:
                     # prefer the comparable check if it is available
@@ -505,6 +504,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
 
         if identical_result_ctr is None:
             return None
+        assert memoized_outputs is not None
+        assert memoized_display_output is not None
 
         # TODO: split this method up here
 
@@ -540,11 +541,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     ) -> Optional[str]:
         original_content = cell_content
         (
-            cell_content,
+            new_cell_content,
             memoized_output_level,
         ) = Cell.get_memoized_content_and_output_level(cell_content)
-        if cell_content is None:
-            cell_content = original_content
+        if new_cell_content is not None:
+            cell_content = new_cell_content
         flow_ = singletons.flow()
         settings = flow_.mut_settings
         if settings.interface == Interface.UNKNOWN:
@@ -564,7 +565,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             flow_.active_cell_id = cell_id
         to_create_cell_id = flow_.active_cell_id
         placeholder_id = to_create_cell_id is None
-        if placeholder_id:
+        if to_create_cell_id is None:
             # next counter because it gets bumped on creation
             to_create_cell_id = Cell.next_exec_counter()
         cell = Cell.create_and_track(
@@ -625,6 +626,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         cell = Cell.current_cell()
         prev_cell = cell.prev_cell
         if cell.skipped_due_to_memoization_ctr > 0:
+            assert prev_cell is not None
             cell.to_ast(override=prev_cell.to_ast())
             prev_cell = Cell.at_counter(cell.skipped_due_to_memoization_ctr)
             assert prev_cell is not None

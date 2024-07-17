@@ -42,19 +42,19 @@ def cells(cell_id: Optional["IdType"] = None) -> Union[Type["Cell"], "Cell"]:
         return clazz.from_id(cell_id)
 
 
-def cell_above() -> "Cell":
+def cell_above() -> Optional["Cell"]:
     active_cell_id = flow().active_cell_id
     assert active_cell_id is not None
     return cells().at_position(cells().from_id(active_cell_id).position - 1)
 
 
-def cell_below() -> "Cell":
+def cell_below() -> Optional["Cell"]:
     active_cell_id = flow().active_cell_id
     assert active_cell_id is not None
     return cells().at_position(cells().from_id(active_cell_id).position + 1)
 
 
-def cell_at_offset(offset: int) -> "Cell":
+def cell_at_offset(offset: int) -> Optional["Cell"]:
     active_cell_id = flow().active_cell_id
     assert active_cell_id is not None
     return cells().at_position(cells().from_id(active_cell_id).position + offset)

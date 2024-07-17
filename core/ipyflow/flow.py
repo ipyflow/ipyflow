@@ -240,9 +240,9 @@ class NotebookFlow(singletons.NotebookFlow):
             "register_dynamic_comm_handler", self.handle_register_dynamic_comm_handler
         )
         self.debounced_exec_schedule_pending = False
-        self.fs: Namespace = None
-        self.display_sym: Symbol = None
-        self.fake_edge_sym: Symbol = None
+        self.fs: Namespace = None  # type: ignore[assignment]
+        self.display_sym: Symbol = None  # type: ignore[assignment]
+        self.fake_edge_sym: Symbol = None  # type: ignore[assignment]
         self._override_child_cell: Optional[Cell] = None
         self._comm: Optional[Comm] = None
         self._prev_cell_metadata_by_id: Optional[Dict[IdType, Dict[str, Any]]] = None
@@ -736,7 +736,9 @@ class NotebookFlow(singletons.NotebookFlow):
             return {"success": False, "error": "dataflow not enabled"}
         is_reactively_executing = request.get("is_reactively_executing", False)
         if self.active_cell_id is None:
-            self.set_active_cell(request.get("executed_cell_id"))
+            active_cell_id = request.get("active_cell_id")
+            if active_cell_id is not None:
+                self.set_active_cell(active_cell_id)
             if self.active_cell_id is not None:
                 prev_cell = cells().current_cell()
                 if prev_cell.is_placeholder_id:

@@ -422,7 +422,7 @@ class SliceableMixin(Protocol):
                 while parent.timestamp > self.timestamp:
                     if getattr(parent, "override", False):
                         break
-                    parent = parent.prev
+                    parent = parent.prev  # type: ignore[assignment]
                 parent._make_slice_helper(closure)
 
     def make_slice(self) -> List["SliceableMixin"]:

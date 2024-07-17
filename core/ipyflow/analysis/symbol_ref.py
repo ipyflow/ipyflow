@@ -433,7 +433,7 @@ class SymbolRef:
         cascading_reactive_seen = False
         blocking_seen = False
         if yield_in_reverse:
-            gen: Iterable[Tuple["Symbol", Atom, Atom]] = [
+            gen: Iterable[Tuple["Symbol", Atom, Optional[Atom]]] = [
                 (resolved.sym, resolved.atom, resolved.next_atom)
                 for resolved in self.gen_resolved_symbols(
                     scope,

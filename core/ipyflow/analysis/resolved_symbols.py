@@ -135,6 +135,8 @@ class ResolvedSymbol(CommonEqualityMixin):
     @property
     def is_mutating(self) -> bool:
         assert self.is_live
+        if self.next_atom is None:
+            return False
         if not self.next_atom.is_callpoint:
             return False
         ext_call = resolve_external_call(

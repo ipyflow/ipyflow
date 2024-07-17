@@ -83,8 +83,8 @@ class Scope:
         # to unqualified members of the namespace scope
         if self.is_global:
             return None
-        if self.parent_scope.is_namespace_scope:
-            return self.parent_scope.non_namespace_parent_scope
+        if self.parent_scope.is_namespace_scope:  # type: ignore[union-attr]
+            return self.parent_scope.non_namespace_parent_scope  # type: ignore[union-attr]
         return self.parent_scope
 
     def make_child_scope(self, scope_name) -> "Scope":
@@ -122,7 +122,7 @@ class Scope:
         return ret
 
     def lookup_symbol_by_qualified_name(self, qualified_name: str) -> Optional[Symbol]:
-        scope_or_sym: Union["Scope", Symbol] = self
+        scope_or_sym: Union["Scope", Symbol, None] = self
         for part in qualified_name.split("."):
             if isinstance(scope_or_sym, Symbol):
                 scope_or_sym = scope_or_sym.namespace
@@ -156,9 +156,11 @@ class Scope:
                 break
             else:
                 yield next_sym, atom, None if is_last else symbol_ref.chain[i + 1]
-            cur_scope = next_sym.namespace
-            if cur_scope is None:
+            ns = next_sym.namespace
+            if ns is None:
                 break
+            else:
+                cur_scope = ns
 
     def get_most_specific_symbol_for_attrsub_chain(
         self, chain: SymbolRef
@@ -212,7 +214,7 @@ class Scope:
             return SymbolType.DEFAULT
 
     def _compute_is_static_write_for_assign(self, sym: Symbol) -> bool:
-        if sym.symbol_node is None:
+        if sym.symbol_node is None or sym.stmt_node is None:
             return False
         try:
             return (
@@ -223,6 +225,8 @@ class Scope:
             return False
 
     def _compute_is_static_write_for_def(self, sym: Symbol) -> bool:
+        if sym.stmt_node is None:
+            return False
         dead = compute_live_dead_symbol_refs(sym.stmt_node, self)[1]
         return isinstance(sym.name, str) and SymbolRef.from_string(sym.name) in dead
 
@@ -241,7 +245,7 @@ class Scope:
     def _compute_is_static_write(self, sym: Symbol) -> bool:
         scope = self
         while scope.is_namespace_scope:
-            scope = scope.parent_scope
+            scope = scope.parent_scope  # type: ignore[assignment]
         if not scope.is_global or sym.stmt_node is None:
             return False
         elif not pyc.is_outer_stmt(id(sym.stmt_node)):
@@ -443,7 +447,7 @@ class Scope:
         if self.is_global:
             return path
         else:
-            return self.parent_scope.full_path + path
+            return self.parent_scope.full_path + path  # type: ignore[union-attr]
 
     @property
     def full_namespace_path(self) -> str:

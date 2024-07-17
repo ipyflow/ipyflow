@@ -307,7 +307,7 @@ class ComputeLiveSymbolRefs(
 
     def visit_Dict(self, node: ast.Dict) -> None:
         with self.attrsub_context(False):
-            self.generic_visit(node.keys)
+            self.generic_visit([k for k in node.keys if k])
             self.generic_visit(node.values)
 
     def generic_visit_branch_or_loop(
@@ -572,7 +572,7 @@ def _compute_call_chain_live_symbols_and_cells(
                 did_resolve = False
             resolved = None
             for resolved in symbol_ref.gen_resolved_symbols(
-                called_sym.sym.call_scope,
+                called_sym.sym.call_scope,  # type: ignore[arg-type]
                 only_yield_final_symbol=False,
                 yield_all_intermediate_symbols=True,
             ):
@@ -617,7 +617,7 @@ def _compute_call_chain_live_symbols_and_cells(
 
 def compute_live_dead_symbol_refs(
     code: Union[ast.AST, List[ast.stmt], str],
-    scope: "Scope" = None,
+    scope: Optional["Scope"] = None,
     init_killed: Optional[Set[str]] = None,
     include_killed_live: bool = False,
 ) -> Tuple[Set[LiveSymbolRef], Set[SymbolRef], Set[SymbolRef]]:

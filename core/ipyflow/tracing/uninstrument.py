@@ -94,6 +94,8 @@ def uninstrument(
     for alias in flow().aliases.get(id(obj), []):
         if not alias.is_function and not alias.is_lambda:
             continue
+        if alias.func_def_stmt is None:
+            continue
         func_text = astunparse.unparse(alias.func_def_stmt)
         new_obj = _make_uninstrumented_function(
             obj, func_text, alias.func_def_stmt, seen

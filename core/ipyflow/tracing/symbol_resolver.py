@@ -89,7 +89,7 @@ class ResolveRvalSymbols(
         if not resolved:
             # if id(node) not in tracer().node_id_to_loaded_literal_scope:
             # only descend if tracer failed to create literal symbol
-            self.generic_visit(node.keys)
+            self.generic_visit([k for k in node.keys if k])
             self.generic_visit(node.values)
         else:
             self._add_to_resolved(resolved, node)
@@ -269,11 +269,15 @@ class ResolveRvalSymbols(
 
 
 def resolve_rval_symbols(
-    node: Union[str, ast.AST], should_update_usage_info: bool = True
+    rval_node: Union[str, ast.AST], should_update_usage_info: bool = True
 ) -> Set[Symbol]:
-    if isinstance(node, str):
-        node = ast.parse(node).body[0]
+    if isinstance(rval_node, str):
+        node: ast.AST = ast.parse(rval_node).body[0]
+    else:
+        node = rval_node
     if isinstance(node, (ast.Assign, ast.AnnAssign, ast.AugAssign)):
+        if node.value is None:
+            return set()
         node = node.value
     rval_symbols = ResolveRvalSymbols(should_update_usage_info)(node)
     if len(rval_symbols) == 0:

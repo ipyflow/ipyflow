@@ -416,10 +416,15 @@ class Symbol:
                 % (self, ast.dump(self.stmt_node))
             )
         elif isinstance(self.stmt_node, ast.ImportFrom):
+            assert (
+                self.stmt_node.module is not None
+            )  # in a repl, there shouldn't be relative imports
             return self.stmt_node.module
         else:
             raise TypeError(
-                "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
+                "Invalid stmt type for import symbol: %s" % None
+                if self.stmt_node is None
+                else ast.dump(self.stmt_node)
             )
 
     @property
@@ -441,7 +446,9 @@ class Symbol:
             )
         else:
             raise TypeError(
-                "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
+                "Invalid stmt type for import symbol: %s" % None
+                if self.stmt_node is None
+                else ast.dump(self.stmt_node)
             )
 
     def is_cascading_reactive_at_counter(self, ctr: int) -> bool:
@@ -476,7 +483,9 @@ class Symbol:
                 return f"from {module} import {original_symbol_name} as {self.name}"
         else:
             raise TypeError(
-                "Invalid stmt type for import symbol: %s" % ast.dump(self.stmt_node)
+                "Invalid stmt type for import symbol: %s" % None
+                if self.stmt_node is None
+                else ast.dump(self.stmt_node)
             )
 
     @property
@@ -571,7 +580,7 @@ class Symbol:
         ):
             # numpy atoms are not interned (so assigning array elts to a variable does not bump refcount);
             # also seems that refcount is always 0, so just check if the containing namespace is garbage
-            return self.containing_namespace.is_garbage
+            return containing_ns.is_garbage
         return self.get_ref_count() == 0
 
     @property
@@ -784,7 +793,7 @@ class Symbol:
         seen_keys = set()
         for keyword in caller_node.keywords:
             keyword_key, keyword_value = keyword.arg, keyword.value
-            if keyword_value is None:
+            if keyword_key is None or keyword_value is None:
                 continue
             seen_keys.add(keyword_key)
             yield kwarg_by_name[keyword_key], tracer().resolve_loaded_symbols(
@@ -833,7 +842,7 @@ class Symbol:
         logger.info("create symbols for call to %s", self)
         for def_arg, deps in self._match_call_args_with_definition_args():
             seen_def_args.add(def_arg.arg)
-            self.call_scope.upsert_symbol_for_name(
+            self.call_scope.upsert_symbol_for_name(  # type: ignore[union-attr]
                 def_arg.arg,
                 call_frame.f_locals.get(def_arg.arg),
                 deps,
@@ -845,7 +854,7 @@ class Symbol:
         for def_arg in self.get_definition_args():
             if def_arg.arg in seen_def_args:
                 continue
-            self.call_scope.upsert_symbol_for_name(
+            self.call_scope.upsert_symbol_for_name(  # type: ignore[union-attr]
                 def_arg.arg,
                 None,
                 set(),
@@ -1093,6 +1102,8 @@ class Symbol:
         if msg.get("name") != "value" or "new" not in msg:
             return
         ns = self.namespace
+        if ns is None:
+            return
         sym = ns.lookup_symbol_by_name_this_indentation("value")
         if sym is None:
             return
@@ -1309,7 +1320,7 @@ class Symbol:
         if self.obj is not obj:
             flow_ = flow()
             for alias in flow_.aliases.get(
-                self.cached_obj_id, set()
+                self.cached_obj_id or -1, set()
             ) | flow_.aliases.get(self.obj_id, set()):
                 containing_namespace = alias.containing_namespace
                 if containing_namespace is None:

@@ -241,13 +241,13 @@ class SliceableMixin(Protocol):
 
     @classmethod
     def current(cls) -> "SliceableMixin":
-        ...
+        return NotImplemented
 
     @classmethod
     def at_timestamp(
         cls, ts: TimestampOrCounter, stmt_num: Optional[int] = None
     ) -> "SliceableMixin":
-        ...
+        return NotImplemented
 
     @classmethod
     def from_timestamp(
@@ -257,7 +257,7 @@ class SliceableMixin(Protocol):
 
     @classmethod
     def from_id(cls, sid: IdType) -> "SliceableMixin":
-        ...
+        return NotImplemented
 
     @classmethod
     def from_id_nullable(cls, sid: IdType) -> Optional["SliceableMixin"]:
@@ -265,7 +265,7 @@ class SliceableMixin(Protocol):
 
     @property
     def timestamp(self) -> Timestamp:
-        ...
+        return NotImplemented
 
     @property
     def id(self) -> Union[str, int]:
@@ -273,11 +273,11 @@ class SliceableMixin(Protocol):
 
     @property
     def prev(self) -> Optional["SliceableMixin"]:
-        ...
+        return NotImplemented
 
     @property
     def text(self) -> str:
-        ...
+        return NotImplemented
 
     @property
     def is_current(self) -> bool:

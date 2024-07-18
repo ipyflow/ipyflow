@@ -742,7 +742,7 @@ class DataflowTracer(StackFrameManager):
         is_first = True
         cur_scope = self.cur_frame_original_scope
         up_to_component = ""
-        symbol = None
+        symbol: Optional[Symbol] = None
         components = module_name.split(".")
         for idx, component in enumerate(components):
             if is_first:

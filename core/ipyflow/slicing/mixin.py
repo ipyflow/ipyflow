@@ -269,7 +269,7 @@ class SliceableMixin(Protocol):
 
     @property
     def id(self) -> Union[str, int]:
-        ...
+        return NotImplemented
 
     @property
     def prev(self) -> Optional["SliceableMixin"]:

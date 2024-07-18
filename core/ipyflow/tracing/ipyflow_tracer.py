@@ -755,8 +755,8 @@ class DataflowTracer(StackFrameManager):
             sym_name = component
             if is_first and not is_named and not sym_name.startswith("<"):
                 sym_name = f"<{sym_name}>"
-            symbol = next(iter(flow().aliases.get(id(module), {None})))
-            if symbol is None:
+            aliases = flow().aliases.get(id(module))
+            if aliases is None:
                 symbol = cur_scope.upsert_symbol_for_name(
                     sym_name,
                     module,
@@ -768,6 +768,8 @@ class DataflowTracer(StackFrameManager):
                     implicit=not isinstance(node, (ast.Import, ast.ImportFrom)),
                     symbol_node=node,
                 )
+            else:
+                symbol = next(iter(aliases))
             is_first = False
             if idx == len(components) - 1:
                 break

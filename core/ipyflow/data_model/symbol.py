@@ -661,7 +661,7 @@ class Symbol:
         self._cached_out_of_sync = True
         if (
             flow().settings.mark_typecheck_failures_unsafe
-            and self.cached_obj_type != type(obj)
+            and self.cached_obj_type is not type(obj)
         ):
             for cell in self.cells_where_live:
                 cell.invalidate_typecheck_result()

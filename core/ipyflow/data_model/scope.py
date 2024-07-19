@@ -267,7 +267,7 @@ class Scope:
         name: SupportedIndexType,
         obj: Any,
         deps: Optional[Iterable[Symbol]] = None,
-        stmt_node: Optional[ast.stmt] = None,
+        stmt_node: Optional[Union[ast.stmt, ast.Lambda]] = None,
         symbol_node: Optional[ast.AST] = None,
         overwrite: bool = True,
         is_subscript: bool = False,
@@ -334,7 +334,7 @@ class Scope:
         obj: Any,
         deps: Set[Symbol],
         symbol_type: SymbolType,
-        stmt_node: Optional[ast.stmt] = None,
+        stmt_node: Optional[Union[ast.stmt, ast.Lambda]] = None,
         symbol_node: Optional[ast.AST] = None,
         implicit: bool = False,
     ) -> Tuple[Symbol, Optional[Symbol], Optional[Any]]:

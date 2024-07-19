@@ -1,7 +1,7 @@
 import ast
 import copy
 import textwrap
-from types import FunctionType, LambdaType
+from types import FunctionType
 from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Union
 
 from pyccolo.extra_builtins import PYCCOLO_BUILTIN_PREFIX
@@ -17,7 +17,7 @@ else:
 
 
 def _make_uninstrumented_function(
-    obj: Union[FunctionType, LambdaType],
+    obj: FunctionType,
     func_text: str,
     func_node: ast.AST,
     seen: Set[int],
@@ -61,13 +61,13 @@ def {PYCCOLO_BUILTIN_PREFIX}_make_closure({", ".join(kwargs.keys())}):
         return None
     if hasattr(obj, "__name__") and hasattr(new_obj, "__name__"):
         new_obj.__name__ = obj.__name__
-    if isinstance(new_obj, (FunctionType, LambdaType)):
+    if isinstance(new_obj, FunctionType):
         return new_obj
     else:
         return None
 
 
-def _get_uninstrumented_decorator(obj: Union[FunctionType, LambdaType], seen: Set[int]):
+def _get_uninstrumented_decorator(obj: FunctionType, seen: Set[int]):
     func_node, decorator_idx = flow().deco_metadata_by_obj_id.get(id(obj), (None, None))
     if func_node is None:
         return None
@@ -78,8 +78,8 @@ def _get_uninstrumented_decorator(obj: Union[FunctionType, LambdaType], seen: Se
 
 
 def uninstrument(
-    obj: Union[FunctionType, LambdaType], seen: Optional[Set[int]] = None
-) -> Optional[Union[FunctionType, LambdaType]]:
+    obj: FunctionType, seen: Optional[Set[int]] = None
+) -> Optional[FunctionType]:
     if seen is None:
         seen = set()
     if id(obj) in seen:

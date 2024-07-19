@@ -17,6 +17,8 @@ class DataflowAstRewriter(AstRewriter):
     def visit(self, node: ast.AST):
         try:
             ret = super().visit(node)
+            # after call to super().visit(...), orig_to_copy_mapping should be set
+            assert self.orig_to_copy_mapping is not None
             cells().current_cell().to_ast(
                 override=cast(ast.Module, self.orig_to_copy_mapping[id(node)])
             )

@@ -127,15 +127,15 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             if not isinstance(tracer, (ModuleIniter, StackFrameManager)) or isinstance(
                 tracer, DataflowTracer
             ):
-                tracer.__class__.file_passes_filter_for_event = (  # type: ignore
+                tracer.__class__.file_passes_filter_for_event = (  # type: ignore[method-assign]
                     lambda *args: tracer.__class__ in self.registered_tracers
                     and orig_passes_filter(*args)
                 )
-            tracer.__class__.should_instrument_file = lambda *_: False
+            tracer.__class__.should_instrument_file = lambda *_: False  # type: ignore[method-assign]
             yield
         finally:
-            tracer.__class__.file_passes_filter_for_event = orig_passes_filter
-            tracer.__class__.should_instrument_file = orig_checker
+            tracer.__class__.file_passes_filter_for_event = orig_passes_filter  # type: ignore[method-assign]
+            tracer.__class__.should_instrument_file = orig_checker  # type: ignore[method-assign]
 
     @contextmanager
     def _patch_pyccolo_exec_eval(self):
@@ -298,8 +298,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                         tracer._disable_tracing(check_enabled=False)
                     # remove pyccolo meta path entries when not executing as they seem to
                     # mess up completions
-                    while isinstance(sys.meta_path[0], TraceFinder):
-                        self._saved_meta_path_entries.append(sys.meta_path.pop(0))
+                    while len(sys.meta_path) > 0 and isinstance(
+                        sys.meta_path[0], TraceFinder
+                    ):
+                        self._saved_meta_path_entries.append(sys.meta_path[0])
+                        sys.meta_path.pop(0)
         except Exception:
             logger.exception("encountered an exception")
             raise

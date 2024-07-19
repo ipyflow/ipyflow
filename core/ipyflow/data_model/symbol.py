@@ -16,6 +16,7 @@ from typing import (
     Set,
     Tuple,
     Type,
+    Union,
     cast,
 )
 
@@ -108,7 +109,7 @@ class Symbol:
         symbol_type: SymbolType,
         obj: Any,
         containing_scope: "Scope",
-        stmt_node: Optional[ast.stmt] = None,
+        stmt_node: Optional[Union[ast.stmt, ast.Lambda]] = None,
         symbol_node: Optional[ast.AST] = None,
         refresh_cached_obj: bool = False,
         implicit: bool = False,
@@ -134,7 +135,7 @@ class Symbol:
             self._refresh_cached_obj()
         self.containing_scope = containing_scope or flow().global_scope
         self.call_scope: Optional[Scope] = None
-        self.func_def_stmt: Optional[ast.stmt] = None
+        self.func_def_stmt: Optional[Union[ast.stmt, ast.Lambda]] = None
         self.stmt_node = self.update_stmt_node(stmt_node)
         self.symbol_node = symbol_node
         self._funcall_live_symbols = None
@@ -725,7 +726,9 @@ class Symbol:
         cleanup_discard(flow().aliases, self.cached_obj_id, self)
         flow().aliases.setdefault(self.obj_id, set()).add(self)
 
-    def update_stmt_node(self, stmt_node: Optional[ast.stmt]) -> Optional[ast.stmt]:
+    def update_stmt_node(
+        self, stmt_node: Optional[Union[ast.stmt, ast.Lambda]]
+    ) -> Optional[Union[ast.stmt, ast.Lambda]]:
         self.stmt_node = stmt_node
         self._funcall_live_symbols = None
         if self.is_function or (

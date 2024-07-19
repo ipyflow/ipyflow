@@ -7,7 +7,7 @@ import symtable
 import sys
 from collections import defaultdict
 from contextlib import contextmanager
-from types import FrameType, ModuleType
+from types import FrameType, FunctionType, ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -18,6 +18,7 @@ from typing import (
     Optional,
     Set,
     Tuple,
+    Type,
     Union,
     cast,
 )
@@ -89,7 +90,7 @@ blocking_spec = pyc.AugmentationSpec(
 
 class ModuleIniter(pyc.BaseTracer):
     @pyc.register_raw_handler(pyc.init_module)
-    def init_cell(self, _obj, _node_id, frame: FrameType, *_, **__):
+    def init_cell(self, _obj, _node_id, frame: FrameType, *_, **__) -> None:
         flow().set_name_to_cell_num_mapping(frame)
         for tracer in pyc._TRACER_STACK:
             tracer._tracing_enabled_files.add(frame.f_code.co_filename)
@@ -100,7 +101,7 @@ class ModuleIniter(pyc.BaseTracer):
 
 
 class StackFrameManager(SingletonBaseTracer):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.call_depth = 0
         self.external_call_depth = 0
@@ -118,7 +119,7 @@ class StackFrameManager(SingletonBaseTracer):
         event: pyc.TraceEvent,
         *_,
         **__,
-    ):
+    ) -> Optional[Type[pyc.SkipAll]]:
         if frame.f_code.co_name == "<traced_lambda>":
             return pyc.SkipAll
         flow_ = flow()
@@ -141,6 +142,7 @@ class StackFrameManager(SingletonBaseTracer):
             self.external_call_depth = max(self.external_call_depth, 0)
             if self.call_depth == 0:
                 return pyc.SkipAll
+        return None
 
     @property
     def should_patch_meta_path(self) -> bool:
@@ -351,7 +353,7 @@ class DataflowTracer(StackFrameManager):
             stmt.mark_finished()
         self._deactivate_guards()
 
-    def _handle_call_transition(self, trace_stmt: Statement, frame: FrameType):
+    def _handle_call_transition(self, trace_stmt: Statement, frame: FrameType) -> None:
         if (
             self.external_call_depth
             >= flow().mut_settings.max_external_call_depth_for_tracing
@@ -377,7 +379,7 @@ class DataflowTracer(StackFrameManager):
 
     def _check_prev_stmt_done_executing_hook(
         self, event: pyc.TraceEvent, trace_stmt: Statement
-    ):
+    ) -> None:
         if event == pyc.after_stmt and trace_stmt.is_initial_frame_stmt():
             while len(self.call_stack) > 0:
                 # potentially necessary if tracing was disabled
@@ -420,7 +422,7 @@ class DataflowTracer(StackFrameManager):
 
     def _handle_return_transition(
         self, trace_stmt: Statement, frame: FrameType, ret: Any
-    ):
+    ) -> None:
         try:
             inside_anonymous_call = self.inside_anonymous_call
             try:
@@ -525,7 +527,7 @@ class DataflowTracer(StackFrameManager):
         trace_stmt: Statement,
         frame: FrameType,
         ret: Any,
-    ):
+    ) -> None:
         self._check_prev_stmt_done_executing_hook(event, trace_stmt)
 
         if event == pyc.call:
@@ -545,7 +547,9 @@ class DataflowTracer(StackFrameManager):
             ref = id(ref)
         return ref
 
-    def _resolve_store_data_for_simple_target(self, target: str, frame: FrameType):
+    def _resolve_store_data_for_simple_target(
+        self, target: str, frame: FrameType
+    ) -> Tuple[Scope, str, Any, bool, Set[Symbol]]:
         scope = self.cur_frame_original_scope
         lut = frame.f_locals
         flow_ = flow()
@@ -827,7 +831,7 @@ class DataflowTracer(StackFrameManager):
         return sym
 
     @pyc.register_raw_handler(pyc.after_import)
-    def after_import(self, *_, module: ModuleType, **__):
+    def after_import(self, *_, module: ModuleType, **__) -> None:
         compile_and_register_handlers_for_module(module)
         modname = getattr(module, "__name__", "")
         apply_patches(modname, module)
@@ -846,7 +850,7 @@ class DataflowTracer(StackFrameManager):
             pyc.before_subscript_del,
         )
     )
-    def _save_node_id(self, _obj, node_id: NodeId, frame, *_, **__):
+    def _save_node_id(self, _obj, node_id: NodeId, _frame, *_, **__) -> None:
         self.prev_node_id_in_cur_frame = node_id
         self.prev_node_id_in_cur_frame_lexical = node_id
 
@@ -867,7 +871,9 @@ class DataflowTracer(StackFrameManager):
             pyc.after_dict_comprehension_value,
         )
     )
-    def after_loop_iter(self, _obj, _node, frame: FrameType, *_, guard: str, **__):
+    def after_loop_iter(
+        self, _obj, _node, frame: FrameType, *_, guard: str, **__
+    ) -> None:
         self.activate_guard(guard)
         self.guards_pending_deactivation.add(guard)
         self._tracked_disable_tracing(frame, check_enabled=False)
@@ -878,12 +884,12 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_assign_rhs)
     @pyc.skip_when_tracing_disabled
-    def after_assign_rhs(self, obj: Any, *_, **__):
+    def after_assign_rhs(self, obj: Any, *_, **__) -> None:
         self.saved_assign_rhs_obj = obj
 
     @pyc.register_raw_handler(pyc.after_subscript_slice)
     @pyc.skip_when_tracing_disabled
-    def after_subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___):
+    def after_subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___) -> None:
         node = self.ast_node_by_id.get(node_id, None)
         if node is None:
             return
@@ -926,7 +932,7 @@ class DataflowTracer(StackFrameManager):
         top_level_node_id: NodeId,
         obj_name: Optional[str] = None,
         **__,
-    ):
+    ) -> None:
         value_node_id = id(node.value)
         if isinstance(self.ast_node_by_id[value_node_id], ast.Call):
             # clear the callpoint dependency
@@ -1054,7 +1060,7 @@ class DataflowTracer(StackFrameManager):
             self.active_scope = scope
 
     @pyc.register_raw_handler(pyc.after_load_complex_symbol)
-    def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__):
+    def after_complex_symbol(self, obj: Any, node_id: NodeId, *_, **__) -> None:
         try:
             if not self.is_tracing_enabled:
                 return
@@ -1076,7 +1082,9 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_handler(pyc.after_argument)
     @pyc.skip_when_tracing_disabled
-    def handle_lift_argument(self, arg_obj: Any, arg_node: ast.AST, *_, **__):
+    def handle_lift_argument(
+        self, arg_obj: Any, arg_node: ast.AST, *_, **__
+    ) -> Optional[Union[Type[pyc.Null], Symbol]]:
         if self.num_args_seen > 0 or self.cur_function not in (
             api_code,
             api_deps,
@@ -1091,7 +1099,7 @@ class DataflowTracer(StackFrameManager):
             api_users,
             api_watchpoints,
         ):
-            return
+            return None
         resolved = [
             sym
             for sym in resolve_rval_symbols(arg_node, should_update_usage_info=False)
@@ -1122,15 +1130,15 @@ class DataflowTracer(StackFrameManager):
         key: Optional[str],
         is_last: bool,
         **__,
-    ):
+    ) -> Optional[FunctionType]:
         self.num_args_seen += 1
         try:
             ext_call_cand = self.lexical_call_stack.get_field("external_call_candidate")
         except IndexError:
-            return
+            return None
         if ext_call_cand is None:
-            return
-        arg_node = self.ast_node_by_id.get(arg_node_id, None)
+            return None
+        arg_node = self.ast_node_by_id.get(arg_node_id)
         if isinstance(arg_node, ast.Name):
             assert self.active_scope is self.cur_frame_original_scope
             arg_sym = self.active_scope.lookup_symbol_by_name(arg_node.id)
@@ -1147,7 +1155,9 @@ class DataflowTracer(StackFrameManager):
             ext_call_cand._process_arg_impl(
                 (
                     arg_obj,
-                    resolve_rval_symbols(arg_node, should_update_usage_info=False),
+                    resolve_rval_symbols(arg_node, should_update_usage_info=False)
+                    if arg_node
+                    else set(),
                 )
             )
         else:
@@ -1155,7 +1165,9 @@ class DataflowTracer(StackFrameManager):
                 key,
                 (
                     arg_obj,
-                    resolve_rval_symbols(arg_node, should_update_usage_info=False),
+                    resolve_rval_symbols(arg_node, should_update_usage_info=False)
+                    if arg_node
+                    else set(),
                 ),
             )
         if is_last:
@@ -1165,6 +1177,7 @@ class DataflowTracer(StackFrameManager):
             and getattr(arg_obj, "__name__", None) == "<lambda>"
         ):
             return uninstrument(arg_obj)
+        return None
 
     def _save_external_call_candidate(
         self,
@@ -1413,10 +1426,13 @@ class DataflowTracer(StackFrameManager):
 
     @pyc.register_raw_handler(pyc.after_lambda)
     @pyc.skip_when_tracing_disabled
-    def after_lambda(self, obj: Any, lambda_node_id: int, frame: FrameType, *_, **__):
+    def after_lambda(
+        self, obj: Any, lambda_node_id: int, _frame: FrameType, *_, **__
+    ) -> None:
         sym_deps = []
         node = self.ast_node_by_id[lambda_node_id]
-        for kw_default in node.args.defaults:  # type: ignore[union-attr]
+        assert isinstance(node, ast.Lambda)
+        for kw_default in node.args.defaults:
             sym_deps.extend(self.resolve_loaded_symbols(kw_default))
         sym = self.active_scope.upsert_symbol_for_name(
             "<lambda_sym_%d>" % id(obj),
@@ -1431,7 +1447,9 @@ class DataflowTracer(StackFrameManager):
         self.node_id_to_loaded_symbols.setdefault(lambda_node_id, []).append(sym)
 
     @pyc.register_raw_handler(pyc.decorator)
-    def decorator(self, deco: Any, *_, func_node_id: int, decorator_idx: int, **__):
+    def decorator(
+        self, deco: Any, *_, func_node_id: int, decorator_idx: int, **__
+    ) -> Callable[..., Callable[..., Any]]:
         def tracing_decorator(func):
             flow_ = flow()
             try:
@@ -1450,7 +1468,9 @@ class DataflowTracer(StackFrameManager):
         return tracing_decorator
 
     @pyc.register_raw_handler(pyc.after_stmt)
-    def after_stmt(self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__):
+    def after_stmt(
+        self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__
+    ) -> None:
         self._saved_stmt_ret_expr = ret_expr
         try:
             if not self.is_tracing_enabled and not self._try_reenable_tracing(
@@ -1630,7 +1650,7 @@ class DataflowTracer(StackFrameManager):
         event: pyc.TraceEvent,
         stmt_node: Optional[ast.stmt],
         trace_stmt: Statement,
-    ):
+    ) -> None:
         if not flow().trace_messages_enabled:
             return
         assert stmt_node is not None
@@ -1687,7 +1707,7 @@ class DataflowTracer(StackFrameManager):
         event: pyc.TraceEvent,
         *_,
         **__,
-    ):
+    ) -> Optional[Type[pyc.Null]]:
         cell_num, lineno = flow().get_position(frame)
         assert cell_num is not None
         if lineno == 0:
@@ -1715,6 +1735,7 @@ class DataflowTracer(StackFrameManager):
             return pyc.Null
         trace_stmt.node_id_for_last_call = prev_node_id_in_cur_frame_lexical
         self.state_transition_hook(event, trace_stmt, frame, ret_obj)
+        return None
 
     @pyc.register_raw_handler((pyc.return_, pyc.exception))
     def handle_other_sys_events(
@@ -1726,7 +1747,7 @@ class DataflowTracer(StackFrameManager):
         *_,
         stmt_node: Optional[ast.stmt] = None,
         **__,
-    ):
+    ) -> None:
         assert self.is_tracing_enabled or event == pyc.after_stmt
 
         cell_num, lineno = flow().get_position(frame)

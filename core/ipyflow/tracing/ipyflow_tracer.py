@@ -119,7 +119,7 @@ class StackFrameManager(SingletonBaseTracer):
         event: pyc.TraceEvent,
         *_,
         **__,
-    ) -> Optional[Type[pyc.SkipAll]]:
+    ) -> Optional[Type["pyc.SkipAll"]]:
         if frame.f_code.co_name == "<traced_lambda>":
             return pyc.SkipAll
         flow_ = flow()
@@ -1084,7 +1084,7 @@ class DataflowTracer(StackFrameManager):
     @pyc.skip_when_tracing_disabled
     def handle_lift_argument(
         self, arg_obj: Any, arg_node: ast.AST, *_, **__
-    ) -> Optional[Union[Type[pyc.Null], Symbol]]:
+    ) -> Optional[Union[Type["pyc.Null"], Symbol]]:
         if self.num_args_seen > 0 or self.cur_function not in (
             api_code,
             api_deps,
@@ -1707,7 +1707,7 @@ class DataflowTracer(StackFrameManager):
         event: pyc.TraceEvent,
         *_,
         **__,
-    ) -> Optional[Type[pyc.Null]]:
+    ) -> Optional[Type["pyc.Null"]]:
         cell_num, lineno = flow().get_position(frame)
         assert cell_num is not None
         if lineno == 0:

@@ -14,8 +14,8 @@ class AstRange(NamedTuple):
     @classmethod
     def from_ast_node(cls, node: ast.AST) -> "AstRange":
         return cls(
-            lineno=node.lineno,
+            lineno=node.lineno,  # type: ignore[attr-defined]
             end_lineno=getattr(node, "end_lineno", None),
-            col_offset=node.col_offset,
+            col_offset=node.col_offset,  # type: ignore[attr-defined]
             end_col_offset=getattr(node, "end_col_offset", None),
         )

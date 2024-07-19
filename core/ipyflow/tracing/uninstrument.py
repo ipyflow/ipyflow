@@ -2,7 +2,7 @@ import ast
 import copy
 import textwrap
 from types import FunctionType
-from typing import TYPE_CHECKING, Any, Dict, Optional, Set, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Set
 
 from pyccolo.extra_builtins import PYCCOLO_BUILTIN_PREFIX
 

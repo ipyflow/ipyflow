@@ -18,8 +18,8 @@ logger.setLevel(logging.WARNING)
 def _make_range_from_node(node: ast.AST) -> Dict[str, Any]:
     return {
         "start": {
-            "line": node.lineno - 1,
-            "character": node.col_offset,
+            "line": node.lineno - 1,  # type: ignore[attr-defined]
+            "character": node.col_offset,  # type: ignore[attr-defined]
         },
         "end": {
             "line": getattr(node, "end_lineno", 0) - 1,

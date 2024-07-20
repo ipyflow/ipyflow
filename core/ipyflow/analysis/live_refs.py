@@ -626,7 +626,10 @@ def compute_live_dead_symbol_refs(
     if isinstance(code, str):
         code = ast.parse(code)
     elif isinstance(code, list):
-        code = ast.Module(code, [])
+        if sys.version_info < (3, 8):
+            code = ast.Module(code)
+        else:
+            code = ast.Module(code, [])
     return ComputeLiveSymbolRefs(
         scope=scope, init_killed=init_killed, include_killed_live=include_killed_live
     )(code)

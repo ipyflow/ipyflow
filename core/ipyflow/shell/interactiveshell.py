@@ -19,6 +19,7 @@ from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
 from ipyflow.memoization import MemoizedOutputLevel
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
+from ipyflow.tracing.interrupt_tracer import InterruptTracer
 from ipyflow.tracing.ipyflow_tracer import (
     DataflowTracer,
     ModuleIniter,
@@ -70,6 +71,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self.registered_tracers: List[Type[pyc.BaseTracer]] = [
             OutputRecorder,
             DataflowTracer,
+            InterruptTracer,
         ]
         self.tracer_cleanup_callbacks: List[Callable] = []
         self.tracer_cleanup_pending: bool = False
@@ -131,7 +133,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     lambda *args: tracer.__class__ in self.registered_tracers
                     and orig_passes_filter(*args)
                 )
-            tracer.__class__.should_instrument_file = lambda *_: False  # type: ignore[method-assign]
+            tracer.__class__.should_instrument_file = (  # type: ignore[method-assign]
+                lambda *args: tracer.__class__ in self.registered_tracers
+                and orig_checker(*args)
+            )
             yield
         finally:
             tracer.__class__.file_passes_filter_for_event = orig_passes_filter  # type: ignore[method-assign]

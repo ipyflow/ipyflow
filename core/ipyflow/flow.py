@@ -521,10 +521,8 @@ class NotebookFlow(singletons.NotebookFlow):
             )
             raise e
 
-    def set_name_to_cell_num_mapping(self, frame: FrameType):
-        self._cell_name_to_cell_num_mapping[
-            frame.f_code.co_filename
-        ] = cells().exec_counter()
+    def set_name_to_cell_num_mapping(self, fname: str, ctr: int) -> None:
+        self._cell_name_to_cell_num_mapping[fname] = ctr
 
     def is_cell_file(self, fname: str) -> bool:
         return fname in self._cell_name_to_cell_num_mapping

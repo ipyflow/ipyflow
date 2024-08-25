@@ -551,17 +551,35 @@ class Cell(SliceableMixin):
     def get_memoized_output_level(cls, content: str) -> Optional[MemoizedOutputLevel]:
         return cls.get_memoized_content_and_output_level(content)[1]
 
-    def _rewriter_and_sanitized_content(self) -> Tuple[Optional[pyc.AstRewriter], str]:
+    @property
+    def raw_cell(self):
+        return self.get_memoized_content(self.current_content) or self.current_content
+
+    def _rewriter_and_sanitized_content(
+        self, raw_cell: Optional[str] = None, path: Optional[str] = None
+    ) -> Tuple[Optional[pyc.AstRewriter], str]:
         # we transform magics, but for %time, we would ideally like to trace the statement being timed
         # TODO: how to do this?
-        current_content = (
-            self.get_memoized_content(self.current_content) or self.current_content
+        if raw_cell is None:
+            raw_cell = self.raw_cell
+        try:
+            content = get_ipython().transform_cell(raw_cell)
+        except Exception:
+            content = raw_cell
+        ast_rewriter, syntax_augmenters = shell().make_rewriter_and_syntax_augmenters(
+            path=path
         )
-        content = get_ipython().transform_cell(current_content)
-        ast_rewriter, syntax_augmenters = shell().make_rewriter_and_syntax_augmenters()
         for aug in syntax_augmenters:
             content = aug(content)
         return ast_rewriter, content
+
+    def raw_and_sanitized_content(self, path: Optional[str] = None) -> Tuple[str, str]:
+        raw_cell = self.raw_cell
+        return raw_cell, self._rewriter_and_sanitized_content(raw_cell, path=path)[1]
+
+    def make_ipython_name(self) -> str:
+        raw_cell, cell = self.raw_and_sanitized_content()
+        return shell().compile.cache(cell, self.cell_ctr, raw_code=raw_cell)
 
     def sanitized_content(self) -> str:
         return self._rewriter_and_sanitized_content()[1]
@@ -585,7 +603,8 @@ class Cell(SliceableMixin):
             or len(self.last_ast_content) != len(self.current_content)
             or self.last_ast_content != self.current_content
         ):
-            rewriter, content = self._rewriter_and_sanitized_content()
+            path = self.make_ipython_name()
+            rewriter, content = self._rewriter_and_sanitized_content(path=path)
             self._cached_ast = ast.parse(content)
             self.last_ast_content = self.current_content
             if rewriter is not None:
@@ -751,6 +770,12 @@ class Cell(SliceableMixin):
         modified_symbols, _ = get_symbols_for_references(
             modified_symbol_refs, global_scope
         )
+        for sym in list(modified_symbols):
+            modified_symbols |= set(
+                subsym
+                for subsym in sym.get_namespace_symbols(recurse=True)
+                if not subsym._timestamp.is_initialized
+            )
         if self.last_check_content == self.current_content:
             dead_symbols |= self.static_writes
             modified_symbols |= self.static_writes

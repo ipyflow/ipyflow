@@ -69,6 +69,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
     def run_cell(code, cell_id=None, cell_pos=None, ignore_exceptions=False) -> int:
         nonlocal has_keyword_arg
         next_exec_counter = cells().next_exec_counter()
+        shell().execution_count = next_exec_counter
         if cell_id is None:
             cell_id = next_exec_counter
         flow().set_active_cell(cell_id)
@@ -118,6 +119,7 @@ def make_flow_fixture(**kwargs) -> Tuple[Any, Any]:
             **kwargs,
         )
         DataflowTracer.clear_instance()
+        DataflowTracer.reset_bookkeeping()
         DataflowTracer.instance()
         # run all at once to prevent exec counter
         # from getting too far ahead

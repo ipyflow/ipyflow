@@ -20,11 +20,7 @@ from ipyflow.flow import NotebookFlow
 from ipyflow.memoization import MemoizedOutputLevel
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.interrupt_tracer import InterruptTracer
-from ipyflow.tracing.ipyflow_tracer import (
-    DataflowTracer,
-    ModuleIniter,
-    StackFrameManager,
-)
+from ipyflow.tracing.ipyflow_tracer import DataflowTracer, StackFrameManager
 from ipyflow.utils.ipython_utils import (
     CapturedIO,
     CaptureOutputTee,
@@ -118,6 +114,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def cell_counter(self):
         return singletons.flow().cell_counter()
 
+    def make_ipython_cell_name(self) -> str:
+        cur_cell = Cell.current_cell()
+        cell_name = cur_cell.make_ipython_name()
+        return cell_name
+
     @contextmanager
     def _patch_tracer_filters(
         self,
@@ -126,7 +127,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         orig_passes_filter = tracer.__class__.file_passes_filter_for_event
         orig_checker = tracer.__class__.should_instrument_file
         try:
-            if not isinstance(tracer, (ModuleIniter, StackFrameManager)) or isinstance(
+            if not isinstance(tracer, StackFrameManager) or isinstance(
                 tracer, DataflowTracer
             ):
                 tracer.__class__.file_passes_filter_for_event = (  # type: ignore[method-assign]
@@ -206,6 +207,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self,
         tracers: Optional[List[pyc.BaseTracer]] = None,
         ast_rewriter: Optional[pyc.AstRewriter] = None,
+        path: Optional[str] = None,
     ) -> Tuple[Optional[pyc.AstRewriter], List[Callable]]:
         tracers = (
             [tracer.instance() for tracer in self.registered_tracers]
@@ -214,7 +216,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         )
         if len(tracers) == 0:
             return None, []
-        ast_rewriter = ast_rewriter or DataflowAstRewriter(tracers)
+        ast_rewriter = ast_rewriter or DataflowAstRewriter(tracers, path=path)  # type: ignore[arg-type]
         # ast_rewriter = ast_rewriter or tracers[-1].make_ast_rewriter()
         all_syntax_augmenters = []
         for tracer in tracers:
@@ -227,7 +229,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     ):
         if syntax_transforms_enabled:
             ast_rewriter = ast_rewriter or DataflowTracer.instance().make_ast_rewriter(
-                module_id=self.cell_counter()
+                self.make_ipython_cell_name(), module_id=self.cell_counter()
             )
             _, all_syntax_augmenters = self.make_rewriter_and_syntax_augmenters(
                 tracers=all_tracers, ast_rewriter=ast_rewriter
@@ -266,8 +268,12 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     # TODO: decouple this from the dataflow tracer
                     StackFrameManager.clear_instance()
                     all_tracers.append(StackFrameManager.instance())
-            all_tracers.insert(0, ModuleIniter.instance())
+            cell_name = self.make_ipython_cell_name()
+            singletons.flow().set_name_to_cell_num_mapping(
+                cell_name, self.execution_count
+            )
             for tracer in all_tracers:
+                tracer._tracing_enabled_files.add(cell_name)
                 tracer.reset()
             if DataflowTracer.instance() in all_tracers:
                 DataflowTracer.instance().init_symtab()
@@ -285,7 +291,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     for tracer in all_tracers:
                         tracer._enable_tracing(check_disabled=False)
                 ast_rewriter = DataflowTracer.instance().make_ast_rewriter(
-                    module_id=self.cell_counter()
+                    cell_name, module_id=self.cell_counter()
                 )
                 with self._syntax_transform_only_tracing_context(
                     syntax_transforms_enabled, all_tracers, ast_rewriter=ast_rewriter
@@ -402,7 +408,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 and not raw_cell.strip().startswith("%%"),
             ) if should_trace else suppress():
                 has_transformed_cell = kwargs.pop("transformed_cell", None) is not None
-                transformed_cell = self.transform_cell(raw_cell)
+                try:
+                    transformed_cell = self.transform_cell(raw_cell)
+                except Exception:
+                    transformed_cell = raw_cell
                 if has_transformed_cell:
                     kwargs["transformed_cell"] = transformed_cell
                 # discard any previous transformations that were done

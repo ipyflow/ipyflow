@@ -4,7 +4,7 @@ import logging
 import traceback
 from typing import cast
 
-from pyccolo import AstRewriter
+import pyccolo as pyc
 
 from ipyflow.data_model.cell import cells
 from ipyflow.singletons import flow
@@ -13,8 +13,19 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 
-class DataflowAstRewriter(AstRewriter):
+class DataflowAstRewriter(pyc.AstRewriter):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._already_run = False
+
+    def should_instrument_with_tracer(self, _tracer: pyc.BaseTracer) -> bool:
+        return True
+
     def visit(self, node: ast.AST):
+        # prevents calling the same transformer multiple times due to e.g. magics like %time
+        if self._already_run:
+            return node
+        self._already_run = True
         try:
             ret = super().visit(node)
             # after call to super().visit(...), orig_to_copy_mapping should be set

@@ -88,18 +88,6 @@ blocking_spec = pyc.AugmentationSpec(
 )
 
 
-class ModuleIniter(pyc.BaseTracer):
-    @pyc.register_raw_handler(pyc.init_module)
-    def init_cell(self, _obj, _node_id, frame: FrameType, *_, **__) -> None:
-        flow().set_name_to_cell_num_mapping(frame)
-        for tracer in pyc._TRACER_STACK:
-            tracer._tracing_enabled_files.add(frame.f_code.co_filename)
-
-    @property
-    def should_patch_meta_path(self) -> bool:
-        return False
-
-
 class StackFrameManager(SingletonBaseTracer):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -254,9 +242,10 @@ class DataflowTracer(StackFrameManager):
 
     def init_symtab(self) -> None:
         try:
+            cur_cell = cells().current_cell()
             self.cur_cell_symtab = symtable.symtable(
-                cells().current_cell().sanitized_content(),
-                f"<cell-{cells().exec_counter()}>",
+                cur_cell.sanitized_content(),
+                cur_cell.make_ipython_name(),
                 "exec",
             )
         except Exception:

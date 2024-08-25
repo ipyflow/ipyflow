@@ -166,7 +166,7 @@ class Symbol:
         # History of definitions at time of liveness
         self.timestamp_by_liveness_time: Dict[Timestamp, Timestamp] = {}
         # All timestamps associated with updates to this symbol
-        self.updated_timestamps: Set[Timestamp] = set()
+        self._updated_timestamps: Set[Timestamp] = set()
         # The most recent timestamp associated with a particular object id
         self.last_updated_timestamp_by_obj_id: Dict[int, Timestamp] = {}
 
@@ -202,6 +202,14 @@ class Symbol:
                 # not ideal because it relies on the `self` convention but is probably
                 # acceptable for the use case of improving readable names
                 ns.scope_name = self.name
+
+    @property
+    def updated_timestamps(self) -> Set[Timestamp]:
+        init_ts = self._initialized_timestamp
+        if init_ts.is_initialized:
+            return self._updated_timestamps | {init_ts}
+        else:
+            return self._updated_timestamps
 
     @property
     def aliases(self) -> List["Symbol"]:
@@ -248,11 +256,23 @@ class Symbol:
         return set() if ns is None else ns.namespace_waiting_symbols
 
     @property
+    def _initialized_timestamp(self) -> Timestamp:
+        ts = self._timestamp
+        if ts.is_initialized:
+            return ts
+        ns = self.containing_namespace
+        if ns is not None:
+            for sym in flow().aliases.get(ns.obj_id, []):
+                return sym._initialized_timestamp
+        return ts
+
+    @property
     def shallow_timestamp(self) -> Timestamp:
+        ts = self._initialized_timestamp
         if self._override_timestamp is None:
-            return self._timestamp
+            return ts
         else:
-            return max(self._timestamp, self._override_timestamp)
+            return max(ts, self._override_timestamp)
 
     @property
     def visible_timestamp(self) -> Optional[Timestamp]:
@@ -1194,7 +1214,7 @@ class Symbol:
         )
         if not is_blocking:
             is_usage = False
-            ts_to_use = self._timestamp
+            ts_to_use = self._initialized_timestamp
             for updated_ts in sorted(self.updated_timestamps, reverse=True):
                 if not updated_ts.is_initialized:
                     continue

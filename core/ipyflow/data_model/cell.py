@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import ast
+import inspect
 import logging
 import shlex
 import subprocess
@@ -579,7 +580,11 @@ class Cell(SliceableMixin):
 
     def make_ipython_name(self) -> str:
         raw_cell, cell = self.raw_and_sanitized_content()
-        return shell().compile.cache(cell, self.cell_ctr, raw_code=raw_cell)
+        shell_ = shell()
+        kwargs = {}
+        if "raw_code" in inspect.signature(shell_.compiler_class.cache).parameters:
+            kwargs["raw_code"] = raw_cell
+        return shell_.compile.cache(cell, self.cell_ctr, **kwargs)
 
     def sanitized_content(self) -> str:
         return self._rewriter_and_sanitized_content()[1]

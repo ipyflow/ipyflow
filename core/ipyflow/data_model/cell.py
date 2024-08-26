@@ -580,11 +580,11 @@ class Cell(SliceableMixin):
 
     def make_ipython_name(self) -> str:
         raw_cell, cell = self.raw_and_sanitized_content()
-        shell_ = shell()
+        cache = shell().compile.cache
         kwargs = {}
-        if "raw_code" in inspect.signature(shell_.compiler_class.cache).parameters:
+        if "raw_code" in inspect.signature(cache).parameters:
             kwargs["raw_code"] = raw_cell
-        return shell_.compile.cache(cell, self.cell_ctr, **kwargs)
+        return cache(cell, self.cell_ctr, **kwargs)
 
     def sanitized_content(self) -> str:
         return self._rewriter_and_sanitized_content()[1]

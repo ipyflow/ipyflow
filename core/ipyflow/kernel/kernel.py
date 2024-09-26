@@ -188,9 +188,9 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             user_expressions=None,
             allow_stdin=False,
             cell_id=None,
+            **kwargs,
         ):
             super_ = super()
-            kwargs = {}
             if self._has_cell_id:
                 kwargs["cell_id"] = cell_id
             ret = await super_.do_execute(
@@ -217,9 +217,9 @@ class IPyflowKernel(singletons.IPyflowKernel, IPythonKernel):  # type: ignore
             user_expressions=None,
             allow_stdin=False,
             cell_id=None,
+            **kwargs,
         ):
             super_ = super()
-            kwargs = {}
             if self._has_cell_id:
                 kwargs["cell_id"] = cell_id
 

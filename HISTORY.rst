@@ -1,6 +1,12 @@
 History
 =======
 
+0.0.201 (2024-09-26)
+--------------------
+* [kernel] fix compatibility with newer versions of ipython;
+* [kernel] allow interrupting commands with bare except in loop;
+* [kernel] misc bugfixes and analysis improvements;
+
 0.0.200 (2024-03-21)
 --------------------
 * [lab] fix regression introduced when interacting with jupyter-collaboration autosave;

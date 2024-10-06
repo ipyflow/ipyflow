@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.202 (2024-10-06)
+--------------------
+* [kernel] track multiple deps from returning function;
+
 0.0.201 (2024-09-26)
 --------------------
 * [kernel] fix compatibility with newer versions of ipython;

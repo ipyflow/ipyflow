@@ -39,6 +39,8 @@ _CAPTURE_OUTPUT_SAVE_LIMIT = 2 * 1024 * 1024
 
 
 class OutputRecorder(pyc.BaseTracer):
+    should_patch_meta_path = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         with self.persistent_fields():
@@ -48,10 +50,6 @@ class OutputRecorder(pyc.BaseTracer):
     @pyc.register_raw_handler(pyc.init_module)
     def init_module(self, *_, **__):
         self.capture_output = self.capture_output_tee.__enter__()
-
-    @property
-    def should_patch_meta_path(self) -> bool:
-        return False
 
 
 class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):

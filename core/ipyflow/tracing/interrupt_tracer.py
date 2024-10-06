@@ -11,6 +11,9 @@ class PlaceholderException(BaseException):
 
 
 class InterruptTracer(pyc.BaseTracer):
+    global_guards_enabled = False
+    requires_ast_bookkeeping = False
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.num_interrupts_by_node_id: Dict[int, int] = {}
@@ -25,12 +28,8 @@ class InterruptTracer(pyc.BaseTracer):
             return 1
 
     def should_instrument_file(self, filename: str) -> bool:
-        # TODO: get this working (requires overhaulting pyccolo ast state management)
-        return False
-        # return filename.endswith((".py", ".pyc")) or os.path.splitext(filename)[1] == ""
-
-    @property
-    def global_guards_enabled(self) -> bool:
+        # TODO: get this working (requires optimizing pyccolo, otherwise it's too slow to be useful for cache misses)
+        # return filename.endswith(".py")
         return False
 
     @pyc.register_raw_handler(pyc.exception_handler_type, exempt_from_guards=True)

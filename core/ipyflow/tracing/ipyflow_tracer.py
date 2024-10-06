@@ -89,14 +89,14 @@ blocking_spec = pyc.AugmentationSpec(
 
 
 class StackFrameManager(SingletonBaseTracer):
+    should_patch_meta_path = False
+    # TODO: we should also provide a way to prevent threads from running on instrumented ASTs
+    multiple_threads_allowed = False
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.call_depth = 0
         self.external_call_depth = 0
-
-    def multiple_threads_allowed(self) -> bool:
-        # TODO: we should also provide a way to prevent threads from running on instrumented ASTs
-        return False
 
     @pyc.register_raw_handler((pyc.call, pyc.return_))
     def handle_first_ipython_frame(
@@ -132,10 +132,6 @@ class StackFrameManager(SingletonBaseTracer):
                 return pyc.SkipAll
         return None
 
-    @property
-    def should_patch_meta_path(self) -> bool:
-        return False
-
     _FILTERED_PATH_REGEX = re.compile(
         rf"[/\\]({'|'.join(['IPython', 'ipykernel', '_?pytest.*', 'pluggy', 'test'])})[/\\]"
     )
@@ -159,6 +155,7 @@ class StackFrameManager(SingletonBaseTracer):
 
 class DataflowTracer(StackFrameManager):
     ast_rewriter_cls = DataflowAstRewriter
+    should_patch_meta_path = True
 
     def should_propagate_handler_exception(
         self, evt: pyc.TraceEvent, exc: Exception
@@ -299,10 +296,6 @@ class DataflowTracer(StackFrameManager):
     @property
     def syntax_augmentation_specs(self) -> List[pyc.AugmentationSpec]:
         return [blocking_spec, cascading_reactive_spec, reactive_spec]
-
-    @property
-    def should_patch_meta_path(self) -> bool:
-        return True
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter

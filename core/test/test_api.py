@@ -49,6 +49,21 @@ def test_deps_and_users():
     run_cell("assert users(y) == []")
 
 
+def test_multiple_deps_from_funcall():
+    run_cell(
+        """
+        def f():
+            x = 0
+            y = 1
+            return x + y
+    """
+    )
+    run_cell("z = f()")
+    run_cell("print(deps(z))")
+    run_cell("print(deps(z))")
+    run_cell("assert sorted([repr(d) for d in deps(z)]) == ['<f>', '<x>', '<y>']")
+
+
 def test_call_deps():
     run_cell("def f(): return 0, 1, 2, 3")
     run_cell("a, b, c, d = f()")

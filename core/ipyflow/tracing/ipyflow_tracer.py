@@ -445,22 +445,7 @@ class DataflowTracer(StackFrameManager):
                     rvals = resolve_rval_symbols(maybe_lambda_node.body)
                 else:
                     rvals = resolve_rval_symbols(trace_stmt.stmt_node)
-                sym_to_attach = None
-                if len(rvals) == 1:
-                    sym_to_attach = next(iter(rvals))
-                    if sym_to_attach.obj_id != id(ret):
-                        sym_to_attach = None
-                if sym_to_attach is None and len(rvals) > 0:
-                    sym_to_attach = (
-                        self.cur_frame_original_scope.upsert_symbol_for_name(
-                            "<return_sym_%d>" % id(ret),
-                            ret,
-                            rvals,
-                            trace_stmt.stmt_node,
-                            is_anonymous=True,
-                        )
-                    )
-                if sym_to_attach is None:
+                if len(rvals) == 0:
                     return
                 return_to_node_id = self.call_stack.get_field(
                     "prev_node_id_in_cur_frame"
@@ -490,8 +475,8 @@ class DataflowTracer(StackFrameManager):
                 except IndexError:
                     pass
                 # logger.error("use node %s", ast.dump(self.ast_node_by_id[return_to_node_id]))
-                self.node_id_to_loaded_symbols.setdefault(return_to_node_id, []).append(
-                    sym_to_attach
+                self.node_id_to_loaded_symbols.setdefault(return_to_node_id, []).extend(
+                    rvals
                 )
         finally:
             if self.is_tracing_enabled:

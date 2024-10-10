@@ -64,6 +64,70 @@ def test_multiple_deps_from_funcall():
     run_cell("assert sorted([repr(d) for d in deps(z)]) == ['<f>', '<x>', '<y>']")
 
 
+def test_function_dependencies():
+    run_cell(
+        """
+        class DummyClass:
+            class_static_val = ["DummyClass.class_static_val"]
+
+            @staticmethod
+            def class_static_method():
+                class_static_method_val_1 = ["DummyClass.class_static_method_val_1"]
+                class_static_method_val_2 = ["DummyClass.class_static_method_val_2"]
+                return class_static_method_val_1 + class_static_method_val_2
+
+            def __init__(self):
+                self.class_val_1 = ["class_val_1"]
+                self.class_val_2 = ["class_val_2"]
+                self.class_val_3 = ["class_val_3"]
+
+            def class_instance_method(self):
+                return self.class_val_1 + self.class_val_2 + self.class_val_3
+    """
+    )
+    run_cell(
+        """
+        x = []
+        class_instance = DummyClass()
+        x += class_instance.class_instance_method()
+    """
+    )
+    run_cell(
+        "assert sorted([repr(d) for d in deps(x)]) == ["
+        "'<DummyClass.class_instance_method>', "
+        "'<class_instance.class_val_1>', "
+        "'<class_instance.class_val_2>', "
+        "'<class_instance.class_val_3>', "
+        "'<class_instance>']"
+    )
+    run_cell(
+        """
+        x = []
+        x += DummyClass.class_static_method()
+    """
+    )
+    run_cell(
+        "assert sorted([repr(d) for d in deps(x)]) == ["
+        "'<DummyClass.class_static_method>', "
+        "'<DummyClass>', "
+        "'<class_static_method_val_1>', "
+        "'<class_static_method_val_2>']"
+    )
+    run_cell(
+        """
+        x = []
+        x += class_instance.class_static_method()
+    """
+    )
+    run_cell(
+        "assert sorted([repr(d) for d in deps(x)]) == ["
+        "'<DummyClass.class_static_method>', "
+        "'<class_instance>', "
+        "'<class_static_method_val_1>', "
+        "'<class_static_method_val_2>']"
+    )
+
+
 def test_call_deps():
     run_cell("def f(): return 0, 1, 2, 3")
     run_cell("a, b, c, d = f()")

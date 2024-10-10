@@ -917,12 +917,12 @@ class DataflowTracer(StackFrameManager):
 
         scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
         is_subscript = "subscript" in event.value
+        sym = None
         if sym_for_obj is not None and sym_for_obj.obj is obj:
             try:
                 sym = scope.lookup_symbol_by_name_this_indentation(
                     attr_or_subscript,
                     is_subscript=is_subscript,
-                    skip_cloned_lookup=True,
                 )
             except TypeError:
                 sym = None
@@ -946,6 +946,10 @@ class DataflowTracer(StackFrameManager):
             self.top_level_node_id_for_chain = top_level_node_id
         if self.first_obj_id_in_chain is None:
             self.first_obj_id_in_chain = obj_id
+        if self.top_level_node_id_for_chain is not None and sym is not None:
+            self.node_id_to_loaded_symbols.setdefault(
+                self.top_level_node_id_for_chain, []
+            ).append(sym)
 
         try:
             if isinstance(attr_or_subscript, list):
@@ -993,36 +997,33 @@ class DataflowTracer(StackFrameManager):
                 is_subscript,
                 obj_name,
             )
-            if call_context:
-                if not is_subscript:
-                    if (
-                        sym_for_obj is None
-                        and not self.active_scope.is_namespace_scope
-                        and obj_name is not None
-                    ):
-                        sym_for_obj = self.active_scope.lookup_symbol_by_name(
-                            obj_name, is_subscript=False
-                        )
-                    if (
-                        sym_for_obj is None
-                        and self.prev_trace_stmt_in_cur_frame is not None
-                    ):
-                        sym_for_obj = self.active_scope.upsert_symbol_for_name(
-                            obj_name or "<anonymous_symbol_%d>" % id(obj),
-                            obj,
-                            set(),
-                            self.prev_trace_stmt_in_cur_frame.stmt_node,
-                            is_subscript=is_subscript,
-                            is_anonymous=obj_name is None,
-                            propagate=False,
-                            implicit=True,
-                            symbol_node=node,
-                        )
-                    if sym_for_obj is not None:
-                        assert self.top_level_node_id_for_chain is not None
-                        self.node_id_to_loaded_symbols.setdefault(
-                            self.top_level_node_id_for_chain, []
-                        ).append(sym_for_obj)
+            if not call_context:
+                return
+            if (
+                sym_for_obj is None
+                and not self.active_scope.is_namespace_scope
+                and obj_name is not None
+            ):
+                sym_for_obj = self.active_scope.lookup_symbol_by_name(
+                    obj_name, is_subscript=is_subscript
+                )
+            if sym_for_obj is None and self.prev_trace_stmt_in_cur_frame is not None:
+                sym_for_obj = self.active_scope.upsert_symbol_for_name(
+                    obj_name or "<anonymous_symbol_%d>" % id(obj),
+                    obj,
+                    set(),
+                    self.prev_trace_stmt_in_cur_frame.stmt_node,
+                    is_subscript=is_subscript,
+                    is_anonymous=obj_name is None,
+                    propagate=False,
+                    implicit=True,
+                    symbol_node=node,
+                )
+            if sym_for_obj is not None:
+                assert self.top_level_node_id_for_chain is not None
+                self.node_id_to_loaded_symbols.setdefault(
+                    self.top_level_node_id_for_chain, []
+                ).append(sym_for_obj)
         finally:
             self.active_scope = scope
 

@@ -1282,13 +1282,13 @@ class Symbol:
         seen: Optional[Set["Symbol"]] = None,
     ) -> None:
         orig_timestamp = self._timestamp
+        self._updated_timestamps.add(orig_timestamp)
         self._timestamp = Timestamp.current() if timestamp is None else timestamp
         self._override_timestamp = None
         if take_timestamp_snapshots and (
             orig_timestamp < self._timestamp or len(self._snapshot_timestamps) == 0
         ):
             self._take_timestamp_snapshots(self._timestamp)
-        self.updated_timestamps.add(self._timestamp)
         self._temp_disable_warnings = False
         for cell in self.cells_where_live:
             cell.add_used_cell_counter(self, self._timestamp.cell_num)

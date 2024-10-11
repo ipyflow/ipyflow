@@ -29,6 +29,8 @@ def _make_range_from_node(node: ast.AST) -> Dict[str, Any]:
 
 
 class FrontendCheckerResult(NamedTuple):
+    cell_parents: Dict[IdType, Set[IdType]]
+    cell_children: Dict[IdType, Set[IdType]]
     waiting_cells: Set[IdType]
     ready_cells: Set[IdType]
     new_ready_cells: Set[IdType]
@@ -48,6 +50,8 @@ class FrontendCheckerResult(NamedTuple):
     @classmethod
     def empty(cls, allow_new_ready: bool = True):
         return cls(
+            cell_parents={},
+            cell_children={},
             waiting_cells=set(),
             ready_cells=set(),
             new_ready_cells=set(),
@@ -69,6 +73,14 @@ class FrontendCheckerResult(NamedTuple):
         return {
             # TODO: we should probably have separate fields for waiting vs non-typechecking cells,
             #  or at least change the name to a more general "unsafe_cells" or equivalent
+            "cell_parents": {
+                cell_id: list(parent_ids)
+                for cell_id, parent_ids in self.cell_parents.items()
+            },
+            "cell_children": {
+                cell_id: list(child_ids)
+                for cell_id, child_ids in self.cell_children.items()
+            },
             "waiting_cells": list(self.waiting_cells | self.typecheck_error_cells),
             "ready_cells": list(self.ready_cells),
             "new_ready_cells": list(self.new_ready_cells)
@@ -497,6 +509,68 @@ class FrontendCheckerResult(NamedTuple):
                     },
                 )
 
+    def _compute_filtered_parents(self, cells_to_check: List[Cell]) -> None:
+        flow_ = flow()
+        for cell in cells_to_check:
+            this_cell_parents: Set[IdType] = set()
+            latest_par_by_ts = cell.get_latest_parent_by_ts_map()
+            for _ in flow_.mut_settings.iter_slicing_contexts():
+                for par_id, raw_syms in cell.directional_parents.items():
+                    syms = raw_syms - cell.static_removed_symbols
+                    if len(syms) == 0:
+                        continue
+                    if (
+                        latest_par_by_ts is not None
+                        and flow_.fake_edge_sym not in syms
+                        and par_id
+                        not in {
+                            latest_par_by_ts[sym.shallow_timestamp].cell_id
+                            for sym in syms
+                        }
+                    ):
+                        continue
+                    parent = cells().from_id(par_id)
+                    if (
+                        parent.last_check_result is not None
+                        and syms <= parent.static_writes
+                        and len(parent.last_check_result.modified & syms) == 0
+                    ):
+                        continue
+                    if parent.cell_ctr >= 0 and not any(
+                        parent.cell_ctr
+                        in {ts.cell_num for ts in sym.updated_timestamps}
+                        for sym in syms
+                    ):
+                        continue
+                    should_skip = False
+                    if (
+                        flow_.mut_settings.flow_order == FlowDirection.IN_ORDER
+                        and slicing_ctx_var.get() == SlicingContext.STATIC
+                    ):
+                        for (
+                            other_par_id,
+                            other_syms,
+                        ) in cell.directional_parents.items():
+                            if syms == {flow_.fake_edge_sym} and other_syms == {
+                                flow_.fake_edge_sym
+                            }:
+                                continue
+                            other_parent = cells().from_id(other_par_id)
+                            if other_parent.position <= parent.position:
+                                continue
+                            if syms <= other_syms or flow_.fake_edge_sym in other_syms:
+                                should_skip = True
+                                break
+                    if should_skip:
+                        continue
+                    this_cell_parents.add(par_id)
+            self.cell_parents[cell.id] = this_cell_parents
+        for cell_id, parents in self.cell_parents.items():
+            for parent_id in parents:
+                self.cell_children.setdefault(parent_id, set()).add(cell_id)
+        for cell in cells_to_check:
+            self.cell_children.setdefault(cell.cell_id, set())
+
     def compute_frontend_checker_result(
         self,
         cells_to_check: Optional[Iterable[Cell]] = None,
@@ -541,4 +615,5 @@ class FrontendCheckerResult(NamedTuple):
         self._compute_waiter_and_ready_maker_links()
         if flow_.mut_settings.lint_out_of_order_usages:
             self._compute_unsafe_order_usages(cells_to_check)
+        self._compute_filtered_parents(cells_to_check)
         return self

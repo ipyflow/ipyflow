@@ -482,7 +482,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def reset_cell_counter(self):
         # only called in test context
         for sym in self.all_symbols():
-            sym.updated_timestamps.clear()
+            sym._updated_timestamps.clear()
             sym._timestamp = (
                 sym._max_inner_timestamp
             ) = sym.required_timestamp = Timestamp.uninitialized()
@@ -793,71 +793,6 @@ class NotebookFlow(singletons.NotebookFlow):
         response["settings"] = dict(
             self.mut_settings.to_json().items() | self.settings.to_json().items()
         )
-        cell_parents: Dict[IdType, List[IdType]] = {}
-        cell_children: Dict[IdType, List[IdType]] = {}
-        for cell in cells_to_check:
-            this_cell_parents: Set[IdType] = set()
-            latest_par_by_ts = cell.get_latest_parent_by_ts_map()
-            for _ in self.mut_settings.iter_slicing_contexts():
-                for par_id, raw_syms in cell.directional_parents.items():
-                    syms = raw_syms - cell.static_removed_symbols
-                    if len(syms) == 0:
-                        continue
-                    if (
-                        latest_par_by_ts is not None
-                        and self.fake_edge_sym not in syms
-                        and par_id
-                        not in {
-                            latest_par_by_ts[sym.shallow_timestamp].cell_id
-                            for sym in syms
-                        }
-                    ):
-                        continue
-                    parent = cells().from_id(par_id)
-                    if (
-                        parent.last_check_result is not None
-                        and syms <= parent.static_writes
-                        and len(parent.last_check_result.modified & syms) == 0
-                    ):
-                        continue
-                    if parent.cell_ctr >= 0 and not any(
-                        parent.cell_ctr
-                        in {ts.cell_num for ts in sym.updated_timestamps}
-                        for sym in syms
-                    ):
-                        continue
-                    should_skip = False
-                    if (
-                        self.mut_settings.flow_order == FlowDirection.IN_ORDER
-                        and slicing_ctx_var.get() == SlicingContext.STATIC
-                    ):
-                        for (
-                            other_par_id,
-                            other_syms,
-                        ) in cell.directional_parents.items():
-                            if syms == {self.fake_edge_sym} and other_syms == {
-                                self.fake_edge_sym
-                            }:
-                                continue
-                            other_parent = cells().from_id(other_par_id)
-                            if other_parent.position <= parent.position:
-                                continue
-                            if syms <= other_syms or self.fake_edge_sym in other_syms:
-                                should_skip = True
-                                break
-                    if should_skip:
-                        continue
-                    this_cell_parents.add(par_id)
-            cell_parents[cell.id] = list(this_cell_parents)
-        for cell_id, parents in cell_parents.items():
-            for parent_id in parents:
-                cell_children.setdefault(parent_id, []).append(cell_id)
-        cell_children = {k: list(set(v)) for k, v in cell_children.items()}
-        for cell in cells_to_check:
-            if cell.cell_id not in cell_children:
-                cell_children[cell.cell_id] = []
-        response["cell_parents"] = cell_parents
-        response["cell_children"] = cell_children
         response["executed_cells"] = list(cells().all_executed_cell_ids())
         return response
 

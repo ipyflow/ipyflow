@@ -24,3 +24,4 @@ coverage.xml
 htmlcov/**
 .hypothesis
 *.iml
+.jupyter_ystore.db-journal

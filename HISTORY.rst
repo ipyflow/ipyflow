@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.203 (2024-10-13)
+--------------------
+* [kernel] fix bookkeeping regression;
+
 0.0.202 (2024-10-06)
 --------------------
 * [kernel] track multiple deps from returning function;

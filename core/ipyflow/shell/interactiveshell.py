@@ -14,7 +14,6 @@ from ipyflow import singletons
 from ipyflow.config import Interface
 from ipyflow.data_model.cell import Cell
 from ipyflow.data_model.statement import Statement
-from ipyflow.data_model.symbol import Symbol
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
 from ipyflow.memoization import MemoizedOutputLevel
@@ -22,7 +21,6 @@ from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.interrupt_tracer import InterruptTracer
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer, StackFrameManager
 from ipyflow.utils.ipython_utils import (
-    CapturedIO,
     CaptureOutputTee,
     ast_transformer_context,
     input_transformer_context,
@@ -413,14 +411,14 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 if has_transformed_cell:
                     kwargs["transformed_cell"] = transformed_cell
                 # discard any previous transformations that were done
+                cell = Cell.current_cell()
                 ret = await super().run_cell_async(
-                    raw_cell if has_transformed_cell else transformed_cell,
+                    cell.raw_cell if has_transformed_cell else transformed_cell,
                     store_history=store_history,
                     silent=False,
                     shell_futures=shell_futures,
                     **kwargs,
                 )  # pragma: no cover
-                cell = Cell.current_cell()
                 cell.error_in_exec = ret.error_in_exec
                 if is_already_recording_output:
                     outvar = (
@@ -479,46 +477,19 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
 
     def _get_content_for_memoized_run(self, cell: Cell) -> Optional[str]:
         prev_cell = cell.prev_cell
-        if not cell.is_memoized or prev_cell is None:
+        if prev_cell is None:
             return None
-
-        identical_result_ctr: Optional[int] = None
-        memoized_display_output: Optional[CapturedIO] = None
-        memoized_outputs = []
-
-        for (
-            inputs,
-            outputs,
-            displayed_output,
-            ctr,
-        ) in prev_cell._memoized_executions.get(cell.executed_content or "", []):
-            for sym, in_ts, mem_ts, obj_id, comparable in inputs:
-                if comparable is not Symbol.NULL:
-                    # prefer the comparable check if it is available
-                    current_comp, eq = sym.make_memoize_comparable()
-                    if current_comp is Symbol.NULL or eq is None:
-                        break
-                    if eq(current_comp, comparable):
-                        continue
-                    else:
-                        break
-                if sym.is_import or sym.timestamp.cell_num == in_ts.cell_num:
-                    continue
-                elif sym.obj_id == obj_id and sym.memoize_timestamp in (
-                    in_ts,
-                    mem_ts or Timestamp.uninitialized(),
-                ):
-                    continue
-                else:
-                    break
-            else:
-                identical_result_ctr = ctr
-                memoized_outputs = outputs
-                memoized_display_output = displayed_output
-                break
-
+        identical_result_ctr = cell.get_memoized_counter()
         if identical_result_ctr is None:
             return None
+        (
+            _,
+            memoized_outputs,
+            memoized_display_output,
+            _,
+        ) = prev_cell._memoized_executions[cell.executed_content or ""][
+            identical_result_ctr
+        ]
         assert memoized_outputs is not None
         assert memoized_display_output is not None
 
@@ -542,10 +513,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         if cell.memoized_output_level == MemoizedOutputLevel.VERBOSE:
             cell.captured_output = memoized_display_output
             memoized_display_output.show()
-        if cell.memoized_output_level == MemoizedOutputLevel.QUIET:
-            return "pass"
-        else:
-            return f"Out.get({identical_result_ctr})"
+        return cell.get_transformed_memoized_content(ctr=identical_result_ctr)
 
     def before_run_cell(
         self,

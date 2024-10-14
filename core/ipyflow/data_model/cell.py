@@ -43,7 +43,7 @@ from ipyflow.memoization import (
     MemoizedOutputLevel,
     parse_verbosity,
 )
-from ipyflow.models import _CodeCellContainer, cells, statements
+from ipyflow.models import _CodeCellContainer, cells, statements, symbols
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
 from ipyflow.types import IdType, TimestampOrCounter
@@ -82,7 +82,7 @@ class Cell(SliceableMixin):
     _cells_by_tag: Dict[str, Set["Cell"]] = defaultdict(set)
     _reactive_cells_by_tag: Dict[str, Set[IdType]] = defaultdict(set)
     _override_current_cell: Optional["Cell"] = None
-    _memoized_executions: Dict[str, List[MemoizedCellExecution]] = {}
+    _memoized_executions: Dict[str, Dict[int, MemoizedCellExecution]] = {}
 
     def __init__(
         self,
@@ -348,13 +348,13 @@ class Cell(SliceableMixin):
             outputs[sym] = MemoizedOutput(sym, sym.shallow_timestamp, sym.obj)
         assert self.captured_output is not None
         assert self.executed_content is not None
-        self._memoized_executions.setdefault(self.executed_content, []).append(
-            MemoizedCellExecution(
-                list(inputs.values()),
-                list(outputs.values()),
-                self.captured_output,
-                self.cell_ctr,
-            )
+        self._memoized_executions.setdefault(self.executed_content, {})[
+            self.cell_ctr
+        ] = MemoizedCellExecution(
+            list(inputs.values()),
+            list(outputs.values()),
+            self.captured_output,
+            self.cell_ctr,
         )
 
     @classmethod
@@ -553,21 +553,80 @@ class Cell(SliceableMixin):
         return cls.get_memoized_content_and_output_level(content)[1]
 
     @property
-    def raw_cell(self):
+    def raw_cell(self) -> str:
         return self.get_memoized_content(self.current_content) or self.current_content
+
+    @property
+    def transformed_cell(self) -> str:
+        cell = self.get_transformed_memoized_content()
+        if cell is not None:
+            return cell
+        return self.raw_and_sanitized_content()[1]
+
+    def get_memoized_counter(self) -> Optional[int]:
+        prev_cell = self.prev_cell
+        if not self.is_memoized or prev_cell is None:
+            return None
+
+        symbols_ = symbols()
+        for (
+            inputs,
+            outputs,
+            displayed_output,
+            ctr,
+        ) in prev_cell._memoized_executions.get(
+            self.executed_content or "", {}
+        ).values():
+            if ctr >= self.cell_ctr:
+                continue
+            for sym, in_ts, mem_ts, obj_id, comparable in inputs:
+                if comparable is not symbols_.NULL:
+                    # prefer the comparable check if it is available
+                    current_comp, eq = sym.make_memoize_comparable()
+                    if current_comp is symbols_.NULL or eq is None:
+                        break
+                    if eq(current_comp, comparable):
+                        continue
+                    else:
+                        break
+                if sym.is_import or sym.timestamp.cell_num == in_ts.cell_num:
+                    continue
+                elif sym.obj_id == obj_id and sym.memoize_timestamp in (
+                    in_ts,
+                    mem_ts or Timestamp.uninitialized(),
+                ):
+                    continue
+                else:
+                    break
+            else:
+                return ctr
+        return None
+
+    def get_transformed_memoized_content(
+        self, ctr: Optional[int] = None
+    ) -> Optional[str]:
+        if ctr is None:
+            ctr = self.get_memoized_counter()
+        if ctr is None:
+            return None
+        if self.memoized_output_level == MemoizedOutputLevel.QUIET:
+            return "pass"
+        else:
+            return f"Out.get({ctr})"
 
     def _rewriter_and_sanitized_content(
         self, raw_cell: Optional[str] = None, path: Optional[str] = None
     ) -> Tuple[Optional[pyc.AstRewriter], str]:
         # we transform magics, but for %time, we would ideally like to trace the statement being timed
         # TODO: how to do this?
+        shell_ = shell()
         if raw_cell is None:
             raw_cell = self.raw_cell
         try:
-            content = get_ipython().transform_cell(raw_cell)
+            content = shell_.transform_cell(raw_cell)
         except Exception:
             content = raw_cell
-        ast_rewriter, syntax_augmenters = shell().make_rewriter_and_syntax_augmenters(
+        ast_rewriter, syntax_augmenters = shell_.make_rewriter_and_syntax_augmenters(
             path=path
         )
         for aug in syntax_augmenters:
@@ -579,12 +638,11 @@ class Cell(SliceableMixin):
         return raw_cell, self._rewriter_and_sanitized_content(raw_cell, path=path)[1]
 
     def make_ipython_name(self) -> str:
-        raw_cell, cell = self.raw_and_sanitized_content()
         cache = shell().compile.cache
         kwargs = {}
         if "raw_code" in inspect.signature(cache).parameters:
-            kwargs["raw_code"] = raw_cell
-        return cache(cell, self.cell_ctr, **kwargs)
+            kwargs["raw_code"] = self.raw_cell
+        return cache(self.transformed_cell, self.cell_ctr, **kwargs)
 
     def sanitized_content(self) -> str:
         return self._rewriter_and_sanitized_content()[1]

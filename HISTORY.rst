@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.204 (2024-10-14)
+--------------------
+* [kernel] fix memoize regression;
+
 0.0.203 (2024-10-13)
 --------------------
 * [kernel] fix bookkeeping regression;

@@ -3,6 +3,7 @@ import ast
 import itertools
 import logging
 import symtable
+from types import ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -181,6 +182,7 @@ class Scope:
 
     @staticmethod
     def _resolve_symbol_type(
+        obj: Any,
         overwrite: bool = True,
         is_subscript: bool = False,
         is_function_def: bool = False,
@@ -210,6 +212,8 @@ class Scope:
             return SymbolType.SUBSCRIPT
         elif is_anonymous:
             return SymbolType.ANONYMOUS
+        elif isinstance(obj, ModuleType):
+            return SymbolType.MODULE
         else:
             return SymbolType.DEFAULT
 
@@ -282,6 +286,7 @@ class Scope:
         is_cascading_reactive: Optional[bool] = None,
     ) -> Symbol:
         symbol_type = symbol_type or self._resolve_symbol_type(
+            obj=obj,
             overwrite=overwrite,
             is_subscript=is_subscript,
             is_function_def=is_function_def,

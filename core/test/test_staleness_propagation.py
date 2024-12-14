@@ -2240,7 +2240,6 @@ def test_default_dict():
     assert_detected("`x` has dependency on old value of `d[0][0]`")
 
 
-@skipif_known_failing
 def test_mutate_arg():
     run_cell("import numpy as np")
     run_cell("x = np.ones(5)")
@@ -2250,6 +2249,7 @@ def test_mutate_arg():
     assert_detected("`y` has a dependency on an old value of `x`")
 
 
+@skipif_known_failing
 def test_mutate_arg_special_cases():
     run_cell("import numpy as np")
     run_cell("x = np.random.random(10)")

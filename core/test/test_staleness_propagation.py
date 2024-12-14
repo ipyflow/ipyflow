@@ -2249,7 +2249,6 @@ def test_mutate_arg():
     assert_detected("`y` has a dependency on an old value of `x`")
 
 
-@skipif_known_failing
 def test_mutate_arg_special_cases():
     run_cell("import numpy as np")
     run_cell("x = np.random.random(10)")

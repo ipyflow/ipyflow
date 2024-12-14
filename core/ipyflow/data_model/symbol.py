@@ -3,7 +3,7 @@ import ast
 import logging
 import sys
 from enum import Enum
-from types import FrameType, FunctionType
+from types import FrameType, FunctionType, ModuleType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -989,8 +989,11 @@ class Symbol:
             self.watchpoints.clear()
         if mutated and self.is_immutable:
             return
-        # if we get here, no longer implicit
-        self._implicit = False
+        if self._implicit:
+            # if we get here, no longer implicit
+            self._implicit = False
+            if isinstance(self.obj, ModuleType):
+                self.symbol_type = SymbolType.MODULE
         # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
         # TODO: check higher-order ancestors too?
         overwrite = overwrite and self not in new_deps

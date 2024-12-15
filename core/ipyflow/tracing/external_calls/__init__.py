@@ -47,7 +47,7 @@ def resolve_external_call(
     if (
         module is logging
         or getattr(module, "__name__", None) == "__main__"
-        or function_or_method == print
+        or function_or_method is print
     ):
         return None
     if caller_self is logging or isinstance(caller_self, logging.Logger):

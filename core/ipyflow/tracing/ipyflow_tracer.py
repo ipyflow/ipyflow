@@ -1053,20 +1053,23 @@ class DataflowTracer(StackFrameManager):
     def handle_lift_argument(
         self, arg_obj: Any, arg_node: ast.AST, *_, **__
     ) -> Optional[Union[Type["pyc.Null"], Symbol]]:
-        if self.num_args_seen > 0 or self.cur_function not in (
-            api_code,
-            api_deps,
-            api_has_tag,
-            api_lift,
-            api_rdeps,
-            api_rusers,
-            api_set_tag,
-            api_symbols,
-            api_timestamp,
-            api_unset_tag,
-            api_users,
-            api_watchpoints,
-        ):
+        try:
+            if self.num_args_seen > 0 or self.cur_function not in (
+                api_code,
+                api_deps,
+                api_has_tag,
+                api_lift,
+                api_rdeps,
+                api_rusers,
+                api_set_tag,
+                api_symbols,
+                api_timestamp,
+                api_unset_tag,
+                api_users,
+                api_watchpoints,
+            ):
+                return None
+        except TypeError:
             return None
         resolved = [
             sym

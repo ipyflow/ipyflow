@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.205 (2024-12-15)
+--------------------
+* [kernel] improve performance for recursive function calls;
+
 0.0.204 (2024-10-14)
 --------------------
 * [kernel] fix memoize regression;

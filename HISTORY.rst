@@ -1,9 +1,10 @@
 History
 =======
 
-0.0.205 (2024-12-15)
+0.0.206 (2024-12-15)
 --------------------
 * [kernel] improve performance for recursive function calls;
+* [kernel] don't fail open on incomparable equality checks;
 
 0.0.204 (2024-10-14)
 --------------------

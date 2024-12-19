@@ -179,7 +179,6 @@ class DataflowTracer(StackFrameManager):
         self.tracing_disabled_since_last_module_stmt = False
         self.guards_pending_deactivation: Set[str] = set()
         self._module_stmt_counter = 0
-        self._saved_stmt_ret_expr: Optional[Any] = None
         self._seen_loop_ids: Set[NodeId] = set()
         self._seen_functions_ids: Set[NodeId] = set()
         self.prev_event: Optional[pyc.TraceEvent] = None
@@ -1439,10 +1438,7 @@ class DataflowTracer(StackFrameManager):
         return tracing_decorator
 
     @pyc.register_raw_handler(pyc.after_stmt)
-    def after_stmt(
-        self, ret_expr: Any, stmt_id: int, frame: FrameType, *_, **__
-    ) -> None:
-        self._saved_stmt_ret_expr = ret_expr
+    def after_stmt(self, _ret: Any, stmt_id: int, frame: FrameType, *_, **__) -> None:
         try:
             if not self.is_tracing_enabled and not self._try_reenable_tracing(
                 frame,
@@ -1471,7 +1467,6 @@ class DataflowTracer(StackFrameManager):
             cell = cells().current_cell()
             cell.dynamic_writes.update(cell._pending_dynamic_writes)
             cell._pending_dynamic_writes.clear()
-            return ret_expr
         finally:
             self.tracing_disabled_since_last_stmt = False
 
@@ -1495,13 +1490,11 @@ class DataflowTracer(StackFrameManager):
                 global_scope.upsert_symbol_for_name(ref_name, ref_value)
 
     @pyc.register_handler(pyc.after_module_stmt)
-    def after_module_stmt(self, _ret, stmt: ast.stmt, *_, **__) -> Optional[Any]:
+    def after_module_stmt(self, ret, stmt: ast.stmt, *_, **__) -> Optional[Any]:
         if self.is_tracing_enabled:
             assert self.cur_frame_original_scope.is_global
         if self.tracing_disabled_since_last_module_stmt:
             self._handle_skipped_sub_statements(stmt)
-        ret = self._saved_stmt_ret_expr
-        self._saved_stmt_ret_expr = None
         if ret is not None:
             flow_ = flow()
             # clean up prev _ namespace

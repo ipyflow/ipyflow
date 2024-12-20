@@ -951,7 +951,7 @@ class NotebookFlow(singletons.NotebookFlow):
                         Timestamp(self.cell_counter(), 0), sym.timestamp, sym
                     )
 
-    def _resync_symbols(self, symbols: Iterable[Symbol]):
+    def _resync_symbols(self, symbols: Iterable[Symbol]) -> None:
         for sym in symbols:
             sym.resync_if_necessary(refresh=False)
 

@@ -111,7 +111,7 @@ class Scope:
     ) -> Optional[Symbol]:
         return self._symbol_by_name.get(name)
 
-    def all_symbols_this_indentation(self):
+    def all_symbols_this_indentation(self) -> Iterable[Symbol]:
         return self._symbol_by_name.values()
 
     def lookup_symbol_by_name(

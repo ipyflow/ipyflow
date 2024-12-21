@@ -91,6 +91,9 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 subclass._instance = ipy
         NotebookFlow.instance()
         Cell._cell_counter = ipy.execution_count
+        if ipy.displayhook.exec_result is None:
+            # we are not currently running a cell, so the cell counter will be too high
+            Cell._cell_counter -= 1
         shell_class.prev_shell_class = prev_shell_class
 
     @classmethod
@@ -531,11 +534,11 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             cell_content = new_cell_content
         flow_ = singletons.flow()
         settings = flow_.mut_settings
-        if settings.interface == Interface.UNKNOWN:
-            try:
-                singletons.kernel()
-            except AssertionError:
-                settings.interface = Interface.IPYTHON
+        if (
+            settings.interface == Interface.UNKNOWN
+            and getattr(self, "kernel", None) is None
+        ):
+            settings.interface = Interface.IPYTHON
         self.syntax_transforms_enabled = settings.syntax_transforms_enabled
         self.syntax_transforms_only = settings.syntax_transforms_only
         flow_.test_and_clear_waiter_usage_detected()

@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.207 (2024-12-22)
+--------------------
+* [kernel] only use globally-accessible symbols to induce edges;
+* [kernel] add an `ipyflow.pyccolo` extension for allowing registration of non-pyccolo tracers;
+
 0.0.206 (2024-12-15)
 --------------------
 * [kernel] improve performance for recursive function calls;

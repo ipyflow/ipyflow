@@ -93,12 +93,13 @@ def test_function_dependencies():
     """
     )
     run_cell(
-        "assert sorted([repr(d) for d in deps(x)]) == ["
+        "dep_reprs = sorted([repr(d) for d in deps(x)])\n"
+        "assert dep_reprs == ["
         "'<DummyClass.class_instance_method>', "
         "'<class_instance.class_val_1>', "
         "'<class_instance.class_val_2>', "
         "'<class_instance.class_val_3>', "
-        "'<class_instance>']"
+        "'<class_instance>'], dep_reprs"
     )
     run_cell(
         """

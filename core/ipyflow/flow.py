@@ -449,6 +449,8 @@ class NotebookFlow(singletons.NotebookFlow):
         parent: Timestamp,
         sym: Symbol,
     ) -> None:
+        if not sym.is_globally_accessible:
+            return
         assert parent.is_initialized
         child_cell = self._override_child_cell or cells().at_timestamp(child)
         child_cell.used_symbols.add(sym)

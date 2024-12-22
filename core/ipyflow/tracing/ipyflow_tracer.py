@@ -646,25 +646,31 @@ class DataflowTracer(StackFrameManager):
         return symbols
 
     def _get_namespace_for_obj(
-        self, obj: Any, obj_name: Optional[str] = None
+        self, obj: Any, sym_for_obj: Optional[Symbol], obj_name: Optional[str] = None
     ) -> Namespace:
         obj_id = id(obj)
-        ns = flow().namespaces.get(obj_id)
+        flow_ = flow()
+        ns = flow_.namespaces.get(obj_id)
         if ns is not None:
+            if ns.is_anonymous and sym_for_obj is not None:
+                ns.parent_scope = sym_for_obj.containing_scope
+                if isinstance(sym_for_obj.name, str):
+                    ns.scope_name = sym_for_obj.name
             return ns
-        class_scope = flow().namespaces.get(id(obj.__class__), None)
+        class_scope = flow_.namespaces.get(id(obj.__class__))
         if class_scope is not None:
             # logger.warning(
             #     'found class scope %s containing %s',
             #     class_scope, list(class_scope.all_symbols_this_indentation())
             # )
             ns = class_scope.clone(obj)
+            ns.parent_scope = None
             if obj_name is not None:
                 ns.scope_name = obj_name
         else:
             # print('no scope for class', obj.__class__)
             if obj_name is None:
-                first_full_sym = flow().get_first_full_symbol(obj_id)
+                first_full_sym = flow_.get_first_full_symbol(obj_id)
                 if first_full_sym is None or not isinstance(first_full_sym.name, str):
                     scope_name = "<unknown namespace>"
                 else:
@@ -673,10 +679,28 @@ class DataflowTracer(StackFrameManager):
                 scope_name = obj_name
             ns = Namespace(obj, scope_name, parent_scope=None)
         # FIXME: brittle strategy for determining parent scope of obj
+        if sym_for_obj is not None:
+            for alias in sym_for_obj.aliases:
+                if alias.is_globally_accessible:
+                    sym_for_obj = alias
+                    break
+        if (
+            ns.parent_scope is None
+            and sym_for_obj is not None
+            and sym_for_obj.name != "self"
+        ):
+            ns.parent_scope = sym_for_obj.containing_scope
+            if ns.scope_name is None:
+                ns.scope_name = sym_for_obj.name
+        if ns.parent_scope is None and obj_name == "self":
+            try:
+                ns.parent_scope = self.active_scope.parent_scope.parent_scope  # type: ignore[union-attr]
+            except AttributeError:
+                ns.parent_scope = flow_.global_scope
         frame = self.prev_trace_stmt_in_cur_frame.frame  # type: ignore[union-attr]
         if ns.parent_scope is None and frame is not None:
             if obj_name is not None and obj_name not in frame.f_locals:
-                parent_scope = flow().global_scope
+                parent_scope = flow_.global_scope
             else:
                 parent_scope = self.active_scope
             ns.parent_scope = parent_scope
@@ -914,7 +938,7 @@ class DataflowTracer(StackFrameManager):
         if sym_for_obj is None and obj_name is not None:
             sym_for_obj = self.active_scope.get(obj_name)
 
-        scope = self._get_namespace_for_obj(obj, obj_name=obj_name)
+        scope = self._get_namespace_for_obj(obj, sym_for_obj, obj_name=obj_name)
         is_subscript = "subscript" in event.value
         sym = None
         if sym_for_obj is not None and sym_for_obj.obj is obj:

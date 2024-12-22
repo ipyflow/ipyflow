@@ -1020,7 +1020,7 @@ class Symbol:
             and not self.is_immutable
             and not self.is_mutation_virtual_symbol
             and not self.is_anonymous
-            and self.containing_scope.is_global
+            and self.is_globally_accessible
             and not self.is_underscore
             and not self.is_implicit
             and self.obj_type is not type

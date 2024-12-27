@@ -224,16 +224,26 @@ class Statement(SliceableMixin):
         blacken: bool = True,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> Slice:
         return self.format_slice(
-            blacken=blacken, seed_only=seed_only, format_type=format_type
+            blacken=blacken,
+            seed_only=seed_only,
+            format_type=format_type,
+            include_cell_headers=include_cell_headers,
         )
 
     def code(
-        self, blacken: bool = True, format_type: Optional[Type[FormatType]] = None
+        self,
+        blacken: bool = True,
+        format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> Slice:
         return self.format_slice(
-            blacken=blacken, seed_only=True, format_type=format_type
+            blacken=blacken,
+            seed_only=True,
+            format_type=format_type,
+            include_cell_headers=include_cell_headers,
         )
 
     def to_function(self, *args, **kwargs):

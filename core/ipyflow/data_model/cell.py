@@ -167,7 +167,9 @@ class Cell(SliceableMixin):
 
     @property
     def is_visible(self) -> bool:
-        return self._position_by_cell_id.get(self.cell_id, float("inf")) < float("inf")
+        if flow().mut_settings.interface in (Interface.IPYTHON, Interface.UNKNOWN):
+            return True
+        return self.position not in (-1, float("inf"))
 
     @property
     def position(self) -> int:
@@ -941,6 +943,7 @@ class Cell(SliceableMixin):
         stmts: bool = False,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> Slice:
         if stmts:
             return self.format_multi_slice(
@@ -948,16 +951,28 @@ class Cell(SliceableMixin):
                 blacken=True,
                 seed_only=seed_only,
                 format_type=format_type,
+                include_cell_headers=include_cell_headers,
             )
         else:
             return self.format_slice(
-                blacken=False, seed_only=seed_only, format_type=format_type
+                blacken=False,
+                seed_only=seed_only,
+                format_type=format_type,
+                include_cell_headers=include_cell_headers,
             )
 
     def code(
-        self, stmts: bool = False, format_type: Optional[Type[FormatType]] = None
+        self,
+        stmts: bool = False,
+        format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> Slice:
-        return self.slice(stmts=stmts, seed_only=True, format_type=format_type)
+        return self.slice(
+            stmts=stmts,
+            seed_only=True,
+            format_type=format_type,
+            include_cell_headers=include_cell_headers,
+        )
 
     def to_function(self, *args, **kwargs):
         return self.code().to_function(*args, **kwargs)

@@ -60,6 +60,7 @@ class Slice:
         raw_slice: Dict[int, str],
         blacken: bool,
         format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> None:
         self.raw_slice = dict(raw_slice)
         self.iface = flow().mut_settings.interface
@@ -72,10 +73,12 @@ class Slice:
             fmt = format_type  # type: ignore
         self.format_type: Type[FormatType] = fmt  # type: ignore
         self.blacken = blacken
+        self.include_cell_headers = include_cell_headers
 
     def _get_slice_text_from_slice(self) -> str:
-        return "\n\n".join(
-            f"# Cell {cell_num}\n" + content
+        sep = "\n\n" if self.include_cell_headers else "\n"
+        return sep.join(
+            f"# Cell {cell_num}\n" + content if self.include_cell_headers else content
             for cell_num, content in sorted(self.raw_slice.items())
         ).strip()
 
@@ -498,12 +501,14 @@ class SliceableMixin(Protocol):
         blacken: bool = True,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> Slice:
         seeds = cls._process_memoized_seeds(seeds)
         return format_slice(
             cls.make_cell_dict_multi_slice(seeds, seed_only=seed_only),
             blacken=blacken,
             format_type=format_type,
+            include_cell_headers=include_cell_headers,
         )
 
     def format_slice(
@@ -511,12 +516,14 @@ class SliceableMixin(Protocol):
         blacken: bool = True,
         seed_only: bool = False,
         format_type: Optional[Type[FormatType]] = None,
+        include_cell_headers: bool = True,
     ) -> Slice:
         return self.format_multi_slice(
             [self],
             blacken=blacken,
             seed_only=seed_only,
             format_type=format_type,
+            include_cell_headers=include_cell_headers,
         )
 
 
@@ -524,6 +531,7 @@ def format_slice(
     raw_slice: Dict[int, str],
     blacken: bool = True,
     format_type: Optional[Type[FormatType]] = None,
+    include_cell_headers: bool = True,
 ) -> Slice:
     raw_slice = dict(raw_slice)
     if blacken:
@@ -534,4 +542,9 @@ def format_slice(
                 ).strip()
             except Exception as e:
                 logger.info("call to black failed with exception: %s", e)
-    return Slice(raw_slice, blacken=blacken, format_type=format_type)
+    return Slice(
+        raw_slice,
+        blacken=blacken,
+        format_type=format_type,
+        include_cell_headers=include_cell_headers,
+    )

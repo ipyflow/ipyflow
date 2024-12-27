@@ -183,6 +183,11 @@ def make_line_magic(flow_: "NotebookFlow"):
             with open(fname, "w") as f:
                 f.write(outstr)
 
+    def histslice(line: str) -> None:
+        get_ipython().run_line_magic("flow", f"slice --noheader {line}")
+
+    register_line_magic(histslice)
+
     # FIXME (smacke): probably not a great idea to rely on this
     _flow_magic.__name__ = _FLOW_LINE_MAGIC
     return register_line_magic(_flow_magic)
@@ -317,6 +322,7 @@ _SLICE_PARSER.add_argument("cell_num", nargs="?", type=int, default=None)
 _SLICE_PARSER.add_argument("--stmt", "--stmts", action="store_true")
 _SLICE_PARSER.add_argument("--blacken", action="store_true")
 _SLICE_PARSER.add_argument("--tag", nargs="?", type=str, default=None)
+_SLICE_PARSER.add_argument("--noheader", action="store_true")
 
 
 def make_slice(line: str) -> Optional[str]:
@@ -352,6 +358,7 @@ def make_slice(line: str) -> Optional[str]:
                 cells().make_cell_dict_from_closure(closure),
                 blacken=args.stmt or args.blacken,
                 format_type=str,
+                include_cell_headers=not args.noheader,
             )
         )
     return None

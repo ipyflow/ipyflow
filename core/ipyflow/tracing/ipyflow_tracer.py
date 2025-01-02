@@ -33,6 +33,7 @@ from ipyflow.api.lift import code as api_code
 from ipyflow.api.lift import deps as api_deps
 from ipyflow.api.lift import has_tag as api_has_tag
 from ipyflow.api.lift import lift as api_lift
+from ipyflow.api.lift import mutate as api_mutate
 from ipyflow.api.lift import rdeps as api_rdeps
 from ipyflow.api.lift import rusers as api_rusers
 from ipyflow.api.lift import set_tag as api_set_tag
@@ -1082,6 +1083,7 @@ class DataflowTracer(StackFrameManager):
                 api_deps,
                 api_has_tag,
                 api_lift,
+                api_mutate,
                 api_rdeps,
                 api_rusers,
                 api_set_tag,

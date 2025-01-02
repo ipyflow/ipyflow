@@ -72,6 +72,13 @@ def users(sym: Any) -> List[Symbol]:
     return [child for child in sym.children.keys() if not child.is_anonymous]
 
 
+def mutate(sym: Any) -> None:
+    """
+    Force mutation for a particular symbol.
+    """
+    _validate(sym).mutate()
+
+
 def _traverse(sym: Symbol, seen: Set[Symbol], attr: str) -> None:
     if sym in seen:
         return

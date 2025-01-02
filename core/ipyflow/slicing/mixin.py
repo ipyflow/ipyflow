@@ -371,7 +371,9 @@ class SliceableMixin(Protocol):
         settings = flow_.mut_settings
         parents: Dict[IdType, Set["Symbol"]] = {}
         for _ in settings.iter_slicing_contexts():
-            for pid, syms in self.raw_parents.items():
+            for pid, syms in getattr(
+                self, "directional_parents", self.raw_parents
+            ).items():
                 parents.setdefault(pid, set()).update(syms)
         return parents
 
@@ -400,7 +402,9 @@ class SliceableMixin(Protocol):
         settings = flow_.mut_settings
         children: Dict[IdType, Set["Symbol"]] = {}
         for _ in settings.iter_slicing_contexts():
-            for pid, syms in self.raw_children.items():
+            for pid, syms in getattr(
+                self, "directional_children", self.raw_children
+            ).items():
                 children.setdefault(pid, set()).update(syms)
         return children
 

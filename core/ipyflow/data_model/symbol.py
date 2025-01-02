@@ -981,6 +981,7 @@ class Symbol:
         refresh: bool = True,
         is_cascading_reactive: Optional[bool] = None,
     ) -> None:
+        flow_ = flow()
         if self.is_import and self.obj_id == self.cached_obj_id:
             # skip updates for imported symbols; just bump the version
             self.refresh()
@@ -990,6 +991,18 @@ class Symbol:
         if mutated and self.is_immutable:
             return
         # if we get here, no longer implicit
+        if (
+            self.is_implicit
+            and not self._timestamp.is_initialized
+            and self.containing_namespace is not None
+        ):
+            self._timestamp = max(
+                (
+                    sym.timestamp
+                    for sym in flow_.aliases.get(self.containing_namespace.obj_id, [])
+                ),
+                default=self._timestamp,
+            )
         self._implicit = False
         # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
         # TODO: check higher-order ancestors too?
@@ -1039,7 +1052,6 @@ class Symbol:
             prev_cell = None
         prev_cell_ctr = -1 if prev_cell is None else prev_cell.cell_ctr
         if overwrite:
-            flow_ = flow()
             self._cascading_reactive_cell_num = -1
             flow_.updated_reactive_symbols.discard(self)
             flow_.updated_deep_reactive_symbols.discard(self)
@@ -1057,7 +1069,6 @@ class Symbol:
                 refresh_descendent_namespaces=propagate
                 and not (mutated and not propagate_to_namespace_descendents)
                 and not self._is_underscore_or_simple_assign(new_deps),
-                refresh_namespace_waiting=not mutated,
             )
         if propagate:
             UpdateProtocol(self)(
@@ -1080,6 +1091,17 @@ class Symbol:
         if overwrite and len(flow().aliases[self.obj_id]) == 1:
             self._handle_possible_widget_creation()
             self._handle_possible_mercury_widget_creation()
+
+    def mutate(
+        self, deps: Optional[Set["Symbol"]] = None, propagate: bool = True
+    ) -> None:
+        self.update_deps(
+            deps or set(),
+            overwrite=False,
+            mutated=True,
+            propagate_to_namespace_descendents=propagate,
+            refresh=propagate,
+        )
 
     @property
     def _mercury_widgets_manager(self):
@@ -1277,7 +1299,6 @@ class Symbol:
         self,
         take_timestamp_snapshots: bool = True,
         refresh_descendent_namespaces: bool = False,
-        refresh_namespace_waiting: bool = True,
         timestamp: Optional[Timestamp] = None,
         seen: Optional[Set["Symbol"]] = None,
     ) -> None:
@@ -1295,42 +1316,45 @@ class Symbol:
         ns = self.containing_namespace
         if ns is not None:
             # logger.error("bump version of %s due to %s (value %s)", ns.full_path, self.full_path, self.obj)
-            ns.max_descendent_timestamp = self.shallow_timestamp
-            for alias in flow().aliases.get(ns.obj_id, []):
+            ns.max_descendent_timestamp = max(
+                ns.max_descendent_timestamp, self._timestamp
+            )
+            flow_ = flow()
+            for alias in flow_.aliases.get(ns.obj_id, []):
                 for cell in alias.cells_where_deep_live:
                     cell.add_used_cell_counter(alias, self._timestamp.cell_num)
-        if refresh_descendent_namespaces:
-            if seen is None:
-                seen = set()
-            if self in seen:
-                return
-            seen.add(self)
-            ns = self.namespace
-            if ns is not None:
-                for sym in ns.all_symbols_this_indentation(exclude_class=True):
-                    # this is to handle cases like `x = x.mutate(42)`, where
-                    # we could have changed some member of x but returned the
-                    # original object -- in this case, just assume that all
-                    # the stale namespace descendents are no longer stale, as
-                    # this is likely the user intention. For an example, see
-                    # `test_external_object_update_propagates_to_stale_namespace_symbols()`
-                    # in `test_frontend_checker.py`
-                    if not sym.is_waiting or refresh_namespace_waiting:
-                        # logger.error(
-                        #     "refresh %s due to %s (value %s) via namespace %s",
-                        #     sym.full_path,
-                        #     self.full_path,
-                        #     self.obj,
-                        #     ns.full_path,
-                        # )
-                        sym.refresh(
-                            refresh_descendent_namespaces=True,
-                            timestamp=self.shallow_timestamp,
-                            take_timestamp_snapshots=False,
-                            seen=seen,
-                        )
-        if refresh_namespace_waiting:
-            self.namespace_waiting_symbols.clear()
+        self.namespace_waiting_symbols.clear()
+        if not refresh_descendent_namespaces:
+            return
+        if seen is None:
+            seen = set()
+        if self in seen:
+            return
+        seen.add(self)
+        ns = self.namespace
+        if ns is None:
+            return
+        for sym in ns.all_symbols_this_indentation(exclude_class=True):
+            # this is to handle cases like `x = x.mutate(42)`, where
+            # we could have changed some member of x but returned the
+            # original object -- in this case, just assume that all
+            # the stale namespace descendents are no longer stale, as
+            # this is likely the user intention. For an example, see
+            # `test_external_object_update_propagates_to_stale_namespace_symbols()`
+            # in `test_frontend_checker.py`
+            # logger.error(
+            #     "refresh %s due to %s (value %s) via namespace %s",
+            #     sym.full_path,
+            #     self.full_path,
+            #     self.obj,
+            #     ns.full_path,
+            # )
+            sym.refresh(
+                refresh_descendent_namespaces=True,
+                timestamp=self._timestamp,
+                take_timestamp_snapshots=False,
+                seen=seen,
+            )
 
     def resync_if_necessary(self, refresh: bool) -> None:
         if not self.containing_scope.is_global:

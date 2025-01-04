@@ -202,6 +202,23 @@ class Symbol:
                 # not ideal because it relies on the `self` convention but is probably
                 # acceptable for the use case of improving readable names
                 ns.scope_name = self.name
+        self._maybe_fix_implicitness()
+
+    def _maybe_fix_implicitness(self) -> None:
+        if (
+            self.is_implicit
+            and not self._timestamp.is_initialized
+            and self.containing_namespace is not None
+        ):
+            self._timestamp = max(
+                (
+                    sym.timestamp
+                    for sym in flow().aliases.get(self.containing_namespace.obj_id, [])
+                ),
+                default=self._timestamp,
+            )
+        if self._timestamp.is_initialized and self._implicit:
+            self._implicit = False
 
     @property
     def updated_timestamps(self) -> Set[Timestamp]:
@@ -723,9 +740,12 @@ class Symbol:
             return -1
         total = sys.getrefcount(self.obj) - 1
         total -= len(flow().aliases.get(self.obj_id, []))
-        ns = flow().namespaces.get(self.obj_id, None)
-        if ns is not None and ns.obj is not None and ns.obj is not Symbol.NULL:
+        ns = self.namespace
+        if ns is not None and ns.obj is self.obj:
             total -= 1
+        ns = self.containing_namespace
+        if ns is not None and not ns.is_garbage:
+            total += 1
         return total
 
     def _should_cancel_propagation(self, prev_obj: Optional[Any]) -> bool:
@@ -991,18 +1011,6 @@ class Symbol:
         if mutated and self.is_immutable:
             return
         # if we get here, no longer implicit
-        if (
-            self.is_implicit
-            and not self._timestamp.is_initialized
-            and self.containing_namespace is not None
-        ):
-            self._timestamp = max(
-                (
-                    sym.timestamp
-                    for sym in flow_.aliases.get(self.containing_namespace.obj_id, [])
-                ),
-                default=self._timestamp,
-            )
         self._implicit = False
         # quick last fix to avoid overwriting if we appear inside the set of deps to add (or a 1st order ancestor)
         # TODO: check higher-order ancestors too?

@@ -841,7 +841,10 @@ class Cell(SliceableMixin):
                 for subsym in sym.get_namespace_symbols(recurse=True)
                 if not subsym._timestamp.is_initialized
             )
-        if self.last_check_content == self.current_content:
+        if (
+            self.last_check_content is None
+            or self.last_check_content == self.current_content
+        ):
             dead_symbols |= self.static_writes
             modified_symbols |= self.static_writes
         for resolved in live_resolved_symbols:

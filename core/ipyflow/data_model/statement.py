@@ -477,7 +477,7 @@ class Statement(SliceableMixin):
                 inner_deps = {inner_dep}
             inner_deps |= extra_deps
             if isinstance(inner_target, (ast.List, ast.Tuple)):
-                inner_namespace = flow().namespaces.get(inner_dep.obj_id, None)
+                inner_namespace = flow().namespaces.get(inner_dep.obj_id)
                 if inner_namespace is None or inner_namespace.obj is None:
                     self._handle_store_target_tuple_unpack_from_deps(
                         inner_target, inner_deps
@@ -495,17 +495,9 @@ class Statement(SliceableMixin):
         if saved_starred_node is not None:
             self._handle_starred_store_target(saved_starred_node, saved_starred_deps)
 
-    def _handle_store_target(
-        self, target: ast.AST, value: ast.AST, skip_namespace_check: bool = False
-    ) -> None:
+    def _handle_store_target(self, target: ast.AST, value: ast.AST) -> None:
         if isinstance(target, (ast.List, ast.Tuple)):
-            rhs_namespace = (
-                None
-                if skip_namespace_check
-                # next branch will always return None if skip_namespace_check is true,
-                # but we skip it anyway just for the sake of explicitness
-                else flow().namespaces.get(id(tracer().saved_assign_rhs_obj), None)
-            )
+            rhs_namespace = flow().namespaces.get(id(tracer().saved_assign_rhs_obj))
             if rhs_namespace is None or rhs_namespace.obj is None:
                 self._handle_store_target_tuple_unpack_from_deps(
                     target, resolve_rval_symbols(value)
@@ -525,12 +517,12 @@ class Statement(SliceableMixin):
                 maybe_fixup_literal_namespace=True,
             )
 
-    def _handle_store(self, node: Union[ast.Assign, ast.For]) -> None:
+    def _handle_store(self, node: Union[ast.Assign, ast.For, ast.AsyncFor]) -> None:
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 self._handle_store_target(target, node.value)
-        elif isinstance(node, ast.For):
-            self._handle_store_target(node.target, node.iter, skip_namespace_check=True)
+        elif isinstance(node, (ast.For, ast.AsyncFor)):
+            self._handle_store_target(node.target, node.iter)
         else:  # pragma: no cover
             raise TypeError("node type not supported for node: %s" % ast.dump(node))
 
@@ -548,7 +540,7 @@ class Statement(SliceableMixin):
                 logger.info("got key error: %s", e)
 
     def _make_lval_symbols(self) -> None:
-        if isinstance(self.stmt_node, (ast.Assign, ast.For)):
+        if isinstance(self.stmt_node, (ast.Assign, ast.For, ast.AsyncFor)):
             self._handle_store(self.stmt_node)
         else:
             self._make_lval_symbols_old()
@@ -619,7 +611,7 @@ class Statement(SliceableMixin):
                     is_function_def=is_function_def,
                     is_import=is_import,
                     class_scope=self.class_scope,
-                    propagate=not isinstance(self.stmt_node, ast.For),
+                    propagate=not isinstance(self.stmt_node, (ast.For, ast.AsyncFor)),
                     symbol_node=target if isinstance(target, ast.AST) else None,
                     is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
                 )

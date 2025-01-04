@@ -1463,6 +1463,11 @@ class DataflowTracer(StackFrameManager):
 
         return tracing_decorator
 
+    # @pyc.after_for_iter
+    # def after_for_iter(self, ret: Any, node: ast.AST, *_, **__) -> None:
+    #     pass
+    #     # print("external calls", self.external_calls[-1].args, ast.unparse(node))
+
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, _ret: Any, stmt_id: int, frame: FrameType, *_, **__) -> None:
         try:
@@ -1558,7 +1563,8 @@ class DataflowTracer(StackFrameManager):
             prev_trace_stmt_in_cur_frame = self.prev_trace_stmt_in_cur_frame
             # both of the following stmts should be processed when body is entered
             if isinstance(
-                prev_trace_stmt_in_cur_frame.stmt_node, (ast.For, ast.If, ast.With)
+                prev_trace_stmt_in_cur_frame.stmt_node,
+                (ast.For, ast.AsyncFor, ast.If, ast.With, ast.AsyncWith),
             ):
                 self.after_stmt(None, prev_trace_stmt_in_cur_frame.stmt_id, frame)
         self.prev_trace_stmt_in_cur_frame = trace_stmt

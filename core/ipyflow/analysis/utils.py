@@ -38,9 +38,11 @@ def stmt_contains_lval(node: ast.stmt):
             ast.FunctionDef,
             ast.AsyncFunctionDef,
             ast.For,
+            ast.AsyncFor,
             ast.Import,
             ast.ImportFrom,
             ast.With,
+            ast.AsyncWith,
         ),
     )
     return simple_contains_lval or ContainsNamedExprVisitor()(node)

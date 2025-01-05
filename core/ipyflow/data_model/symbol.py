@@ -571,6 +571,13 @@ class Symbol:
         return self.name == self.IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME
 
     @property
+    def is_implicit_virtual(self) -> bool:
+        return self.name in (
+            self.IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME,
+            self.IPYFLOW_ITER_VIRTUAL_SYMBOL_NAME,
+        )
+
+    @property
     def is_underscore(self) -> bool:
         return self.name == "_" and self.containing_scope.is_global
 
@@ -1375,9 +1382,15 @@ class Symbol:
             return
         if self.obj is not obj:
             flow_ = flow()
-            for alias in flow_.aliases.get(
-                self.cached_obj_id or -1, set()
-            ) | flow_.aliases.get(self.obj_id, set()):
+            if len(flow_.aliases.get(id(obj), [])) == 0:
+                aliases_to_check = flow_.aliases.get(
+                    self.cached_obj_id or -1, set()
+                ) | flow_.aliases.get(self.obj_id, set())
+            else:
+                aliases_to_check = set()
+            for alias in aliases_to_check:
+                if alias.is_implicit_virtual:
+                    continue
                 containing_namespace = alias.containing_namespace
                 if containing_namespace is None:
                     continue

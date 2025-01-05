@@ -212,7 +212,7 @@ class Namespace(Scope):
             return name
 
     def _lookup_subscript(self, name: SupportedIndexType) -> Optional[Symbol]:
-        ret = self._subscript_symbol_by_name.get(name, None)
+        ret = self._subscript_symbol_by_name.get(name)
         if (
             isinstance(self.obj, Sequence)
             and isinstance(name, int)
@@ -220,7 +220,7 @@ class Namespace(Scope):
         ):
             if name < 0 and ret is None:
                 name = len(self.obj) + name
-                ret = self._subscript_symbol_by_name.get(name, None)
+                ret = self._subscript_symbol_by_name.get(name)
         return ret
 
     def lookup_symbol_by_name_this_indentation(

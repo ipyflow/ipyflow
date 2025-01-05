@@ -1478,7 +1478,12 @@ class DataflowTracer(StackFrameManager):
             parent_scope=self.cur_frame_original_scope,
             force_allow_iteration=True,
         )
-        for i, (arg, arg_syms) in enumerate(self.external_calls[-1].args):
+        before_extra: List[Tuple[Any, Set[Symbol]]] = []
+        if isinstance(ret, enumerate):
+            before_extra.append((0, set()))
+        for i, (arg, arg_syms) in enumerate(
+            before_extra + self.external_calls[-1].args
+        ):
             ns.upsert_symbol_for_name(
                 i,
                 arg,

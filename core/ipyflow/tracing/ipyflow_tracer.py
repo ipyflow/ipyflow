@@ -1463,10 +1463,31 @@ class DataflowTracer(StackFrameManager):
 
         return tracing_decorator
 
-    # @pyc.after_for_iter
-    # def after_for_iter(self, ret: Any, node: ast.AST, *_, **__) -> None:
-    #     pass
-    #     # print("external calls", self.external_calls[-1].args, ast.unparse(node))
+    @pyc.register_raw_handler(pyc.after_for_iter)
+    def after_for_iter(self, ret: Any, *_, **__) -> None:
+        # A for loop is kind of like an assignment, so save off the iterable as if it where the RHS of one. We'll use it
+        # later to either unpack individual zip / enumerate iterators from the anonymous namespace created below, or as
+        # a handle to look up potential existing symbols over which we're iterating, so that we can upsert an aliasing
+        # virtual iterator symbol through which mutations can propagate.
+        self.saved_assign_rhs_obj = ret
+        if not isinstance(ret, (enumerate, zip)):
+            return
+        ns = Namespace(
+            ret,
+            Namespace.ANONYMOUS,
+            parent_scope=self.cur_frame_original_scope,
+            force_allow_iteration=True,
+        )
+        for i, (arg, arg_syms) in enumerate(self.external_calls[-1].args):
+            ns.upsert_symbol_for_name(
+                i,
+                arg,
+                arg_syms,
+                is_subscript=True,
+                is_anonymous=True,
+                implicit=True,
+                propagate=False,
+            )
 
     @pyc.register_raw_handler(pyc.after_stmt)
     def after_stmt(self, _ret: Any, stmt_id: int, frame: FrameType, *_, **__) -> None:

@@ -344,6 +344,7 @@ class Statement(SliceableMixin):
         target: ast.AST,
         deps: Set[Symbol],
         maybe_fixup_literal_namespace: bool = False,
+        iter_namespace: Optional[Namespace] = None,
     ) -> None:
         # logger.error("upsert %s into %s", deps, tracer()._partial_resolve_ref(target))
         try:
@@ -369,6 +370,15 @@ class Statement(SliceableMixin):
             # if flow().is_test:
             #     raise ke
             return
+        if iter_namespace is not None:
+            iter_namespace.upsert_symbol_for_name(
+                Symbol.IPYFLOW_ITER_VIRTUAL_SYMBOL_NAME,
+                obj,
+                set(),
+                is_anonymous=True,
+                propagate=False,
+                implicit=True,
+            )
         if isinstance(target, ast.Name) and getattr(obj, "__name__", "").startswith(
             Slice.FUNC_PREFIX
         ):
@@ -410,13 +420,20 @@ class Statement(SliceableMixin):
                 namespace_for_upsert.parent_scope = scope
 
     def _handle_store_target_tuple_unpack_from_deps(
-        self, target: Union[ast.List, ast.Tuple], deps: Set[Symbol]
+        self,
+        target: Union[ast.List, ast.Tuple],
+        deps: Set[Symbol],
+        iter_namespace: Optional[Namespace] = None,
     ) -> None:
         for inner_target in target.elts:
             if isinstance(inner_target, (ast.List, ast.Tuple)):
-                self._handle_store_target_tuple_unpack_from_deps(inner_target, deps)
+                self._handle_store_target_tuple_unpack_from_deps(
+                    inner_target, deps, iter_namespace=iter_namespace
+                )
             else:
-                self._handle_assign_target_for_deps(inner_target, deps)
+                self._handle_assign_target_for_deps(
+                    inner_target, deps, iter_namespace=iter_namespace
+                )
 
     def _handle_starred_store_target(
         self, target: ast.Starred, inner_deps: List[Optional[Symbol]]
@@ -460,6 +477,7 @@ class Statement(SliceableMixin):
         target: Union[ast.List, ast.Tuple],
         rhs_namespace: Namespace,
         extra_deps: Set[Symbol],
+        is_for: bool = False,
     ) -> None:
         saved_starred_node: Optional[ast.Starred] = None
         saved_starred_deps = []
@@ -487,34 +505,62 @@ class Statement(SliceableMixin):
                         inner_target, inner_namespace, extra_deps
                     )
             else:
+                iter_namespace = None
+                if is_for and inner_dep is not None:
+                    iter_namespace = inner_dep.namespaced()
                 self._handle_assign_target_for_deps(
                     inner_target,
                     inner_deps,
+                    iter_namespace=iter_namespace,
                     maybe_fixup_literal_namespace=True,
                 )
         if saved_starred_node is not None:
             self._handle_starred_store_target(saved_starred_node, saved_starred_deps)
 
-    def _handle_store_target(self, target: ast.AST, value: ast.AST) -> None:
+    def _handle_store_target(
+        self, target: ast.AST, value: ast.AST, is_for: bool = False
+    ) -> None:
+        saved_assign_rhs_obj = tracer().saved_assign_rhs_obj
+        deps = resolve_rval_symbols(value)
+        iter_symbol = None
+        if is_for:
+            for dep in deps:
+                if dep.obj is saved_assign_rhs_obj:
+                    iter_symbol = dep
+                    break
         if isinstance(target, (ast.List, ast.Tuple)):
-            rhs_namespace = flow().namespaces.get(id(tracer().saved_assign_rhs_obj))
+            if not is_for or isinstance(saved_assign_rhs_obj, (enumerate, zip)):
+                rhs_namespace = flow().namespaces.get(id(saved_assign_rhs_obj))
+            else:
+                # if we're in a for loop and the loop iter is not a special case of an enumerate or a zip, don't try to
+                # unpack from the namespace for the individual loop variables -- this very namespace is where we will
+                # end up inserting the virtual iteration symbol for mutation propagation, and we want such mutations to
+                # propagate to all loop vars.
+                rhs_namespace = None
             if rhs_namespace is None or rhs_namespace.obj is None:
                 self._handle_store_target_tuple_unpack_from_deps(
-                    target, resolve_rval_symbols(value)
+                    target,
+                    deps,
+                    iter_namespace=None
+                    if iter_symbol is None
+                    else iter_symbol.namespaced(),
                 )
             else:
                 extra_deps: Set[Symbol] = set()
                 if isinstance(value, ast.Call):
                     # in this case, every target should depend on whatever was called
-                    extra_deps |= resolve_rval_symbols(value)
+                    extra_deps = deps
                 self._handle_store_target_tuple_unpack_from_namespace(
-                    target, rhs_namespace, extra_deps
+                    target, rhs_namespace, extra_deps, is_for=is_for
                 )
         else:
             self._handle_assign_target_for_deps(
                 target,
-                resolve_rval_symbols(value),
+                deps,
                 maybe_fixup_literal_namespace=True,
+                iter_namespace=None
+                if iter_symbol is None
+                else iter_symbol.namespaced(),
             )
 
     def _handle_store(self, node: Union[ast.Assign, ast.For, ast.AsyncFor]) -> None:
@@ -522,7 +568,7 @@ class Statement(SliceableMixin):
             for target in node.targets:
                 self._handle_store_target(target, node.value)
         elif isinstance(node, (ast.For, ast.AsyncFor)):
-            self._handle_store_target(node.target, node.iter)
+            self._handle_store_target(node.target, node.iter, is_for=True)
         else:  # pragma: no cover
             raise TypeError("node type not supported for node: %s" % ast.dump(node))
 

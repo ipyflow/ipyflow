@@ -40,7 +40,9 @@ class Namespace(Scope):
 
     # TODO: support (multiple) inheritance by allowing
     #  Namespaces from classes to clone their parent class's Namespaces
-    def __init__(self, obj: Any, *args, **kwargs) -> None:
+    def __init__(
+        self, obj: Any, *args, force_allow_iteration: bool = False, **kwargs
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.cloned_from: Optional["Namespace"] = None
         self.child_clones: List["Namespace"] = []
@@ -63,6 +65,7 @@ class Namespace(Scope):
         self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()
         self._subscript_symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
         self.namespace_waiting_symbols: Set[Symbol] = set()
+        self._force_allow_iteration = force_allow_iteration
 
     @property
     def is_namespace_scope(self):
@@ -84,11 +87,17 @@ class Namespace(Scope):
         return len(self._subscript_symbol_by_name) + len(self._symbol_by_name)
 
     def _iter_inner(self) -> Generator[Optional[Symbol], None, None]:
-        for i in range(len(self.obj)):
+        if isinstance(self.obj, (list, tuple)):
+            limit = len(self.obj)
+        else:
+            limit = len(self._subscript_symbol_by_name)
+        for i in range(limit):
             yield self.lookup_symbol_by_name_this_indentation(i, is_subscript=True)
 
     def __iter__(self) -> Iterator[Optional[Symbol]]:
-        if not isinstance(self.obj, (list, tuple)):  # pragma: no cover
+        if not self._force_allow_iteration and not isinstance(
+            self.obj, (list, tuple)
+        ):  # pragma: no cover
             raise TypeError(
                 "tried to iterate through non-sequence namespace %s: %s", self, self.obj
             )

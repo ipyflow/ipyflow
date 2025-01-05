@@ -102,6 +102,7 @@ class Symbol:
     IMMUTABLE_TYPES = set(IMMUTABLE_PRIMITIVE_TYPES)
 
     IPYFLOW_MUTATION_VIRTUAL_SYMBOL_NAME = "__ipyflow_mutation"
+    IPYFLOW_ITER_VIRTUAL_SYMBOL_NAME = "__ipyflow_iter"
 
     def __init__(
         self,

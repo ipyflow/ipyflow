@@ -275,13 +275,22 @@ class Symbol:
 
     @property
     def _initialized_timestamp(self) -> Timestamp:
+        return self._get_initialized_timestamp()
+
+    def _get_initialized_timestamp(
+        self, seen: Optional[Set["Symbol"]] = None
+    ) -> Timestamp:
         ts = self._timestamp
         if ts.is_initialized:
             return ts
+        seen = seen or set()
+        seen.add(self)
         ns = self.containing_namespace
         if ns is not None:
             for sym in flow().aliases.get(ns.obj_id, []):
-                return sym._initialized_timestamp
+                if sym in seen:
+                    continue
+                return sym._get_initialized_timestamp(seen=seen)
         return ts
 
     @property

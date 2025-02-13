@@ -1,6 +1,13 @@
 History
 =======
 
+0.0.208 (2025-02-12)
+--------------------
+* [kernel] propagate mutations through `zip` and `enumerate` iterables;
+* [kernel] add `%histslice` magic;
+* [kernel] instrumentation for `async for` loop variable updates;
+* [kernel] misc bugfixes and stability improvements;
+
 0.0.207 (2024-12-22)
 --------------------
 * [kernel] only use globally-accessible symbols to induce edges;

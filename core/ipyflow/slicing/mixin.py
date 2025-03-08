@@ -263,8 +263,7 @@ class SliceableMixin(Protocol):
         return NotImplemented
 
     @classmethod
-    def from_id_nullable(cls, sid: IdType) -> Optional["SliceableMixin"]:
-        ...
+    def from_id_nullable(cls, sid: IdType) -> Optional["SliceableMixin"]: ...
 
     @property
     def timestamp(self) -> Timestamp:
@@ -481,7 +480,7 @@ class SliceableMixin(Protocol):
 
     @staticmethod
     def _process_memoized_seeds(
-        seeds: Iterable[Union[TimestampOrCounter, "SliceableMixin"]]
+        seeds: Iterable[Union[TimestampOrCounter, "SliceableMixin"]],
     ) -> Set[TimestampOrCounter]:
         processed_seeds: Set[TimestampOrCounter] = set()
         for seed in seeds:

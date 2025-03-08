@@ -1447,7 +1447,7 @@ class Symbol:
 
     @staticmethod
     def _make_list_eq(
-        eqs: List[Callable[[Any, Any], bool]]
+        eqs: List[Callable[[Any, Any], bool]],
     ) -> Callable[[List[Any], List[Any]], bool]:
         def list_eq(lst1: List[Any], lst2: List[Any]) -> bool:
             for eq, obj1, obj2 in zip(eqs, lst1, lst2):

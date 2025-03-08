@@ -25,7 +25,7 @@ def _simplify_symbol_refs(symbols: Set[SymbolRef]) -> Set[str]:
 
 
 def compute_live_dead_symbol_refs_raw(
-    code: Union[str, ast.AST]
+    code: Union[str, ast.AST],
 ) -> Tuple[Set[SymbolRef], Set[SymbolRef]]:
     if isinstance(code, str):
         code = textwrap.dedent(code)
@@ -35,7 +35,7 @@ def compute_live_dead_symbol_refs_raw(
 
 
 def compute_live_dead_symbol_refs(
-    code: Union[str, ast.AST]
+    code: Union[str, ast.AST],
 ) -> Tuple[Set[str], Set[str]]:
     live, dead = compute_live_dead_symbol_refs_raw(code)
     return _simplify_symbol_refs(live), _simplify_symbol_refs(dead)

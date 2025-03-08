@@ -416,9 +416,9 @@ class ComputeLiveSymbolRefs(
                 self.visit(gen.iter)
                 self.visit(gen.ifs)
 
-    visit_DictComp = (
-        visit_ListComp
-    ) = visit_SetComp = visit_GeneratorExp = generic_visit_comprehension
+    visit_DictComp = visit_ListComp = visit_SetComp = visit_GeneratorExp = (
+        generic_visit_comprehension
+    )
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         with self.kill_context():

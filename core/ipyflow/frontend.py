@@ -83,9 +83,9 @@ class FrontendCheckerResult(NamedTuple):
             },
             "waiting_cells": list(self.waiting_cells | self.typecheck_error_cells),
             "ready_cells": list(self.ready_cells),
-            "new_ready_cells": list(self.new_ready_cells)
-            if self.allow_new_ready
-            else [],
+            "new_ready_cells": (
+                list(self.new_ready_cells) if self.allow_new_ready else []
+            ),
             "forced_reactive_cells": list(self.forced_reactive_cells),
             "forced_cascading_reactive_cells": list(
                 self.forced_cascading_reactive_cells

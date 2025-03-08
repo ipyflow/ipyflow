@@ -170,9 +170,9 @@ class DataflowTracer(StackFrameManager):
             self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 reactive_spec
             ]
-            self.cascading_reactive_node_ids: Set[
-                int
-            ] = self.augmented_node_ids_by_spec[cascading_reactive_spec]
+            self.cascading_reactive_node_ids: Set[int] = (
+                self.augmented_node_ids_by_spec[cascading_reactive_spec]
+            )
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_spec[
                 blocking_spec
             ]
@@ -1151,9 +1151,11 @@ class DataflowTracer(StackFrameManager):
             ext_call_cand._process_arg_impl(
                 (
                     arg_obj,
-                    resolve_rval_symbols(arg_node, should_update_usage_info=False)
-                    if arg_node
-                    else set(),
+                    (
+                        resolve_rval_symbols(arg_node, should_update_usage_info=False)
+                        if arg_node
+                        else set()
+                    ),
                 )
             )
         else:
@@ -1161,9 +1163,11 @@ class DataflowTracer(StackFrameManager):
                 key,
                 (
                     arg_obj,
-                    resolve_rval_symbols(arg_node, should_update_usage_info=False)
-                    if arg_node
-                    else set(),
+                    (
+                        resolve_rval_symbols(arg_node, should_update_usage_info=False)
+                        if arg_node
+                        else set()
+                    ),
                 ),
             )
         if is_last:

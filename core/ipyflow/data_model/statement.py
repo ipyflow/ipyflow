@@ -363,9 +363,11 @@ class Statement(SliceableMixin):
             if flow().is_dev_mode:
                 logger.warning(
                     "keyerror for %s",
-                    astunparse.unparse(target)
-                    if isinstance(target, ast.AST)
-                    else target,
+                    (
+                        astunparse.unparse(target)
+                        if isinstance(target, ast.AST)
+                        else target
+                    ),
                 )
             # if flow().is_test:
             #     raise ke
@@ -541,9 +543,9 @@ class Statement(SliceableMixin):
                 self._handle_store_target_tuple_unpack_from_deps(
                     target,
                     deps,
-                    iter_namespace=None
-                    if iter_symbol is None
-                    else iter_symbol.namespaced(),
+                    iter_namespace=(
+                        None if iter_symbol is None else iter_symbol.namespaced()
+                    ),
                 )
             else:
                 extra_deps: Set[Symbol] = set()
@@ -558,9 +560,9 @@ class Statement(SliceableMixin):
                 target,
                 deps,
                 maybe_fixup_literal_namespace=True,
-                iter_namespace=None
-                if iter_symbol is None
-                else iter_symbol.namespaced(),
+                iter_namespace=(
+                    None if iter_symbol is None else iter_symbol.namespaced()
+                ),
             )
 
     def _handle_store(self, node: Union[ast.Assign, ast.For, ast.AsyncFor]) -> None:
@@ -680,9 +682,11 @@ class Statement(SliceableMixin):
                 if flow().is_dev_mode:
                     logger.warning(
                         "keyerror for %s",
-                        astunparse.unparse(target)
-                        if isinstance(target, ast.AST)
-                        else target,
+                        (
+                            astunparse.unparse(target)
+                            if isinstance(target, ast.AST)
+                            else target
+                        ),
                     )
             except ImportError:
                 raise

@@ -15,12 +15,11 @@ file = None
 def open(file, *_, **__) -> UpsertSymbol[FileSystem[file]]: ...
 
 class IOBase:
-
     """"""  # just to ensure space isn't removed by autoformatting
 
     @handler_for("flush", "truncate", "write", "writelines")
     def writer_method(
-        self: AnyOf[FileSystem[file], Parents[FileSystem[file], ...]]
+        self: AnyOf[FileSystem[file], Parents[FileSystem[file], ...]],
     ) -> Mutate[FileSystem[file], self]: ...
 
     """"""

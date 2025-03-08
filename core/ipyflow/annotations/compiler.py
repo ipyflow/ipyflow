@@ -72,9 +72,9 @@ def _arg_position_in_signature(
     posonlyargs = getattr(func.args, "posonlyargs", [])
     for i, arg in enumerate(posonlyargs + func.args.args + func.args.kwonlyargs):
         if arg.arg == arg_name:
-            return None if i >= len(posonlyargs) + len(
-                func.args.args
-            ) else i - is_method, i < len(posonlyargs)
+            return (
+                None if i >= len(posonlyargs) + len(func.args.args) else i - is_method
+            ), i < len(posonlyargs)
     raise ValueError(
         "arg %s not found in function signature %s" % (arg_name, ast.dump(func))
     )

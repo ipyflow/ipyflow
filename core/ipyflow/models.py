@@ -24,12 +24,10 @@ _TimestampContainer: List[Type["Timestamp"]] = []
 if TYPE_CHECKING:
 
     @overload
-    def cells(cell_id: None = None) -> Type["Cell"]:
-        ...
+    def cells(cell_id: None = None) -> Type["Cell"]: ...
 
     @overload
-    def cells(cell_id: "IdType") -> "Cell":
-        ...
+    def cells(cell_id: "IdType") -> "Cell": ...
 
 
 def cells(cell_id: Optional["IdType"] = None) -> Union[Type["Cell"], "Cell"]:
@@ -75,12 +73,10 @@ def scopes() -> Type["Scope"]:
 if TYPE_CHECKING:
 
     @overload
-    def symbols(sym: None = None) -> Type["Symbol"]:
-        ...
+    def symbols(sym: None = None) -> Type["Symbol"]: ...
 
     @overload
-    def symbols(sym: "Symbol") -> "Symbol":
-        ...
+    def symbols(sym: "Symbol") -> "Symbol": ...
 
 
 def symbols(sym: Optional["Symbol"] = None) -> Union[Type["Symbol"], "Symbol"]:

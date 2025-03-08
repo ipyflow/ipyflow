@@ -485,9 +485,9 @@ class NotebookFlow(singletons.NotebookFlow):
         # only called in test context
         for sym in self.all_symbols():
             sym._updated_timestamps.clear()
-            sym._timestamp = (
-                sym._max_inner_timestamp
-            ) = sym.required_timestamp = Timestamp.uninitialized()
+            sym._timestamp = sym._max_inner_timestamp = sym.required_timestamp = (
+                Timestamp.uninitialized()
+            )
             sym.timestamp_by_used_time.clear()
             sym.timestamp_by_liveness_time.clear()
         cells().clear()

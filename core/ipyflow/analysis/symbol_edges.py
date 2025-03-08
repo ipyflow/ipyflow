@@ -114,7 +114,7 @@ class GetSymbolEdges(
 
 
 def get_symbol_edges(
-    node: Union[str, ast.AST]
+    node: Union[str, ast.AST],
 ) -> List[Tuple[Union[str, ast.AST], ast.AST]]:
     if isinstance(node, str):
         node = ast.parse(node).body[0]

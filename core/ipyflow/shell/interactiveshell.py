@@ -401,11 +401,15 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         is_already_recording_output = raw_cell.strip().startswith("%%capture")
         self._should_capture_output = should_trace and not is_already_recording_output
         try:
-            with self._tracing_context(
-                self.syntax_transforms_enabled
-                # disable syntax transforms for cell magics
-                and not raw_cell.strip().startswith("%%"),
-            ) if should_trace else suppress():
+            with (
+                self._tracing_context(
+                    self.syntax_transforms_enabled
+                    # disable syntax transforms for cell magics
+                    and not raw_cell.strip().startswith("%%"),
+                )
+                if should_trace
+                else suppress()
+            ):
                 has_transformed_cell = kwargs.pop("transformed_cell", None) is not None
                 try:
                     transformed_cell = self.transform_cell(raw_cell)

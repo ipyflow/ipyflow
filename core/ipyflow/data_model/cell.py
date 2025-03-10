@@ -46,8 +46,9 @@ from ipyflow.memoization import (
 from ipyflow.models import _CodeCellContainer, cells, statements, symbols
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
+from ipyflow.tracing.output_recorder import CapturedIO
 from ipyflow.types import IdType, TimestampOrCounter
-from ipyflow.utils.ipython_utils import _IPY, CapturedIO
+from ipyflow.utils.ipython_utils import _IPY
 from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
 
 if TYPE_CHECKING:

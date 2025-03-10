@@ -20,8 +20,8 @@ from ipyflow.memoization import MemoizedOutputLevel
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.interrupt_tracer import InterruptTracer
 from ipyflow.tracing.ipyflow_tracer import DataflowTracer, StackFrameManager
+from ipyflow.tracing.output_recorder import OutputRecorder
 from ipyflow.utils.ipython_utils import (
-    CaptureOutputTee,
     ast_transformer_context,
     input_transformer_context,
     make_mro_inserter_metaclass,
@@ -34,20 +34,6 @@ logger.setLevel(logging.WARNING)
 
 
 _CAPTURE_OUTPUT_SAVE_LIMIT = 2 * 1024 * 1024
-
-
-class OutputRecorder(pyc.BaseTracer):
-    should_patch_meta_path = False
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        with self.persistent_fields():
-            self.capture_output_tee = CaptureOutputTee()
-        self.capture_output = None
-
-    @pyc.register_raw_handler(pyc.init_module)
-    def init_module(self, *_, **__):
-        self.capture_output = self.capture_output_tee.__enter__()
 
 
 class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):

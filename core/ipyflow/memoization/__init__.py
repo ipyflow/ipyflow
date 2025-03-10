@@ -4,7 +4,7 @@ import shlex
 from enum import Enum
 from typing import TYPE_CHECKING, Any, List, NamedTuple, Optional
 
-from ipyflow.utils.ipython_utils import CapturedIO
+from ipyflow.tracing.output_recorder import CapturedIO
 
 if TYPE_CHECKING:
     from ipyflow.data_model.symbol import Symbol

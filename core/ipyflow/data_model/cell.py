@@ -46,7 +46,7 @@ from ipyflow.memoization import (
 from ipyflow.models import _CodeCellContainer, cells, statements, symbols
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.mixin import FormatType, Slice, SliceableMixin
-from ipyflow.tracing.output_recorder import CapturedIO
+from ipyflow.tracing.output_recorder import IPyflowCapturedIO
 from ipyflow.types import IdType, TimestampOrCounter
 from ipyflow.utils.ipython_utils import _IPY
 from ipyflow.utils.ipython_utils import cell_counter as ipy_cell_counter
@@ -105,7 +105,7 @@ class Cell(SliceableMixin):
         self.executed_content: Optional[str] = None
         self.current_content: str = content
         self.last_ast_content: Optional[str] = None
-        self.captured_output: Optional[CapturedIO] = None
+        self.captured_output: Optional[IPyflowCapturedIO] = None
         self.tags: Tuple[str, ...] = tags
         self.prev_cell = prev_cell
         self.override_live_refs: Optional[List[str]] = None
@@ -997,7 +997,7 @@ class Cell(SliceableMixin):
             )
             print_("-" * max_len)
         if show_output and cell_to_repro.captured_output is not None:
-            cell_to_repro.captured_output.show()
+            cell_to_repro.captured_output.show(render_out_expr=False)
         return shell().user_ns["Out"].get(cell_to_repro.cell_ctr)
 
 

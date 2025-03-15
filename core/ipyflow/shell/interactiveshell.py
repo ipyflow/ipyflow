@@ -505,7 +505,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             sym.refresh(timestamp=new_updated_ts)
         if cell.memoized_output_level == MemoizedOutputLevel.VERBOSE:
             cell.captured_output = memoized_display_output
-            memoized_display_output.show()
+            memoized_display_output.show(render_out_expr=False)
         return cell.get_transformed_memoized_content(ctr=identical_result_ctr)
 
     def before_run_cell(

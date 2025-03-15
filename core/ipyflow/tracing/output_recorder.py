@@ -78,6 +78,21 @@ class TeeCompatibleCapturingDisplayPublisher(CapturingDisplayPublisher):
         self.outputs.clear()
 
 
+class IPyflowCapturedIO(CapturedIO):
+    def __init__(self, stdout, stderr, outputs=None, exec_ctr=None) -> None:
+        super().__init__(stdout, stderr, outputs=outputs)
+        self._exec_ctr = exec_ctr
+
+    def show(self, render_out_expr: bool = True) -> None:
+        super().show()
+        if not render_out_expr:
+            return
+        shell_ = shell()
+        expr_result = shell_.user_ns.get("Out", {}).get(self._exec_ctr)
+        if expr_result is not None:
+            shell_.displayhook(expr_result)
+
+
 class CaptureOutputTee:
     """
     Context manager for capturing and replicating stdout/err and rich display publishers.
@@ -123,7 +138,12 @@ class CaptureOutputTee:
             )
 
         self._in_context = True
-        return CapturedIO(stdout, stderr, outputs)
+        return IPyflowCapturedIO(
+            stdout,
+            stderr,
+            outputs,
+            None if self.shell is None else self.shell.execution_count,
+        )
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         if not self._in_context:

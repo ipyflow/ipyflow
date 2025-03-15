@@ -1576,11 +1576,6 @@ class DataflowTracer(StackFrameManager):
                 stmt,
                 propagate=False,
             )
-            try:
-                if isinstance(sys.stdout, Tee):
-                    sys.stdout.out2.write(repr(ret) + "\n")
-            except Exception:
-                pass
         self._module_stmt_counter += 1
         self.tracing_disabled_since_last_module_stmt = False
         return ret

@@ -53,7 +53,6 @@ from ipyflow.singletons import SingletonBaseTracer, flow, shell
 from ipyflow.tracing.external_calls import resolve_external_call
 from ipyflow.tracing.external_calls.base_handlers import ExternalCallHandler
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
-from ipyflow.tracing.output_recorder import Tee
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
 from ipyflow.tracing.uninstrument import uninstrument
 from ipyflow.tracing.utils import match_container_obj_or_namespace_with_literal_nodes

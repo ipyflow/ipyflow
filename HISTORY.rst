@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.209 (2025-03-16)
+--------------------
+* [kernel] for captured outputs, always ensure displayhook is reinvoked;
+
 0.0.208 (2025-02-12)
 --------------------
 * [kernel] propagate mutations through `zip` and `enumerate` iterables;

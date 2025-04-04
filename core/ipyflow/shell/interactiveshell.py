@@ -322,6 +322,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     ):
         if self._has_cell_id:
             kwargs["cell_id"] = cell_id
+        # save it off in case extension is disabled
+        tee_output_tracer = self.tee_output_tracer
         try:
             return super().run_cell(
                 raw_cell,
@@ -331,11 +333,12 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 **kwargs,
             )
         finally:
-            if self._reset_should_capture_output():
-                # Kind of weird -- we enter the context using the tracer to ensure it only picks up
-                # user output, but we don't exit it until here to ensure we also pick up output from
-                # ipython post execute hooks (e.g. where matplotlib flushes buffers).
-                self.tee_output_tracer.capture_output_tee.__exit__(None, None, None)
+            # won't be available if extension is disabled
+            getattr(self, "_reset_should_capture_output", lambda: None)()
+            # Kind of weird -- we enter the context using the tracer to ensure it only picks up
+            # user output, but we don't exit it until here to ensure we also pick up output from
+            # ipython post execute hooks (e.g. where matplotlib flushes buffers).
+            tee_output_tracer.done_capturing_output()
 
     async def run_cell_async(
         self,

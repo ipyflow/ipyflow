@@ -167,7 +167,15 @@ class OutputRecorder(pyc.BaseTracer):
         with self.persistent_fields():
             self.capture_output_tee = CaptureOutputTee()
         self.capture_output = None
+        self.capturing_output = False
 
     @pyc.register_raw_handler(pyc.init_module)
     def init_module(self, *_, **__):
+        self.capturing_output = True
         self.capture_output = self.capture_output_tee.__enter__()
+
+    def done_capturing_output(self) -> None:
+        if not self.capturing_output:
+            return
+        self.capturing_output = False
+        self.capture_output_tee.__exit__(None, None, None)

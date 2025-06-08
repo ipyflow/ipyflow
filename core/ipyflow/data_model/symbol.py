@@ -70,7 +70,7 @@ def _debounced_exec_schedule(executed_cell_id: IdType, reactive: bool) -> None:
         if exec_schedule == ExecutionSchedule.DAG_BASED:
             settings.exec_schedule = ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
         flow_.get_and_set_exception_raised_during_execution(None)
-        flow_.handle(
+        flow_.comm_manager.handle(
             {
                 "type": "compute_exec_schedule",
                 "executed_cell_id": executed_cell_id,
@@ -80,7 +80,7 @@ def _debounced_exec_schedule(executed_cell_id: IdType, reactive: bool) -> None:
         )
     finally:
         settings.exec_schedule = exec_schedule
-        flow_.debounced_exec_schedule_pending = False
+        flow_.comm_manager.debounced_exec_schedule_pending = False
 
 
 class SymbolType(Enum):
@@ -1209,7 +1209,7 @@ class Symbol:
         if _debounced_exec_schedule(
             cells().at_timestamp(self.timestamp).cell_id, reactive=reactive
         ):
-            flow().debounced_exec_schedule_pending = True
+            flow().comm_manager.debounced_exec_schedule_pending = True
 
     def namespaced(self) -> "Namespace":
         ns = self.namespace

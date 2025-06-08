@@ -1,4 +1,5 @@
 **/.DS_Store
+**/.cursor
 **/.vscode
 **/__pycache__
 **/.mypy_cache

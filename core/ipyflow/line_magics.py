@@ -421,7 +421,7 @@ def set_exec_mode(line_: str) -> None:
         for cell in cells().current_cells_for_each_id():
             cell.set_ready(False)
     flow_._min_new_ready_cell_counter = flow_.cell_counter() + 1
-    comm = flow_._comm
+    comm = flow_.comm_manager._comm
     if comm is not None:
         comm.send(
             {"type": "set_exec_mode", "exec_mode": exec_mode.value, "success": True}

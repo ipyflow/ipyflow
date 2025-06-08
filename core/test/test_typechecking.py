@@ -17,7 +17,9 @@ _flow_fixture, run_cell_ = make_flow_fixture(mark_typecheck_failures_unsafe=True
 def run_cell(cell, cell_id=None, **kwargs):
     """Mocks the `change active cell` portion of the comm protocol"""
     if cell_id is not None:
-        flow().handle({"type": "change_active_cell", "active_cell_id": cell_id})
+        flow().comm_manager.handle(
+            {"type": "change_active_cell", "active_cell_id": cell_id}
+        )
     run_cell_(cell, **kwargs)
 
 

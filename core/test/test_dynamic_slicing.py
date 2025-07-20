@@ -190,6 +190,19 @@ def test_list_mutations():
     assert slice_size == 5, "got %d" % slice_size
 
 
+def test_nested_list_mutations():
+    run_cell("dummy = 0")
+    run_cell("lst = [[]]")
+    run_cell("lst[0].append(1)")
+    run_cell("lst[0].append(2)")
+    run_cell("lst[0].append(3); lst[0].append(4)")
+    run_cell("logging.info(lst)")
+    deps = set(compute_unparsed_slice(5).keys())
+    assert deps == {2, 3, 4, 5}, "got %s" % deps
+    slice_size = num_stmts_in_slice(5)
+    assert slice_size == 5, "got %d" % slice_size
+
+
 def test_imports():
     run_cell("import numpy as np")
     run_cell("arr = np.zeros((5,))")

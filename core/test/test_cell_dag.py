@@ -2,7 +2,7 @@
 import logging
 from test.utils import make_flow_fixture
 
-from ipyflow.data_model.cell import cells
+from ipyflow.models import cells
 from ipyflow.slicing.context import dynamic_slicing_context
 
 logging.basicConfig(level=logging.ERROR)
@@ -33,3 +33,12 @@ def test_simple():
         assert cells().from_id(1).raw_children.keys() == {2, 3}
         assert cells().from_id(2).raw_children.keys() == {3}
         assert cells().from_id(5).raw_parents.keys() == {4}
+
+
+def test_nested_list_literal_mutation_induces_edge_with_mutation_virtual_symbol():
+    with dynamic_slicing_context():
+        run_cell("lst = [[]]")
+        run_cell("lst[0].append(0)")
+        assert any(
+            sym.is_mutation_virtual_symbol for sym in cells().from_id(2).raw_parents[1]
+        )

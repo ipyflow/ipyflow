@@ -1057,7 +1057,6 @@ class Symbol:
             and Timestamp.current().is_initialized
             and not self.is_immutable
             and not self.is_mutation_virtual_symbol
-            and not self.is_anonymous
             and self.is_globally_accessible
             and not self.is_underscore
             and not self.is_implicit
@@ -1327,6 +1326,8 @@ class Symbol:
         timestamp: Optional[Timestamp] = None,
         seen: Optional[Set["Symbol"]] = None,
     ) -> None:
+        if seen is not None and self in seen:
+            return
         orig_timestamp = self._timestamp
         self._updated_timestamps.add(orig_timestamp)
         self._timestamp = Timestamp.current() if timestamp is None else timestamp
@@ -1353,8 +1354,6 @@ class Symbol:
             return
         if seen is None:
             seen = set()
-        if self in seen:
-            return
         seen.add(self)
         ns = self.namespace
         if ns is None:

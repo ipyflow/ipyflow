@@ -1354,7 +1354,7 @@ class DataflowTracer(StackFrameManager):
                         inner_symbols,
                         self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                         is_subscript=True,
-                        implicit=True,
+                        implicit=False,
                         # this is necessary in case some literal object got reused,
                         # since as of this comment (2021/08/14) we do not clear
                         # GC'd symbols from the symbol graph
@@ -1371,7 +1371,7 @@ class DataflowTracer(StackFrameManager):
                 outer_deps,
                 self.prev_trace_stmt_in_cur_frame.stmt_node,  # type: ignore[union-attr]
                 is_anonymous=True,
-                implicit=True,
+                implicit=False,
                 propagate=False,
             )
             self.node_id_to_loaded_symbols.setdefault(node_id, []).append(literal_sym)

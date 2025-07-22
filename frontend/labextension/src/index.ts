@@ -303,31 +303,39 @@ class IpyflowSessionState {
   }
 
   computeTransitiveClosure(
-    cellIds: string[],
+    startCellIds: string[],
     inclusive = true,
     parents = false
   ): Cell<ICellModel>[] {
-    const closure = new Set<string>();
-    for (const cellId of cellIds) {
-      if (parents) {
-        this.computeTransitiveClosureHelper(closure, cellId, this.cellParents);
-      } else {
-        this.computeTransitiveClosureHelper(closure, cellId, this.cellChildren);
+    let cellIds = startCellIds;
+    const closure = new Set(cellIds);
+    while (true) {
+      for (const cellId of cellIds) {
+        if (parents) {
+          this.computeTransitiveClosureHelper(closure, cellId, this.cellParents, false, true);
+        } else {
+          this.computeTransitiveClosureHelper(closure, cellId, this.cellChildren, false, true);
+        }
       }
-    }
-    if (!parents) {
+      if (parents || !(this.settings.pull_reactive_updates ?? false)) {
+        break;
+      }
       for (const cellId of closure) {
         this.computeTransitiveClosureHelper(
-          closure,
-          cellId,
-          this.cellParents,
-          true,
-          true
+            closure,
+            cellId,
+            this.cellParents,
+            true,
+            true
         );
       }
+      if (cellIds.length === closure.size || !(this.settings.push_reactive_updates_to_cousins ?? false)) {
+        break;
+      }
+      cellIds = Array.from(closure);
     }
     if (!inclusive) {
-      for (const cellId of cellIds) {
+      for (const cellId of startCellIds) {
         closure.delete(cellId);
       }
     }
@@ -1121,17 +1129,19 @@ const connectToComm = (
   const updateUI = (notebook: Notebook) => {
     clearCellState(notebook);
     refreshNodeMapping(notebook);
-    const slice = new Set<string>();
     let closureCellIds = state.selectedCells;
     if (closureCellIds.length === 0) {
       closureCellIds = [state.activeCell.model.id];
     }
-    for (const cellId of closureCellIds) {
-      state.computeTransitiveClosureHelper(slice, cellId, state.cellChildren);
-    }
-    const executeSlice = new Set(slice);
-    if (state.settings.pull_reactive_updates ?? false) {
-      for (const cellId of slice) {
+    const executeSlice= new Set(closureCellIds);
+    while (true) {
+      for (const cellId of closureCellIds) {
+        state.computeTransitiveClosureHelper(executeSlice, cellId, state.cellChildren, false, true);
+      }
+      if (!(state.settings.pull_reactive_updates ?? false)) {
+        break;
+      }
+      for (const cellId of executeSlice) {
         state.computeTransitiveClosureHelper(
           executeSlice,
           cellId,
@@ -1140,7 +1150,12 @@ const connectToComm = (
           true
         );
       }
+      if (executeSlice.size === closureCellIds.length || !(state.settings.push_reactive_updates_to_cousins ?? false)) {
+        break;
+      }
+      closureCellIds = Array.from(executeSlice);
     }
+    const slice = new Set(executeSlice);
     for (const cellId of closureCellIds) {
       slice.delete(cellId);
       state.computeTransitiveClosureHelper(slice, cellId, state.cellParents);

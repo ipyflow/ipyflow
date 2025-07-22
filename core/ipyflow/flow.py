@@ -332,7 +332,7 @@ class NotebookFlow(singletons.NotebookFlow):
         if push_reactive_updates is not None:
             self.mut_settings.push_reactive_updates = push_reactive_updates
         if push_reactive_updates_to_cousins is not None:
-            self.mut_settings.push_reactive_updates = push_reactive_updates_to_cousins
+            self.mut_settings.push_reactive_updates_to_cousins = push_reactive_updates_to_cousins
         if pull_reactive_updates is not None:
             self.mut_settings.pull_reactive_updates = pull_reactive_updates
         self.mut_settings.color_scheme = ColorScheme(

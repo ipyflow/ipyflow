@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.211 (2025-07-22)
+--------------------
+* [kernel][lab] add option to push reactive updates to cousin cells;
+
 0.0.210 (2025-07-20)
 --------------------
 * [kernel] ensure edges with mutation virtual symbols are induced in more contexts;

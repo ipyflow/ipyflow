@@ -128,7 +128,7 @@ class NotebookFlow(singletons.NotebookFlow):
             ),
             push_reactive_updates_to_cousins=kwargs.pop(
                 "push_reactive_updates_to_cousins",
-                getattr(config, "push_reactive_updates_to_cousins", False),
+                getattr(config, "push_reactive_updates_to_cousins", True),
             ),
             pull_reactive_updates=kwargs.pop(
                 "pull_reactive_updates",

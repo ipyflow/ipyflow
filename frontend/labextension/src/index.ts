@@ -172,7 +172,7 @@ class IpyflowSessionState {
     });
   }
 
-  computeTransitiveClosureHelper(
+  computeRawTransitiveClosureHelper(
     closure: Set<string>,
     cellId: string,
     edges: { [id: string]: string[] } | undefined | null,
@@ -191,7 +191,7 @@ class IpyflowSessionState {
     }
     const prevClosureSize = closure.size;
     relatives.forEach((related) => {
-      this.computeTransitiveClosureHelper(
+      this.computeRawTransitiveClosureHelper(
         closure,
         related,
         edges,
@@ -230,7 +230,7 @@ class IpyflowSessionState {
         }
         if (shouldIncludeRelated) {
           closure.add(related);
-          this.computeTransitiveClosureHelper(
+          this.computeRawTransitiveClosureHelper(
             closure,
             related,
             edges,
@@ -250,7 +250,7 @@ class IpyflowSessionState {
             continue;
           }
           closure.add(parent);
-          this.computeTransitiveClosureHelper(
+          this.computeRawTransitiveClosureHelper(
             closure,
             parent,
             edges,
@@ -302,26 +302,26 @@ class IpyflowSessionState {
       .map((id) => this.cellsById[id]);
   }
 
-  computeTransitiveClosure(
+  computeRawTransitiveClosure(
     startCellIds: string[],
     inclusive = true,
-    parents = false
-  ): Cell<ICellModel>[] {
+    parents = false,
+  ): Set<string> {
     let cellIds = startCellIds;
     const closure = new Set(cellIds);
     while (true) {
       for (const cellId of cellIds) {
         if (parents) {
-          this.computeTransitiveClosureHelper(closure, cellId, this.cellParents, false, true);
+          this.computeRawTransitiveClosureHelper(closure, cellId, this.cellParents, false, true);
         } else {
-          this.computeTransitiveClosureHelper(closure, cellId, this.cellChildren, false, true);
+          this.computeRawTransitiveClosureHelper(closure, cellId, this.cellChildren, false, true);
         }
       }
       if (parents || !(this.settings.pull_reactive_updates ?? false)) {
         break;
       }
       for (const cellId of closure) {
-        this.computeTransitiveClosureHelper(
+        this.computeRawTransitiveClosureHelper(
             closure,
             cellId,
             this.cellParents,
@@ -339,7 +339,15 @@ class IpyflowSessionState {
         closure.delete(cellId);
       }
     }
-    return this.cellIdsToCells(Array.from(closure));
+    return closure;
+  }
+
+  computeTransitiveClosure(
+      startCellIds: string[],
+      inclusive = true,
+      parents = false
+  ): Cell<ICellModel>[] {
+    return this.cellIdsToCells(Array.from(this.computeRawTransitiveClosure(startCellIds, inclusive, parents)));
   }
 }
 
@@ -1133,32 +1141,12 @@ const connectToComm = (
     if (closureCellIds.length === 0) {
       closureCellIds = [state.activeCell.model.id];
     }
-    const executeSlice= new Set(closureCellIds);
-    while (true) {
-      for (const cellId of closureCellIds) {
-        state.computeTransitiveClosureHelper(executeSlice, cellId, state.cellChildren, false, true);
-      }
-      if (!(state.settings.pull_reactive_updates ?? false)) {
-        break;
-      }
-      for (const cellId of executeSlice) {
-        state.computeTransitiveClosureHelper(
-          executeSlice,
-          cellId,
-          state.cellParents,
-          true,
-          true
-        );
-      }
-      if (executeSlice.size === closureCellIds.length || !(state.settings.push_reactive_updates_to_cousins ?? false)) {
-        break;
-      }
-      closureCellIds = Array.from(executeSlice);
-    }
+    const executeSlice = state.computeRawTransitiveClosure(closureCellIds, true, false);
+    closureCellIds = Array.from(executeSlice);
     const slice = new Set(executeSlice);
     for (const cellId of closureCellIds) {
       slice.delete(cellId);
-      state.computeTransitiveClosureHelper(slice, cellId, state.cellParents);
+      state.computeRawTransitiveClosureHelper(slice, cellId, state.cellParents);
     }
     for (const cell of notebook.widgets) {
       const id = cell.model.id;

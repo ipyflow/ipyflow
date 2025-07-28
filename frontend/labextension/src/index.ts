@@ -305,16 +305,29 @@ class IpyflowSessionState {
   computeRawTransitiveClosure(
     startCellIds: string[],
     inclusive = true,
-    parents = false,
+    parents = false
   ): Set<string> {
     let cellIds = startCellIds;
     const closure = new Set(cellIds);
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       for (const cellId of cellIds) {
         if (parents) {
-          this.computeRawTransitiveClosureHelper(closure, cellId, this.cellParents, false, true);
+          this.computeRawTransitiveClosureHelper(
+            closure,
+            cellId,
+            this.cellParents,
+            false,
+            true
+          );
         } else {
-          this.computeRawTransitiveClosureHelper(closure, cellId, this.cellChildren, false, true);
+          this.computeRawTransitiveClosureHelper(
+            closure,
+            cellId,
+            this.cellChildren,
+            false,
+            true
+          );
         }
       }
       if (parents || !(this.settings.pull_reactive_updates ?? false)) {
@@ -322,14 +335,17 @@ class IpyflowSessionState {
       }
       for (const cellId of closure) {
         this.computeRawTransitiveClosureHelper(
-            closure,
-            cellId,
-            this.cellParents,
-            true,
-            true
+          closure,
+          cellId,
+          this.cellParents,
+          true,
+          true
         );
       }
-      if (cellIds.length === closure.size || !(this.settings.push_reactive_updates_to_cousins ?? false)) {
+      if (
+        cellIds.length === closure.size ||
+        !(this.settings.push_reactive_updates_to_cousins ?? false)
+      ) {
         break;
       }
       cellIds = Array.from(closure);
@@ -343,11 +359,15 @@ class IpyflowSessionState {
   }
 
   computeTransitiveClosure(
-      startCellIds: string[],
-      inclusive = true,
-      parents = false
+    startCellIds: string[],
+    inclusive = true,
+    parents = false
   ): Cell<ICellModel>[] {
-    return this.cellIdsToCells(Array.from(this.computeRawTransitiveClosure(startCellIds, inclusive, parents)));
+    return this.cellIdsToCells(
+      Array.from(
+        this.computeRawTransitiveClosure(startCellIds, inclusive, parents)
+      )
+    );
   }
 }
 
@@ -1141,7 +1161,11 @@ const connectToComm = (
     if (closureCellIds.length === 0) {
       closureCellIds = [state.activeCell.model.id];
     }
-    const executeSlice = state.computeRawTransitiveClosure(closureCellIds, true, false);
+    const executeSlice = state.computeRawTransitiveClosure(
+      closureCellIds,
+      true,
+      false
+    );
     closureCellIds = Array.from(executeSlice);
     const slice = new Set(executeSlice);
     for (const cellId of closureCellIds) {

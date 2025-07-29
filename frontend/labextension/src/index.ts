@@ -208,56 +208,56 @@ class IpyflowSessionState {
     ) {
       closure.add(cellId);
     }
-    if (pullReactiveUpdates && closure.has(cellId)) {
-      relatives.forEach((related) => {
-        if (closure.has(related)) {
-          return;
-        }
-        let shouldIncludeRelated =
-          this.staleParents?.[cellId]?.includes(related);
-        if (!shouldIncludeRelated) {
-          for (const [executed, staleParents] of Object.entries(
-            this.staleParentsByExecutedCellByChild?.[cellId] ?? {}
-          )) {
-            if (!closure.has(executed)) {
-              continue;
-            }
-            shouldIncludeRelated = staleParents.includes(related);
-            if (shouldIncludeRelated) {
-              break;
-            }
-          }
-        }
-        if (shouldIncludeRelated) {
-          closure.add(related);
-          this.computeRawTransitiveClosureHelper(
-            closure,
-            related,
-            edges,
-            pullReactiveUpdates,
-            true
-          );
-        }
-      });
-      for (const [child, staleParents] of Object.entries(
-        this.staleParentsByChildByExecutedCell?.[cellId] ?? {}
-      )) {
-        if (!closure.has(child)) {
-          continue;
-        }
-        for (const parent of staleParents) {
-          if (closure.has(parent) || !edges?.[child]?.includes(parent)) {
+    if (!pullReactiveUpdates || !closure.has(cellId)) {
+      return;
+    }
+    relatives.forEach((related) => {
+      if (closure.has(related)) {
+        return;
+      }
+      let shouldIncludeRelated = this.staleParents?.[cellId]?.includes(related);
+      if (!shouldIncludeRelated) {
+        for (const [executed, staleParents] of Object.entries(
+          this.staleParentsByExecutedCellByChild?.[cellId] ?? {}
+        )) {
+          if (!closure.has(executed)) {
             continue;
           }
-          closure.add(parent);
-          this.computeRawTransitiveClosureHelper(
-            closure,
-            parent,
-            edges,
-            pullReactiveUpdates,
-            true
-          );
+          shouldIncludeRelated = staleParents.includes(related);
+          if (shouldIncludeRelated) {
+            break;
+          }
         }
+      }
+      if (shouldIncludeRelated) {
+        closure.add(related);
+        this.computeRawTransitiveClosureHelper(
+          closure,
+          related,
+          edges,
+          pullReactiveUpdates,
+          true
+        );
+      }
+    });
+    for (const [child, staleParents] of Object.entries(
+      this.staleParentsByChildByExecutedCell?.[cellId] ?? {}
+    )) {
+      if (!closure.has(child)) {
+        continue;
+      }
+      for (const parent of staleParents) {
+        if (closure.has(parent) || !edges?.[child]?.includes(parent)) {
+          continue;
+        }
+        closure.add(parent);
+        this.computeRawTransitiveClosureHelper(
+          closure,
+          parent,
+          edges,
+          pullReactiveUpdates,
+          true
+        );
       }
     }
   }

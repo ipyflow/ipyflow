@@ -23,7 +23,7 @@ from ipyflow.analysis.live_refs import compute_live_dead_symbol_refs
 from ipyflow.analysis.symbol_ref import Atom, SymbolRef
 from ipyflow.data_model.symbol import Symbol, SymbolType
 from ipyflow.models import _ScopeContainer, cells, scopes
-from ipyflow.singletons import tracer, tracer_initialized
+from ipyflow.singletons import flow, tracer, tracer_initialized
 from ipyflow.types import SupportedIndexType
 
 if TYPE_CHECKING:
@@ -40,6 +40,7 @@ _override_unused_warning_scopes = scopes
 
 class Scope:
     GLOBAL_SCOPE_NAME = "<module>"
+    cloned_from: Optional["Namespace"] = None
 
     def __init__(
         self,
@@ -51,6 +52,16 @@ class Scope:
         self.parent_scope = parent_scope  # None iff this is the global scope
         self.symtab = symtab
         self._symbol_by_name: Dict[SupportedIndexType, Symbol] = {}
+
+    def promote_to_namespace(self, obj: Any) -> None:
+        from ipyflow.data_model.namespace import Namespace
+
+        if isinstance(self, Namespace):
+            self.obj = obj
+            return
+        ns = cast(Namespace, self)
+        ns.__class__ = Namespace
+        Namespace._namespace_init(ns, obj)
 
     def __hash__(self):
         return hash(id(self))
@@ -190,7 +201,7 @@ class Scope:
         is_module: bool = False,
         is_anonymous: bool = False,
         class_scope: Optional["Scope"] = None,
-    ):
+    ) -> SymbolType:
         assert not (class_scope is not None and (is_function_def or is_import))
         if is_function_def:
             assert overwrite
@@ -315,6 +326,21 @@ class Scope:
             refresh=not implicit,
             is_cascading_reactive=is_cascading_reactive,
         )
+        if (
+            prev_sym is None
+            and not implicit
+            and symbol_type == SymbolType.DEFAULT
+            and isinstance(name, str)
+            and self.cloned_from is not None
+            and self.cloned_from.lookup_symbol_by_name_this_indentation(
+                name, is_subscript=False
+            )
+            is not None
+        ):
+            # `name` will no longer refer to the name in the namespace that we cloned from. this counts as a mutation.
+            for parent in flow().aliases.get(cast("Namespace", self).obj_id, []):
+                parent.mutate(set(), propagate=False)
+
         if tracer_initialized():
             tracer().this_stmt_updated_symbols.add(sym)
         if cells().exec_counter() <= 0:
@@ -324,7 +350,11 @@ class Scope:
         except SyntaxError:
             is_static_write = False
         current_cell = cells().current_cell()
+        sym_ns = sym.namespace
         for subsym in itertools.chain([sym], sym.get_namespace_symbols(recurse=True)):
+            if subsym.containing_namespace is not sym_ns:
+                # likely it's coming from the original class; don't count it as a write here
+                continue
             if is_static_write and subsym not in current_cell.dynamic_writes:
                 current_cell._pending_dynamic_writes.discard(subsym)
                 current_cell.static_writes.add(subsym)

@@ -63,7 +63,7 @@ class Statement(SliceableMixin):
         self._finished: bool = False
         self.override: bool = override
         self.prev_stmt = prev_stmt
-        self.class_scope: Optional[Namespace] = None
+        self.class_scope: Optional[Scope] = None
         self.lambda_call_point_deps_done_once = False
         self.node_id_for_last_call: Optional[int] = None
         self._stmt_contains_cascading_reactive_rval: Optional[bool] = None
@@ -637,8 +637,7 @@ class Statement(SliceableMixin):
             if is_class_def:
                 assert self.class_scope is not None
                 class_ref = self.frame.f_locals[cast(ast.ClassDef, self.stmt_node).name]  # type: ignore[union-attr]
-                self.class_scope.obj = class_ref
-                flow().namespaces[id(class_ref)] = self.class_scope
+                self.class_scope.promote_to_namespace(class_ref)
             try:
                 (
                     scope,

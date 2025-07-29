@@ -424,9 +424,7 @@ class DataflowTracer(StackFrameManager):
                 # no need to track dependencies in this case
                 return
             if isinstance(return_to_stmt.stmt_node, ast.ClassDef):
-                return_to_stmt.class_scope = cast(
-                    Namespace, self.cur_frame_original_scope
-                )
+                return_to_stmt.class_scope = self.cur_frame_original_scope
             elif (
                 isinstance(trace_stmt.stmt_node, ast.Return) or inside_anonymous_call
             ) and not trace_stmt.lambda_call_point_deps_done_once:

@@ -42,3 +42,14 @@ def test_nested_list_literal_mutation_induces_edge_with_mutation_virtual_symbol(
         assert any(
             sym.is_mutation_virtual_symbol for sym in cells().from_id(2).raw_parents[1]
         )
+
+
+def test_overwrite_class_attribute_induces_mutation():
+    with dynamic_slicing_context():
+        run_cell("class Foo:\n    x = 42")
+        run_cell("foo = Foo()")
+        run_cell("foo.x = 43")
+        run_cell("foo")
+        assert any(
+            sym.is_mutation_virtual_symbol for sym in cells().from_id(4).raw_parents[3]
+        )

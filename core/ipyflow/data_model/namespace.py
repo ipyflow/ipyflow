@@ -44,6 +44,9 @@ class Namespace(Scope):
         self, obj: Any, *args, force_allow_iteration: bool = False, **kwargs
     ) -> None:
         super().__init__(*args, **kwargs)
+        self._namespace_init(obj, force_allow_iteration=force_allow_iteration)
+
+    def _namespace_init(self, obj: Any, force_allow_iteration: bool = False):
         self.cloned_from: Optional["Namespace"] = None
         self.child_clones: List["Namespace"] = []
         self.obj = obj

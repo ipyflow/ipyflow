@@ -251,11 +251,10 @@ class Cell(SliceableMixin):
             key=lambda cell: cell.cell_ctr,
         )
 
-    def __str__(self):
-        return self.executed_content
-
     def __repr__(self):
         return f"<{self.__class__.__name__}[ctr={self.cell_ctr},id={self.cell_id}]>"
+
+    __str__ = __repr__
 
     def __hash__(self):
         return hash((self.cell_id, self.cell_ctr))

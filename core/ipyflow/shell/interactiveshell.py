@@ -673,6 +673,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         self._handle_memoization()
         flow_._remove_dangling_parent_edges(this_cell_dangling_symbols)
         flow_.gc()
+        # run the checker again to record edges for any implicit symbols introduced during execution of the cell
+        flow_._safety_precheck_cell(
+            Cell.current_cell(), clear_updated_reactive_symbols=False
+        )
 
     def on_exception(self, e: Union[None, str, Exception]) -> None:
         singletons.flow().get_and_set_exception_raised_during_execution(e)

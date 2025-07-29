@@ -552,14 +552,16 @@ class NotebookFlow(singletons.NotebookFlow):
                 self.updated_reactive_symbols_last_cell.clear()
                 self.updated_deep_reactive_symbols_last_cell.clear()
 
-    def _safety_precheck_cell(self, cell: Cell) -> None:
+    def _safety_precheck_cell(
+        self, cell: Cell, clear_updated_reactive_symbols: bool = True
+    ) -> None:
         for tracer in singletons.shell().registered_tracers:
             # just make sure all tracers are initialized
             tracer.instance()
         checker_result = self.check_and_link_multiple_cells(
             cells_to_check=[cell],
             update_liveness_time_versions=self.mut_settings.static_slicing_enabled,
-            clear_updated_reactive_symbols=True,
+            clear_updated_reactive_symbols=clear_updated_reactive_symbols,
         )
         if cell.cell_id in checker_result.waiting_cells:
             self.waiter_usage_detected = True

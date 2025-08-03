@@ -962,9 +962,6 @@ const connectToComm = (
         itercell.node.classList.remove(readyMakingInputClass);
       }
     });
-    if (state.settings.reactivity_mode === 'incremental') {
-      state.requestComputeExecSchedule();
-    }
   };
 
   for (const cell of notebook.widgets) {
@@ -1404,7 +1401,7 @@ const connectToComm = (
         } else {
           state.isReactivelyExecuting = true;
           state.executedCells.add(state.cellPendingExecution.model.id);
-          CodeCell.execute(state.cellPendingExecution, session);
+          state.executeCells([state.cellPendingExecution]);
         }
       }
       if (doneReactivelyExecuting) {

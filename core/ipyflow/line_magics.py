@@ -459,15 +459,24 @@ def set_flow_direction(line_: str) -> None:
 
 def set_reactivity(line_: str) -> None:
     line_ = line_.lower().strip()
+    settings = flow().mut_settings
     usage = (
         f"Usage: %flow reactivity [{ReactivityMode.BATCH}|{ReactivityMode.INCREMENTAL}]"
     )
     if line_ in ("batch", "incremental"):
         reactivity = ReactivityMode(line_)
+        if reactivity == ReactivityMode.INCREMENTAL and settings.exec_schedule not in (
+            ExecutionSchedule.LIVENESS_BASED,
+            ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED,
+        ):
+            warn(
+                f"Current exec schedule {settings.exec_schedule} incompatible with incremental reactivity; changing to {ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED}"
+            )
+            settings.exec_schedule = ExecutionSchedule.HYBRID_DAG_LIVENESS_BASED
     else:
         warn(usage)
         return
-    flow().mut_settings.reactivity_mode = reactivity
+    settings.reactivity_mode = reactivity
 
 
 def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:

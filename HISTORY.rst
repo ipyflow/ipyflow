@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.213 (2025-11-02)
+--------------------
+* [kernel] mark compatible with Python 3.13;
+
 0.0.212 (2025-11-02)
 --------------------
 * [kernel][lab] turn on cousin reactivity by default;

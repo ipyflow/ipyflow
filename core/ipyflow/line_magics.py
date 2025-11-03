@@ -409,7 +409,10 @@ def show_tags(line: str) -> None:
 
 
 def set_exec_mode(line_: str) -> None:
-    usage = f"Usage: %flow mode [{ExecutionMode.NORMAL}|{ExecutionMode.REACTIVE}]"
+    usage = f"Usage: %flow mode [{ExecutionMode.LAZY}|{ExecutionMode.REACTIVE}]"
+    line_ = line_.strip()
+    if line_ == "normal":
+        line_ = "lazy"
     try:
         exec_mode = ExecutionMode(line_.strip())
     except ValueError:

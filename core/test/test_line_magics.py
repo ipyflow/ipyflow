@@ -138,11 +138,11 @@ def test_make_slice():
 
 
 def test_set_exec_mode():
-    assert flow().mut_settings.exec_mode == ExecutionMode.NORMAL
+    assert flow().mut_settings.exec_mode == ExecutionMode.LAZY
     run_cell(f"%flow mode {ExecutionMode.REACTIVE.value}")
     assert flow().mut_settings.exec_mode == ExecutionMode.REACTIVE
-    run_cell(f"%flow mode {ExecutionMode.NORMAL.value}")
-    assert flow().mut_settings.exec_mode == ExecutionMode.NORMAL
+    run_cell(f"%flow mode {ExecutionMode.LAZY.value}")
+    assert flow().mut_settings.exec_mode == ExecutionMode.LAZY
 
 
 def test_set_exec_schedule_and_flow_order():

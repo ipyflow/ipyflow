@@ -149,8 +149,8 @@ class IpyflowSessionState {
     KernelMessage.IExecuteReplyMsg
   > {
     if (this.settings.exec_mode === 'reactive') {
-      this.settings.exec_mode = 'normal';
-    } else if (this.settings.exec_mode === 'normal') {
+      this.settings.exec_mode = 'lazy';
+    } else if (this.settings.exec_mode === 'lazy') {
       this.settings.exec_mode = 'reactive';
     }
     return this.session.session.kernel.requestExecute({
@@ -484,7 +484,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         } else if (state.settings.reactivity_mode === 'batch') {
           let closure = altModeExecuteCells ?? [notebooks.activeCell];
           if (
-            state.settings.exec_mode === 'normal' &&
+            state.settings.exec_mode === 'lazy' &&
             altModeExecuteCells === null
           ) {
             closure = state.computeTransitiveClosure([
@@ -543,7 +543,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         isBackward
       );
       state.numPendingForcedReactiveCounterBumps++;
-      if (state.settings.exec_mode === 'normal') {
+      if (state.settings.exec_mode === 'lazy') {
         state.executeCells(closure);
       } else {
         state.altModeExecuteCells = closure;
@@ -1067,7 +1067,7 @@ const connectToComm = (
     if (model.type !== 'code') {
       return;
     }
-    if ((state.settings.color_scheme ?? 'normal') === 'classic') {
+    if ((state.settings.color_scheme ?? 'lazy') === 'classic') {
       node.classList.add(classicColorsClass);
     }
     if (inExecuteSlice) {

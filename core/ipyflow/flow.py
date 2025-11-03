@@ -101,7 +101,7 @@ class NotebookFlow(singletons.NotebookFlow):
             exec_mode=ExecutionMode(
                 kwargs.pop(
                     "exec_mode",
-                    getattr(config, "exec_mode", ExecutionMode.NORMAL),
+                    getattr(config, "exec_mode", ExecutionMode.LAZY),
                 )
             ),
             exec_schedule=ExecutionSchedule(
@@ -519,10 +519,10 @@ class NotebookFlow(singletons.NotebookFlow):
             cells().create_and_track(cell_id, content, (), bump_cell_counter=False)
 
     def toggle_reactivity(self):
-        if self.mut_settings.exec_mode == ExecutionMode.NORMAL:
+        if self.mut_settings.exec_mode == ExecutionMode.LAZY:
             self.mut_settings.exec_mode = ExecutionMode.REACTIVE
         elif self.mut_settings.exec_mode == ExecutionMode.REACTIVE:
-            self.mut_settings.exec_mode = ExecutionMode.NORMAL
+            self.mut_settings.exec_mode = ExecutionMode.LAZY
         else:
             raise ValueError("unhandled exec mode: %s" % self.mut_settings.exec_mode)
         self._min_new_ready_cell_counter = self.cell_counter() + 1

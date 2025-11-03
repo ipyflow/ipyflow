@@ -13,7 +13,7 @@ class EnumWithDefault(Enum):
 
 
 class ExecutionMode(EnumWithDefault):
-    NORMAL = "normal"
+    LAZY = "lazy"
     REACTIVE = __default__ = "reactive"  # type: ignore
 
 

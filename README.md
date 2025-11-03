@@ -139,7 +139,7 @@ ctrl+shift+enter (on Mac, cmd+shift+enter also works) to only execute the cell i
 <img src="https://raw.githubusercontent.com/ipyflow/ipyflow/master/img/alt-mode-execute.gif" />
 </p>
 
-You can also run the magic command `%flow mode normal` in opt out of the
+You can also run the magic command `%flow mode lazy` in opt out of the
 default reactive execution mode (in which case, ctr+shift+enter /
 cmd+shift+enter will switch from being nonreactive to reactive). To reenable
 reactive execution as the default, you can run `%flow mode reactive`:
@@ -154,7 +154,7 @@ at `~/.ipython/profile_default/ipython_config.py`):
 
 ```python
 c = get_config()
-c.ipyflow.exec_mode = "normal"  # defaults to "reactive"
+c.ipyflow.exec_mode = "lazy"  # defaults to "reactive"
 ```
 
 

@@ -1,6 +1,15 @@
 History
 =======
 
+0.0.212 (2025-11-02)
+--------------------
+* [kernel][lab] turn on cousin reactivity by default;
+* [kernel] simplify cell repr;
+* [kernel] namespace promotion and better handling for cloned namespaces;
+* [kernel] add static check post-run as well as pre-run;
+* [kernel][lab] bugfix for incremental reactivity;
+* [kernel] rename "normal" reactiviy mode to "lazy";
+
 0.0.211 (2025-07-22)
 --------------------
 * [kernel][lab] add option to push reactive updates to cousin cells;

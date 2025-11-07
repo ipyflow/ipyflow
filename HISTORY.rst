@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.214 (2025-11-06)
+--------------------
+* [lab] mark incompatibility with jupyterlab>=4.2.0;
+
 0.0.213 (2025-11-02)
 --------------------
 * [kernel] mark compatible with Python 3.13;

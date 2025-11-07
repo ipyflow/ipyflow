@@ -230,6 +230,7 @@ class NotebookFlow(singletons.NotebookFlow):
     def init_virtual_symbols(self) -> None:
         if self._virtual_symbols_inited:
             return
+        self._virtual_symbols_inited = True
         self.fs = Namespace(Namespace.FILE_SYSTEM, "fs")
         self.display_sym = self.virtual_symbols.upsert_symbol_for_name(
             "display", Symbol.DISPLAY, propagate=False, implicit=True
@@ -237,7 +238,6 @@ class NotebookFlow(singletons.NotebookFlow):
         self.fake_edge_sym = self.virtual_symbols.upsert_symbol_for_name(
             "fake_edge_sym", object(), propagate=False, implicit=True
         )
-        self._virtual_symbols_inited = True
 
     def _initialize_cell_parents(
         self, cell_parents: Optional[Dict[IdType, List[IdType]]]

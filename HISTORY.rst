@@ -1,9 +1,9 @@
 History
 =======
 
-0.0.214 (2025-11-06)
+0.0.215 (2025-11-06)
 --------------------
-* [lab] mark incompatibility with jupyterlab>=4.2.0;
+* [kernel] small bugfix for %load_ext ipyflow;
 
 0.0.213 (2025-11-02)
 --------------------

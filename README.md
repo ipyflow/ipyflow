@@ -7,8 +7,6 @@
 [![](https://img.shields.io/pypi/v/ipyflow.svg)](https://pypi.org/project/ipyflow)
 ![](https://img.shields.io/pypi/pyversions/ipyflow.svg)
 
-**Note:** Requires jupyterlab>=3.0,<4.2.0. Support for jupyterlab>=4.2.0 is coming.
-
 TL;DR
 -----
 Precise reactive Python notebooks for Jupyter[Lab]:

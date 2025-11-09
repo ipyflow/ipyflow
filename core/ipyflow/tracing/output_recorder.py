@@ -1,6 +1,7 @@
 import sys
-from io import StringIO
-from typing import Any, Optional, TextIO
+import threading
+from io import StringIO, TextIOBase
+from typing import Any, Optional, Union
 
 import pyccolo as pyc
 from IPython.core.displayhook import DisplayHook
@@ -93,6 +94,30 @@ class IPyflowCapturedIO(CapturedIO):
             shell_.displayhook(expr_result)
 
 
+class StdstreamProxy:
+    def __init__(self, capture_output_tee: "CaptureOutputTee", name: str) -> None:
+        self._capture_output_tee = capture_output_tee
+        self._name = name
+        self._inited = True
+
+    def _stream(self, include_tee: bool = True) -> Union[TextIOBase, Tee]:
+        stream = None
+        if include_tee and threading.current_thread().name == "MainThread":
+            stream = getattr(self._capture_output_tee, f"tee_sys_{self._name}")
+        if stream is None:
+            stream = getattr(self._capture_output_tee, f"sys_{self._name}")
+        return stream
+
+    def __getattr__(self, item: str) -> object:
+        return getattr(self._stream(), item)
+
+    def __setattr__(self, key: str, value: object) -> None:
+        if not self.__dict__.get("_inited", False):
+            super().__setattr__(key, value)
+        else:
+            self._stream(include_tee=False).__setattr__(key, value)
+
+
 class CaptureOutputTee:
     """
     Context manager for capturing and replicating stdout/err and rich display publishers.
@@ -107,15 +132,14 @@ class CaptureOutputTee:
         self.stderr = stderr
         self.display = display
         self.shell: Optional[InteractiveShell] = None
-        self.sys_stdout: Optional[TextIO] = None
-        self.sys_stderr: Optional[TextIO] = None
+        self.sys_stdout = sys.stdout
+        self.sys_stderr = sys.stderr
+        self.tee_sys_stdout: Optional[Tee] = None
+        self.tee_sys_stderr: Optional[Tee] = None
         self.save_display_pub: Optional[DisplayPublisher] = None
         self._in_context = False
 
     def __enter__(self) -> CapturedIO:
-        self.sys_stdout = sys.stdout
-        self.sys_stderr = sys.stderr
-
         if self.display:
             self.shell = shell()
             if self.shell is None:
@@ -125,17 +149,22 @@ class CaptureOutputTee:
         stdout = stderr = outputs = None
         if self.stdout:
             stdout = StringIO()
-            sys.stdout = Tee(sys.stdout, stdout)  # type: ignore
+            stdout_tee = Tee(self.sys_stdout, stdout)
+            self.tee_sys_stdout = stdout_tee
+            # sys.stdout = stdout_tee  # type: ignore
         if self.stderr:
             stderr = StringIO()
-            sys.stderr = Tee(sys.stderr, stderr)  # type: ignore
+            stderr_tee = Tee(self.sys_stderr, stderr)
+            self.tee_sys_stderr = stderr_tee
+            # sys.stderr = stderr_tee  # type: ignore
         if self.display and self.shell is not None:
             self.save_display_pub = self.shell.display_pub
             capture_display_pub = TeeCompatibleCapturingDisplayPublisher()
             outputs = capture_display_pub.outputs
-            self.shell.display_pub = TeeDisplayPublisher(
+            tee_display_pub = TeeDisplayPublisher(
                 self.shell.display_pub, capture_display_pub
             )
+            self.shell.display_pub = tee_display_pub
 
         self._in_context = True
         return IPyflowCapturedIO(
@@ -149,28 +178,32 @@ class CaptureOutputTee:
         if not self._in_context:
             return
         self._in_context = False
-        if self.sys_stdout is not None:
-            sys.stdout = self.sys_stdout
-            self.sys_stdout = None
-        if self.sys_stderr is not None:
-            sys.stderr = self.sys_stderr
-            self.sys_stderr = None
+        if self.stdout:
+            # sys.stdout = self.sys_stdout
+            self.tee_sys_stdout = None
+        if self.stderr:
+            # sys.stderr = self.sys_stderr
+            self.tee_sys_stderr = None
         if self.display and self.shell:
             self.shell.display_pub = self.save_display_pub
 
 
 class OutputRecorder(pyc.BaseTracer):
     should_patch_meta_path = False
+    capture_output_tee = CaptureOutputTee()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        with self.persistent_fields():
-            self.capture_output_tee = CaptureOutputTee()
         self.capture_output = None
         self.capturing_output = False
 
     @pyc.register_raw_handler(pyc.init_module)
     def init_module(self, *_, **__):
+        if not isinstance(sys.stdout, StdstreamProxy):
+            self.capture_output_tee.sys_stdout = sys.stdout
+            self.capture_output_tee.sys_stderr = sys.stderr
+            sys.stdout = StdstreamProxy(self.capture_output_tee, "stdout")
+            sys.stderr = StdstreamProxy(self.capture_output_tee, "stderr")
         self.capturing_output = True
         self.capture_output = self.capture_output_tee.__enter__()
 

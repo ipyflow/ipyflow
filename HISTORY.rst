@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.216 (2025-11-11)
+--------------------
+* [kernel] improve OutputRecorder robustness in multithreaded scenarios;
+
 0.0.215 (2025-11-06)
 --------------------
 * [kernel] small bugfix for %load_ext ipyflow;

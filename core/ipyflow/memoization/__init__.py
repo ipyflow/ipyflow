@@ -4,7 +4,7 @@ import shlex
 from enum import Enum
 from typing import TYPE_CHECKING, Any, List, NamedTuple, Optional
 
-from ipyflow.tracing.output_recorder import CapturedIO
+from ipyflow.tracing.output_recorder import IPyflowCapturedIO
 
 if TYPE_CHECKING:
     from ipyflow.data_model.symbol import Symbol
@@ -43,7 +43,7 @@ class MemoizedOutput(NamedTuple):
 class MemoizedCellExecution(NamedTuple):
     inputs: List[MemoizedInput]
     outputs: List[MemoizedOutput]
-    displayed_output: CapturedIO
+    displayed_output: IPyflowCapturedIO
     cell_ctr: int
 
 

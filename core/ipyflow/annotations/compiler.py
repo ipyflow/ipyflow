@@ -163,7 +163,9 @@ def get_names_for_function(func: ast.FunctionDef) -> List[str]:
         if not isinstance(deco_func, ast.Name) or deco_func.id != "handler_for":
             continue
         for arg in decorator.args:
-            if isinstance(arg, ast.Str):
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                names.append(arg.value)
+            elif isinstance(arg, getattr(ast, "Str", type(None))):
                 names.append(arg.s)
     if len(names) > 0:
         return names
@@ -202,7 +204,9 @@ def get_modules_from_decorators(decorators: List[ast.expr]) -> Set[str]:
         ):
             continue
         for arg in decorator.args:
-            if isinstance(arg, ast.Str):
+            if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                modules.append(arg.value)
+            elif isinstance(arg, getattr(ast, "Str", type(None))):
                 modules.append(arg.s)
     return set(modules)
 
@@ -236,19 +240,30 @@ def compile_functions(
 def handle_string_annotation(
     node: Union[ast.Expr, ast.Str], filename: str
 ) -> Optional[Set[str]]:
+    str_const = ""
     if isinstance(node, ast.Expr):
-        if isinstance(node.value, ast.Str):
+        if isinstance(node.value, getattr(ast, "Str", type(None))):
             node = node.value
+            str_const = node.s
+        elif isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            node = node.value
+            str_const = node.value
         else:
             return None
     # validate that it's not too dangerous to call "eval" in the header
-    header, contents = node.s.split("\n", 1)
+    header, contents = str_const.split("\n", 1)
     header = header[1:]
     parsed_header = ast.parse(header, mode="eval").body
     if not isinstance(parsed_header, ast.Compare):
         return None
     for comparator in [parsed_header.left] + parsed_header.comparators:
-        if not isinstance(comparator, (ast.Attribute, ast.Tuple, ast.Num)):
+        if isinstance(comparator, ast.Constant) and not isinstance(
+            comparator.value, int
+        ):
+            return None
+        if not isinstance(
+            comparator, (ast.Attribute, ast.Tuple, getattr(ast, "Num", type(None)))
+        ):
             return None
         if isinstance(comparator, ast.Attribute):
             if not isinstance(comparator.value, ast.Name):
@@ -259,7 +274,9 @@ def handle_string_annotation(
                 return None
         elif isinstance(comparator, ast.Tuple):
             for elt in comparator.elts:
-                if not isinstance(elt, ast.Num):
+                if not isinstance(elt, getattr(ast, "Num", type(None))) and not (
+                    isinstance(elt, ast.Constant) and isinstance(elt.value, int)
+                ):
                     return None
     if eval(header):
         return register_annotations_from_source(contents, filename)
@@ -270,7 +287,18 @@ def handle_string_annotation(
 def register_annotations_from_source(source: str, filename: str) -> Set[str]:
     regisered_modules = set()
     for node in ast.parse(source).body:
-        if not isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.Expr, ast.Str)):
+        if not isinstance(
+            node,
+            (
+                ast.ClassDef,
+                ast.FunctionDef,
+                ast.Expr,
+                ast.Constant,
+                getattr(ast, "Str", type(None)),
+            ),
+        ):
+            continue
+        if isinstance(node, ast.Constant) and not isinstance(node.value, str):
             continue
         for module in get_modules_from_decorators(
             getattr(node, "decorator_list", [])
@@ -280,7 +308,9 @@ def register_annotations_from_source(source: str, filename: str) -> Set[str]:
                 REGISTERED_CLASS_SPECS.setdefault(module, []).append(node)
             elif isinstance(node, ast.FunctionDef):
                 REGISTERED_FUNCTION_SPECS.setdefault(module, []).append(node)
-            elif isinstance(node, (ast.Expr, ast.Str)):
+            elif isinstance(
+                node, (ast.Expr, ast.Constant, getattr(ast, "Str", type(None)))
+            ):
                 regisered_modules |= handle_string_annotation(node, filename) or set()
     return regisered_modules
 

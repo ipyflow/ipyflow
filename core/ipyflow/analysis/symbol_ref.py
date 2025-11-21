@@ -40,10 +40,10 @@ def resolve_slice_to_constant(
     if isinstance(slc, ast.Tuple):
         elts: Any = []
         for v in slc.elts:
-            if isinstance(v, ast.Num):
-                elts.append(v.n)
-            elif isinstance(v, ast.Str):
-                elts.append(v.s)
+            if isinstance(v, getattr(ast, "Num", type(None))):
+                elts.append(v.n)  # type: ignore[attr-defined]
+            elif isinstance(v, getattr(ast, "Str", type(None))):
+                elts.append(v.s)  # type: ignore[attr-defined]
             elif isinstance(v, ast.Constant):
                 elts.append(v.value)
             else:
@@ -58,16 +58,23 @@ def resolve_slice_to_constant(
     if isinstance(slc, ast.Name):
         return slc
 
-    if not isinstance(slc, (ast.Constant, ast.Str, ast.Num)):
+    if not isinstance(
+        slc,
+        (
+            ast.Constant,
+            getattr(ast, "Str", type(None)),
+            getattr(ast, "Num", type(None)),
+        ),
+    ):
         return None
 
     if isinstance(slc, ast.Constant):
         slc = slc.value
-    elif isinstance(slc, ast.Num):  # pragma: no cover
+    elif isinstance(slc, getattr(ast, "Num", type(None))):  # pragma: no cover
         slc = slc.n  # type: ignore
         if not isinstance(slc, int):
             return None
-    elif isinstance(slc, ast.Str):  # pragma: no cover
+    elif isinstance(slc, getattr(ast, "Str", type(None))):  # pragma: no cover
         slc = slc.s  # type: ignore
     else:
         return None
@@ -215,7 +222,7 @@ class SymbolRefVisitor(ast.NodeVisitor):
         elif isinstance(node.func, ast.Subscript):
             if isinstance(node.func.slice, ast.Constant) or (
                 isinstance(node.func.slice, ast.Index)
-                and isinstance(node.func.slice.value, (ast.Str, ast.Num))  # type: ignore
+                and isinstance(node.func.slice.value, (getattr(ast, "Str", type(None)), getattr(ast, "Num", type(None))))  # type: ignore
             ):
                 sliceval = resolve_slice_to_constant(node.func)
                 self.symbol_chain.append(
@@ -294,13 +301,13 @@ class SymbolRefVisitor(ast.NodeVisitor):
     def visit_JoinedStr(self, node: ast.JoinedStr):
         raise ValueError("ref cannot contain literals in chain")
 
-    def visit_Num(self, node: ast.Num):
+    def visit_Num(self, node: ast.Num):  # type: ignore[name-defined]
         raise ValueError("ref cannot contain literals in chain")
 
     def visit_Set(self, node: ast.Set):
         raise ValueError("ref cannot contain literals in chain")
 
-    def visit_Str(self, node: ast.Str):
+    def visit_Str(self, node: ast.Str):  # type: ignore[name-defined]
         raise ValueError("ref cannot contain literals in chain")
 
     def visit_Tuple(self, node: ast.Tuple):
@@ -470,7 +477,7 @@ class SymbolRef:
                 #  Right now, yielding the intermediate elts of the chain will yield false positives in the
                 #  event of namespace stale children.
                 yield ResolvedSymbol(sym, atom, next_atom)
-        if not yield_all_intermediate_symbols and sym is not None:
+        if not yield_all_intermediate_symbols and sym is not None and atom is not None:
             if next_atom is None or not only_yield_final_symbol:
                 yield ResolvedSymbol(sym, atom, next_atom)
 

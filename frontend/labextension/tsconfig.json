@@ -17,7 +17,7 @@
     "rootDir": "src",
     "strict": true,
     "strictNullChecks": false,
-    "target": "es2017",
+    "target": "es2020",
     "types": []
   },
   "include": ["src/*"],

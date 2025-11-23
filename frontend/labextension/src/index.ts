@@ -1,406 +1,39 @@
 import type { IChangedArgs } from '@jupyterlab/coreutils/lib/interfaces';
-import type {
-  IComm,
-  IShellFuture,
-} from '@jupyterlab/services/lib/kernel/kernel';
-import type {
-  IObservableList,
-  IObservableUndoableList,
-} from '@jupyterlab/observables';
-import type { KernelMessage } from '@jupyterlab/services';
+import type { IObservableList } from '@jupyterlab/observables';
+import { JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application';
+import { ICommandPalette, ISessionContext } from '@jupyterlab/apputils';
+import { Cell, CodeCell, ICellModel, ICodeCellModel } from '@jupyterlab/cells';
+import { type CellList, INotebookTracker, Notebook } from '@jupyterlab/notebook';
+import { debounce, isEqual } from 'lodash';
 
 import {
-  JupyterFrontEnd,
-  JupyterFrontEndPlugin,
-} from '@jupyterlab/application';
+  classicColorsClass,
+  executeSliceClass,
+  linkedReadyMakerClass,
+  linkedWaitingClass,
+  readyClass,
+  readyMakingClass,
+  readyMakingInputClass,
+  sliceClass,
+  waitingClass,
+} from './classes';
+import {
+  addUnsafeCellInteraction,
+  addWaitingOutputInteractions,
+  clearCellState,
+  getJpInputCollapser,
+  getJpOutputCollapser,
+} from './dom';
+import {
+  type Highlights,
+  type IpyflowSessionState,
+  initSessionState,
+  ipyflowState,
+  resetSessionState,
+} from './store';
+import { mergeMaps } from './utils';
 
-import { ICommandPalette, ISessionContext } from '@jupyterlab/apputils';
-
-import { Cell, CodeCell, ICellModel, ICodeCellModel } from '@jupyterlab/cells';
-
-import { INotebookTracker, Notebook } from '@jupyterlab/notebook';
-
-import _ from 'lodash';
-
-type Highlights = 'all' | 'none' | 'executed' | 'reactive';
-type CellMetadata = {
-  index: number;
-  content: string;
-  type: string;
-};
-type CellMetadataMap = {
-  [id: string]: CellMetadata;
-};
-
-const waitingClass = 'waiting-cell';
-const readyClass = 'ready-cell';
-const readyMakingClass = 'ready-making-cell';
-const readyMakingInputClass = 'ready-making-input-cell';
-const linkedWaitingClass = 'linked-waiting';
-const linkedReadyMakerClass = 'linked-ready-maker';
-const sliceClass = 'ipyflow-slice';
-const executeSliceClass = 'ipyflow-slice-execute';
-const classicColorsClass = 'ipyflow-classic-colors';
-
-const cleanup = new Event('cleanup');
-
-// ipyflow frontend state
-class IpyflowSessionState {
-  comm: IComm | null = null;
-  notebook: Notebook | null = null;
-  session: ISessionContext | null = null;
-  isIpyflowCommConnected = false;
-  selectedCells: string[] = [];
-  executedCells: Set<string> = new Set();
-  dirtyCells: Set<string> = new Set();
-  waitingCells: Set<string> = new Set();
-  readyCells: Set<string> = new Set();
-  waiterLinks: { [id: string]: string[] } = {};
-  readyMakerLinks: { [id: string]: string[] } = {};
-  staleParents: { [id: string]: string[] } = {};
-  staleParentsByExecutedCellByChild: {
-    [id: string]: { [id2: string]: string[] };
-  } = {};
-  staleParentsByChildByExecutedCell: {
-    [id: string]: { [id2: string]: string[] };
-  } = {};
-  prevActiveCell: Cell<ICellModel> | null = null;
-  activeCell: Cell<ICellModel> | null = null;
-  cellsById: { [id: string]: Cell<ICellModel> } = {};
-  orderIdxById: { [id: string]: number } = {};
-  cellPendingExecution: CodeCell | null = null;
-  isReactivelyExecuting = false;
-  numAltModeExecutes = 0;
-  altModeExecuteCells: Cell<ICellModel>[] | null = null;
-  lastExecutionHighlights: Highlights | null = null;
-  executedReactiveReadyCells: Set<string> = new Set();
-  newReadyCells: Set<string> = new Set();
-  forcedReactiveCells: Set<string> = new Set();
-  forcedCascadingReactiveCells: Set<string> = new Set();
-  numPendingForcedReactiveCounterBumps = 0;
-  cellParents: { [id: string]: string[] } = {};
-  cellChildren: { [id: string]: string[] } = {};
-  settings: { [key: string]: string } = {};
-  lastCellMetadataMap: CellMetadataMap | null = null;
-
-  gatherCellMetadataAndContent() {
-    const cell_metadata_by_id: CellMetadataMap = {};
-    this.notebook.widgets.forEach((itercell, idx) => {
-      const model = itercell.model;
-      cell_metadata_by_id[model.id] = {
-        index: idx,
-        content: model.sharedModel.getSource(),
-        type: model.type,
-      };
-    });
-    return cell_metadata_by_id;
-  }
-
-  requestComputeExecSchedule() {
-    this.comm.send({
-      type: 'compute_exec_schedule',
-      cell_metadata_by_id: this.gatherCellMetadataAndContent(),
-      is_reactively_executing: this.isReactivelyExecuting,
-    });
-  }
-
-  isBatchReactive() {
-    return (
-      (this.isIpyflowCommConnected ?? false) &&
-      this.settings?.exec_mode === 'reactive' &&
-      this.settings?.reactivity_mode === 'batch'
-    );
-  }
-
-  executeCells(cells: Cell<ICellModel>[]) {
-    if (cells.length === 0) {
-      return;
-    }
-    let numFinished = 0;
-    for (const cell of cells) {
-      // if any of them fail, change the [*] to [ ] on subsequent cells
-      CodeCell.execute(cell as CodeCell, this.session).then(() => {
-        if (cell.promptNode.textContent?.includes('[*]')) {
-          // can happen if a preceding cell errored
-          cell.setPrompt('');
-        } else {
-          this.executedCells.add(cell.model.id);
-        }
-        if (++numFinished === cells.length) {
-          // wait a tick first to allow the disk changes to propagate up
-          this.isReactivelyExecuting = false;
-          setTimeout(() => this.requestComputeExecSchedule(), 0);
-        }
-      });
-    }
-  }
-
-  executeClosure(cells: Cell<ICellModel>[]) {
-    if (cells.length === 0) {
-      return;
-    }
-    const cellIds = cells.map((cell) => cell.model.id);
-    const closureCells = this.computeTransitiveClosure(cellIds);
-    this.executeCells(closureCells);
-  }
-
-  toggleReactivity(): IShellFuture<
-    KernelMessage.IExecuteRequestMsg,
-    KernelMessage.IExecuteReplyMsg
-  > {
-    if (this.settings.exec_mode === 'reactive') {
-      this.settings.exec_mode = 'lazy';
-    } else if (this.settings.exec_mode === 'lazy') {
-      this.settings.exec_mode = 'reactive';
-    }
-    return this.session.session.kernel.requestExecute({
-      code: '%flow toggle-reactivity',
-      silent: true,
-      store_history: false,
-    });
-  }
-
-  bumpForcedReactiveCounter(): IShellFuture<
-    KernelMessage.IExecuteRequestMsg,
-    KernelMessage.IExecuteReplyMsg
-  > {
-    this.numPendingForcedReactiveCounterBumps--;
-    return this.session.session.kernel.requestExecute({
-      code: '%flow bump-min-forced-reactive-counter',
-      silent: true,
-      store_history: false,
-    });
-  }
-
-  computeRawTransitiveClosureHelper(
-    closure: Set<string>,
-    cellId: string,
-    edges: { [id: string]: string[] } | undefined | null,
-    pullReactiveUpdates = false,
-    skipFirstCheck = false
-  ): void {
-    if (!skipFirstCheck && closure.has(cellId)) {
-      return;
-    }
-    if (!pullReactiveUpdates) {
-      closure.add(cellId);
-    }
-    const relatives = edges?.[cellId];
-    if (relatives === undefined) {
-      return;
-    }
-    const prevClosureSize = closure.size;
-    relatives.forEach((related) => {
-      this.computeRawTransitiveClosureHelper(
-        closure,
-        related,
-        edges,
-        pullReactiveUpdates
-      );
-    });
-    if (
-      pullReactiveUpdates &&
-      (closure.size > prevClosureSize ||
-        !this.executedCells.has(cellId) ||
-        this.readyCells.has(cellId) ||
-        this.waitingCells.has(cellId) ||
-        this.dirtyCells.has(cellId))
-    ) {
-      closure.add(cellId);
-    }
-    if (!pullReactiveUpdates || !closure.has(cellId)) {
-      return;
-    }
-    relatives.forEach((related) => {
-      if (closure.has(related)) {
-        return;
-      }
-      let shouldIncludeRelated = this.staleParents?.[cellId]?.includes(related);
-      if (!shouldIncludeRelated) {
-        for (const [executed, staleParents] of Object.entries(
-          this.staleParentsByExecutedCellByChild?.[cellId] ?? {}
-        )) {
-          if (!closure.has(executed)) {
-            continue;
-          }
-          shouldIncludeRelated = staleParents.includes(related);
-          if (shouldIncludeRelated) {
-            break;
-          }
-        }
-      }
-      if (shouldIncludeRelated) {
-        closure.add(related);
-        this.computeRawTransitiveClosureHelper(
-          closure,
-          related,
-          edges,
-          pullReactiveUpdates,
-          true
-        );
-      }
-    });
-    for (const [child, staleParents] of Object.entries(
-      this.staleParentsByChildByExecutedCell?.[cellId] ?? {}
-    )) {
-      if (!closure.has(child)) {
-        continue;
-      }
-      for (const parent of staleParents) {
-        if (closure.has(parent) || !edges?.[child]?.includes(parent)) {
-          continue;
-        }
-        closure.add(parent);
-        this.computeRawTransitiveClosureHelper(
-          closure,
-          parent,
-          edges,
-          pullReactiveUpdates,
-          true
-        );
-      }
-    }
-  }
-
-  #computeTopoOrderIdxHelper(
-    cellId: string,
-    orderedCellIds: string[],
-    seen: Set<string>
-  ): void {
-    if (seen.has(cellId) || this.cellsById[cellId]?.model?.type !== 'code') {
-      return;
-    }
-    seen.add(cellId);
-    for (const child of this.cellChildren[cellId] ?? []) {
-      this.#computeTopoOrderIdxHelper(child, orderedCellIds, seen);
-    }
-    orderedCellIds.unshift(cellId);
-  }
-
-  #computeTopoOrderIdx(): { [cellId: string]: number } {
-    const orderedCellIds: string[] = [];
-    const seen = new Set<string>();
-    for (const cellId of Object.keys(this.cellsById)) {
-      this.#computeTopoOrderIdxHelper(cellId, orderedCellIds, seen);
-    }
-    const topoOrderIdx: { [cellId: string]: number } = {};
-    orderedCellIds.forEach((cellId, idx) => {
-      topoOrderIdx[cellId] = idx;
-    });
-    return topoOrderIdx;
-  }
-
-  cellIdsToCells(cellIds: string[]) {
-    const orderIdxById =
-      this.settings.flow_order === 'any_order'
-        ? this.#computeTopoOrderIdx()
-        : this.orderIdxById;
-    return cellIds
-      .filter((id) => this.cellsById[id] !== undefined)
-      .filter((id) => this.orderIdxById[id] !== undefined)
-      .sort((a, b) => orderIdxById[a] - orderIdxById[b])
-      .map((id) => this.cellsById[id]);
-  }
-
-  computeRawTransitiveClosure(
-    startCellIds: string[],
-    inclusive = true,
-    parents = false
-  ): Set<string> {
-    let cellIds = startCellIds;
-    const closure = new Set(cellIds);
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      for (const cellId of cellIds) {
-        if (parents) {
-          this.computeRawTransitiveClosureHelper(
-            closure,
-            cellId,
-            this.cellParents,
-            false,
-            true
-          );
-        } else {
-          this.computeRawTransitiveClosureHelper(
-            closure,
-            cellId,
-            this.cellChildren,
-            false,
-            true
-          );
-        }
-      }
-      if (parents || !(this.settings.pull_reactive_updates ?? false)) {
-        break;
-      }
-      for (const cellId of closure) {
-        this.computeRawTransitiveClosureHelper(
-          closure,
-          cellId,
-          this.cellParents,
-          true,
-          true
-        );
-      }
-      if (
-        cellIds.length === closure.size ||
-        !(this.settings.push_reactive_updates_to_cousins ?? false)
-      ) {
-        break;
-      }
-      cellIds = Array.from(closure);
-    }
-    if (!inclusive) {
-      for (const cellId of startCellIds) {
-        closure.delete(cellId);
-      }
-    }
-    return closure;
-  }
-
-  computeTransitiveClosure(
-    startCellIds: string[],
-    inclusive = true,
-    parents = false
-  ): Cell<ICellModel>[] {
-    return this.cellIdsToCells(
-      Array.from(
-        this.computeRawTransitiveClosure(startCellIds, inclusive, parents)
-      )
-    );
-  }
-}
-
-type IpyflowState = {
-  [session_id: string]: IpyflowSessionState;
-};
-
-const ipyflowState: IpyflowState = {};
 const deferredCells: Cell<ICellModel>[] = [];
-
-function initSessionState(session_id: string): void {
-  const ipyflowSessionState = new IpyflowSessionState();
-  ipyflowState[session_id] = ipyflowSessionState;
-  (window as any).ipyflow = ipyflowSessionState;
-}
-
-function resetSessionState(session_id: string): void {
-  delete ipyflowState[session_id];
-}
-
-function mergeMaps<V>(
-  priority: { [id: string]: V },
-  backup: { [id: string]: V }
-): { [id: string]: V } {
-  const merged: { [id: string]: V } = {};
-  for (const key in backup) {
-    merged[key] = backup[key];
-  }
-  for (const key in priority) {
-    merged[key] = priority[key];
-  }
-  return merged;
-}
 
 /**
  * Initialization data for the jupyterlab-ipyflow extension.
@@ -596,7 +229,7 @@ const extension: JupyterFrontEndPlugin<void> = {
         'notebook:run-cell-and-select-next'
       );
       runMenuRunCommand = (app.commands as any)._commands.get('runmenu:run');
-    } catch (e) {
+    } catch {
       runCellCommand = (app.commands as any)._commands['notebook:run-cell'];
       runCellAndSelectNextCommand = (app.commands as any)._commands[
         'notebook:run-cell-and-select-next'
@@ -761,148 +394,6 @@ const extension: JupyterFrontEndPlugin<void> = {
   },
 };
 
-const getJpInputCollapser = (elem: HTMLElement) => {
-  if (elem === null || elem === undefined) {
-    return null;
-  }
-  const child = elem.children.item(1);
-  if (child === null) {
-    return null;
-  }
-  return child.firstElementChild;
-};
-
-const getJpOutputCollapser = (elem: HTMLElement) => {
-  if (elem === null || elem === undefined) {
-    return null;
-  }
-  const child = elem.children.item(2);
-  if (child === null) {
-    return null;
-  }
-  return child.firstElementChild;
-};
-
-const attachCleanupListener = (
-  elem: Element,
-  evt: 'mouseover' | 'mouseout',
-  listener: any
-) => {
-  const cleanupListener = () => {
-    elem.removeEventListener(evt, listener);
-    elem.removeEventListener('cleanup', cleanupListener);
-  };
-  elem.addEventListener(evt, listener);
-  elem.addEventListener('cleanup', cleanupListener);
-};
-
-const addWaitingOutputInteraction = (
-  elem: Element,
-  linkedElem: Element,
-  evt: 'mouseover' | 'mouseout',
-  add_or_remove: 'add' | 'remove',
-  css: string
-) => {
-  if (elem === null || linkedElem === null) {
-    return;
-  }
-  const listener = () => {
-    linkedElem.firstElementChild.classList[add_or_remove](css);
-  };
-  attachCleanupListener(elem, evt, listener);
-};
-
-const addWaitingOutputInteractions = (
-  elem: HTMLElement,
-  linkedInputClass: string
-) => {
-  addWaitingOutputInteraction(
-    getJpInputCollapser(elem),
-    getJpOutputCollapser(elem),
-    'mouseover',
-    'add',
-    linkedWaitingClass
-  );
-  addWaitingOutputInteraction(
-    getJpInputCollapser(elem),
-    getJpOutputCollapser(elem),
-    'mouseout',
-    'remove',
-    linkedWaitingClass
-  );
-
-  addWaitingOutputInteraction(
-    getJpOutputCollapser(elem),
-    getJpInputCollapser(elem),
-    'mouseover',
-    'add',
-    linkedInputClass
-  );
-  addWaitingOutputInteraction(
-    getJpOutputCollapser(elem),
-    getJpInputCollapser(elem),
-    'mouseout',
-    'remove',
-    linkedInputClass
-  );
-};
-
-const clearCellState = (notebook: Notebook) => {
-  notebook.widgets.forEach((cell) => {
-    cell.node.classList.remove(classicColorsClass);
-    cell.node.classList.remove(waitingClass);
-    cell.node.classList.remove(readyMakingClass);
-    cell.node.classList.remove(readyClass);
-    cell.node.classList.remove(readyMakingInputClass);
-    cell.node.classList.remove(sliceClass);
-    cell.node.classList.remove(executeSliceClass);
-
-    // clear any old event listeners
-    const inputCollapser = getJpInputCollapser(cell.node);
-    if (inputCollapser !== null) {
-      inputCollapser.firstElementChild.classList.remove(linkedWaitingClass);
-      inputCollapser.firstElementChild.classList.remove(linkedReadyMakerClass);
-      inputCollapser.dispatchEvent(cleanup);
-    }
-
-    const outputCollapser = getJpOutputCollapser(cell.node);
-    if (outputCollapser !== null) {
-      outputCollapser.firstElementChild.classList.remove(linkedWaitingClass);
-      outputCollapser.firstElementChild.classList.remove(linkedReadyMakerClass);
-      outputCollapser.dispatchEvent(cleanup);
-    }
-  });
-};
-
-const addUnsafeCellInteraction = (
-  elem: Element,
-  linkedElems: string[],
-  cellsById: { [id: string]: Cell },
-  collapserFun: (elem: HTMLElement) => Element,
-  evt: 'mouseover' | 'mouseout',
-  add_or_remove: 'add' | 'remove',
-  waitingCells: Set<string>
-) => {
-  if (elem === null) {
-    return;
-  }
-  const listener = () => {
-    for (const linkedId of linkedElems) {
-      let css = linkedReadyMakerClass;
-      if (waitingCells.has(linkedId)) {
-        css = linkedWaitingClass;
-      }
-      const collapser = collapserFun(cellsById[linkedId].node);
-      if (collapser === null || collapser.firstElementChild === null) {
-        return;
-      }
-      collapser.firstElementChild.classList[add_or_remove](css);
-    }
-  };
-  elem.addEventListener(evt, listener);
-  attachCleanupListener(elem, evt, listener);
-};
-
 const connectToComm = (
   session: ISessionContext,
   notebooks: INotebookTracker,
@@ -927,14 +418,14 @@ const connectToComm = (
     }
   };
 
-  const onContentChanged = _.debounce(() => {
+  const onContentChanged = debounce(() => {
     if (disconnected) {
       notebook.model.contentChanged.disconnect(onContentChanged);
       notebook.model.cells.changed.disconnect(onContentChanged);
       return;
     }
     const cell_metadata_by_id = state.gatherCellMetadataAndContent();
-    if (_.isEqual(cell_metadata_by_id, state.lastCellMetadataMap)) {
+    if (isEqual(cell_metadata_by_id, state.lastCellMetadataMap)) {
       // fixes https://github.com/ipyflow/ipyflow/issues/145
       return;
     }
@@ -969,7 +460,7 @@ const connectToComm = (
   }
 
   const onCellsAdded = (
-    _: IObservableUndoableList<ICellModel>,
+    _cells: CellList,
     change: IObservableList.IChangedArgs<ICellModel>
   ) => {
     if (disconnected) {
@@ -1202,7 +693,7 @@ const connectToComm = (
   };
   notebooks.selectionChanged.connect(onSelectionChanged);
 
-  const debouncedSave = _.debounce(() => {
+  const debouncedSave = debounce(() => {
     const notebook = notebooks.currentWidget;
     if ((notebook.model as any).collaborative ?? false) {
       return;

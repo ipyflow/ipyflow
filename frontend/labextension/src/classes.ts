@@ -1,0 +1,9 @@
+export const waitingClass = 'waiting-cell';
+export const readyClass = 'ready-cell';
+export const readyMakingClass = 'ready-making-cell';
+export const readyMakingInputClass = 'ready-making-input-cell';
+export const linkedWaitingClass = 'linked-waiting';
+export const linkedReadyMakerClass = 'linked-ready-maker';
+export const sliceClass = 'ipyflow-slice';
+export const executeSliceClass = 'ipyflow-slice-execute';
+export const classicColorsClass = 'ipyflow-classic-colors';

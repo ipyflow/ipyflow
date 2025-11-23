@@ -1,22 +1,19 @@
 import type { IChangedArgs } from '@jupyterlab/coreutils/lib/interfaces';
 import type { IObservableList } from '@jupyterlab/observables';
-import { JupyterFrontEnd, JupyterFrontEndPlugin } from '@jupyterlab/application';
+import {
+  JupyterFrontEnd,
+  JupyterFrontEndPlugin,
+} from '@jupyterlab/application';
 import { ICommandPalette, ISessionContext } from '@jupyterlab/apputils';
 import { Cell, CodeCell, ICellModel, ICodeCellModel } from '@jupyterlab/cells';
-import { type CellList, INotebookTracker, Notebook } from '@jupyterlab/notebook';
+import {
+  type CellList,
+  INotebookTracker,
+  Notebook,
+} from '@jupyterlab/notebook';
 import { debounce, isEqual } from 'lodash';
 
-import {
-  classicColorsClass,
-  executeSliceClass,
-  linkedReadyMakerClass,
-  linkedWaitingClass,
-  readyClass,
-  readyMakingClass,
-  readyMakingInputClass,
-  sliceClass,
-  waitingClass,
-} from './classes';
+import classes from './classes';
 import {
   addUnsafeCellInteraction,
   addWaitingOutputInteractions,
@@ -453,8 +450,8 @@ const connectToComm = (
     state.dirtyCells.delete(cell.id);
     notebook.widgets.forEach((itercell) => {
       if (itercell.model.id === cell.id) {
-        itercell.node.classList.remove(readyClass);
-        itercell.node.classList.remove(readyMakingInputClass);
+        itercell.node.classList.remove(classes.readyCell);
+        itercell.node.classList.remove(classes.readyMakingInputCell);
       }
     });
   };
@@ -563,30 +560,30 @@ const connectToComm = (
       return;
     }
     if ((state.settings.color_scheme ?? 'lazy') === 'classic') {
-      node.classList.add(classicColorsClass);
+      node.classList.add(classes.ipyflowClassicColors);
     }
     if (inExecuteSlice) {
-      node.classList.add(executeSliceClass);
+      node.classList.add(classes.ipyflowSliceExecute);
     } else {
-      node.classList.remove(executeSliceClass);
+      node.classList.remove(classes.ipyflowSliceExecute);
     }
     if (inSlice && !inExecuteSlice) {
-      node.classList.add(sliceClass);
+      node.classList.add(classes.ipyflowSlice);
     } else {
-      node.classList.remove(sliceClass);
+      node.classList.remove(classes.ipyflowSlice);
     }
     if (!showCollapserHighlights) {
       return;
     }
     if (state.waitingCells.has(id)) {
-      node.classList.add(waitingClass);
-      node.classList.add(readyClass);
-      node.classList.remove(readyMakingInputClass);
-      addWaitingOutputInteractions(node, linkedWaitingClass);
+      node.classList.add(classes.waitingCell);
+      node.classList.add(classes.readyCell);
+      node.classList.remove(classes.readyMakingInputCell);
+      addWaitingOutputInteractions(node, classes.linkedWaiting);
     } else if (state.readyCells.has(id)) {
-      node.classList.add(readyMakingInputClass);
-      node.classList.add(readyClass);
-      addWaitingOutputInteractions(node, linkedReadyMakerClass);
+      node.classList.add(classes.readyMakingInputCell);
+      node.classList.add(classes.readyCell);
+      addWaitingOutputInteractions(node, classes.linkedReadyMaker);
     }
 
     if (state.settings.exec_mode === 'reactive') {
@@ -619,8 +616,8 @@ const connectToComm = (
 
     if (state.readyMakerLinks[id] !== undefined) {
       if (!state.waitingCells.has(id)) {
-        node.classList.add(readyMakingClass);
-        node.classList.add(readyClass);
+        node.classList.add(classes.readyMakingCell);
+        node.classList.add(classes.readyCell);
       }
       actionUpdatePairs.forEach(({ action, update }) => {
         addUnsafeCellInteraction(

@@ -20,7 +20,7 @@
     "target": "es2020",
     "types": []
   },
-  "include": ["src/*"],
+  "include": ["src/*", "style/*.d.ts"],
   "exclude": [
     "node_modules"
   ]

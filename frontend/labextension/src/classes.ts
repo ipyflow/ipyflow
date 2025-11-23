@@ -1,9 +1,16 @@
-export const waitingClass = 'waiting-cell';
-export const readyClass = 'ready-cell';
-export const readyMakingClass = 'ready-making-cell';
-export const readyMakingInputClass = 'ready-making-input-cell';
-export const linkedWaitingClass = 'linked-waiting';
-export const linkedReadyMakerClass = 'linked-ready-maker';
-export const sliceClass = 'ipyflow-slice';
-export const executeSliceClass = 'ipyflow-slice-execute';
-export const classicColorsClass = 'ipyflow-classic-colors';
+import styles from '../style/index.module.css';
+
+function hyphenToCamel(s: string) {
+  return s.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+function makeRawClassMap<T extends Record<string, string>>(styles: T): T {
+  const out: Record<string, string> = {};
+  for (const key of Object.keys(styles)) {
+    const camel = hyphenToCamel(key);
+    out[camel] = key; // value = original hyphenated class name
+  }
+  return out as Record<string, string> as T;
+}
+
+export default makeRawClassMap(styles);

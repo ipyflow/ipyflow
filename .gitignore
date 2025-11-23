@@ -11,6 +11,7 @@
 core/ipyflow/resources/labextension/
 core/ipyflow/resources/nbextension/
 frontend/**/lib/
+frontend/**/style/index.module.*
 frontend/**/node_modules/
 build/
 dist/

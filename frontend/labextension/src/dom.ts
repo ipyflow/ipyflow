@@ -1,17 +1,7 @@
 import { Cell } from '@jupyterlab/cells';
 import { Notebook } from '@jupyterlab/notebook';
 
-import {
-  classicColorsClass,
-  linkedReadyMakerClass,
-  linkedWaitingClass,
-  readyClass,
-  readyMakingClass,
-  readyMakingInputClass,
-  waitingClass,
-  sliceClass,
-  executeSliceClass,
-} from './classes';
+import classes from './classes';
 
 const cleanup = new Event('cleanup');
 
@@ -75,14 +65,14 @@ export function addWaitingOutputInteractions(
     getJpOutputCollapser(elem),
     'mouseover',
     'add',
-    linkedWaitingClass
+    classes.linkedWaiting
   );
   addWaitingOutputInteraction(
     getJpInputCollapser(elem),
     getJpOutputCollapser(elem),
     'mouseout',
     'remove',
-    linkedWaitingClass
+    classes.linkedWaiting
   );
 
   addWaitingOutputInteraction(
@@ -103,26 +93,30 @@ export function addWaitingOutputInteractions(
 
 export function clearCellState(notebook: Notebook): void {
   notebook.widgets.forEach((cell) => {
-    cell.node.classList.remove(classicColorsClass);
-    cell.node.classList.remove(waitingClass);
-    cell.node.classList.remove(readyMakingClass);
-    cell.node.classList.remove(readyClass);
-    cell.node.classList.remove(readyMakingInputClass);
-    cell.node.classList.remove(sliceClass);
-    cell.node.classList.remove(executeSliceClass);
+    cell.node.classList.remove(classes.ipyflowClassicColors);
+    cell.node.classList.remove(classes.waitingCell);
+    cell.node.classList.remove(classes.readyMakingCell);
+    cell.node.classList.remove(classes.readyCell);
+    cell.node.classList.remove(classes.readyMakingInputCell);
+    cell.node.classList.remove(classes.ipyflowSlice);
+    cell.node.classList.remove(classes.ipyflowSliceExecute);
 
     // clear any old event listeners
     const inputCollapser = getJpInputCollapser(cell.node);
     if (inputCollapser !== null) {
-      inputCollapser.firstElementChild.classList.remove(linkedWaitingClass);
-      inputCollapser.firstElementChild.classList.remove(linkedReadyMakerClass);
+      inputCollapser.firstElementChild.classList.remove(classes.linkedWaiting);
+      inputCollapser.firstElementChild.classList.remove(
+        classes.linkedReadyMaker
+      );
       inputCollapser.dispatchEvent(cleanup);
     }
 
     const outputCollapser = getJpOutputCollapser(cell.node);
     if (outputCollapser !== null) {
-      outputCollapser.firstElementChild.classList.remove(linkedWaitingClass);
-      outputCollapser.firstElementChild.classList.remove(linkedReadyMakerClass);
+      outputCollapser.firstElementChild.classList.remove(classes.linkedWaiting);
+      outputCollapser.firstElementChild.classList.remove(
+        classes.linkedReadyMaker
+      );
       outputCollapser.dispatchEvent(cleanup);
     }
   });
@@ -142,9 +136,9 @@ export function addUnsafeCellInteraction(
   }
   const listener = () => {
     for (const linkedId of linkedElems) {
-      let css = linkedReadyMakerClass;
+      let css = classes.linkedReadyMaker;
       if (waitingCells.has(linkedId)) {
-        css = linkedWaitingClass;
+        css = classes.linkedWaiting;
       }
       const collapser = collapserFun(cellsById[linkedId].node);
       if (collapser === null || collapser.firstElementChild === null) {

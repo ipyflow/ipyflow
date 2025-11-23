@@ -326,7 +326,11 @@ const extension: JupyterFrontEndPlugin<void> = {
 
     notebooks.currentChanged.connect((_, nbPanel) => {
       const session = nbPanel.sessionContext;
-      (window as any).ipyflow = ipyflowState[session.session.id];
+      if (session?.session == null) {
+        delete (window as any).ipyflow;
+      } else {
+        (window as any).ipyflow = ipyflowState[session.session.id];
+      }
     });
 
     notebooks.widgetAdded.connect((sender, nbPanel) => {

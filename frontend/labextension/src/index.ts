@@ -11,6 +11,7 @@ import {
   INotebookTracker,
   Notebook,
 } from '@jupyterlab/notebook';
+import type { JSONValue } from '@lumino/coreutils';
 import { debounce, isEqual } from 'lodash';
 
 import classes from './classes';
@@ -403,11 +404,35 @@ const connectToComm = (
   initSessionState(session.session.id);
   const state = ipyflowState[session.session.id];
   state.activeCell = notebook.activeCell;
-  const comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
+  let comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
   state.comm = comm;
   state.notebook = notebook;
   state.session = session;
   let disconnected = false;
+  let onEstablishPayload: JSONValue | null = null;
+
+  const commDisconnectHandler = () => {
+    if (!comm.isDisposed) {
+      comm.dispose();
+    }
+    disconnected = true;
+    state.isIpyflowCommConnected = false;
+    resetSessionState(session.session.id);
+  };
+
+  const safeSend = (data: JSONValue) => {
+    if (disconnected) {
+      return;
+    } else if (comm.isDisposed) {
+      onEstablishPayload = data;
+      comm = state.comm = session.session.kernel.createComm(
+        'ipyflow',
+        'ipyflow'
+      );
+    } else {
+      comm.send(data);
+    }
+  };
 
   const syncDirtiness = (cell: Cell<ICellModel>) => {
     if (cell !== null && cell.model !== null) {
@@ -432,7 +457,7 @@ const connectToComm = (
     }
     state.lastCellMetadataMap = cell_metadata_by_id;
     notebook.widgets.forEach(syncDirtiness);
-    comm.send({
+    safeSend({
       type: 'notify_content_changed',
       cell_metadata_by_id,
     });
@@ -495,7 +520,7 @@ const connectToComm = (
       active_cell_id: newActiveCell.id,
       active_cell_order_idx: newActiveCellOrderIdx,
     };
-    comm.send(payload);
+    safeSend(payload);
   };
 
   const refreshNodeMapping = (notebook: Notebook) => {
@@ -552,7 +577,8 @@ const connectToComm = (
     cell: Cell<ICellModel>,
     inSlice: boolean,
     inExecuteSlice: boolean,
-    showCollapserHighlights: boolean
+    showCollapserHighlights: boolean,
+    minimapNode: Element | undefined
   ) => {
     const { model, node } = cell;
     const id = model.id;
@@ -561,16 +587,28 @@ const connectToComm = (
     }
     if ((state.settings.color_scheme ?? 'lazy') === 'classic') {
       node.classList.add(classes.ipyflowClassicColors);
+      minimapNode?.classList.add(classes.ipyflowClassicColors);
+    } else {
+      node.classList.remove(classes.ipyflowClassicColors);
+      minimapNode?.classList.remove(classes.ipyflowClassicColors);
     }
     if (inExecuteSlice) {
       node.classList.add(classes.ipyflowSliceExecute);
+      minimapNode?.classList.add(classes.ipyflowSliceExecute);
     } else {
       node.classList.remove(classes.ipyflowSliceExecute);
+      minimapNode?.classList.remove(classes.ipyflowSliceExecute);
     }
     if (inSlice && !inExecuteSlice) {
       node.classList.add(classes.ipyflowSlice);
+      minimapNode?.classList.add(classes.ipyflowSlice);
     } else {
       node.classList.remove(classes.ipyflowSlice);
+      minimapNode?.classList.remove(classes.ipyflowSlice);
+    }
+    if (cell.model.id === state.activeCell.model.id) {
+      minimapNode?.classList.remove(classes.ipyflowSliceExecute);
+      minimapNode?.classList.remove(classes.ipyflowSlice);
     }
     if (!showCollapserHighlights) {
       return;
@@ -661,13 +699,24 @@ const connectToComm = (
       slice.delete(cellId);
       state.computeRawTransitiveClosureHelper(slice, cellId, state.cellParents);
     }
+
+    const minimapNodesByCellId: { [ctr: string]: Element } = {};
+    document
+      .querySelectorAll(
+        'div.jp-WindowedPanel-scrollbar > ol > li.jp-WindowedPanel-scrollbar-item'
+      )
+      .forEach((node, idx) => {
+        minimapNodesByCellId[notebook.widgets[idx].model.id] = node;
+      });
+
     for (const cell of notebook.widgets) {
       const id = cell.model.id;
       updateOneCellUI(
         cell,
         slice.has(id),
         executeSlice.has(id),
-        state.lastExecutionHighlights !== 'none'
+        state.lastExecutionHighlights !== 'none',
+        minimapNodesByCellId[id]
       );
     }
   };
@@ -716,6 +765,10 @@ const connectToComm = (
       onActiveCellChange(notebook, notebook.activeCell);
       notebook.model.contentChanged.connect(onContentChanged);
       notebook.model.cells.changed.connect(onContentChanged);
+      if (onEstablishPayload !== null) {
+        safeSend(onEstablishPayload);
+        onEstablishPayload = null;
+      }
       state.requestComputeExecSchedule();
     } else if (payload.type === 'set_exec_mode') {
       state.numAltModeExecutes = 0;
@@ -901,7 +954,7 @@ const connectToComm = (
           if (state.lastExecutionHighlights === 'reactive') {
             state.readyCells = state.executedReactiveReadyCells;
           }
-          comm.send({
+          safeSend({
             type: 'reactivity_cleanup',
           });
         }
@@ -929,12 +982,7 @@ const connectToComm = (
     cell_children: ipyflow_metadata?.cell_children ?? {},
   });
   // return a disconnection handle
-  return () => {
-    comm.dispose();
-    disconnected = true;
-    state.isIpyflowCommConnected = false;
-    resetSessionState(session.session.id);
-  };
+  return commDisconnectHandler;
 };
 
 export default extension;

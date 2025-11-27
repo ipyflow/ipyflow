@@ -330,7 +330,6 @@ const extension: JupyterFrontEndPlugin<void> = {
         const ipyflowSession = ipyflowState[session.session.id];
         (window as any).ipyflow = ipyflowSession;
         if (ipyflowSession?.isIpyflowCommConnected ?? false) {
-          ipyflowSession.notebook.scrollbar = true;
           ipyflowSession.requestComputeExecSchedule();
         }
       }
@@ -775,13 +774,7 @@ const connectToComm = (
       return;
     }
     if (payload.type === 'establish') {
-      notebook.notebookConfig = {
-        ...notebook.notebookConfig,
-        showMinimap: true,
-      };
-      if (notebooks.currentWidget.content === notebook) {
-        notebook.scrollbar = true;
-      }
+      notebook.scrollbar = true;
       state.isIpyflowCommConnected = true;
       refreshNodeMapping(notebook);
       notebook.activeCellChanged.connect(onActiveCellChange);

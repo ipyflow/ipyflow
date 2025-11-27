@@ -327,7 +327,12 @@ const extension: JupyterFrontEndPlugin<void> = {
       if (session?.session == null) {
         delete (window as any).ipyflow;
       } else {
-        (window as any).ipyflow = ipyflowState[session.session.id];
+        const ipyflowSession = ipyflowState[session.session.id];
+        (window as any).ipyflow = ipyflowSession;
+        if (ipyflowSession?.isIpyflowCommConnected ?? false) {
+          ipyflowSession.notebook.scrollbar = true;
+          ipyflowSession.requestComputeExecSchedule();
+        }
       }
     });
 
@@ -429,6 +434,12 @@ const connectToComm = (
         'ipyflow',
         'ipyflow'
       );
+      comm.open({
+        interface: 'jupyterlab',
+        cell_metadata_by_id: state.gatherCellMetadataAndContent(),
+        cell_parents: ipyflow_metadata?.cell_parents ?? {},
+        cell_children: ipyflow_metadata?.cell_children ?? {},
+      });
     } else {
       comm.send(data);
     }
@@ -585,7 +596,7 @@ const connectToComm = (
     if (model.type !== 'code') {
       return;
     }
-    if ((state.settings.color_scheme ?? 'lazy') === 'classic') {
+    if ((state.settings.color_scheme ?? 'normal') === 'classic') {
       node.classList.add(classes.ipyflowClassicColors);
       minimapNode?.classList.add(classes.ipyflowClassicColors);
     } else {
@@ -682,6 +693,9 @@ const connectToComm = (
   };
 
   const updateUI = (notebook: Notebook) => {
+    if (notebooks.currentWidget.content !== notebook) {
+      return;
+    }
     clearCellState(notebook);
     refreshNodeMapping(notebook);
     let closureCellIds = state.selectedCells;
@@ -701,12 +715,15 @@ const connectToComm = (
     }
 
     const minimapNodesByCellId: { [ctr: string]: Element } = {};
-    document
+    notebook.node
       .querySelectorAll(
         'div.jp-WindowedPanel-scrollbar > ol > li.jp-WindowedPanel-scrollbar-item'
       )
       .forEach((node, idx) => {
-        minimapNodesByCellId[notebook.widgets[idx].model.id] = node;
+        const cellModel = notebook.widgets[idx]?.model;
+        if (cellModel !== undefined) {
+          minimapNodesByCellId[cellModel.id] = node;
+        }
       });
 
     for (const cell of notebook.widgets) {
@@ -758,6 +775,13 @@ const connectToComm = (
       return;
     }
     if (payload.type === 'establish') {
+      notebook.notebookConfig = {
+        ...notebook.notebookConfig,
+        showMinimap: true,
+      };
+      if (notebooks.currentWidget.content === notebook) {
+        notebook.scrollbar = true;
+      }
       state.isIpyflowCommConnected = true;
       refreshNodeMapping(notebook);
       notebook.activeCellChanged.connect(onActiveCellChange);
@@ -766,8 +790,9 @@ const connectToComm = (
       notebook.model.contentChanged.connect(onContentChanged);
       notebook.model.cells.changed.connect(onContentChanged);
       if (onEstablishPayload !== null) {
-        safeSend(onEstablishPayload);
+        const toSend = onEstablishPayload;
         onEstablishPayload = null;
+        safeSend(toSend);
       }
       state.requestComputeExecSchedule();
     } else if (payload.type === 'set_exec_mode') {

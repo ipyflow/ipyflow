@@ -8,5 +8,5 @@ nvm use default
 set -euxo pipefail
 
 pushd frontend/labextension
-npm run eslint:check
+npm run lint
 popd

@@ -381,11 +381,7 @@ class Scope:
         )
         if prev_sym is not None:
             prev_obj = Symbol.NULL if prev_sym.obj is None else prev_sym.obj
-            # TODO: handle case where new sym is of different type
-            if (
-                name in self.symbol_by_name(prev_sym.is_subscript)
-                and prev_sym.symbol_type == symbol_type
-            ):
+            if name in self.symbol_by_name(prev_sym.is_subscript):
                 prev_sym.update_obj_ref(obj, refresh_cached=False)
                 # old_sym.update_type(symbol_type)
                 prev_sym.update_stmt_node(stmt_node)

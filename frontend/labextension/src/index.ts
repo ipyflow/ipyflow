@@ -295,8 +295,7 @@ const extension: JupyterFrontEndPlugin<void> = {
             }
           }
         } else {
-          exec.call(command, args);
-          state.requestComputeExecSchedule();
+          exec.call(command, args).then(() => state.requestComputeExecSchedule());
         }
       };
     });
@@ -408,16 +407,15 @@ const connectToComm = (
   initSessionState(session.session.id);
   const state = ipyflowState[session.session.id];
   state.activeCell = notebook.activeCell;
-  let comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
-  state.comm = comm;
+  state.comm = session.session.kernel.createComm('ipyflow', 'ipyflow');
   state.notebook = notebook;
   state.session = session;
   let disconnected = false;
   let onEstablishPayload: JSONValue | null = null;
 
   const commDisconnectHandler = () => {
-    if (!comm.isDisposed) {
-      comm.dispose();
+    if (!state.comm.isDisposed) {
+      state.comm.dispose();
     }
     disconnected = true;
     state.isIpyflowCommConnected = false;
@@ -427,20 +425,22 @@ const connectToComm = (
   const safeSend = (data: JSONValue) => {
     if (disconnected) {
       return;
-    } else if (comm.isDisposed) {
+    } else if (state.comm.isDisposed) {
       onEstablishPayload = data;
-      comm = state.comm = session.session.kernel.createComm(
+      const oldComm = state.comm;
+      state.comm = session.session.kernel.createComm(
         'ipyflow',
         'ipyflow'
       );
-      comm.open({
+      state.comm.onMsg = oldComm.onMsg;
+      state.comm.open({
         interface: 'jupyterlab',
         cell_metadata_by_id: state.gatherCellMetadataAndContent(),
         cell_parents: ipyflow_metadata?.cell_parents ?? {},
         cell_children: ipyflow_metadata?.cell_children ?? {},
       });
     } else {
-      comm.send(data);
+      state.comm.send(data);
     }
   };
 
@@ -768,7 +768,7 @@ const connectToComm = (
     }
   }, 200);
 
-  comm.onMsg = (msg) => {
+  state.comm.onMsg = (msg) => {
     const payload = msg.content.data;
     if (disconnected || !(payload.success ?? true)) {
       return;
@@ -993,7 +993,7 @@ const connectToComm = (
   };
   const ipyflow_metadata =
     (notebook.model as any).getMetadata?.('ipyflow') ?? ({} as any);
-  comm.open({
+  state.comm.open({
     interface: 'jupyterlab',
     cell_metadata_by_id: state.gatherCellMetadataAndContent(),
     cell_parents: ipyflow_metadata?.cell_parents ?? {},

@@ -636,7 +636,10 @@ class Symbol:
             # numpy atoms are not interned (so assigning array elts to a variable does not bump refcount);
             # also seems that refcount is always 0, so just check if the containing namespace is garbage
             return containing_ns.is_garbage
-        return self.get_ref_count() == 0
+        # TODO: seems like we want to keep symbols around even if there are no more references
+        #   figure out the garbage collection story in this case
+        # return self.get_ref_count() == 0
+        return False
 
     @property
     def is_globally_accessible(self) -> bool:

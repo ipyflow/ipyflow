@@ -478,9 +478,20 @@ def get_live_symbols_and_cells_for_references(
     cell_ctr: int,
     update_liveness_time_versions: bool = False,
 ) -> Tuple[Set[ResolvedSymbol], Set[int], Set[LiveSymbolRef]]:
+    from ipyflow.data_model.cell import cells
+
     live_symbols: Set[ResolvedSymbol] = set()
     unresolved_live_refs: Set[LiveSymbolRef] = set()
     called_syms: Set[Tuple[ResolvedSymbol, int]] = set()
+    try:
+        cell = cells().from_counter(cell_ctr)
+    except KeyError:
+        cell = None
+    used_syms = (
+        set()
+        if cell is None or cell is cells().current_cell()
+        else set(cell.used_symbols)
+    )
     for live_symbol_ref in symbol_refs:
         chain = live_symbol_ref.ref.chain
         if len(chain) >= 1:
@@ -491,12 +502,16 @@ def get_live_symbols_and_cells_for_references(
         else:
             did_resolve = False
         resolved = None
+        update_liveness_time_for_ref = update_liveness_time_versions
         for resolved in live_symbol_ref.gen_resolved_symbols(
             scope,
             only_yield_final_symbol=False,
             yield_all_intermediate_symbols=True,
             cell_ctr=cell_ctr,
         ):
+            update_liveness_time_for_ref = (
+                update_liveness_time_for_ref and resolved.sym not in used_syms
+            )
             if (
                 live_symbol_ref.is_killed
                 and resolved.sym.shallow_timestamp.cell_num != cell_ctr
@@ -509,7 +524,7 @@ def get_live_symbols_and_cells_for_references(
                 live_symbols.add(resolved)
         if (
             resolved is not None
-            and update_liveness_time_versions
+            and update_liveness_time_for_ref
             and not live_symbol_ref.is_killed
         ):
             liveness_time = resolved.liveness_timestamp

@@ -260,6 +260,12 @@ class CommManager:
                 prev_live_syms = {resolved.sym for resolved in prev_resolved_live_syms}
                 live_syms: Set[Symbol] = {resolved.sym for resolved in result.live}
                 cell.static_removed_symbols |= prev_live_syms
+                # cell.static_removed_symbols |= {
+                #     sym
+                #     for sym in prev_live_syms
+                #     # TODO: need a better way to prevent removing dangling references
+                #     # if not cells().from_timestamp(sym.timestamp).is_current
+                # }
                 cell.static_removed_symbols -= live_syms
                 cell.last_check_content = cell.current_content
                 cell.last_check_result = result

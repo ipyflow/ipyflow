@@ -386,10 +386,16 @@ class NotebookFlow(singletons.NotebookFlow):
         self.mut_settings.trace_messages_enabled = new_val
 
     def get_first_full_symbol(self, obj_id: int) -> Optional[Symbol]:
+        self_alias = None
         for alias in self.aliases.get(obj_id, []):
-            if not alias.is_anonymous:
+            if alias.is_anonymous:
+                continue
+            if alias.name == "self":
+                self_alias = alias
+            else:
+                # prefer non-self alias
                 return alias
-        return None
+        return self_alias
 
     @staticmethod
     def cell_counter() -> int:

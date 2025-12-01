@@ -662,7 +662,7 @@ class DataflowTracer(StackFrameManager):
             #     'found class scope %s containing %s',
             #     class_scope, list(class_scope.all_symbols_this_indentation())
             # )
-            ns = class_scope.clone(obj)
+            ns = class_scope.clone(obj, original_symbol=sym_for_obj)
             ns.parent_scope = None
             if obj_name is not None:
                 ns.scope_name = obj_name

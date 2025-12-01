@@ -449,7 +449,8 @@ class Statement(SliceableMixin):
             # use suppressed log level to avoid noise to user
             logger.info("Exception: %s", e)
             return
-        ns = flow().namespaces.get(id(obj), None)
+        ns = flow().namespaces.get(id(obj))
+        ns_was_none = ns is None
         if ns is None:
             ns = Namespace(obj, str(name), parent_scope=scope)
         for i, inner_dep in enumerate(inner_deps):
@@ -463,7 +464,7 @@ class Statement(SliceableMixin):
                 is_subscript=True,
                 is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
             )
-        scope.upsert_symbol_for_name(
+        sym = scope.upsert_symbol_for_name(
             name,
             obj,
             set(),
@@ -472,6 +473,8 @@ class Statement(SliceableMixin):
             symbol_node=target,
             is_cascading_reactive=self.stmt_contains_cascading_reactive_rval,
         )
+        if ns_was_none and ns is not None:
+            ns.original_symbol = sym
         self._handle_reactive_store(target.value)
 
     def _handle_store_target_tuple_unpack_from_namespace(

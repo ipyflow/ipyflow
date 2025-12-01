@@ -579,7 +579,10 @@ def _compute_call_chain_live_symbols_and_cells(
             continue
         called_sym, stmt_ctr = workitem
         # TODO: handle callable classes
-        if called_sym.sym.func_def_stmt is None:
+        if not isinstance(
+            called_sym.sym.func_def_stmt,
+            (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda),
+        ):
             continue
         seen.add(workitem)
         init_killed = {arg.arg for arg in called_sym.sym.get_definition_args()}

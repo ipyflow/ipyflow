@@ -41,28 +41,44 @@ class Namespace(Scope):
     # TODO: support (multiple) inheritance by allowing
     #  Namespaces from classes to clone their parent class's Namespaces
     def __init__(
-        self, obj: Any, *args, force_allow_iteration: bool = False, **kwargs
+        self,
+        obj: Any,
+        *args,
+        original_symbol: Optional[Symbol] = None,
+        force_allow_iteration: bool = False,
+        **kwargs,
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._namespace_init(obj, force_allow_iteration=force_allow_iteration)
+        self._namespace_init(
+            obj,
+            original_symbol=original_symbol,
+            force_allow_iteration=force_allow_iteration,
+        )
 
-    def _namespace_init(self, obj: Any, force_allow_iteration: bool = False):
+    def _namespace_init(
+        self,
+        obj: Any,
+        original_symbol: Optional[Symbol] = None,
+        force_allow_iteration: bool = False,
+    ):
+        flow_ = flow()
         self.cloned_from: Optional["Namespace"] = None
         self.child_clones: List["Namespace"] = []
         self.obj = obj
         self.cached_obj_id = id(obj)
+        self.original_symbol = original_symbol or flow_.get_first_full_symbol(
+            self.cached_obj_id
+        )
         if (
-            obj is not None
-            and not isinstance(obj, int)
-            and id(obj) in flow().namespaces
+            obj is not None and not isinstance(obj, int) and id(obj) in flow_.namespaces
         ):  # pragma: no cover
             msg = "namespace already registered for %s" % obj
-            if flow().is_dev_mode:
+            if flow_.is_dev_mode:
                 raise ValueError(msg)
             else:
                 logger.warning(msg)
         if obj is not self.PENDING_CLASS_PLACEHOLDER:
-            flow().namespaces[id(obj)] = self
+            flow_.namespaces[id(obj)] = self
         self._tombstone = False
         # this timestamp needs to be bumped in Symbol refresh()
         self.max_descendent_timestamp: Timestamp = Timestamp.uninitialized()
@@ -190,8 +206,10 @@ class Namespace(Scope):
         else:
             return self._symbol_by_name
 
-    def clone(self, obj: Any) -> "Namespace":
-        cloned = Namespace(obj, self.scope_name, self.parent_scope)
+    def clone(self, obj: Any, original_symbol: Optional[Symbol] = None) -> "Namespace":
+        cloned = Namespace(
+            obj, self.scope_name, self.parent_scope, original_symbol=original_symbol
+        )
         cloned.cloned_from = self
         self.child_clones.append(cloned)
         return cloned
@@ -201,7 +219,12 @@ class Namespace(Scope):
         return cls(cls.PENDING_CLASS_PLACEHOLDER, scope_name, parent_scope=scope)
 
     def fresh_copy(self, obj: Any) -> "Namespace":
-        return Namespace(obj, self.scope_name, self.parent_scope)
+        return Namespace(
+            obj,
+            self.scope_name,
+            self.parent_scope,
+            original_symbol=self.original_symbol,
+        )
 
     def make_namespace_qualified_name(self, sym: Symbol) -> str:
         path = self.full_namespace_path

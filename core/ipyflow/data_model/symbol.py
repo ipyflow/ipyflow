@@ -611,6 +611,13 @@ class Symbol:
         else:
             return None
 
+    def traverse_up_namespaces(self) -> Generator["Symbol", None, None]:
+        yield self
+        containing_ns = self.containing_namespace
+        if containing_ns is None or containing_ns.original_symbol is None:
+            return
+        yield from containing_ns.original_symbol.traverse_up_namespaces()
+
     @property
     def full_path(self) -> Tuple[str, ...]:
         return self.containing_scope.full_path + (str(self.name),)
@@ -810,9 +817,9 @@ class Symbol:
         self.cached_obj_len = self.obj_len
 
     def get_definition_args(self) -> List[ast.arg]:
-        assert self.func_def_stmt is not None and isinstance(
+        assert isinstance(
             self.func_def_stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
-        )
+        ), ("got %s" % self.func_def_stmt)
         args = []
         for arg in self.func_def_stmt.args.args + self.func_def_stmt.args.kwonlyargs:
             args.append(arg)
@@ -1104,17 +1111,23 @@ class Symbol:
         self._refresh_cached_obj()
         if self.is_class:
             # pop pending class defs and update obj ref
-            pending_class_ns = tracer().pending_class_namespaces.pop()
-            pending_class_ns.update_obj_ref(self.obj)
+            try:
+                pending_class_ns = tracer().pending_class_namespaces.pop()
+                pending_class_ns.update_obj_ref(self.obj)
+            except IndexError:
+                pass
         for dep in new_deps:
             if dep.obj is self.obj and dep.call_scope is not None:
                 self.call_scope = dep.call_scope
                 self.func_def_stmt = dep.func_def_stmt
         ns = self.namespace
-        if ns is not None and ns.scope_name == "self" and isinstance(self.name, str):
+        if ns is not None and isinstance(self.name, str):
             # fixup namespace name if necessary
             # can happen if symbol for 'self' was created in a previous __init__
-            ns.scope_name = self.name
+            if ns.scope_name == "self":
+                ns.scope_name = self.name
+            if ns.original_symbol is not None and ns.original_symbol.name == "self":
+                ns.original_symbol = self
         if overwrite and len(flow().aliases[self.obj_id]) == 1:
             self._handle_possible_widget_creation()
             self._handle_possible_mercury_widget_creation()
@@ -1217,7 +1230,12 @@ class Symbol:
         ns = self.namespace
         if ns is not None:
             return ns
-        return namespaces()(self.obj, self.name, parent_scope=self.containing_scope)
+        return namespaces()(
+            self.obj,
+            self.name,
+            parent_scope=self.containing_scope,
+            original_symbol=self,
+        )
 
     def update_usage_info_one_timestamp(
         self,
@@ -1377,7 +1395,7 @@ class Symbol:
             #     ns.full_path,
             # )
             sym.refresh(
-                refresh_descendent_namespaces=True,
+                refresh_descendent_namespaces=sym.name != "__class__",
                 timestamp=self._timestamp,
                 take_timestamp_snapshots=False,
                 seen=seen,

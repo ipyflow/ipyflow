@@ -254,10 +254,11 @@ class FrontendCheckerResult(NamedTuple):
         for _ in flow_.mut_settings.iter_slicing_contexts():
             for pid, syms in cell.directional_parents.items():
                 parent = cells().from_id(pid)
-                for sym in syms:
-                    if sym.shallow_timestamp.cell_num > parent.cell_ctr:
-                        self.stale_parents[cell.cell_id].add(parent.cell_id)
-                        break
+                for qual_sym in syms:
+                    for sym in qual_sym.traverse_up_namespaces():
+                        if sym.shallow_timestamp.cell_num > parent.cell_ctr:
+                            self.stale_parents[cell.cell_id].add(parent.cell_id)
+                            break
 
     def _compute_stale_parent_makers(self) -> None:
         flow_ = flow()
@@ -274,16 +275,17 @@ class FrontendCheckerResult(NamedTuple):
         for cell in cells().iterate_over_notebook_in_position_order():
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 for pid, syms in cell.raw_parents.items():
-                    for sym in syms:
-                        for executed_cell in cells_so_far_that_update_symbol.get(
-                            sym, []
-                        ):
-                            self.stale_parents_by_executed_cell_by_child.setdefault(
-                                cell.cell_id, {}
-                            ).setdefault(executed_cell.cell_id, set()).add(pid)
-                            self.stale_parents_by_child_by_executed_cell.setdefault(
-                                executed_cell.cell_id, {}
-                            ).setdefault(cell.cell_id, set()).add(pid)
+                    for qual_sym in syms:
+                        for sym in qual_sym.traverse_up_namespaces():
+                            for executed_cell in cells_so_far_that_update_symbol.get(
+                                sym, []
+                            ):
+                                self.stale_parents_by_executed_cell_by_child.setdefault(
+                                    cell.cell_id, {}
+                                ).setdefault(executed_cell.cell_id, set()).add(pid)
+                                self.stale_parents_by_child_by_executed_cell.setdefault(
+                                    executed_cell.cell_id, {}
+                                ).setdefault(cell.cell_id, set()).add(pid)
             static_writes = set(cell.static_writes)
             if cell.last_check_result is not None:
                 static_writes &= cell.last_check_result.modified

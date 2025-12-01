@@ -3,6 +3,7 @@ import { Notebook } from '@jupyterlab/notebook';
 import { ISessionContext } from '@jupyterlab/apputils';
 import { Cell, CodeCell, ICellModel } from '@jupyterlab/cells';
 import { KernelMessage } from '@jupyterlab/services';
+import { JSONValue } from '@lumino/coreutils';
 
 export type Highlights = 'all' | 'none' | 'executed' | 'reactive';
 
@@ -19,6 +20,7 @@ type CellMetadataMap = {
 // ipyflow frontend state
 export class IpyflowSessionState {
   comm: IComm | null = null;
+  safeSend: ((data: JSONValue) => void) | null = null;
   notebook: Notebook | null = null;
   session: ISessionContext | null = null;
   isIpyflowCommConnected = false;
@@ -69,7 +71,7 @@ export class IpyflowSessionState {
   }
 
   requestComputeExecSchedule() {
-    this.comm.send({
+    (this.safeSend ?? this.comm.send)({
       type: 'compute_exec_schedule',
       cell_metadata_by_id: this.gatherCellMetadataAndContent(),
       is_reactively_executing: this.isReactivelyExecuting,
@@ -84,7 +86,7 @@ export class IpyflowSessionState {
     );
   }
 
-  executeCells(cells: Cell<ICellModel>[]) {
+  executeCells(cells: Cell<ICellModel>[]): void {
     if (cells.length === 0) {
       return;
     }
@@ -101,7 +103,9 @@ export class IpyflowSessionState {
         if (++numFinished === cells.length) {
           // wait a tick first to allow the disk changes to propagate up
           this.isReactivelyExecuting = false;
-          setTimeout(() => this.requestComputeExecSchedule(), 0);
+          setTimeout(() => {
+            this.requestComputeExecSchedule();
+          }, 0);
         }
       });
     }

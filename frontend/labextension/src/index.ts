@@ -6,6 +6,7 @@ import {
 } from '@jupyterlab/application';
 import { ICommandPalette, ISessionContext } from '@jupyterlab/apputils';
 import { Cell, CodeCell, ICellModel, ICodeCellModel } from '@jupyterlab/cells';
+import { IDocumentManager } from '@jupyterlab/docmanager';
 import {
   type CellList,
   INotebookTracker,
@@ -38,12 +39,13 @@ const deferredCells: Cell<ICellModel>[] = [];
  */
 const extension: JupyterFrontEndPlugin<void> = {
   id: 'jupyterlab-ipyflow',
-  requires: [INotebookTracker, ICommandPalette],
+  requires: [INotebookTracker, ICommandPalette, IDocumentManager],
   autoStart: true,
   activate: (
     app: JupyterFrontEnd,
     notebooks: INotebookTracker,
-    palette: ICommandPalette
+    palette: ICommandPalette,
+    docManager: IDocumentManager,
   ) => {
     app.commands.addCommand('execute-stale', {
       label: 'Execute Ready Cells',
@@ -122,13 +124,7 @@ const extension: JupyterFrontEndPlugin<void> = {
               notebooks.activeCell.model.id,
             ]);
           }
-          if (state.numAltModeExecutes === 1) {
-            state
-              .toggleReactivity()
-              .done.then(() => state.executeCells(closure));
-          } else {
-            state.executeCells(closure);
-          }
+          state.executeCells(closure);
         } else {
           console.error(
             `Unknown reactivity mode: ${state.settings.reactivity_mode}`
@@ -252,6 +248,8 @@ const extension: JupyterFrontEndPlugin<void> = {
       return state.isBatchReactive();
     };
 
+    let inProgressExecs = 0;
+
     [
       [runCellCommand, runCellCommandExecute, 'notebook:run-cell'],
       [
@@ -262,6 +260,7 @@ const extension: JupyterFrontEndPlugin<void> = {
       [runMenuRunCommand, runMenuRunCommandExecute, 'runmenu:run'],
     ].forEach(([command, exec, commandId]) => {
       command.execute = (...args: any[]) => {
+        inProgressExecs++;
         const state = getIpyflowState();
         const nbpanel = notebooks.currentWidget;
         const notebook = nbpanel.content;
@@ -295,29 +294,34 @@ const extension: JupyterFrontEndPlugin<void> = {
             }
           }
         } else {
-          exec.call(command, args).then(() => state.requestComputeExecSchedule());
+          exec.call(command, args).then(() => {
+            if (--inProgressExecs === 0) {
+              state.requestComputeExecSchedule();
+            }
+          });
         }
       };
     });
 
     const executeBatchReactive = (skipFirst = false) => {
       const state = getIpyflowState();
-      if (state.isIpyflowCommConnected ?? false) {
-        const closureCellIds: string[] = [];
-        for (const cell of state.notebook.widgets) {
-          if (state.notebook.isSelectedOrActive(cell)) {
-            closureCellIds.push(cell.model.id);
-          }
+      if (!(state.isIpyflowCommConnected ?? false)) {
+        return;
+      }
+      const closureCellIds: string[] = [];
+      for (const cell of state.notebook.widgets) {
+        if (state.notebook.isSelectedOrActive(cell)) {
+          closureCellIds.push(cell.model.id);
         }
-        let closure = state.computeTransitiveClosure(closureCellIds, true);
-        if (skipFirst) {
-          closure = closure.splice(1);
-        }
-        if (closure.length > 0) {
-          state.executeCells(closure);
-        } else {
-          state.requestComputeExecSchedule();
-        }
+      }
+      let closure = state.computeTransitiveClosure(closureCellIds, true);
+      if (skipFirst) {
+        closure = closure.splice(1);
+      }
+      if (closure.length > 0) {
+        state.executeCells(closure);
+      } else {
+        state.requestComputeExecSchedule();
       }
     };
 
@@ -354,7 +358,8 @@ const extension: JupyterFrontEndPlugin<void> = {
                 commDisconnectHandler = connectToComm(
                   session,
                   notebooks,
-                  nbPanel.content
+                  nbPanel.content,
+                  docManager,
                 );
               }
             };
@@ -362,7 +367,8 @@ const extension: JupyterFrontEndPlugin<void> = {
             commDisconnectHandler = connectToComm(
               session,
               notebooks,
-              nbPanel.content
+              nbPanel.content,
+              docManager,
             );
           }
         );
@@ -375,7 +381,8 @@ const extension: JupyterFrontEndPlugin<void> = {
         commDisconnectHandler = connectToComm(
           session,
           notebooks,
-          nbPanel.content
+          nbPanel.content,
+          docManager,
         );
         session.kernelChanged.connect((_, args) => {
           if (args.newValue == null) {
@@ -390,7 +397,8 @@ const extension: JupyterFrontEndPlugin<void> = {
             commDisconnectHandler = connectToComm(
               session,
               notebooks,
-              nbPanel.content
+              nbPanel.content,
+              docManager,
             );
           });
         });
@@ -402,7 +410,8 @@ const extension: JupyterFrontEndPlugin<void> = {
 const connectToComm = (
   session: ISessionContext,
   notebooks: INotebookTracker,
-  notebook: Notebook
+  notebook: Notebook,
+  docManager: IDocumentManager,
 ) => {
   initSessionState(session.session.id);
   const state = ipyflowState[session.session.id];
@@ -422,7 +431,7 @@ const connectToComm = (
     resetSessionState(session.session.id);
   };
 
-  const safeSend = (data: JSONValue) => {
+  const safeSend = (data: JSONValue): void => {
     if (disconnected) {
       return;
     } else if (state.comm.isDisposed) {
@@ -443,6 +452,7 @@ const connectToComm = (
       state.comm.send(data);
     }
   };
+  state.safeSend = safeSend;
 
   const syncDirtiness = (cell: Cell<ICellModel>) => {
     if (cell !== null && cell.model !== null) {
@@ -763,6 +773,8 @@ const connectToComm = (
     const notebook = notebooks.currentWidget;
     if ((notebook.model as any).collaborative ?? false) {
       return;
+    } else if (docManager.autosave && docManager.autosaveInterval <= 5) {
+      return;
     } else {
       notebook.context.save();
     }
@@ -976,7 +988,7 @@ const connectToComm = (
             type: 'reactivity_cleanup',
           });
         }
-        if (state.numAltModeExecutes > 0 && --state.numAltModeExecutes === 0) {
+        if (state.numAltModeExecutes > 0 && --state.numAltModeExecutes === 0 && state.settings.reactivity_mode === 'incremental') {
           state.toggleReactivity();
         }
         if (state.numPendingForcedReactiveCounterBumps > 0) {

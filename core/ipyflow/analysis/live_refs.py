@@ -492,6 +492,21 @@ def get_live_symbols_and_cells_for_references(
         if cell is None or cell is cells().current_cell()
         else set(cell.used_symbols)
     )
+    flow_ = flow()
+    if cell is not None and flow_.mut_settings.flow_order == FlowDirection.IN_ORDER:
+        # if the executed cell lies outside this cell's parent span, we should be able to refresh any unsafe symbols
+        # that this cell references
+        current_cell = cells().current_cell()
+        if current_cell.position >= cell.position:
+            allow_unsafe = True
+        else:
+            min_pos = cell.position
+            for _ in flow_.mut_settings.iter_slicing_contexts():
+                for par_id in cell.directional_parents.keys():
+                    min_pos = min(min_pos, cells().from_id(par_id).position)
+            allow_unsafe = min_pos > cells().current_cell().position
+    else:
+        allow_unsafe = False
     for live_symbol_ref in symbol_refs:
         chain = live_symbol_ref.ref.chain
         if len(chain) >= 1:
@@ -520,7 +535,7 @@ def get_live_symbols_and_cells_for_references(
             did_resolve = True
             if resolved.is_called:
                 called_syms.add((resolved, live_symbol_ref.timestamp))
-            if resolved.is_live and not resolved.is_unsafe:
+            if resolved.is_live and (allow_unsafe or not resolved.is_unsafe):
                 live_symbols.add(resolved)
         if (
             resolved is not None

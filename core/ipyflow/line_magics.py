@@ -34,6 +34,7 @@ from ipyflow.utils.magic_parser import MagicParser
 
 if TYPE_CHECKING:
     from ipyflow.flow import NotebookFlow
+    from ipyflow.shell.interactiveshell import IPyflowInteractiveShell
 
 
 _FLOW_LINE_MAGIC = "flow"
@@ -499,37 +500,42 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
             return None
 
 
-def _deregister_tracers(tracers):
-    shell().tracer_cleanup_pending = True
+def _deregister_tracers(tracers, shell_: Optional["IPyflowInteractiveShell"] = None):
+    (shell_ or shell()).tracer_cleanup_pending = True
     for tracer in tracers:
         tracer.clear_instance()
         try:
-            shell().registered_tracers.remove(tracer)
+            (shell_ or shell()).registered_tracers.remove(tracer)
         except ValueError:
             pass
 
 
-def _deregister_tracers_for(tracer_cls):
+def _deregister_tracers_for(
+    tracer_cls, shell_: Optional["IPyflowInteractiveShell"] = None
+) -> None:
     _deregister_tracers(
         [tracer_cls]
         + [
             tracer
-            for tracer in shell().registered_tracers
+            for tracer in (shell_ or shell()).registered_tracers
             if tracer.__name__ == tracer_cls.__name__
-        ]
+        ],
+        shell_=shell_,
     )
 
 
-def register_tracer(line_: str) -> None:
+def register_tracer(
+    line_: str, shell_: Optional["IPyflowInteractiveShell"] = None
+) -> None:
     line_ = line_.strip()
     usage = "Usage: %flow register_tracer <module.path.to.tracer_class>"
     tracer_cls = _resolve_tracer_class(line_)
     if tracer_cls is None:
         warn(usage)
         return
-    _deregister_tracers_for(tracer_cls)
+    _deregister_tracers_for(tracer_cls, shell_=shell_)
     tracer_cls.instance()
-    shell().registered_tracers.insert(0, tracer_cls)
+    (shell_ or shell()).registered_tracers.insert(0, tracer_cls)
 
 
 def deregister_tracer(line_: str) -> None:

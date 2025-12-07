@@ -16,6 +16,7 @@ from ipyflow.data_model.cell import Cell
 from ipyflow.data_model.statement import Statement
 from ipyflow.data_model.timestamp import Timestamp
 from ipyflow.flow import NotebookFlow
+from ipyflow.line_magics import register_tracer
 from ipyflow.memoization import MemoizedOutputLevel
 from ipyflow.tracing.flow_ast_rewriter import DataflowAstRewriter
 from ipyflow.tracing.interrupt_tracer import InterruptTracer
@@ -60,6 +61,10 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             "cell_id" in inspect.signature(super()._run_cell).parameters
         )
         self._should_capture_output = False
+        for qualified_tracer_cls_name in reversed(
+            getattr(self.config.ipyflow, "extra_pyccolo_tracers", [])
+        ):
+            register_tracer(qualified_tracer_cls_name, shell_=self)
 
     @classmethod
     def instance(cls, *args, **kwargs) -> "IPyflowInteractiveShell":

@@ -2,7 +2,18 @@
 import ast
 import logging
 from collections import defaultdict
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+from typing import (
+    Any,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from ipyflow.config import ExecutionSchedule, FlowDirection
 from ipyflow.data_model.cell import Cell, CheckerResult, cells
@@ -518,7 +529,10 @@ class FrontendCheckerResult(NamedTuple):
             latest_par_by_ts = cell.get_latest_parent_by_ts_map()
             for _ in flow_.mut_settings.iter_slicing_contexts():
                 for par_id, raw_syms in cell.directional_parents.items():
-                    syms = raw_syms - cell.static_removed_symbols
+                    syms: Union[Set["Symbol"], FrozenSet["Symbol"]] = (
+                        raw_syms - cell.static_removed_symbols
+                    )
+                    syms = {sym for sym in syms if not sym.is_implicit_virtual}
                     if len(syms) == 0:
                         continue
                     if (

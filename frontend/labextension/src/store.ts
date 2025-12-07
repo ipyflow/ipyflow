@@ -56,6 +56,7 @@ export class IpyflowSessionState {
   cellChildren: { [id: string]: string[] } = {};
   settings: { [key: string]: string } = {};
   lastCellMetadataMap: CellMetadataMap | null = null;
+  inProgressExecs = 0;
 
   gatherCellMetadataAndContent() {
     const cell_metadata_by_id: CellMetadataMap = {};

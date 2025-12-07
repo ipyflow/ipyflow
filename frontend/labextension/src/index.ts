@@ -248,8 +248,6 @@ const extension: JupyterFrontEndPlugin<void> = {
       return state.isBatchReactive();
     };
 
-    let inProgressExecs = 0;
-
     [
       [runCellCommand, runCellCommandExecute, 'notebook:run-cell'],
       [
@@ -260,8 +258,8 @@ const extension: JupyterFrontEndPlugin<void> = {
       [runMenuRunCommand, runMenuRunCommandExecute, 'runmenu:run'],
     ].forEach(([command, exec, commandId]) => {
       command.execute = (...args: any[]) => {
-        inProgressExecs++;
         const state = getIpyflowState();
+        state.inProgressExecs++;
         const nbpanel = notebooks.currentWidget;
         const notebook = nbpanel.content;
         const kernel = nbpanel.sessionContext.session.kernel.name;
@@ -295,7 +293,8 @@ const extension: JupyterFrontEndPlugin<void> = {
           }
         } else {
           exec.call(command, args).then(() => {
-            if (--inProgressExecs === 0) {
+            if (--state.inProgressExecs <= 0) {
+              state.inProgressExecs = 0;
               state.requestComputeExecSchedule();
             }
           });

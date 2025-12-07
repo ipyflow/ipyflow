@@ -261,6 +261,8 @@ class Scope:
         scope = self
         while scope.is_namespace_scope:
             scope = scope.parent_scope  # type: ignore[assignment]
+            if scope is None:
+                return False
         if not scope.is_global or sym.stmt_node is None:
             return False
         elif not pyc.is_outer_stmt(id(sym.stmt_node)):
@@ -381,7 +383,10 @@ class Scope:
         )
         if prev_sym is not None:
             prev_obj = Symbol.NULL if prev_sym.obj is None else prev_sym.obj
-            if prev_sym.symbol_type != SymbolType.MODULE and symbol_type != SymbolType.IMPORT:
+            if (
+                prev_sym.symbol_type != SymbolType.MODULE
+                and symbol_type != SymbolType.IMPORT
+            ):
                 prev_sym.symbol_type = symbol_type
             if name in self.symbol_by_name(prev_sym.is_subscript):
                 prev_sym.update_obj_ref(obj, refresh_cached=False)

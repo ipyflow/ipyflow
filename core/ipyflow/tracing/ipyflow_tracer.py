@@ -687,6 +687,8 @@ class DataflowTracer(StackFrameManager):
             ns.parent_scope is None
             and sym_for_obj is not None
             and sym_for_obj.name != "self"
+            and ns.original_symbol is not None
+            and ns.original_symbol is sym_for_obj
         ):
             ns.parent_scope = sym_for_obj.containing_scope
             if ns.scope_name is None:

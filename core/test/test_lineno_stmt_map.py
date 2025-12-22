@@ -3,7 +3,7 @@ import ast
 import textwrap
 from typing import Dict
 
-from pyccolo.ast_bookkeeping import BookkeepingVisitor
+from pyccolo.ast_bookkeeping import AstBookkeeper, BookkeepingVisitor
 from pyccolo.stmt_mapper import StatementMapper
 
 from ipyflow.singletons import tracer
@@ -15,10 +15,11 @@ _flow_fixture, _ = make_flow_fixture()
 
 def compute_lineno_to_stmt_mapping(code: str) -> Dict[int, ast.stmt]:
     node = ast.parse(textwrap.dedent(code).strip())
-    mapper = StatementMapper([tracer()], {})
+    mapper = StatementMapper([tracer()])
     copy_mapping = mapper(node)
-    bookkeeper = BookkeepingVisitor(*[{} for _ in range(5)])
-    bookkeeper.visit(copy_mapping[id(node)])
+    bookkeeper = AstBookkeeper.create(None, -1)
+    visitor = BookkeepingVisitor(bookkeeper)
+    visitor.visit(copy_mapping[id(node)])
     return bookkeeper.stmt_by_lineno
 
 

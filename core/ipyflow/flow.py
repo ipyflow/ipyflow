@@ -492,9 +492,12 @@ class NotebookFlow(singletons.NotebookFlow):
 
     def get_position(self, frame: FrameType) -> Tuple[int, int]:
         try:
-            cell_num = self._cell_name_to_cell_num_mapping.get(
-                frame.f_code.co_filename, None
-            )
+            while (
+                frame.f_code.co_filename.startswith("<sandbox")
+                or "pyccolo" in frame.f_code.co_filename
+            ):
+                frame = frame.f_back  # type: ignore[assignment]
+            cell_num = self._cell_name_to_cell_num_mapping.get(frame.f_code.co_filename)
             if cell_num is None:
                 cell_num = self.cell_counter()
             return cell_num, frame.f_lineno

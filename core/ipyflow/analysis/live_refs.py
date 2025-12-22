@@ -395,6 +395,18 @@ class ComputeLiveSymbolRefs(
             self.visit(node.right)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:
+        if isinstance(node.value, ast.Name) and node.value.id in (
+            "f",
+            "q",
+            "ast_literal",
+            "filter",
+            "ifilter",
+            "map",
+            "imap",
+            "reduce",
+        ):
+            # skip quasiquoted values
+            return
         if not self._inside_attrsub and not isinstance(_chain_root(node), ast.BinOp):
             self._add_attrsub_to_live_if_eligible(SymbolRef(node))
         with self.attrsub_context():

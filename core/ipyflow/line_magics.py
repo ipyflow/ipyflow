@@ -489,6 +489,10 @@ def _resolve_tracer_class(name: str) -> Optional[Type[pyc.BaseTracer]]:
             return pyc.resolve_tracer(name)
         except ImportError:
             return None
+    elif name == "dataflow":
+        from ipyflow.tracing.ipyflow_tracer import DataflowTracer
+
+        return DataflowTracer
     else:
         tracer_cls = get_ipython().ns_table["user_global"].get(name, None)
         if tracer_cls is not None:

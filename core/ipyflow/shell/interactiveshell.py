@@ -1,14 +1,22 @@
 # -*- coding: utf-8 -*-
 import inspect
 import logging
+import os
 import sys
 from contextlib import contextmanager, suppress
+from types import FrameType
 from typing import Callable, Generator, List, Optional, Tuple, Type, Union
 
 import pyccolo as pyc
 from IPython import get_ipython
 from IPython.core.interactiveshell import ExecutionResult, InteractiveShell
+from pyccolo.emit_event import SANDBOX_FNAME_PREFIX
 from pyccolo.import_hooks import TraceFinder
+from pyccolo.tracer import (
+    HIDE_PYCCOLO_FRAME,
+    PYCCOLO_DEV_MODE_ENV_VAR,
+    TRACED_LAMBDA_NAME,
+)
 
 from ipyflow import singletons
 from ipyflow.config import Interface
@@ -685,6 +693,43 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
 
     def on_exception(self, e: Union[None, str, Exception]) -> None:
         singletons.flow().get_and_set_exception_raised_during_execution(e)
+
+    @staticmethod
+    def filter_hidden_frames(tb) -> None:
+        prev = None
+        while tb is not None:
+            should_filter = False
+            frame: FrameType = tb.tb_frame
+            if prev is not None:
+                should_filter = frame.f_locals.get(HIDE_PYCCOLO_FRAME, False)
+                should_filter = should_filter or frame.f_code.co_filename.startswith(
+                    SANDBOX_FNAME_PREFIX
+                )
+                should_filter = should_filter or frame.f_code.co_name in (
+                    TRACED_LAMBDA_NAME,
+                    "_patched_eval",
+                    "_patched_tracer_eval",
+                )
+                should_filter = should_filter or (
+                    "pyccolo" in frame.f_code.co_filename
+                    and os.getenv(PYCCOLO_DEV_MODE_ENV_VAR) != "1"
+                )
+            if should_filter and prev is not None:
+                prev.tb_next = tb.tb_next
+            else:
+                prev = tb
+            tb = tb.tb_next
+
+    def showtraceback(self, exc_tuple=None, *args, **kwargs):
+        # filters frames from pyccolo
+        try:
+            etype, value, tb = self._get_exc_info(exc_tuple)
+        except ValueError:
+            print_ = print
+            print_("No traceback available to show.", file=sys.stderr)
+            return
+        self.filter_hidden_frames(tb)
+        super().showtraceback((etype, value, tb), *args, **kwargs)
 
 
 UsesIPyflowShell = make_mro_inserter_metaclass(

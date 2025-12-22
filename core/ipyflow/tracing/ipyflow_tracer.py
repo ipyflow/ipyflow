@@ -78,17 +78,6 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
 
-reactive_spec = pyc.AugmentationSpec(
-    aug_type=pyc.AugmentationType.prefix, token="$", replacement=""
-)
-cascading_reactive_spec = pyc.AugmentationSpec(
-    aug_type=pyc.AugmentationType.prefix, token="$$", replacement=""
-)
-blocking_spec = pyc.AugmentationSpec(
-    aug_type=pyc.AugmentationType.prefix, token="$:", replacement=""
-)
-
-
 class StackFrameManager(SingletonBaseTracer):
     should_patch_meta_path = False
     # TODO: we should also provide a way to prevent threads from running on instrumented ASTs
@@ -158,6 +147,16 @@ class DataflowTracer(StackFrameManager):
     ast_rewriter_cls = DataflowAstRewriter
     should_patch_meta_path = True
 
+    blocking_spec = pyc.AugmentationSpec(
+        aug_type=pyc.AugmentationType.prefix, token="$:", replacement=""
+    )
+    cascading_reactive_spec = pyc.AugmentationSpec(
+        aug_type=pyc.AugmentationType.prefix, token="$$", replacement=""
+    )
+    reactive_spec = pyc.AugmentationSpec(
+        aug_type=pyc.AugmentationType.prefix, token="$", replacement=""
+    )
+
     def should_propagate_handler_exception(
         self, evt: pyc.TraceEvent, exc: Exception
     ) -> bool:
@@ -168,13 +167,13 @@ class DataflowTracer(StackFrameManager):
         self._tracing_enabled_files.discard(self.defined_file)
         with self.persistent_fields():
             self.reactive_node_ids: Set[int] = self.augmented_node_ids_by_spec[
-                reactive_spec
+                self.reactive_spec
             ]
             self.cascading_reactive_node_ids: Set[int] = (
-                self.augmented_node_ids_by_spec[cascading_reactive_spec]
+                self.augmented_node_ids_by_spec[self.cascading_reactive_spec]
             )
             self.blocking_node_ids: Set[int] = self.augmented_node_ids_by_spec[
-                blocking_spec
+                self.blocking_spec
             ]
         self.tracing_disabled_since_last_stmt = False
         self.tracing_disabled_since_last_module_stmt = False
@@ -292,10 +291,6 @@ class DataflowTracer(StackFrameManager):
             yield
         finally:
             setattr(obj, attr, orig_func)
-
-    @property
-    def syntax_augmentation_specs(self) -> List[pyc.AugmentationSpec]:
-        return [blocking_spec, cascading_reactive_spec, reactive_spec]
 
     def module_stmt_counter(self) -> int:
         return self._module_stmt_counter
@@ -881,7 +876,7 @@ class DataflowTracer(StackFrameManager):
     @pyc.register_raw_handler(pyc.after_subscript_slice)
     @pyc.skip_when_tracing_disabled
     def after_subscript_slice(self, _obj: Any, node_id: NodeId, *__, **___) -> None:
-        node = self.ast_node_by_id.get(node_id, None)
+        node = self.ast_node_by_id.get(node_id)
         if node is None:
             return
         slice_node = cast(ast.Subscript, node).slice
@@ -890,7 +885,8 @@ class DataflowTracer(StackFrameManager):
         )
         subscript_live_refs = []
         for ref in live:
-            if len(ref.ref.chain) == 1:
+            if len(ref.ref.chain) == 1 and ref.ref.chain[0].value != "_":
+                # disallow "_" inside slices for quasiquoter
                 subscript_live_refs.append(cast(str, ref.ref.chain[0].value))
         self.node_id_to_saved_live_subscript_refs[node_id] = self.resolve_symbols(
             set(subscript_live_refs)
@@ -925,7 +921,7 @@ class DataflowTracer(StackFrameManager):
         **__,
     ) -> None:
         value_node_id = id(node.value)
-        if isinstance(self.ast_node_by_id[value_node_id], ast.Call):
+        if isinstance(self.ast_node_by_id.get(value_node_id), ast.Call):
             # clear the callpoint dependency
             self.node_id_to_loaded_symbols.pop(value_node_id, None)
         if obj is None or obj is get_ipython():
@@ -1200,7 +1196,11 @@ class DataflowTracer(StackFrameManager):
     def before_call(
         self, function_or_method, node: ast.Call, frame: FrameType, *_, **__
     ):
-        if getattr(function_or_method, "__qualname__", "").startswith(
+        qualname = getattr(function_or_method, "__qualname__", "")
+        if qualname is None:
+            self._tracked_disable_tracing(frame)
+            return
+        if qualname.startswith(
             (self.dataflow_tracing_disabled_patch.__qualname__, "InteractiveShell.")
         ):
             self._tracked_disable_tracing(frame)
@@ -1743,6 +1743,7 @@ class DataflowTracer(StackFrameManager):
         trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
         self._maybe_log_event(event, stmt_node, trace_stmt)
 
+        allow_lambda = False
         try:
             prev_node_id_in_cur_frame_lexical = self.lexical_call_stack.get_field(
                 "prev_node_id_in_cur_frame_lexical"
@@ -1753,8 +1754,12 @@ class DataflowTracer(StackFrameManager):
             # (e.g., it's a property or just induces a __repr__ call)
             # Make node_id_for_last_call point to self to cover such cases
             prev_node_id_in_cur_frame_lexical = id(stmt_node)
+            allow_lambda = True
 
-        if trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical:
+        if (
+            trace_stmt.node_id_for_last_call == prev_node_id_in_cur_frame_lexical
+            and not (allow_lambda and frame.f_code.co_name == "<lambda>")
+        ):
             if flow().trace_messages_enabled:
                 self.EVENT_LOGGER.warning(" disable tracing >>>")
             self._tracked_disable_tracing(frame)
@@ -1786,3 +1791,8 @@ class DataflowTracer(StackFrameManager):
         trace_stmt = self._get_or_make_trace_stmt(stmt_node, frame)
         self._maybe_log_event(event, stmt_node, trace_stmt)
         self.state_transition_hook(event, trace_stmt, frame, ret_obj)
+
+
+reactive_spec = DataflowTracer.reactive_spec
+cascading_reactive_spec = DataflowTracer.cascading_reactive_spec
+blocking_spec = DataflowTracer.blocking_spec

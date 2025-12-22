@@ -458,9 +458,12 @@ class Scope:
 
     @property
     def is_globally_accessible(self):
-        return self.is_global or (
-            self.is_namespace_scope and self.parent_scope.is_globally_accessible
-        )
+        if self.is_global:
+            return True
+        elif self.is_namespace_scope:
+            return self.parent_scope is self or self.parent_scope.is_globally_accessible
+        else:
+            return False
 
     @property
     def is_namespace_scope(self):

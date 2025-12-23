@@ -225,7 +225,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
     def _syntax_transform_only_tracing_context(
         self, syntax_transforms_enabled: bool, all_tracers, ast_rewriter=None
     ):
-        if syntax_transforms_enabled:
+        if syntax_transforms_enabled and all_tracers:
             ast_rewriter = ast_rewriter or DataflowTracer.instance().make_ast_rewriter(
                 self.make_ipython_cell_name(), module_id=self.cell_counter()
             )
@@ -288,16 +288,24 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                 else:
                     for tracer in all_tracers:
                         tracer._enable_tracing(check_disabled=False)
-                ast_rewriter = DataflowTracer.instance().make_ast_rewriter(
-                    cell_name, module_id=self.cell_counter()
-                )
-                with self._syntax_transform_only_tracing_context(
-                    syntax_transforms_enabled, all_tracers, ast_rewriter=ast_rewriter
-                ):
-                    with ast_transformer_context([ast_rewriter]):
-                        with self._patch_pyccolo_exec_eval():
-                            with self.inner_tracing_context():
-                                yield
+                if all_tracers:
+                    ast_rewriter = DataflowTracer.instance().make_ast_rewriter(
+                        cell_name, module_id=self.cell_counter()
+                    )
+                else:
+                    ast_rewriter = None
+                if ast_rewriter is None:
+                    yield
+                else:
+                    with self._syntax_transform_only_tracing_context(
+                        syntax_transforms_enabled,
+                        all_tracers,
+                        ast_rewriter=ast_rewriter,
+                    ):
+                        with ast_transformer_context([ast_rewriter]):
+                            with self._patch_pyccolo_exec_eval():
+                                with self.inner_tracing_context():
+                                    yield
                 if DataflowTracer.instance() in all_tracers:
                     DataflowTracer.instance().finish_cell_hook()
                 if self.tracer_cleanup_pending:

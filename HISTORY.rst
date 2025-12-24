@@ -1,6 +1,11 @@
 History
 =======
 
+0.0.218 (2025-12-24)
+--------------------
+* [lab] add color-coded minimap;
+* [kernel] misc bugfixes and stability improvements;
+
 0.0.217 (2025-11-21)
 --------------------
 * [kernel] bump pyccolo dep and make compatible with Python 3.14;

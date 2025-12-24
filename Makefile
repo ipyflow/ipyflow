@@ -14,7 +14,7 @@ bump:
 	./scripts/bump.sh
 
 deploy_only:
-	./scripts/deploy.sh
+	./scripts/deploy-all.sh
 
 deploy: version build deploy_only
 

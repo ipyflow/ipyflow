@@ -1,7 +1,7 @@
 History
 =======
 
-0.0.220 (2025-12-25)
+0.0.221 (2025-12-26)
 --------------------
 * [lab] add color-coded minimap;
 * [kernel] misc bugfixes and stability improvements;

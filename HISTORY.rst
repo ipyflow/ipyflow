@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.222 (2026-01-03)
+--------------------
+* [kernel] bump pyccolo with complex symbol event bugfix;
+
 0.0.221 (2025-12-26)
 --------------------
 * [lab] add color-coded minimap;

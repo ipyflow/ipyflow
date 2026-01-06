@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.223 (2026-01-05)
+--------------------
+* [kernel] bump pyccolo with syntax augmentation position bugfix;
+
 0.0.222 (2026-01-03)
 --------------------
 * [kernel] bump pyccolo with complex symbol event bugfix;

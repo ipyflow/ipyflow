@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.224 (2026-01-06)
+--------------------
+* [kernel] bump pyccolo with predicate AST bookkeeping bugfix;
+
 0.0.223 (2026-01-05)
 --------------------
 * [kernel] bump pyccolo with syntax augmentation position bugfix;

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.225 (2026-01-08)
+--------------------
+* [kernel] bump pyccolo with subscript dot_prefix integration;
+
 0.0.224 (2026-01-06)
 --------------------
 * [kernel] bump pyccolo with predicate AST bookkeeping bugfix;

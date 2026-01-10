@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.226 (2026-01-09)
+--------------------
+* [kernel] bump pyccolo with range-based augmentation detection bugfix;
+
 0.0.225 (2026-01-08)
 --------------------
 * [kernel] bump pyccolo with subscript dot_prefix integration;

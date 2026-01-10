@@ -1,4 +1,4 @@
-ipyflow-core==0.0.225
+ipyflow-core==0.0.226
 jupyter
 jupyterlab>=3.0
 nbclassic

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.227 (2026-01-15)
+--------------------
+* [kernel] bump pyccolo with syntax augmentation optimization;
+
 0.0.226 (2026-01-09)
 --------------------
 * [kernel] bump pyccolo with range-based augmentation detection bugfix;

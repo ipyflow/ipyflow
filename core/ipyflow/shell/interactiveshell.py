@@ -218,7 +218,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
         # ast_rewriter = ast_rewriter or tracers[-1].make_ast_rewriter()
         all_syntax_augmenters = []
         for tracer in tracers:
-            all_syntax_augmenters.extend(tracer.make_syntax_augmenters(ast_rewriter))
+            all_syntax_augmenters.append(tracer.make_syntax_augmenter(ast_rewriter))
         return ast_rewriter, all_syntax_augmenters
 
     @contextmanager
@@ -718,10 +718,7 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
                     "_patched_eval",
                     "_patched_tracer_eval",
                 )
-                should_filter = should_filter or (
-                    "pyccolo" in frame.f_code.co_filename
-                    and os.getenv(PYCCOLO_DEV_MODE_ENV_VAR) != "1"
-                )
+                should_filter = should_filter or "pyccolo" in frame.f_code.co_filename
             if should_filter and prev is not None:
                 prev.tb_next = tb.tb_next
             else:
@@ -736,7 +733,8 @@ class IPyflowInteractiveShell(singletons.IPyflowShell, InteractiveShell):
             print_ = print
             print_("No traceback available to show.", file=sys.stderr)
             return
-        self.filter_hidden_frames(tb)
+        if os.getenv(PYCCOLO_DEV_MODE_ENV_VAR) != "1":
+            self.filter_hidden_frames(tb)
         super().showtraceback((etype, value, tb), *args, **kwargs)
 
 

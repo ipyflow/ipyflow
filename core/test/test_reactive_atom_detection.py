@@ -2,10 +2,9 @@
 import sys
 from typing import List, Set
 
+from pyccolo.syntax_augmentation import AugmentationSpec, AugmentationType
 from pyccolo.syntax_augmentation import (
-    AugmentationSpec,
-    AugmentationType,
-    replace_tokens_and_get_augmented_positions,
+    _replace_tokens_and_get_augmented_positions_inner as replace_tokens_and_get_augmented_positions,
 )
 
 from ipyflow.singletons import tracer

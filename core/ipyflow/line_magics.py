@@ -4,13 +4,14 @@ import inspect
 import json
 import os.path
 import re
-import shlex
 import sys
 from typing import TYPE_CHECKING, Iterable, Optional, Sequence, Type, cast
 
 import pyccolo as pyc
 from IPython import get_ipython
+from IPython.core.error import UsageError
 from IPython.core.magic import register_line_magic
+from IPython.core.magic_arguments import argument, magic_arguments, parse_argstring
 
 from ipyflow.analysis.symbol_ref import SymbolRef
 from ipyflow.annotations.compiler import (
@@ -30,7 +31,6 @@ from ipyflow.experimental.dag import create_dag_metadata
 from ipyflow.singletons import flow, shell
 from ipyflow.slicing.mixin import SliceableMixin, format_slice
 from ipyflow.tracing.symbol_resolver import resolve_rval_symbols
-from ipyflow.utils.magic_parser import MagicParser
 
 if TYPE_CHECKING:
     from ipyflow.flow import NotebookFlow
@@ -318,17 +318,17 @@ def set_highlights(cmd: str, rest: str) -> None:
         flow().mut_settings.highlights = Highlights.NONE
 
 
-_SLICE_PARSER = MagicParser("slice")
-_SLICE_PARSER.add_argument("cell_num", nargs="?", type=int, default=None)
-_SLICE_PARSER.add_argument("--stmt", "--stmts", action="store_true")
-_SLICE_PARSER.add_argument("--blacken", action="store_true")
-_SLICE_PARSER.add_argument("--tag", nargs="?", type=str, default=None)
-_SLICE_PARSER.add_argument("--noheader", action="store_true")
-
-
+@magic_arguments("slice")
+@argument("cell_num", nargs="?", type=int, default=None)
+@argument("--stmt", "--stmts", action="store_true")
+@argument("--blacken", action="store_true")
+@argument("--tag", nargs="?", type=str, default=None)
+@argument("--noheader", action="store_true")
 def make_slice(line: str) -> Optional[str]:
-    args = _SLICE_PARSER.parse_args(shlex.split(line))
-    if args.help:
+    try:
+        args = parse_argstring(make_slice, line)
+    except UsageError as e:
+        warn(str(e))
         return None
     tag = args.tag
     slice_cells = None
@@ -365,41 +365,39 @@ def make_slice(line: str) -> Optional[str]:
     return None
 
 
-_TAG_PARSER = MagicParser(
-    "tag", usage="Usage: %flow tag <tag_name> [--remove] [--cell cell_num]"
-)
-_TAG_PARSER.add_argument("tag_name", type=str)
-_TAG_PARSER.add_argument("--remove", action="store_true")
-_TAG_PARSER.add_argument("--cell", type=int, default=None)
-
-
+@magic_arguments("tag")
+@argument("tag_name", type=str, help="The tag name to add or remove")
+@argument("--remove", action="store_true", help="Remove the tag instead of adding it")
+@argument("--cell", type=int, default=None, help="Cell number to tag")
 def tag(line: str) -> None:
-    args = _TAG_PARSER.parse_args(shlex.split(line))
-    if args.help:
+    """Tag a cell with the given tag name."""
+    try:
+        args = parse_argstring(tag, line)
+    except UsageError as e:
+        warn(str(e))
         return
-    tag = args.tag_name
+    tag_name = args.tag_name
     if args.cell is None:
         cell = cells().current_cell()
     else:
         cell = cells().at_counter(args.cell)
     cell_tags = set(cell.tags)
     if args.remove:
-        cell.tags = tuple(cell_tags - {tag})
+        cell.tags = tuple(cell_tags - {tag_name})
     else:
-        cell.tags = tuple(cell_tags | {tag})
-        cells()._cells_by_tag[tag].add(cell)
+        cell.tags = tuple(cell_tags | {tag_name})
+        cells()._cells_by_tag[tag_name].add(cell)
     return None
 
 
-_SHOW_TAGS_PARSER = MagicParser(
-    "show_tags", usage="Usage: %flow show_tags [--cell cell_num]"
-)
-_SHOW_TAGS_PARSER.add_argument("--cell", type=int, default=None)
-
-
+@magic_arguments("show_tags")
+@argument("--cell", type=int, default=None, help="Cell number to show tags for")
 def show_tags(line: str) -> None:
-    args = _SHOW_TAGS_PARSER.parse_args(shlex.split(line))
-    if args.help:
+    """Show the tags for a cell."""
+    try:
+        args = parse_argstring(show_tags, line)
+    except UsageError as e:
+        warn(str(e))
         return
     if args.cell is None:
         cell = cells().current_cell()

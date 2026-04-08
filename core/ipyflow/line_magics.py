@@ -40,7 +40,6 @@ if TYPE_CHECKING:
 _FLOW_LINE_MAGIC = "flow"
 
 
-# TODO: update this
 _USAGE = """Options:
 [enable|disable]
     - Toggle dataflow capture. On by default.
@@ -210,8 +209,8 @@ def toggle_dataflow(line: str) -> Optional[str]:
         return None
 
 
-def show_deps(symbol_str: str) -> Optional[str]:
-    usage = "Usage: %flow show_[deps|dependencies] <symbol>"
+def _resolve_symbol(symbol_str: str, usage: str) -> Optional[Symbol]:
+    """Parse and resolve a symbol string, warning on errors."""
     if len(symbol_str) == 0:
         warn(usage)
         return None
@@ -225,9 +224,15 @@ def show_deps(symbol_str: str) -> Optional[str]:
         return None
     sym = SymbolRef.resolve(symbol_str)
     if sym is None:
-        warn(
-            f"Could not find symbol metadata for {symbol_str.strip()}",
-        )
+        warn(f"Could not find symbol metadata for {symbol_str.strip()}")
+        return None
+    return sym
+
+
+def show_deps(symbol_str: str) -> Optional[str]:
+    usage = "Usage: %flow show_[deps|dependencies] <symbol>"
+    sym = _resolve_symbol(symbol_str, usage)
+    if sym is None:
         return None
     parents = {par for par in sym.parents if par.is_user_accessible}
     children = {child for child in sym.children if child.is_user_accessible}
@@ -244,22 +249,8 @@ def show_deps(symbol_str: str) -> Optional[str]:
 
 def get_code(symbol_str: str) -> Optional[str]:
     usage = "Usage: %flow [get_]code <symbol>"
-    if len(symbol_str) == 0:
-        warn(usage)
-        return None
-    try:
-        node = cast(ast.Expr, ast.parse(symbol_str).body[0]).value
-    except SyntaxError:
-        warn(f"Could not parse symbols from string {symbol_str.strip()}")
-        return None
-    if isinstance(node, (ast.Dict, ast.List, ast.Set, ast.Tuple)):
-        warn(usage)
-        return None
-    sym = SymbolRef.resolve(symbol_str)
+    sym = _resolve_symbol(symbol_str, usage)
     if sym is None:
-        warn(
-            f"Could not find unique symbol metadata for {symbol_str.strip()}",
-        )
         return None
     return str(sym.code())
 
@@ -338,7 +329,7 @@ def make_slice(line: str) -> Optional[str]:
             cell_num = cells().exec_counter() - 1
     if cell_num is not None:
         slice_cells = {cells().at_timestamp(cell_num)}
-    elif args.tag is not None:
+    elif tag is not None:
         if tag.startswith("$"):
             tag = tag[1:]
             cells().current_cell().mark_as_reactive_for_tag(tag)
@@ -387,7 +378,6 @@ def tag(line: str) -> None:
     else:
         cell.tags = tuple(cell_tags | {tag_name})
         cells()._cells_by_tag[tag_name].add(cell)
-    return None
 
 
 @magic_arguments("show_tags")
@@ -404,7 +394,6 @@ def show_tags(line: str) -> None:
     else:
         cell = cells().at_counter(args.cell)
     print_("Cell has tags:", cell.tags)
-    return None
 
 
 def set_exec_mode(line_: str) -> None:

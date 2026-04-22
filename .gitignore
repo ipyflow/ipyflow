@@ -27,3 +27,4 @@ htmlcov/**
 .hypothesis
 *.iml
 .jupyter_ystore.db-journal
+.tdd-mcp-cache

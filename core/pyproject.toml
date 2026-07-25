@@ -23,6 +23,9 @@ extend_skip_glob = [
     '**/setup.py',
 ]
 
+[tool.ruff]
+extend-exclude = ['versioneer.py', '_version.py']
+
 [tool.pytest.ini_options]
 markers = ['integration: mark a test as an integration test.']
 filterwarnings = [

@@ -26,6 +26,12 @@ extend_skip_glob = [
 [tool.ruff]
 extend-exclude = ['versioneer.py', '_version.py']
 
+[tool.ruff.lint]
+# Pin to ruff's classic default rule set so an unpinned ruff upgrade in CI
+# doesn't start enforcing rules the project handles elsewhere (isort/black) or
+# deliberately keeps (e.g. utf-8 coding headers, intentional star imports).
+select = ['E4', 'E7', 'E9', 'F']
+
 [tool.pytest.ini_options]
 markers = ['integration: mark a test as an integration test.']
 filterwarnings = [

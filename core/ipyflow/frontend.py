@@ -230,8 +230,15 @@ class FrontendCheckerResult(NamedTuple):
             for pid, syms in cell.directional_parents.items():
                 parent = cells().from_id(pid)
                 for qual_sym in syms:
-                    for sym in qual_sym.traverse_up_namespaces():
-                        if sym.shallow_timestamp.cell_num > parent.cell_ctr:
+                    for idx, sym in enumerate(qual_sym.traverse_up_namespaces()):
+                        # For the symbol itself, use the namespace-aware timestamp so
+                        # that in-place mutations of its members (e.g. `lst[0].append(...)`,
+                        # `df.drop(..., inplace=True)`) count as making the parent stale;
+                        # rerunning the parent is what restores the pre-mutation value.
+                        # For enclosing namespaces, only a rebind of the namespace itself
+                        # matters, so the shallow timestamp is the right one.
+                        ts = sym.timestamp if idx == 0 else sym.shallow_timestamp
+                        if ts.cell_num > parent.cell_ctr:
                             self.stale_parents[cell.cell_id].add(parent.cell_id)
                             break
 

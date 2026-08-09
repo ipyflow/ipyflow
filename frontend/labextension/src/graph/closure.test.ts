@@ -101,6 +101,24 @@ describe('computeRawTransitiveClosure', () => {
     ]);
   });
 
+  it('pulls in a stale parent whose edge was pruned from cellParents', () => {
+    // The kernel dedupes cellParents for display (only the last writer of a
+    // symbol survives), but a pruned parent can still be the cell that resets
+    // the mutated state -- e.g. `a = [...]` above an `a, b = b, a` swap.
+    const ctx = makeCtx({
+      cellChildren: { a0: [], a1: ['swap'], swap: ['use'] },
+      cellParents: { swap: ['a1'], use: ['swap'] },
+      staleParents: { swap: ['a0', 'a1'], use: ['swap'] },
+      settings: { pull_reactive_updates: true },
+    });
+    expect(sorted(computeRawTransitiveClosure(ctx, ['use']))).toEqual([
+      'a0',
+      'a1',
+      'swap',
+      'use',
+    ]);
+  });
+
   it('pulls reactive updates across cousins and terminates', () => {
     const ctx = makeCtx({
       cellChildren: { a: ['b'], a2: ['b'] },

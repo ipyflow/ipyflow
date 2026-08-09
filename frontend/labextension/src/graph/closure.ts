@@ -59,7 +59,17 @@ export function computeRawTransitiveClosureHelper(
   if (!pullReactiveUpdates || !closure.has(cellId)) {
     return;
   }
-  relatives.forEach((related) => {
+  // A cell's stale parents are the ones that must re-run to restore the state it
+  // consumed, so consider them even when the kernel pruned the corresponding edge
+  // out of `cellParents` (which is deduped for display: when several parents write
+  // a symbol at the same timestamp, only the last one survives). Without this, a
+  // pruned reset cell -- e.g. the `a = [...]` above an `a, b = b, a` swap -- can
+  // never be pulled into the closure. See ipyflow/ipyflow#173.
+  const pullCandidates = new Set([
+    ...relatives,
+    ...(ctx.staleParents?.[cellId] ?? []),
+  ]);
+  pullCandidates.forEach((related) => {
     if (closure.has(related)) {
       return;
     }

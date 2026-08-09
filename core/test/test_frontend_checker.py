@@ -720,3 +720,51 @@ def test_dag_edge_changes():
         response = flow().check_and_link_multiple_cells()
         assert response.ready_cells == {2}
         assert response.waiting_cells == {3}
+
+
+def test_stale_parents_for_inner_mutation():
+    """The cell that created a container is a stale parent of the cell that
+    mutates one of its members in place -- rerunning it is what restores the
+    pre-mutation value. See https://github.com/ipyflow/ipyflow/issues/173."""
+    cells_to_run = {
+        0: "import copy",
+        1: "ll = [[1],[2],[3]]",
+        2: "c_l = copy.deepcopy(ll)",
+        3: "c_l[0].append(5)",
+        4: "logging.info(c_l)",
+    }
+    with override_settings(
+        exec_schedule=ExecutionSchedule.DAG_BASED, flow_order=FlowDirection.IN_ORDER
+    ):
+        run_all_cells(cells_to_run)
+        response = flow().check_and_link_multiple_cells()
+    assert 2 in response.stale_parents[3], response.stale_parents
+    assert 2 in response.stale_parents[4], response.stale_parents
+
+
+def test_stale_parents_for_toplevel_mutation():
+    cells_to_run = {
+        0: "ll = [[1],[2],[3]]",
+        1: "ll.pop(1)",
+        2: "logging.info(len(ll))",
+    }
+    with override_settings(
+        exec_schedule=ExecutionSchedule.DAG_BASED, flow_order=FlowDirection.IN_ORDER
+    ):
+        run_all_cells(cells_to_run)
+        response = flow().check_and_link_multiple_cells()
+    assert 0 in response.stale_parents[1], response.stale_parents
+
+
+def test_no_stale_parents_without_mutation():
+    cells_to_run = {
+        0: "x = 3",
+        1: "y = x + 1",
+        2: "logging.info(y)",
+    }
+    with override_settings(
+        exec_schedule=ExecutionSchedule.DAG_BASED, flow_order=FlowDirection.IN_ORDER
+    ):
+        run_all_cells(cells_to_run)
+        response = flow().check_and_link_multiple_cells()
+    assert not any(response.stale_parents.values()), response.stale_parents

@@ -165,6 +165,44 @@ export async function setCellSource(
 }
 
 /**
+ * Edit the cell at `index` and wait until the extension has shipped the new
+ * source to the kernel.
+ *
+ * `setCellSource` returns as soon as the shared model is written, but the
+ * `notify_content_changed` message that carries the edit is debounced (500ms,
+ * see comm/notebookEvents.ts). Re-running the cell before that lands makes the
+ * kernel compute the reactive closure from the *old* source, so any test that
+ * edits and then re-runs has to wait for the send. `store.lastCellMetadataMap`
+ * is written as part of that send, so it is the observable signal that it
+ * happened.
+ */
+export async function editCellAndSync(
+  page: any,
+  index: number,
+  source: string
+): Promise<void> {
+  await setCellSource(page, index, source);
+  expect(await cellSource(page, index)).toBe(source);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ i, src }: { i: number; src: string }) => {
+            const store = (window as any).ipyflow;
+            const id = store?.notebook?.widgets?.[i]?.model?.id;
+            return store?.lastCellMetadataMap?.[id]?.content === src;
+          },
+          { i: index, src: source }
+        ),
+      {
+        timeout: 30_000,
+        message: `edit to cell ${index} was never sent to the kernel`
+      }
+    )
+    .toBe(true);
+}
+
+/**
  * Delete the cell at `index` via the shared model's `deleteCell`. Galata's
  * `deleteCells` (and the `notebook:delete-cell` command / `d d` shortcut) proved
  * unreliable here -- they didn't actually remove the cell -- whereas the model

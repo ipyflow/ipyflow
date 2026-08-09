@@ -29,6 +29,14 @@ decoration, reactive re-execution).
 - `tests/modes.spec.ts` — execution modes: an error mid-cascade aborts the
   downstream reactive re-execution; switching reactive → lazy stops dependents
   from auto-running.
+- `tests/reset-cells.spec.ts` — regressions for
+  [#173](https://github.com/ipyflow/ipyflow/issues/173): editing a cell whose
+  upstream state was mutated in place must also re-run the **upstream** cell
+  that resets it, both when the mutation lands on a namespace member
+  (`c_l[0].append(...)` after a `deepcopy`) and when the reset cell's edge was
+  pruned out of the reported parent map (the `a = [...]` above an
+  `a, b = b, a` swap). Each asserts the un-compounded output *and* that the
+  reset cell's execution count moved.
 - `tests/notebook-ops.spec.ts` — deleting a cell keeps the surviving graph
   working; two notebooks keep independent graphs (store repoints on focus
   change); a cell run before the comm establishes still executes.

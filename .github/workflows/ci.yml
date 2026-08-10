@@ -119,7 +119,15 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -e ./core/.[dev] jupyterlab
+        # JupyterLab floats, but @jupyterlab/galata has to be able to drive
+        # whatever it resolves to. galata 5.5.x detected simple mode with
+        # `getByRole('switch', {name: 'Simple'})`; JupyterLab 4.6 dropped that
+        # status-bar switch, so every `page` fixture hung in `waitIsReady` and
+        # the whole suite timed out in setup. galata >= 5.6 reads
+        # `#main[data-shell-mode]` instead, which 4.5 and 4.6 both set. Keep the
+        # floor at 4.5.7 (what the labextension builds against) and bump galata
+        # in ui-tests/package.json whenever a new JupyterLab minor lands.
+        pip install -e ./core/.[dev] 'jupyterlab>=4.5.7'
     - name: Guard against private-registry lockfiles
       run: |
         # The committed package-lock.json files must resolve packages from the
@@ -155,7 +163,11 @@ jobs:
     - name: Install UI test dependencies and browser
       run: |
         cd frontend/labextension/ui-tests
-        npm install
+        # `npm ci` (not `npm install`) so the galata version this job runs is the
+        # one in the lockfile: with JupyterLab floating, galata is what pins the
+        # two together, and a silent drift shows up as the entire suite timing
+        # out in fixture setup rather than as anything resembling a version error.
+        npm ci
         npx playwright install --with-deps chromium
     - name: Galata UI e2e
       run: |

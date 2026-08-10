@@ -77,6 +77,13 @@ decoration, reactive re-execution).
   in-place `KernelConnection.restart()` does not fire it and the comm never
   reconnects. A full `page.reload()` mid-test desyncs Galata's fixtures — close +
   reopen the notebook instead (see `persistence.spec.ts`).
+- **`@jupyterlab/galata` has to track the installed JupyterLab minor.** Galata
+  drives Lab's chrome, so a mismatch fails in the `page` fixture — *every* test
+  times out in setup with an error naming some UI locator, which looks nothing
+  like a version problem. 5.5.x against JupyterLab 4.6 was exactly this: 4.6
+  dropped the status-bar "Simple" switch that 5.5.x used to detect simple mode.
+  Bump the galata dependency whenever you move to a new JupyterLab minor; 5.6.x
+  covers 4.5 and 4.6 (it reads `#main[data-shell-mode]`, which both set).
 
 ## Prerequisites
 

@@ -1,6 +1,10 @@
 History
 =======
 
+0.0.231 (2026-08-14)
+--------------------
+* [kernel] bugfix for pull reactivity for mutations;
+
 0.0.230 (2026-07-07)
 --------------------
 * [kernel][lab] add JupyterLite (Pyodide) support with end-to-end in-browser reactivity;
